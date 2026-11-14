@@ -13,6 +13,7 @@ import {
   dollarCommandToDropdownItem,
   fileReferenceProvider,
   fileToDropdownItem,
+  ompCommandProvider,
   promptProvider,
   promptToDropdownItem,
   slashCommandProvider,
@@ -93,7 +94,8 @@ export function useChatInputCompletionsCoordinator({
       }
     }
   }, [isCodexProvider, nativeSkills.error, nativeSkills.loading, nativeSkills.skills, nativeSkills.hasPendingRequests]);
-  const commandProvider = isCodexProvider ? codexCommandProvider : slashCommandProvider;
+  const defaultCommandProvider = currentProvider === 'omp' ? ompCommandProvider : slashCommandProvider;
+  const commandProvider = isCodexProvider ? codexCommandProvider : defaultCommandProvider;
   const commandItemConverter = isCodexProvider ? codexCommandToDropdownItem : commandToDropdownItem;
   const dollarProvider = isCodexProvider ? codexCommandProvider : dollarCommandProvider;
   const dollarItemConverter = isCodexProvider ? codexCommandToDropdownItem : dollarCommandToDropdownItem;

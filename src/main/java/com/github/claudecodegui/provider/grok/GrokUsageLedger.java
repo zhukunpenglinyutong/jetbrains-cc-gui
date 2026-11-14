@@ -45,7 +45,10 @@ public final class GrokUsageLedger {
         public String model;
         public String cwd;
         public long timestamp;
+        /** Non-cached input; cached prompt tokens are in the two cache fields. */
         public long inputTokens;
+        public long cacheReadTokens;
+        public long cacheWriteTokens;
         public long outputTokens;
         public long totalTokens;
     }
@@ -53,6 +56,8 @@ public final class GrokUsageLedger {
     /** Aggregated totals for one session (sum of recorded turns). */
     public static final class SessionTotals {
         public long inputTokens;
+        public long cacheReadTokens;
+        public long cacheWriteTokens;
         public long outputTokens;
         public long totalTokens;
         public int turnCount;
@@ -68,14 +73,17 @@ public final class GrokUsageLedger {
         if (sessionId == null || sessionId.isBlank() || usage == null) {
             return;
         }
-        // Prefer snake_case (canonical after normalize); camelCase remains fallback.
-        JsonObject u = GrokContextUsageBuilder.normalizeUsageToSnakeCase(usage);
+        // Claude turn schema, so inputTokens never includes cached prompt tokens;
+        // camelCase remains fallback.
+        JsonObject u = GrokContextUsageBuilder.normalizeTurnUsage(usage);
         if (u == null) {
             u = usage;
         }
         long input = firstLong(u, "input_tokens", "inputTokens", "prompt_tokens", "promptTokens");
         long output = firstLong(u, "output_tokens", "outputTokens", "completion_tokens", "completionTokens");
-        long thought = firstLong(u, "thought_tokens", "thoughtTokens");
+        long thought = firstLong(u, "thinking_tokens", "thought_tokens", "thoughtTokens");
+        long cacheRead = firstLong(u, "cache_read_input_tokens");
+        long cacheWrite = firstLong(u, "cache_creation_input_tokens");
         long total = firstLong(u, "total_tokens", "totalTokens");
         if (total <= 0 && (input > 0 || output > 0 || thought > 0)) {
             total = input + output + thought;
@@ -90,6 +98,8 @@ public final class GrokUsageLedger {
         entry.cwd = cwd != null ? cwd : "";
         entry.timestamp = System.currentTimeMillis();
         entry.inputTokens = Math.max(0, input);
+        entry.cacheReadTokens = Math.max(0, cacheRead);
+        entry.cacheWriteTokens = Math.max(0, cacheWrite);
         entry.outputTokens = Math.max(0, output);
         entry.totalTokens = Math.max(0, total);
 
@@ -137,6 +147,8 @@ public final class GrokUsageLedger {
                         // cumulative context size — take max so mid-turn [USAGE] does not inflate.
                         if (e.inputTokens > 0 || e.outputTokens > 0) {
                             t.inputTokens += Math.max(0, e.inputTokens);
+                            t.cacheReadTokens += Math.max(0, e.cacheReadTokens);
+                            t.cacheWriteTokens += Math.max(0, e.cacheWriteTokens);
                             t.outputTokens += Math.max(0, e.outputTokens);
                             long delta = e.totalTokens > 0
                                     ? e.totalTokens

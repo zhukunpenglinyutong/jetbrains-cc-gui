@@ -69,6 +69,9 @@ export const FILE_MODIFY_TOOL_NAMES = new Set([
   'strreplace',
   'apply_patch',
   'file_change',
+  // JetBrains MCP server; its current edit tool is apply_patch above
+  'create_new_file',
+  'replace_text_in_file',
 ]);
 
 /**

@@ -6,6 +6,7 @@ import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.core.BaseMessageHandler;
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.provider.dsh.DshEnvSupport;
+import com.github.claudecodegui.provider.omp.OmpContextWindows;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.startup.BridgePreloader;
 import com.google.gson.Gson;
@@ -151,6 +152,9 @@ public class CliModelsHandler extends BaseMessageHandler {
             }
             if (!payload.has("provider") || payload.get("provider").isJsonNull()) {
                 payload.addProperty("provider", provider);
+            }
+            if ("omp".equals(provider)) {
+                OmpContextWindows.update(payload);
             }
             callJavaScript("window.setCliModels", escapeJs(gson.toJson(payload)));
         } catch (Exception e) {

@@ -215,3 +215,24 @@ test('writeTempScript writes executable file and returns path', () => {
     fs.rmSync(path.dirname(p), { recursive: true, force: true });
   } catch {}
 });
+
+test('release does not signal a process group id reused after the terminal group died', { skip: process.platform === 'win32' }, async (t) => {
+  const host = new AcpTerminalHost({ defaultCwd: process.cwd(), authorizeCreate: async () => true });
+  t.after(() => host.disposeAll());
+  const { terminalId } = await host.create({ sessionId: 's1', command: process.execPath, args: ['-e', 'process.exit(0)'] });
+  await host.waitForExit({ terminalId });
+  // Let the pipes' close event run (it records the dead group) before faking a reused pgid.
+  await new Promise(resolve => setTimeout(resolve, 500));
+  // The group is gone; from now on its id answers as alive, as a reused pgid would.
+  const signals = [];
+  const realKill = process.kill;
+  t.mock.method(process, 'kill', (pid, signal) => {
+    if (pid < 0) {
+      signals.push(signal);
+      return true;
+    }
+    return realKill.call(process, pid, signal);
+  });
+  await host.release({ terminalId });
+  assert.deepEqual(signals.filter(signal => signal !== 0), []);
+});

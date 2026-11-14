@@ -533,6 +533,21 @@ function firstPositiveNumber(obj, ...keys) {
 }
 
 /**
+ * Whether the reported input already counts the cached prompt tokens.
+ * Grok ACP camelCase `inputTokens` and OpenAI-style prompt tokens include them; only the
+ * Claude layout (snake `input_tokens` next to `cache_read_input_tokens` /
+ * `cache_creation_input_tokens`) reports cache reads and writes on top of the input.
+ * Mirrors Java {@code GrokContextUsageBuilder.inputIncludesCache}.
+ *
+ * @param {Record<string, unknown>} src
+ */
+function inputIncludesCache(src) {
+  const hasSnakeInput = firstPositiveNumber(src, 'input_tokens') > 0;
+  const hasClaudeCacheField = firstPositiveNumber(src, 'cache_read_input_tokens', 'cache_creation_input_tokens') > 0;
+  return !(hasSnakeInput && hasClaudeCacheField);
+}
+
+/**
  * Canonical OpenAI-style snake_case usage for [USAGE] tags and Java consumers.
  * ACP often emits camelCase (totalTokens/inputTokens); normalize so snake_case is primary
  * and dual-read extractors remain a fallback for raw payloads.
@@ -562,14 +577,26 @@ export function normalizeUsageToSnakeCase(usage) {
     src,
     'thought_tokens',
     'thoughtTokens',
+    'thinking_tokens',
+    'thinkingTokens',
     'reasoning_tokens',
     'reasoningTokens',
   );
-  const cachedWrite = firstPositiveNumber(src, 'cached_write_tokens', 'cachedWriteTokens');
+  const cachedWrite = firstPositiveNumber(
+    src,
+    'cached_write_tokens',
+    'cachedWriteTokens',
+    'cacheWriteTokens',
+    'cache_creation_input_tokens',
+    'cacheCreationInputTokens',
+  );
   const cachedRead = firstPositiveNumber(
     src,
     'cached_read_tokens',
     'cachedReadTokens',
+    'cacheReadTokens',
+    'cache_read_input_tokens',
+    'cacheReadInputTokens',
     'cached_tokens',
     'cachedTokens',
   );
@@ -578,16 +605,98 @@ export function normalizeUsageToSnakeCase(usage) {
     return null;
   }
 
+  // Snapshots always carry cache-inclusive input (cached_*_tokens are a subset of it), so
+  // normalizeGrokTurnUsage can split the cache back out without guessing from the total.
+  const inclusiveInput = inputIncludesCache(src)
+    ? Math.max(input, cachedRead + cachedWrite)
+    : input + cachedRead + cachedWrite;
+
   /** @type {Record<string, number>} */
   const out = {};
-  if (input > 0) out.input_tokens = input;
+  if (inclusiveInput > 0) out.input_tokens = inclusiveInput;
   if (output > 0) out.output_tokens = output;
   if (thought > 0) out.thought_tokens = thought;
   if (cachedWrite > 0) out.cached_write_tokens = cachedWrite;
   if (cachedRead > 0) out.cached_read_tokens = cachedRead;
-  out.total_tokens =
-    total > 0 ? total : input + output + thought + cachedWrite + cachedRead;
+  // Reasoning is part of output (Grok reports totalTokens = inputTokens + outputTokens).
+  out.total_tokens = total > 0 ? total : inclusiveInput + Math.max(output, thought);
   return out;
+}
+
+/**
+ * Normalize whole-turn Grok usage into the canonical Claude turnUsage schema
+ * expected by MessageDurationFooter.tsx:
+ * { input_tokens, cache_read_input_tokens, cache_creation_input_tokens, output_tokens, thinking_tokens, total_tokens }.
+ *
+ * Cache-inclusive input (camelCase `turn_completed.usage` / `promptResult._meta.usage`,
+ * and the snapshots from {@link normalizeUsageToSnakeCase}) is split as
+ * `Math.max(0, input - cacheRead - cacheWrite)`; Claude-layout input is kept as is.
+ *
+ * @param {unknown} usage
+ * @returns {Record<string, number>|null}
+ */
+export function normalizeGrokTurnUsage(usage) {
+  if (!usage || typeof usage !== 'object' || Array.isArray(usage)) return null;
+  const src = /** @type {Record<string, unknown>} */ (usage);
+  if (
+    src.usage &&
+    typeof src.usage === 'object' &&
+    !Array.isArray(src.usage) &&
+    !firstPositiveNumber(src, 'total_tokens', 'totalTokens', 'input_tokens', 'inputTokens')
+  ) {
+    const nested = normalizeGrokTurnUsage(src.usage);
+    if (nested) return nested;
+  }
+
+  const total = firstPositiveNumber(src, 'total_tokens', 'totalTokens');
+  const rawInput = firstPositiveNumber(src, 'input_tokens', 'inputTokens', 'prompt_tokens', 'promptTokens');
+  const output = firstPositiveNumber(src, 'output_tokens', 'outputTokens', 'completion_tokens', 'completionTokens');
+  const thinking = firstPositiveNumber(
+    src,
+    'thinking_tokens',
+    'thinkingTokens',
+    'thought_tokens',
+    'thoughtTokens',
+    'reasoning_tokens',
+    'reasoningTokens',
+  );
+  const cacheRead = firstPositiveNumber(
+    src,
+    'cache_read_input_tokens',
+    'cacheReadInputTokens',
+    'cached_read_tokens',
+    'cachedReadTokens',
+    'cacheReadTokens',
+    'cached_tokens',
+    'cachedTokens',
+  );
+  const cacheWrite = firstPositiveNumber(
+    src,
+    'cache_creation_input_tokens',
+    'cacheCreationInputTokens',
+    'cached_write_tokens',
+    'cachedWriteTokens',
+    'cacheWriteTokens',
+  );
+
+  if (total <= 0 && rawInput <= 0 && output <= 0 && thinking <= 0 && cacheRead <= 0 && cacheWrite <= 0) {
+    return null;
+  }
+
+  const nonCacheInput = inputIncludesCache(src)
+    ? Math.max(0, rawInput - cacheRead - cacheWrite)
+    : rawInput;
+  const resolvedTotal =
+    total > 0 ? total : nonCacheInput + cacheRead + cacheWrite + Math.max(output, thinking);
+
+  return {
+    input_tokens: nonCacheInput,
+    cache_read_input_tokens: cacheRead,
+    cache_creation_input_tokens: cacheWrite,
+    output_tokens: output,
+    thinking_tokens: thinking,
+    total_tokens: resolvedTotal,
+  };
 }
 
 /**
@@ -643,16 +752,52 @@ export function extractUsageFromAcpEnvelope(methodOrPayload, params) {
   // Prompt-result form: object
   const result = methodOrPayload;
   if (!result || typeof result !== 'object') return null;
-  if (result.usage && typeof result.usage === 'object') return result.usage;
   const meta = result._meta || result.meta;
   if (meta && typeof meta === 'object') {
+    // Top-level _meta carries the final step's context window occupancy
+    // whereas _meta.usage carries the multi-call cumulative sum when modelCalls > 1.
+    if (meta.totalTokens || meta.inputTokens || meta.total_tokens) {
+      return {
+        totalTokens: meta.totalTokens,
+        total_tokens: meta.total_tokens,
+        inputTokens: meta.inputTokens,
+        outputTokens: meta.outputTokens,
+        cachedReadTokens: meta.cachedReadTokens,
+        cachedWriteTokens: meta.cachedWriteTokens,
+        reasoningTokens: meta.reasoningTokens,
+      };
+    }
     if (meta.usage && typeof meta.usage === 'object') return meta.usage;
-    // Flatten meta totals when usage object missing
-    if (meta.totalTokens || meta.inputTokens || meta.total_tokens) return meta;
   }
+  if (result.usage && typeof result.usage === 'object') return result.usage;
   // Top-level totals on some envelopes
   if (result.totalTokens || result.inputTokens || result.total_tokens) return result;
   return null;
+}
+
+/**
+ * Extract whole-turn usage (normalized to Claude turnUsage schema) from a prompt result envelope.
+ * Prefers `result._meta.usage` / `result.usage` over top-level step totals.
+ *
+ * @param {unknown} promptResult
+ * @returns {Record<string, number>|null}
+ */
+export function extractTurnUsageFromPromptResult(promptResult) {
+  if (!promptResult || typeof promptResult !== 'object') return null;
+  const meta = promptResult._meta || promptResult.meta;
+  if (meta && typeof meta === 'object' && meta.usage && typeof meta.usage === 'object') {
+    const normalized = normalizeGrokTurnUsage(meta.usage);
+    if (normalized) return normalized;
+  }
+  if (promptResult.usage && typeof promptResult.usage === 'object') {
+    const normalized = normalizeGrokTurnUsage(promptResult.usage);
+    if (normalized) return normalized;
+  }
+  if (meta && typeof meta === 'object') {
+    const normalized = normalizeGrokTurnUsage(meta);
+    if (normalized) return normalized;
+  }
+  return normalizeGrokTurnUsage(promptResult);
 }
 
 /**
@@ -662,27 +807,9 @@ export function extractUsageFromAcpEnvelope(methodOrPayload, params) {
  */
 export function extractUsedTokens(usage) {
   if (!usage || typeof usage !== 'object') return 0;
+  // A normalized snapshot always carries a total once any token field is present.
   const normalized = normalizeUsageToSnakeCase(usage);
-  if (normalized) {
-    const total = Number(normalized.total_tokens);
-    if (Number.isFinite(total) && total > 0) return Math.floor(total);
-    let used = 0;
-    for (const key of ['input_tokens', 'output_tokens', 'thought_tokens', 'cached_write_tokens', 'cached_read_tokens']) {
-      const n = Number(normalized[key]);
-      if (Number.isFinite(n) && n > 0) used += n;
-    }
-    if (used > 0) return Math.max(0, Math.floor(used));
-  }
-  // Last-resort dual-read without normalize (empty / exotic shapes)
-  const total = firstPositiveNumber(usage, 'total_tokens', 'totalTokens');
-  if (total > 0) return total;
-  let used = 0;
-  used += firstPositiveNumber(usage, 'input_tokens', 'inputTokens', 'prompt_tokens', 'promptTokens');
-  used += firstPositiveNumber(usage, 'output_tokens', 'outputTokens', 'completion_tokens', 'completionTokens');
-  used += firstPositiveNumber(usage, 'thought_tokens', 'thoughtTokens');
-  used += firstPositiveNumber(usage, 'cached_write_tokens', 'cachedWriteTokens');
-  used += firstPositiveNumber(usage, 'cached_read_tokens', 'cachedReadTokens');
-  return Math.max(0, Math.floor(used));
+  return normalized ? normalized.total_tokens : 0;
 }
 
 /**

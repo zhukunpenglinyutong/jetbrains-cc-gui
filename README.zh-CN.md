@@ -33,12 +33,12 @@
 ### 多 AI 引擎支持
 - **Claude Code** - Anthropic 官方 AI 编程助手，支持 Opus 4.5 等多模型
 - **OpenAI Codex** - OpenAI 强大的代码生成引擎
-- **Grok CLI**（Beta）- xAI 的命令行 AI 编程助手
-- **Kimi CLI**（Beta）- 月之暗面（Moonshot AI）的命令行 AI 编程助手
-- **OpenCode**（Beta）- 开源终端 AI 编程 Agent
-- **PI CLI**（Beta）- PI 命令行 AI 编程助手
-- **OMP CLI**（Beta）- OMP 命令行 AI 编程助手
-- **DeepSeek Harness**（Beta）- DeepSeek 的命令行编程 Harness
+- **Grok CLI** - xAI 的命令行 AI 编程助手
+- **Kimi CLI** - 月之暗面（Moonshot AI）的命令行 AI 编程助手
+- **OpenCode** - 开源终端 AI 编程 Agent
+- **PI CLI** - PI 命令行 AI 编程助手
+- **OMP CLI** - OMP 命令行 AI 编程助手
+- **DeepSeek Harness** - DeepSeek 的命令行编程 Harness
 
 ### 智能对话功能
 - 上下文感知的 AI 编程助手

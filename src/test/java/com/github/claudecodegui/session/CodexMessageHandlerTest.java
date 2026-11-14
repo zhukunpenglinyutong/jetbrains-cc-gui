@@ -88,6 +88,9 @@ public class CodexMessageHandlerTest {
         int streamEndCount = 0;
         int stateChangeCount = 0;
         int messageUpdateCount = 0;
+        int usageUpdateCount = 0;
+        int lastUsedTokens = 0;
+        int lastMaxTokens = 0;
         boolean lastLoading = false;
         boolean lastBusy = false;
         String lastStateError;
@@ -114,7 +117,12 @@ public class CodexMessageHandlerTest {
 
         @Override
         public void onUsageUpdate(int usedTokens, int maxTokens) {
+            // Merged from both sides of the upstream merge: the PR's list-based
+            // recording and upstream's counter/last-value recording.
             usageUpdates.add(new int[]{usedTokens, maxTokens});
+            usageUpdateCount++;
+            lastUsedTokens = usedTokens;
+            lastMaxTokens = maxTokens;
         }
 
         @Override
@@ -857,6 +865,70 @@ public class CodexMessageHandlerTest {
         assertFalse(state.isLoading());
     }
 
+    @Test
+    public void usageMessageStampsUsageOnLastAssistantAndPushesContextRing() {
+        SessionState state = new SessionState();
+
+        CallbackHandler callbackHandler = new CallbackHandler();
+        RecordingCallback callback = new RecordingCallback();
+        callbackHandler.setCallback(callback);
+
+        CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
+        handler.onMessage("assistant", "{\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"done\"}]}}");
+        handler.onMessage("usage", "{\"input_tokens\":1347,\"cache_read_input_tokens\":34816,"
+                + "\"output_tokens\":15,\"total_tokens\":36178}");
+
+        assertEquals(1, callback.usageUpdateCount);
+        assertEquals(36163, callback.lastUsedTokens);
+        assertEquals(200000, callback.lastMaxTokens);
+
+        Message message = state.getMessages().get(0);
+        assertTrue(message.raw.has("usage"));
+        JsonObject usage = message.raw.getAsJsonObject("usage");
+        assertEquals(1347, usage.get("input_tokens").getAsInt());
+        assertEquals(15, usage.get("output_tokens").getAsInt());
+        assertEquals(36178, usage.get("total_tokens").getAsInt());
+        assertEquals(34816, usage.get("cache_read_input_tokens").getAsInt());
+    }
+
+    @Test
+    public void usageMessageWithInvalidJsonDoesNotCrashOrPush() {
+        SessionState state = new SessionState();
+
+        CallbackHandler callbackHandler = new CallbackHandler();
+        RecordingCallback callback = new RecordingCallback();
+        callbackHandler.setCallback(callback);
+
+        CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
+        handler.onMessage("assistant", "{\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"done\"}]}}");
+        // The assistant message itself triggers one message update; the invalid
+        // usage payload must not add another one or any usage push.
+        int messageUpdatesBeforeUsage = callback.messageUpdateCount;
+        handler.onMessage("usage", "not-json");
+
+        assertEquals(0, callback.usageUpdateCount);
+        assertEquals(messageUpdatesBeforeUsage, callback.messageUpdateCount);
+        Message message = state.getMessages().get(0);
+        assertFalse(message.raw.has("usage"));
+    }
+
+    @Test
+    public void rawUsageWithoutSnakeCaseFiguresDoesNotPushAZeroRing() {
+        SessionState state = new SessionState();
+        state.setProvider("pi");
+
+        CallbackHandler callbackHandler = new CallbackHandler();
+        RecordingCallback callback = new RecordingCallback();
+        callbackHandler.setCallback(callback);
+
+        CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
+        handler.onMessage("assistant", "{\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"done\"}]}}");
+        handler.onMessage("usage", "{\"input\":1200,\"output\":30,\"cacheRead\":800,\"totalTokens\":2030}");
+
+        assertEquals(0, callback.usageUpdateCount);
+        assertFalse(state.getMessages().get(0).raw.has("usage"));
+    }
+
     /** Native controls keep the failure in the transcript without requesting a second status toast. */
     @Test
     public void controlFailureKeepsItsErrorMessageButOmitsTheStatusError() {
@@ -1077,38 +1149,6 @@ public class CodexMessageHandlerTest {
     // ---------------------------------------------------------------------
     // Story 1.9 review-fix round — H1 (provider gate) and M2 (same-turn guard).
 
-    /**
-     * H1: dsh/omp/pi emit [USAGE] through the shared marker protocol too, but
-     * their payload shapes and per-call emission semantics are unvetted. The
-     * handler consumes the marker ONLY on the gemini provider; other CLI
-     * providers keep their pre-story behavior — the marker is dropped. The
-     * payload here is the fully canonical gemini shape, proving the gate is
-     * the provider, not the shape.
-     */
-    @Test
-    public void usageMarkerFromNonGeminiCliProviderIsDroppedLikeBeforeTheStory() {
-        for (String provider : List.of("dsh", "omp", "pi")) {
-            SessionState state = new SessionState();
-            state.setProvider(provider);
-            CallbackHandler callbackHandler = new CallbackHandler();
-            RecordingCallback callback = new RecordingCallback();
-            callbackHandler.setCallback(callback);
-
-            CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
-            handler.onMessage("stream_start", "");
-            handler.onMessage("content_delta", "Answer.");
-            handler.onMessage("usage", GEMINI_CANONICAL_USAGE);
-            handler.onMessage("stream_end", "");
-
-            assertTrue("[" + provider + "] no ring notification may fire",
-                    callback.usageUpdates.isEmpty());
-            for (Message m : state.getMessages()) {
-                assertFalse("[" + provider + "] the marker must be dropped exactly as before the story",
-                        m.raw != null && (m.raw.has("turnUsage") || m.raw.has("message")
-                                && m.raw.getAsJsonObject("message").has("usage")));
-            }
-        }
-    }
 
     /**
      * M2: a turn whose text arrives only via the result-fallback delta (or an
@@ -1264,5 +1304,44 @@ public class CodexMessageHandlerTest {
         assertEquals(2, callback.usageUpdates.size());
         assertEquals(3486 + 228502, callback.usageUpdates.get(1)[0]);
         assertEquals(1_000_000, callback.usageUpdates.get(1)[1]);
+    }
+
+    @Test
+    public void ompUsageMarkersFeedTheTurnFooterCostAndContextRing() {
+        SessionState state = new SessionState();
+        state.setProvider("omp");
+        state.setModel("slow");
+        CallbackHandler callbackHandler = new CallbackHandler();
+        RecordingCallback callback = new RecordingCallback();
+        callbackHandler.setCallback(callback);
+
+        CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
+        handler.onMessage("stream_start", "");
+        // OMP reports a step's usage before the tool call it ends with.
+        handler.onMessage("usage", "{\"input_tokens\":4,\"output_tokens\":179,\"cache_read_input_tokens\":0,"
+                + "\"cache_creation_input_tokens\":14888,\"total_tokens\":15071,\"cost_usd\":0.1227,"
+                + "\"model_context_window\":1000000}");
+        handler.onMessage("assistant", "{\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":["
+                + "{\"type\":\"tool_use\",\"id\":\"t1\",\"name\":\"bash\",\"input\":{\"command\":\"ls\"}}]}}");
+        handler.onMessage("content_delta", "Done.");
+        handler.onMessage("usage", "{\"input_tokens\":2,\"output_tokens\":4,\"cache_read_input_tokens\":14888,"
+                + "\"cache_creation_input_tokens\":120,\"total_tokens\":15014,\"cost_usd\":0.002,"
+                + "\"model_context_window\":1000000}");
+        handler.onMessage("stream_end", "");
+
+        Message assistant = lastAssistantMessage(handler, state);
+        JsonObject turnUsage = assistant.raw.getAsJsonObject("turnUsage");
+        assertEquals(6, turnUsage.get("input_tokens").getAsInt());
+        assertEquals(183, turnUsage.get("output_tokens").getAsInt());
+        assertEquals(14888, turnUsage.get("cache_read_input_tokens").getAsInt());
+        assertEquals(15008, turnUsage.get("cache_creation_input_tokens").getAsInt());
+        assertEquals(0.1247, assistant.raw.get("turnCostUsd").getAsDouble(), 1e-9);
+
+        // The ring shows what the latest step sent to the model, against OMP's own window.
+        assertEquals(2, callback.usageUpdates.size());
+        assertEquals(2 + 120 + 14888, callback.usageUpdates.get(1)[0]);
+        assertEquals(1_000_000, callback.usageUpdates.get(1)[1]);
+        // The tool call merged into the same assistant message kept its usage.
+        assertEquals(15014, assistant.raw.getAsJsonObject("message").getAsJsonObject("usage").get("total_tokens").getAsInt());
     }
 }

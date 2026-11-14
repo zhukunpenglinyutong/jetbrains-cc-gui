@@ -3,9 +3,13 @@ package com.github.claudecodegui.provider.claude;
 import com.github.claudecodegui.provider.claude.usage.RelayUsageJson;
 import com.github.claudecodegui.provider.claude.usage.RelayUsageRegistry;
 import com.github.claudecodegui.settings.CodemossSettingsService;
+import com.github.claudecodegui.settings.ProviderManager;
+import com.github.claudecodegui.settings.SessionSupplierCatalog;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
+
+import java.time.Instant;
 
 /**
  * Claude plan-usage snapshot builder + resolver.
@@ -69,10 +73,23 @@ public final class ClaudePlanUsageService {
      * disk on each call, so edits to {@code settings.json} are picked up.
      */
     public static JsonObject resolvePlanUsagePayload(CodemossSettingsService settingsService) {
+        return resolvePlanUsagePayload(settingsService, null, System.currentTimeMillis());
+    }
+
+    /** Same as above, for the supplier the conversation is bound to (null = global settings). */
+    public static JsonObject resolvePlanUsagePayload(CodemossSettingsService settingsService, String supplierId) {
+        return resolvePlanUsagePayload(settingsService, supplierId, System.currentTimeMillis());
+    }
+
+    static JsonObject resolvePlanUsagePayload(CodemossSettingsService settingsService, long nowMs) {
+        return resolvePlanUsagePayload(settingsService, null, nowMs);
+    }
+
+    static JsonObject resolvePlanUsagePayload(CodemossSettingsService settingsService, String supplierId, long nowMs) {
         try {
-            if (settingsService != null) {
-                JsonObject relay = RelayUsageRegistry.resolve(
-                        settingsService.readClaudeSettings(), System.currentTimeMillis());
+            JsonObject settings = relaySettingsFor(settingsService, supplierId);
+            if (settings != null) {
+                JsonObject relay = RelayUsageRegistry.resolve(settings, nowMs);
                 if (relay != null) {
                     return relay;
                 }
@@ -81,10 +98,45 @@ public final class ClaudePlanUsageService {
             LOG.warn("Claude plan-usage resolve failed, falling back to rate_limit cache: " + e.getMessage());
         }
         JsonObject cached = cachedRateLimit;
-        if (cached != null) {
+        // The snapshot only changes when the CLI emits another rate_limit_event, so
+        // once its window has reset the figure describes a window that is over.
+        // Report unavailable until the next event instead of showing it as current.
+        if (cached != null && !hasWindowReset(cached, nowMs)) {
             return cached.deepCopy();
         }
         return unavailable("Claude usage unavailable");
+    }
+
+    /**
+     * Settings whose relay vendor describes this conversation's balance. CLI login talks to
+     * Anthropic directly, so the global provider's relay must not be probed for it.
+     */
+    static JsonObject relaySettingsFor(CodemossSettingsService settingsService, String supplierId) throws java.io.IOException {
+        if (settingsService == null || ProviderManager.CLI_LOGIN_PROVIDER_ID.equals(supplierId)) {
+            return null;
+        }
+        return SessionSupplierCatalog.claudeSettings(settingsService, supplierId);
+    }
+
+    /**
+     * Drop the cached rate_limit snapshot. Called when the active Claude provider
+     * changes: the snapshot belongs to the previous account and must not linger
+     * until the new one emits its own event.
+     */
+    public static void clearRateLimitCache() {
+        cachedRateLimit = null;
+    }
+
+    private static boolean hasWindowReset(JsonObject payload, long nowMs) {
+        String resetAt = RelayUsageJson.asString(payload, "reset_at");
+        if (resetAt == null) {
+            return false;
+        }
+        try {
+            return Instant.parse(resetAt).toEpochMilli() <= nowMs;
+        } catch (RuntimeException e) {
+            return false;
+        }
     }
 
     // ===== real Anthropic rate_limit_event =====
@@ -170,11 +222,6 @@ public final class ClaudePlanUsageService {
         out.addProperty("provider", "claude");
         out.addProperty("message", message);
         return out;
-    }
-
-    /** Test-only: drop the cached rate_limit snapshot. */
-    static void resetRateLimitCacheForTests() {
-        cachedRateLimit = null;
     }
 
 }

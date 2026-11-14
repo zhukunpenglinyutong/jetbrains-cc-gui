@@ -11,6 +11,7 @@ import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.session.SessionState;
 import com.github.claudecodegui.util.JsUtils;
+import com.github.claudecodegui.util.WslPathUtil;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.Gson;
@@ -81,6 +82,13 @@ public class HistoryMessageInjector {
         return generation;
     }
 
+    /** Fence in-flight loads without discarding the reader the current session still pages with. */
+    void fencePendingCodexLoads() {
+        synchronized (sessionLoadGeneration) {
+            sessionLoadGeneration.incrementAndGet();
+        }
+    }
+
     void publishIfCurrent(long generation, Runnable publication) {
         synchronized (sessionLoadGeneration) {
             if (generation == sessionLoadGeneration.get()) {
@@ -107,10 +115,14 @@ public class HistoryMessageInjector {
         String provider = currentProvider;
         String resolvedSessionId = sessionId;
         String model = null;
+        String transitionToken = null;
 
         try {
             JsonObject payload = new Gson().fromJson(sessionId, JsonObject.class);
             if (payload != null) {
+                if (payload.has("transitionToken") && payload.get("transitionToken").isJsonPrimitive()) {
+                    transitionToken = payload.get("transitionToken").getAsString();
+                }
                 if (payload.has("sessionId") && !payload.get("sessionId").isJsonNull()) {
                     resolvedSessionId = payload.get("sessionId").getAsString();
                 }
@@ -136,7 +148,11 @@ public class HistoryMessageInjector {
         String projectPath = NodeDetector.isWslPath(nodePath) ? NodeDetector.convertToWslPath(rawPath) : rawPath;
         if (projectPath == null) {
             LOG.warn("[HistoryHandler] Project base path is null");
-            notifyHistoryLoadComplete();
+            if (transitionToken == null) {
+                notifyHistoryLoadComplete();
+            } else {
+                context.callJavaScript("sessionTransitionFailed", "Project base path is unavailable", context.escapeJs(transitionToken));
+            }
             return;
         }
         LOG.info("[HistoryHandler] Loading history session: " + resolvedSessionId
@@ -145,14 +161,22 @@ public class HistoryMessageInjector {
 
         if ("codex".equals(provider)) {
             // Codex session: read session info and restore session state
-            loadCodexSession(resolvedSessionId, model);
+            if (transitionToken == null) {
+                loadCodexSession(resolvedSessionId, model);
+            } else {
+                loadCodexSession(resolvedSessionId, model, transitionToken);
+            }
         } else {
             // Claude / CLI providers: use existing callback mechanism
             if (sessionLoadCallback != null) {
-                sessionLoadCallback.onLoadSession(resolvedSessionId, projectPath, provider, model);
+                sessionLoadCallback.onLoadSession(resolvedSessionId, projectPath, provider, model, transitionToken);
             } else {
                 LOG.warn("[HistoryHandler] WARNING: No session load callback set");
-                notifyHistoryLoadComplete();
+                if (transitionToken == null) {
+                    notifyHistoryLoadComplete();
+                } else {
+                    context.callJavaScript("sessionTransitionFailed", "Session loader is unavailable", context.escapeJs(transitionToken));
+                }
             }
         }
     }
@@ -166,23 +190,23 @@ public class HistoryMessageInjector {
     }
 
     void loadCodexSession(String sessionId, String model) {
+        loadCodexSession(sessionId, model, null);
+    }
+
+    void loadCodexSession(String sessionId, String model, String requestedTransitionToken) {
         long generation = invalidateCodexHistory();
+        String transitionToken = requestedTransitionToken == null || requestedTransitionToken.isBlank()
+                ? "backend:" + UUID.randomUUID() : requestedTransitionToken;
+        ClaudeSession activeSession = this.context.getSession();
+        context.callJavaScript("sessionTransitionStarted", context.escapeJs(sessionId), "", context.escapeJs(transitionToken));
         CompletableFuture.runAsync(() -> {
             LOG.info("[HistoryHandler] ========== 开始加载 Codex 会话 ==========");
             LOG.info("[HistoryHandler] SessionId: " + sessionId);
 
             try {
-                ClaudeSession activeSession = this.context.getSession();
-                String oldThread = activeSession == null ? null : activeSession.getSessionId();
-                if (activeSession != null && "codex".equals(activeSession.getProvider())
-                        && oldThread != null && !oldThread.equals(sessionId) && this.context.getCodexSDKBridge() != null) {
-                    // Node bounds the release itself; keep a Java-side ceiling so
-                    // this history load can never block on the release forever.
-                    JsonObject release = this.context.getCodexSDKBridge().releaseCodexThread(activeSession.getChannelId(),
-                            activeSession.getCwd(), oldThread).get(30, java.util.concurrent.TimeUnit.SECONDS);
-                    if (release.has("error")) {
-                        throw new IllegalStateException(release.get("error").getAsString());
-                    }
+                if (!quiesceForCodexHistory(generation, activeSession, sessionId)
+                        .get(30, java.util.concurrent.TimeUnit.SECONDS)) {
+                    return;
                 }
                 CodexHistoryReader codexReader = new CodexHistoryReader();
                 CodexHistoryPage page = this.readInitialCodexHistory(codexReader, sessionId, generation);
@@ -190,8 +214,13 @@ public class HistoryMessageInjector {
                     String threadIdToUse = page.threadId != null ? page.threadId : sessionId;
                     String cwd = page.cwd;
 
-                    context.getSession().setSessionInfo(threadIdToUse, cwd);
+                    // Acceptance precedes restored identity, just as it does for Claude.
+                    // Both carry the request token so queued callbacks from a superseded
+                    // load cannot commit a later frontend selection.
+                    context.executeJavaScriptQueued("if (window.clearMessages) { window.clearMessages(undefined, "
+                            + new Gson().toJson(transitionToken) + "); }");
                     context.getSession().setProvider("codex");
+                    context.getSession().setSessionInfo(threadIdToUse, cwd, transitionToken);
                     this.nativeHistoryReader = page.nativeReader;
                     this.nativeHistoryCursor = page.cursor;
                     if (model != null && !model.isBlank()) {
@@ -201,9 +230,9 @@ public class HistoryMessageInjector {
                     pushRestoredCodexUsage();
                     LOG.info("[HistoryHandler] 恢复 Codex 会话状态: threadId=" + threadIdToUse + " (from sessionId=" + sessionId + "), cwd=" + cwd);
 
-                    injectCodexHistoryPage(sessionId, page, true);
+                    injectCodexHistoryPage(threadIdToUse, page, true, transitionToken);
 
-                    notifyHistoryLoadComplete(generation);
+                    notifyHistoryLoadComplete(generation, transitionToken);
                 });
 
                 LOG.info("[HistoryHandler] ========== Codex 会话加载完成 ==========");
@@ -213,21 +242,46 @@ public class HistoryMessageInjector {
                     LOG.info("[HistoryHandler] Ignoring stale Codex session load failure: " + sessionId);
                     return;
                 }
-                LOG.error("[HistoryHandler] 加载 Codex 会话失败: " + e.getMessage(), e);
+                LOG.warn("[HistoryHandler] 加载 Codex 会话失败: " + e.getMessage(), e);
 
                 ApplicationManager.getApplication().invokeLater(() -> publishIfCurrent(generation, () -> {
                     String errorMsg = context.escapeJs(e.getMessage() != null ? e.getMessage() : "未知错误");
-                    String jsCode = "if (window.addErrorMessage) { " +
-                                            "  window.addErrorMessage('加载 Codex 会话失败: " + errorMsg + "'); " +
-                                            "}";
-                    context.executeJavaScriptQueued(jsCode);
+                    context.callJavaScript("sessionTransitionFailed", "Failed to load session: " + errorMsg,
+                            context.escapeJs(transitionToken));
                 }));
-                notifyHistoryLoadComplete(generation);
             }
         }, CodexSDKBridge.codexControlExecutor());
     }
 
-    private CodexHistoryPage readInitialCodexHistory(CodexHistoryReader legacyReader, String sessionId, long generation) throws Exception {
+    /** A queued load must never stop the session installed by a newer selection. */
+    CompletableFuture<Boolean> quiesceForCodexHistory(long generation, ClaudeSession activeSession, String targetSessionId) {
+        synchronized (sessionLoadGeneration) {
+            if (generation != sessionLoadGeneration.get() || activeSession != context.getSession()) {
+                return CompletableFuture.completedFuture(false);
+            }
+            if (activeSession == null) {
+                return CompletableFuture.completedFuture(true);
+            }
+            if (!"codex".equals(activeSession.getProvider())) {
+                return activeSession.interrupt().thenApply(ignored -> true);
+            }
+            String oldThread = activeSession.getSessionId();
+            if (!java.util.Objects.equals(oldThread, targetSessionId)
+                    && (oldThread != null || activeSession.isBusy() || activeSession.getState().getExecutionState().hasLiveTurn())
+                    && context.getCodexSDKBridge() != null) {
+                return context.getCodexSDKBridge().releaseCodexThread(activeSession.getChannelId(),
+                        activeSession.getCwd(), oldThread).thenApply(release -> {
+                    if (release.has("error")) {
+                        throw new IllegalStateException(release.get("error").getAsString());
+                    }
+                    return true;
+                });
+            }
+            return CompletableFuture.completedFuture(true);
+        }
+    }
+
+    CodexHistoryPage readInitialCodexHistory(CodexHistoryReader legacyReader, String sessionId, long generation) throws Exception {
         // The session may be absent in exactly the scenario loadCodexSession
         // already anticipates; keep the reader usable without a channel id.
         ClaudeSession session = this.context.getSession();
@@ -462,7 +516,7 @@ public class HistoryMessageInjector {
             return;
         }
         int fallbackMaxTokens = ModelProviderHandler.resolveContextLimit(
-                session.getProvider(), session.getModel(), session.getCwd());
+                session.getProvider(), session.getModel(), session.getCwd(), session.getState().getRuntimeSupplierId(session.getProvider()));
         new UsagePushService(context).pushCurrentUsageIfAvailable(fallbackMaxTokens);
     }
 
@@ -651,7 +705,15 @@ public class HistoryMessageInjector {
     }
 
     private void notifyHistoryLoadComplete(long generation) {
+        notifyHistoryLoadComplete(generation, null);
+    }
+
+    private void notifyHistoryLoadComplete(long generation, String transitionToken) {
         ApplicationManager.getApplication().invokeLater(() -> publishIfCurrent(generation, () -> {
+            if (transitionToken != null) {
+                context.callJavaScript("historyLoadComplete", "", context.escapeJs(transitionToken));
+                return;
+            }
             String jsCode = "if (window.historyLoadComplete) { " +
                                     "  try { " +
                                     "    window.historyLoadComplete(); " +
@@ -784,6 +846,7 @@ public class HistoryMessageInjector {
         private String recordedPatchCallId;
         private final Set<String> recordedPatchItemIds = new HashSet<>();
         private CodexKnownExecReplay knownExec;
+        private CodexExecContinuation execContinuation;
         private String rootThreadId;
         private String nativeTurnId;
         private final Set<String> questionCalls = new HashSet<>();
@@ -816,14 +879,35 @@ public class HistoryMessageInjector {
             String callId = getStringProperty(payload, "call_id");
             String payloadType = getStringProperty(payload, "type");
             if (this.knownExec != null) {
-                if (this.knownExec.rememberNative(rawMessage, this.processCalls)) {
-                    if (this.retainedBytes() > MAX_REPLAY_BYTES) {
-                        this.flushKnownExec(null);
+                if (this.execContinuation.accept(rawMessage, this.recordNumber, this.nativeTurnId)) {
+                    if (!this.execContinuation.awaiting()) {
+                        this.flushKnownExec(this.execContinuation.mergedOutput());
+                    } else if (this.retainedBytes() > MAX_REPLAY_BYTES) {
+                        this.flushKnownExec(null, true);
                     }
                     return;
                 }
-                if (isToolOutputPayload(payload) && this.knownExec.callId().equals(callId)) {
-                    this.flushKnownExec(rawMessage);
+                if (this.knownExec.rememberNative(rawMessage, this.processCalls)) {
+                    if (this.knownExec.nativeRecords().contains(rawMessage)) {
+                        this.execContinuation.remember(rawMessage);
+                    }
+                    if (this.retainedBytes() > MAX_REPLAY_BYTES) {
+                        this.flushKnownExec(null, true);
+                    }
+                    return;
+                }
+                if (this.knownExec.nativeLimitExceeded()) {
+                    // Only a refused receipt exhausts the budget; missing script output cannot prove success.
+                    this.flushKnownExec(null, true);
+                    this.acceptRecordedExecRecord(rawMessage);
+                    return;
+                }
+                if (this.execContinuation.awaiting() && ("reasoning".equals(payloadType) || "message".equals(payloadType))
+                        && getCodexUserRecordKind(rawMessage) == null) {
+                    this.execContinuation.defer(rawMessage, this.recordNumber, this.nativeTurnId);
+                    if (this.retainedBytes() > MAX_REPLAY_BYTES) {
+                        this.flushKnownExec(null, true);
+                    }
                     return;
                 }
                 if ("custom_tool_call".equals(payloadType) || "function_call".equals(payloadType)
@@ -831,6 +915,19 @@ public class HistoryMessageInjector {
                         || "compacted".equals(getStringProperty(rawMessage, "type"))
                         || getCodexUserRecordKind(rawMessage) != null) {
                     this.flushKnownExec(null);
+                } else {
+                    boolean contextOnly = "session_meta".equals(recordType) || "turn_context".equals(recordType)
+                            || "token_usage_record".equals(recordType);
+                    if (!contextOnly) {
+                        // Usage and visible native events must wait for the assistant that opened this window.
+                        boolean usage = "event_msg".equals(recordType) && "token_count".equals(getStringProperty(lifecycle, "type"));
+                        boolean taskStarted = "event_msg".equals(recordType) && "task_started".equals(getStringProperty(lifecycle, "type"));
+                        this.execContinuation.defer(rawMessage, this.recordNumber, this.nativeTurnId, !usage && !taskStarted);
+                        if (this.retainedBytes() > MAX_REPLAY_BYTES) {
+                            this.flushKnownExec(null, true);
+                        }
+                    }
+                    return;
                 }
             }
             if ("custom_tool_call".equals(payloadType) || "function_call".equals(payloadType)) {
@@ -840,6 +937,7 @@ public class HistoryMessageInjector {
                     this.recordedPatchCallId = null;
                     this.recordedPatchItemIds.clear();
                     this.knownExec = candidate;
+                    this.execContinuation = new CodexExecContinuation(rawMessage);
                     return;
                 }
             }
@@ -847,18 +945,24 @@ public class HistoryMessageInjector {
         }
 
         private void flushKnownExec(JsonObject output) {
+            this.flushKnownExec(output, false);
+        }
+
+        private void flushKnownExec(JsonObject output, boolean preservesWrapper) {
             CodexKnownExecReplay replay = this.knownExec;
+            CodexExecContinuation continuation = this.execContinuation;
             this.knownExec = null;
+            this.execContinuation = null;
             if (replay == null) {
                 return;
             }
-            // A record stashed while the wrapper was open belongs after the wrapper's
-            // own cards, matching its position in the transcript.
+            // Passthrough records now live in the continuation; keep any pre-existing pending preview after its wrapper.
             JsonObject stashed = this.pending;
             this.pending = null;
             boolean projected = false;
             try {
-                List<JsonObject> messages = replay.project(output, this.processCalls);
+                List<JsonObject> messages = preservesWrapper || continuation.preservesWrapper() || continuation.awaiting()
+                        ? null : replay.project(output, this.processCalls);
                 if (messages != null) {
                     messages.forEach(this::acceptConverted);
                     projected = true;
@@ -868,40 +972,75 @@ public class HistoryMessageInjector {
             }
             if (projected) {
                 this.acceptConverted(stashed);
+                continuation.deferred().forEach(this::acceptDeferredExecRecord);
                 return;
             }
             // A wrapper can close after the next turn has started; its fallback cards keep the turn that opened it.
             String currentTurnId = this.nativeTurnId;
             this.nativeTurnId = replay.lifecycleTurnId();
             try {
-                this.acceptReplayFallback(replay, output);
+                this.acceptReplayFallback(replay, continuation, output, preservesWrapper);
             } finally {
                 this.nativeTurnId = currentTurnId;
             }
             this.acceptConverted(stashed);
         }
 
-        private void acceptReplayFallback(CodexKnownExecReplay replay, JsonObject output) {
-            if (replay.keepsOriginalWrapper()) {
-                // A rejected ownership/index mapping must not be retried by looser legacy heuristics.
+        private void acceptReplayFallback(CodexKnownExecReplay replay, CodexExecContinuation continuation, JsonObject output, boolean preservesWrapper) {
+            if (preservesWrapper || continuation.preservesWrapper() || continuation.continued() || replay.keepsOriginalWrapper() || !replay.nativeRecords().isEmpty()) {
+                if (replay.nativeRecords().isEmpty() && !continuation.continued()) {
+                    this.previewLiteralPatches(replay.original());
+                }
                 this.acceptOpaqueExecRecord(replay.original(), replay.callId(), false);
-                for (JsonObject record : replay.nativeRecords()) {
-                    List<JsonObject> changes = CodexRecordedFileChange.readMessages(record);
-                    if (changes.isEmpty()) {
-                        this.acceptLegacy(record);
+                for (JsonObject record : continuation.fallbackRecords()) {
+                    if (ownsWrapperOutput(replay, continuation, record)) {
+                        this.acceptOpaqueExecRecord(record, replay.callId(), true);
                     } else {
-                        changes.forEach(this::acceptConverted);
+                        // Waits keep their arrival scope; the original exec result stays with its opening turn.
+                        this.acceptDeferredExecRecord(record);
                     }
                 }
-                if (output != null) {
-                    this.acceptOpaqueExecRecord(output, replay.callId(), true);
+                if (preservesWrapper && output == null) {
+                    // Later native edits and the eventual output still belong to this retained opaque wrapper.
+                    this.recordedPatchCallId = replay.callId();
                 }
+                return;
+            }
+            this.acceptLegacy(replay.original());
+            for (JsonObject record : continuation.fallbackRecords()) {
+                if (ownsWrapperOutput(replay, continuation, record)) {
+                    // The caller has restored the opening turn, which this result shares with its wrapper.
+                    this.acceptRecordedExecRecord(record);
+                } else {
+                    this.acceptDeferredExecRecord(record);
+                }
+            }
+        }
+
+        private static boolean ownsWrapperOutput(CodexKnownExecReplay replay, CodexExecContinuation continuation, JsonObject record) {
+            JsonObject payload = getResponseItemPayload(record);
+            return isToolOutputPayload(payload) && replay.callId().equals(getStringProperty(payload, "call_id"))
+                    && continuation.ownsOutput(record);
+        }
+
+        private void acceptDeferredExecRecord(JsonObject record) {
+            String currentTurnId = this.nativeTurnId;
+            // Deferred records carry their arrival scope; an originally unknown turn must remain unknown.
+            this.nativeTurnId = null;
+            try {
+                this.acceptRecordedExecRecord(record);
+            } finally {
+                this.nativeTurnId = currentTurnId;
+            }
+        }
+
+        private void acceptRecordedExecRecord(JsonObject record) {
+            List<JsonObject> changes = CodexRecordedFileChange.readMessages(record);
+            if (changes.isEmpty()) {
+                this.acceptLegacy(record);
             } else {
-                this.acceptLegacy(replay.original());
-                replay.nativeRecords().forEach(this::acceptLegacy);
-                if (output != null) {
-                    this.acceptLegacy(output);
-                }
+                // A retained native edit does not depend on recognizing the surrounding source.
+                changes.forEach(this::acceptConverted);
             }
         }
 
@@ -914,6 +1053,7 @@ public class HistoryMessageInjector {
         }
 
         private void acceptLegacy(JsonObject rawMessage) {
+            rawMessage = CodexExecContinuation.keepHostTermination(rawMessage);
             JsonObject question = CodexRecordedQuestion.readMessage(rawMessage);
             if (question != null) {
                 this.carryRecordedScope(question, rawMessage);
@@ -964,6 +1104,11 @@ public class HistoryMessageInjector {
                 mcp.forEach(this::acceptConverted);
                 return;
             }
+            List<JsonObject> dynamic = CodexRecordedDynamicToolCall.readMessages(rawMessage);
+            if (!dynamic.isEmpty()) {
+                dynamic.forEach(this::acceptConverted);
+                return;
+            }
             JsonObject usage = extractCodexTokenCountUsage(rawMessage);
             if (usage != null) {
                 attachUsageToLatestAssistant(usage);
@@ -974,7 +1119,10 @@ public class HistoryMessageInjector {
             String callId = getStringProperty(payload, "call_id");
             String timestamp = getStringProperty(rawMessage, "timestamp");
             String payloadType = getStringProperty(payload, "type");
-            if ("custom_tool_call".equals(payloadType) || "function_call".equals(payloadType)) {
+            // A wait does not replace the released cell that still owns later native edits.
+            boolean continuationWait = "function_call".equals(payloadType)
+                    && List.of("wait", "functions.wait").contains(String.valueOf(getStringProperty(payload, "name")));
+            if (!continuationWait && ("custom_tool_call".equals(payloadType) || "function_call".equals(payloadType))) {
                 this.recordedPatchCallId = callId != null && CodexExecHistoryReplay.isExecCall(payload)
                         && CodexExecHistoryReplay.needsRecordedPatch(payload) ? callId : null;
                 this.recordedPatchItemIds.clear();
@@ -990,7 +1138,8 @@ public class HistoryMessageInjector {
                     }
                     return;
                 }
-                if (isToolOutputPayload(payload) && this.recordedPatchCallId.equals(callId)
+                // Yield and notify responses cannot release ownership of edits still running after a budget flush.
+                if (isToolOutputPayload(payload) && this.recordedPatchCallId.equals(callId) && CodexExecContinuation.hasTerminalOutput(payload)
                         || getCodexUserRecordKind(rawMessage) != null) {
                     this.recordedPatchCallId = null;
                     this.recordedPatchItemIds.clear();
@@ -998,19 +1147,7 @@ public class HistoryMessageInjector {
             }
             if (callId != null && CodexExecHistoryReplay.isExecCall(payload)
                     && CodexExecHistoryReplay.containsUnsupportedToolCalls(payload)) {
-                List<String> patches = CodexExecHistoryReplay.extractPatches(payload);
-                long previewBytes = patches.stream().mapToLong(patch -> 3L * patch.length()).sum();
-                if (previewBytes <= MAX_REPLAY_BYTES) {
-                    // Literal inputs still describe reviewable edits. Keep the wrapper and its
-                    // shared result intact because neither proves an individual tool's outcome.
-                    for (int index = 0; index < patches.size(); index++) {
-                        JsonObject preview = CodexExecHistoryReplay.createPatchToolUseMessage(
-                                callId, patches.get(index), index, timestamp);
-                        preview.getAsJsonObject("raw").getAsJsonArray("content").get(0)
-                                .getAsJsonObject().getAsJsonObject("input").addProperty("status", "unknown");
-                        this.acceptConverted(preview, rawMessage);
-                    }
-                }
+                this.previewLiteralPatches(rawMessage);
             }
             if (CodexExecHistoryReplay.isExecCall(payload) && !CodexExecHistoryReplay.containsUnsupportedToolCalls(payload)
                     && !CodexKnownExecReplay.hasUnrepresentedArrayEntries(payload)) {
@@ -1113,6 +1250,25 @@ public class HistoryMessageInjector {
             rememberLatestAssistant(incoming);
         }
 
+        private void previewLiteralPatches(JsonObject record) {
+            JsonObject payload = getResponseItemPayload(record);
+            if (!CodexExecHistoryReplay.isExecCall(payload) || !CodexExecHistoryReplay.containsUnsupportedToolCalls(payload)) {
+                return;
+            }
+            List<String> patches = CodexExecHistoryReplay.extractPatches(payload);
+            if (patches.stream().mapToLong(patch -> 3L * patch.length()).sum() > MAX_REPLAY_BYTES) {
+                return;
+            }
+            // Literal edits remain reviewable without assigning the wrapper's shared outcome to them.
+            for (int index = 0; index < patches.size(); index++) {
+                JsonObject preview = CodexExecHistoryReplay.createPatchToolUseMessage(
+                        getStringProperty(payload, "call_id"), patches.get(index), index, getStringProperty(record, "timestamp"));
+                preview.getAsJsonObject("raw").getAsJsonArray("content").get(0)
+                        .getAsJsonObject().getAsJsonObject("input").addProperty("status", "unknown");
+                this.acceptConverted(preview, record);
+            }
+        }
+
         /**
          * Accepts an already-converted frontend message (e.g. replayed exec tool
          * cards) while preserving ordering with the buffered pending message.
@@ -1203,12 +1359,24 @@ public class HistoryMessageInjector {
 
         List<JsonObject> pendingMessages() {
             if (this.knownExec != null) {
-                List<JsonObject> messages = new ArrayList<>(this.knownExec.snapshot(this.processCalls));
-                JsonObject message = this.pendingMessage();
-                // A record stashed while the wrapper was open follows the wrapper's own cards.
-                if (message != null) {
-                    messages.add(message);
-                }
+                // Preview the same EOF flush as a full read without committing it to the page cache.
+                List<JsonObject> messages = new ArrayList<>();
+                CodexFrontendMessageAccumulator preview = new CodexFrontendMessageAccumulator(messages::add);
+                preview.rootThreadId = this.rootThreadId;
+                preview.nativeTurnId = this.nativeTurnId;
+                preview.recordNumber = this.recordNumber;
+                preview.shellCalls.putAll(this.shellCalls);
+                preview.planCalls.addAll(this.planCalls);
+                preview.patchCalls.putAll(this.patchCalls);
+                preview.recordedPatchCallId = this.recordedPatchCallId;
+                preview.recordedPatchItemIds.addAll(this.recordedPatchItemIds);
+                preview.processCalls.putAll(this.processCalls);
+                preview.questionCalls.addAll(this.questionCalls);
+                preview.generatedImages.copyFrom(this.generatedImages);
+                preview.knownExec = this.knownExec;
+                preview.execContinuation = this.execContinuation;
+                preview.pending = this.pendingMessage();
+                preview.finish();
                 return messages;
             }
             JsonObject message = this.pendingMessage();
@@ -1230,6 +1398,9 @@ public class HistoryMessageInjector {
                     + this.patchCalls.values().stream().flatMap(List::stream).mapToLong(patch -> 3L * patch.length()).sum();
             if (this.knownExec != null) {
                 bytes += this.knownExec.retainedBytes();
+            }
+            if (this.execContinuation != null) {
+                bytes += this.execContinuation.retainedBytes();
             }
             for (var process : this.processCalls.entrySet()) {
                 bytes += 3L * (process.getKey().length() + process.getValue().toolId().length()
@@ -1258,9 +1429,14 @@ public class HistoryMessageInjector {
         }
 
         private void finish() {
+            if (this.knownExec != null && (this.execContinuation.awaiting() || this.execContinuation.preservesWrapper()
+                    || !this.execContinuation.deferred().isEmpty() || !this.knownExec.hasStaticActions() || !this.knownExec.nativeRecords().isEmpty())) {
+                this.flushKnownExec(null);
+            }
             if (this.knownExec != null) {
                 List<JsonObject> pendingKnown = this.knownExec.snapshot(this.processCalls);
                 this.knownExec = null;
+                this.execContinuation = null;
                 // A record stashed while the wrapper was open follows the wrapper's own
                 // cards, matching its position in the transcript and the paged index.
                 JsonObject stashed = this.pending;
@@ -1670,13 +1846,15 @@ public class HistoryMessageInjector {
         }
     }
 
-    private static JsonObject createLocalImageBlock(String imagePath) {
+    static JsonObject createLocalImageBlock(String imagePath) {
         if (imagePath == null || imagePath.trim().isEmpty()) {
             return null;
         }
 
         try {
-            Path path = Path.of(imagePath);
+            // A Codex running in WSL records Linux paths; a Windows JVM only reaches those through the UNC share.
+            String windowsPath = WslPathUtil.convertWslPathToWindowsUnc(imagePath);
+            Path path = Path.of(windowsPath != null ? windowsPath : imagePath);
             if (!Files.isRegularFile(path)) {
                 LOG.debug("[HistoryMessageInjector] Skip missing local image: " + imagePath);
                 return null;
@@ -1730,15 +1908,22 @@ public class HistoryMessageInjector {
      * 分批注入前端消息，避免长历史单次传输阻塞 WebView。
      */
     private void injectCodexHistoryPage(String sessionId, CodexHistoryPage page, boolean replace) {
+        injectCodexHistoryPage(sessionId, page, replace, null);
+    }
+
+    private void injectCodexHistoryPage(String sessionId, CodexHistoryPage page, boolean replace, String transitionToken) {
         String pageId = UUID.randomUUID().toString();
         Gson gson = new Gson();
         JsonObject startInfo = new JsonObject();
         startInfo.addProperty("pageId", pageId);
         startInfo.addProperty("sessionId", sessionId);
         startInfo.addProperty("mode", replace ? "replace" : "prepend");
+        if (transitionToken != null) {
+            startInfo.addProperty("transitionToken", transitionToken);
+        }
 
-        if (replace) {
-            // Keep the session-transition barrier active until historyLoadComplete.
+        if (replace && transitionToken == null) {
+            // A cursor reset replaces the page within an already selected session.
             context.executeJavaScriptQueued("if (window.clearMessages) { window.clearMessages(); }");
         }
         context.callJavaScript("beginCodexHistoryPage", context.escapeJs(gson.toJson(startInfo)));
@@ -1754,6 +1939,9 @@ public class HistoryMessageInjector {
         pageInfo.addProperty("pageId", pageId);
         pageInfo.addProperty("sessionId", sessionId);
         pageInfo.addProperty("mode", replace ? "replace" : "prepend");
+        if (transitionToken != null) {
+            pageInfo.addProperty("transitionToken", transitionToken);
+        }
         pageInfo.addProperty("fromTurn", page.fromTurn);
         pageInfo.addProperty("toTurn", page.toTurn);
         pageInfo.addProperty("totalTurns", page.totalTurns);

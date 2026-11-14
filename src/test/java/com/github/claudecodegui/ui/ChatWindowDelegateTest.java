@@ -8,6 +8,7 @@ import com.github.claudecodegui.provider.ClaudeContextWindowOverrideProvider;
 import com.github.claudecodegui.provider.common.BaseSDKBridge;
 import com.github.claudecodegui.provider.grok.GrokSDKBridge;
 import com.github.claudecodegui.session.ClaudeSession;
+import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.session.SessionLifecycleManager;
 import com.github.claudecodegui.session.StreamMessageCoalescer;
 import com.google.gson.JsonObject;
@@ -15,6 +16,7 @@ import com.google.gson.JsonParser;
 import org.junit.Test;
 
 import javax.swing.JPanel;
+import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
@@ -36,6 +38,31 @@ import static org.junit.Assert.assertTrue;
  * and frontend-ready state ownership in {@link ChatWindowDelegate}.
  */
 public class ChatWindowDelegateTest {
+
+    /** Unsupported provider locking must not abort the tool-window startup repair. */
+    @Test
+    public void startupContinuesWhenProviderRepairCannotLockTheFilesystem() {
+        java.util.concurrent.atomic.AtomicBoolean attempted = new java.util.concurrent.atomic.AtomicBoolean();
+        CodemossSettingsService settings = new CodemossSettingsService() {
+            @Override
+            public boolean repairActiveProviderToClaudeSettings() throws IOException {
+                attempted.set(true);
+                throw new IOException("The filesystem provider does not support file locking; no changes were written",
+                        new kotlin.NotImplementedError("Not yet implemented"));
+            }
+        };
+        ChatWindowDelegate.DelegateHost host = (ChatWindowDelegate.DelegateHost) Proxy.newProxyInstance(
+                ChatWindowDelegate.DelegateHost.class.getClassLoader(),
+                new Class<?>[]{ChatWindowDelegate.DelegateHost.class},
+                (proxy, method, args) -> {
+                    if ("getSettingsService".equals(method.getName())) {
+                        return settings;
+                    }
+                    throw new AssertionError("Unexpected startup interaction: " + method.getName());
+                });
+        new ChatWindowDelegate(host).syncActiveProvider();
+        assertTrue("Startup must attempt repair and handle the lock failure", attempted.get());
+    }
 
     /** Reconnect must repair a missed terminal without replacing the user's input document. */
     @Test
@@ -82,6 +109,16 @@ public class ChatWindowDelegateTest {
 
     /** Verifies that recovery serializes the complete authoritative Session selection state. */
     @Test
+    public void recoverySnapshotPreservesNativeWorkflowEnableAndDisable() {
+        for (boolean enabled : new boolean[]{true, false}) {
+            JsonObject state = JsonParser.parseString(ChatWindowDelegate.buildBackendTabStateJson(
+                    "claude", "claude-sonnet-5", "default", "high", null, enabled)).getAsJsonObject();
+            assertEquals(enabled, state.get("claudeUltracode").getAsBoolean());
+            assertEquals("high", state.get("reasoningEffort").getAsString());
+        }
+    }
+
+    @Test
     public void buildsAuthoritativeBackendTabState() {
         String json = ChatWindowDelegate.buildBackendTabStateJson(
                 "codex",
@@ -99,12 +136,23 @@ public class ChatWindowDelegateTest {
         assertEquals("fast", state.get("codexFastMode").getAsString());
     }
 
+    /** Recovery uses the same provider resolvers as a live turn, e.g. the window OMP declared. */
+    @Test
+    public void resolvesOmpRecoveryLimitFromTheDeclaredModelWindow() {
+        com.github.claudecodegui.provider.omp.OmpContextWindows.update(JsonParser.parseString(
+                "{\"success\":true,\"models\":[{\"id\":\"vendor/recovery-model\",\"contextWindow\":123456}]}")
+                .getAsJsonObject());
+        assertEquals(123_456, ChatWindowDelegate.resolveModelContextLimitForRecovery(
+                "omp", "vendor/recovery-model", null, null, null));
+    }
+
     /** Verifies that recovery preserves v0.5's provider-aware Codex context-window lookup. */
     @Test
     public void resolvesCodexRecoveryLimitThroughExistingProviderConfiguration() {
         int limit = ChatWindowDelegate.resolveModelContextLimitForRecovery(
                 "codex",
                 "gpt-5.6-sol",
+                null,
                 null,
                 null
         );
@@ -135,6 +183,7 @@ public class ChatWindowDelegateTest {
                     "grok",
                     "grok-build",
                     null,
+                    null,
                     null
             );
 
@@ -154,11 +203,13 @@ public class ChatWindowDelegateTest {
                 "gemini",
                 "gemini-2.5-pro",
                 null,
+                null,
                 null
         ));
         assertEquals(200_000, ChatWindowDelegate.resolveModelContextLimitForRecovery(
                 "claude",
                 "gemini-2.5-pro",
+                null,
                 null,
                 null
         ));
@@ -282,6 +333,11 @@ public class ChatWindowDelegateTest {
             @Override
             public void sendCurrentPermissionMode() {
                 // Permission-mode delivery is independent of the recovery snapshot gate.
+            }
+
+            @Override
+            public void sendCurrentOmpApprovalMode() {
+                // Delivered like the permission mode, outside the recovery snapshot gate.
             }
         };
         StreamMessageCoalescer.JsCallbackTarget coalescerTarget =

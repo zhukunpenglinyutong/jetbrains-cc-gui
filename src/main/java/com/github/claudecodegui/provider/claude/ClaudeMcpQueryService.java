@@ -56,12 +56,33 @@ class ClaudeMcpQueryService {
         this.outputExtractor = outputExtractor;
     }
 
-    CompletableFuture<List<JsonObject>> getMcpServerStatus(String cwd) {
+    /**
+     * Repo-local env only expands into the user's MCP servers when the IDE trusts the project.
+     * The caller decides {@code projectTrusted} on the IDE's form of {@code cwd}, which is
+     * already in the form Node runs in.
+     */
+    static JsonObject buildStatusInput(String cwd, boolean projectTrusted) {
+        JsonObject stdinInput = new JsonObject();
+        stdinInput.addProperty("cwd", cwd != null ? cwd : "");
+        stdinInput.addProperty("projectTrusted", projectTrusted);
+        return stdinInput;
+    }
+
+    static JsonObject buildToolsInput(String serverId, String cwd, boolean projectTrusted) {
+        JsonObject stdinInput = new JsonObject();
+        stdinInput.addProperty("serverId", serverId != null ? serverId : "");
+        if (cwd != null && !cwd.isEmpty()) {
+            stdinInput.addProperty("cwd", cwd);
+        }
+        stdinInput.addProperty("projectTrusted", projectTrusted);
+        return stdinInput;
+    }
+
+    CompletableFuture<List<JsonObject>> getMcpServerStatus(String cwd, boolean projectTrusted) {
         return CompletableFuture.supplyAsync(() -> {
             log.info("[McpStatus] Starting getMcpServerStatus, cwd=" + cwd);
 
-            JsonObject stdinInput = new JsonObject();
-            stdinInput.addProperty("cwd", cwd != null ? cwd : "");
+            JsonObject stdinInput = buildStatusInput(cwd, projectTrusted);
 
             MarkerResult result = executeMarkerQuery(
                     MCP_STATUS_CHANNEL_ID,
@@ -123,15 +144,11 @@ class ClaudeMcpQueryService {
         });
     }
 
-    CompletableFuture<JsonObject> getMcpServerTools(String serverId, String cwd) {
+    CompletableFuture<JsonObject> getMcpServerTools(String serverId, String cwd, boolean projectTrusted) {
         return CompletableFuture.supplyAsync(() -> {
             log.info("[McpTools] Starting getMcpServerTools, serverId=" + serverId + ", cwd=" + cwd);
 
-            JsonObject stdinInput = new JsonObject();
-            stdinInput.addProperty("serverId", serverId != null ? serverId : "");
-            if (cwd != null && !cwd.isEmpty()) {
-                stdinInput.addProperty("cwd", cwd);
-            }
+            JsonObject stdinInput = buildToolsInput(serverId, cwd, projectTrusted);
 
             MarkerResult result = executeMarkerQuery(
                     MCP_TOOLS_CHANNEL_ID,

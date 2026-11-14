@@ -18,7 +18,7 @@ interface ContextBarProps {
   onClearAgent?: () => void;
   /** Current provider (for conditional rendering) */
   currentProvider?: string;
-  /** Selected model id (gemini slug rides the quota poll for billing-family selection) */
+  /** Selected model id (OMP plan usage follows it; the gemini slug picks the quota billing family) */
   selectedModel?: string;
   /** Whether there are messages (for rewind button visibility) */
   hasMessages?: boolean;

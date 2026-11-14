@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseMiniMaxModelsFromYaml } from './models-service.js';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { parseMiniMaxModelsFromYaml, resolveMiniMaxConfigPaths } from './models-service.js';
 
 // Model entries in config.yaml are block mappings (properties on the lines
 // below), matching the real mcode config layout.
@@ -63,4 +66,40 @@ provider:
         b: 2
 `);
   assert.equal(models.length, 1);
+});
+
+test('MINIMAX_DATA_DIR relocates config discovery before the ~/.minimax default', () => {
+  const dataDir = mkdtempSync(join(tmpdir(), 'cc-gui-mm-datadir-'));
+  writeFileSync(join(dataDir, 'config.yaml'), 'provider:\n  minimax:\n    models:\n      MiniMax-M3:\n        a: 1\n');
+  const saved = { ...process.env };
+  try {
+    process.env.MINIMAX_DATA_DIR = dataDir;
+    const paths = resolveMiniMaxConfigPaths();
+    assert.equal(paths[0], join(dataDir, 'config.yaml'));
+  } finally {
+    for (const key of ['MINIMAX_DATA_DIR', 'MINIMAX_CODE_HOME', 'MINIMAX_HOME']) {
+      if (saved[key] === undefined) delete process.env[key];
+      else process.env[key] = saved[key];
+    }
+  }
+});
+
+test('plugin overrides still outrank MINIMAX_DATA_DIR', () => {
+  const dataDir = mkdtempSync(join(tmpdir(), 'cc-gui-mm-datadir2-'));
+  writeFileSync(join(dataDir, 'config.yaml'), '');
+  const overrideHome = mkdtempSync(join(tmpdir(), 'cc-gui-mm-override-'));
+  writeFileSync(join(overrideHome, 'config.yaml'), '');
+  const saved = { ...process.env };
+  try {
+    process.env.MINIMAX_DATA_DIR = dataDir;
+    process.env.MINIMAX_CODE_HOME = overrideHome;
+    const paths = resolveMiniMaxConfigPaths();
+    assert.equal(paths[0], join(overrideHome, 'config.yaml'));
+    assert.ok(paths.includes(join(dataDir, 'config.yaml')));
+  } finally {
+    for (const key of ['MINIMAX_DATA_DIR', 'MINIMAX_CODE_HOME', 'MINIMAX_HOME']) {
+      if (saved[key] === undefined) delete process.env[key];
+      else process.env[key] = saved[key];
+    }
+  }
 });

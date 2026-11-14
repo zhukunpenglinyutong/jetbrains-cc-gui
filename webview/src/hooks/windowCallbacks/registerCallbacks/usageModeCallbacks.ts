@@ -34,6 +34,7 @@ export function registerUsageModeCallbacks(options: UseWindowCallbacksOptions): 
     setSelectedGeminiModel,
     setLongContextEnabled,
     setReasoningEffort,
+    setClaudeUltracode,
     setCodexFastMode,
     setProviderConfigVersion,
     setActiveProviderConfig,
@@ -154,9 +155,12 @@ export function registerUsageModeCallbacks(options: UseWindowCallbacksOptions): 
 
       updateMode(state.permissionMode as PermissionMode | undefined, provider);
 
-      const reasoningValues: ReasoningEffort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
+      const reasoningValues: ReasoningEffort[] = ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'];
       if (reasoningValues.includes(state.reasoningEffort as ReasoningEffort)) {
         setReasoningEffort(state.reasoningEffort as ReasoningEffort);
+      }
+      if (typeof state.claudeUltracode === 'boolean') {
+        setClaudeUltracode?.(state.claudeUltracode);
       }
       if (state.codexFastMode === 'normal' || state.codexFastMode === 'fast') {
         setCodexFastMode(state.codexFastMode as CodexFastMode);
@@ -173,6 +177,7 @@ export function registerUsageModeCallbacks(options: UseWindowCallbacksOptions): 
     window.applyBackendTabState(pending);
   }
 
+  const providerEventDispatcher = window.updateActiveProvider;
   window.updateActiveProvider = (jsonStr: string) => {
     try {
       const provider = JSON.parse(jsonStr);
@@ -181,6 +186,17 @@ export function registerUsageModeCallbacks(options: UseWindowCallbacksOptions): 
       setActiveProviderConfig(provider);
     } catch (error) {
       console.error('[Frontend] Failed to parse active provider in App:', error);
+    }
+    // Forward to the runtime-provider dispatcher installed at bootstrap so
+    // subscribeActiveProvider listeners (RuntimeProviderSelect,
+    // useClaudePlanUsage, …) keep receiving updates — replacing it here would
+    // silence the whole subscriber registry.
+    if (providerEventDispatcher) {
+      try {
+        providerEventDispatcher(jsonStr);
+      } catch (error) {
+        console.error('[Frontend] Active provider dispatcher failed:', error);
+      }
     }
   };
 

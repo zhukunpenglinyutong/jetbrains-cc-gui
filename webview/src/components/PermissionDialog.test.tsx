@@ -241,7 +241,14 @@ describe('PermissionDialog', () => {
     expect(screen.getByTestId('codex-permission-scope').textContent).toContain('C:/repo');
   });
 
-  it('exposes native command rule amendments as typed decisions', () => {
+  it.each([
+    { label: /Allow with this command rule/, rule: {
+      acceptWithExecpolicyAmendment: { execpolicy_amendment: ['git', 'status'] },
+    } },
+    { label: /Allow with this network rule/, rule: {
+      applyNetworkPolicyAmendment: { network_policy_amendment: { host: 'example.com', action: 'allow' } },
+    } },
+  ])('wraps native rule approvals in the required decision result for $label', ({ label, rule }) => {
     const onDecision = vi.fn();
     render(
       <PermissionDialog
@@ -249,7 +256,7 @@ describe('PermissionDialog', () => {
         request={buildRequest({
           provider: 'codex',
           codexMethod: 'item/commandExecution/requestApproval',
-          suggestions: [{ acceptWithExecpolicyAmendment: { execpolicy_amendment: ['allow echo'] } }],
+          suggestions: [rule],
         })}
         onApprove={() => {}}
         onSkip={() => {}}
@@ -258,10 +265,8 @@ describe('PermissionDialog', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /Allow with this command rule/ }));
-    expect(onDecision).toHaveBeenCalledWith('perm-1', {
-      acceptWithExecpolicyAmendment: { execpolicy_amendment: ['allow echo'] },
-    });
+    fireEvent.click(screen.getByRole('button', { name: label }));
+    expect(onDecision).toHaveBeenCalledWith('perm-1', { decision: rule });
   });
 
   it('shows which command prefix or host a native rule would allow', () => {

@@ -183,7 +183,7 @@ public abstract class MarkerCliBridge extends BaseSDKBridge {
             MessageCallback callback
     ) {
         return sendMessage(channelId, message, sessionId, cwd, model, reasoningEffort,
-                null, null, null, (Boolean) null, callback);
+                null, null, null, null, (Boolean) null, callback);
     }
 
     /**
@@ -204,7 +204,7 @@ public abstract class MarkerCliBridge extends BaseSDKBridge {
             MessageCallback callback
     ) {
         return sendMessage(channelId, message, sessionId, cwd, model, reasoningEffort,
-                attachments, null, null, (Boolean) null, callback);
+                attachments, null, null, null, (Boolean) null, callback);
     }
 
     /**
@@ -233,7 +233,32 @@ public abstract class MarkerCliBridge extends BaseSDKBridge {
     ) {
         return sendMessageWithPayload(
                 channelId, message, sessionId, cwd, model, reasoningEffort,
-                attachments, permissionMode, dshPreset, thinking, null, callback);
+                attachments, permissionMode, dshPreset, null, thinking, null, callback);
+    }
+
+    /**
+     * Send a message with an OMP approval mode override.
+     *
+     * <p>{@code ompApprovalMode} is the OMP {@code --approval-mode} override;
+     * empty means OMP's own setting decides, {@code null} omits the field.
+     */
+    public CompletableFuture<SDKResult> sendMessage(
+            String channelId,
+            String message,
+            String sessionId,
+            String cwd,
+            String model,
+            String reasoningEffort,
+            List<ClaudeSession.Attachment> attachments,
+            String permissionMode,
+            String dshPreset,
+            String ompApprovalMode,
+            Boolean thinking,
+            MessageCallback callback
+    ) {
+        return sendMessageWithPayload(
+                channelId, message, sessionId, cwd, model, reasoningEffort,
+                attachments, permissionMode, dshPreset, ompApprovalMode, thinking, null, callback);
     }
 
     /**
@@ -261,7 +286,7 @@ public abstract class MarkerCliBridge extends BaseSDKBridge {
     ) {
         return sendMessageWithPayload(
                 channelId, message, sessionId, cwd, model, reasoningEffort,
-                attachments, permissionMode, dshPreset, null, requestedCwd, callback);
+                attachments, permissionMode, dshPreset, null, null, requestedCwd, callback);
     }
 
     /**
@@ -288,7 +313,43 @@ public abstract class MarkerCliBridge extends BaseSDKBridge {
         }
         return sendMessageWithPayload(
                 channelId, message, sessionId, cwd, model, reasoningEffort,
-                attachments, permissionMode, dshPreset, thinking, requestedCwd, callback);
+                attachments, permissionMode, dshPreset, null, thinking, requestedCwd, callback);
+    }
+
+    /**
+     * Full send: OMP approval mode, thinking toggle and pre-clamp requestedCwd.
+     *
+     * <p>Routes through the narrower overloads when a field is absent, so a
+     * subclass that overrides one of those still sees the call.
+     */
+    public CompletableFuture<SDKResult> sendMessage(
+            String channelId,
+            String message,
+            String sessionId,
+            String cwd,
+            String model,
+            String reasoningEffort,
+            List<ClaudeSession.Attachment> attachments,
+            String permissionMode,
+            String dshPreset,
+            String ompApprovalMode,
+            Boolean thinking,
+            String requestedCwd,
+            MessageCallback callback
+    ) {
+        if (requestedCwd == null) {
+            return sendMessage(
+                    channelId, message, sessionId, cwd, model, reasoningEffort,
+                    attachments, permissionMode, dshPreset, ompApprovalMode, thinking, callback);
+        }
+        if (ompApprovalMode == null) {
+            return sendMessage(
+                    channelId, message, sessionId, cwd, model, reasoningEffort,
+                    attachments, permissionMode, dshPreset, thinking, requestedCwd, callback);
+        }
+        return sendMessageWithPayload(
+                channelId, message, sessionId, cwd, model, reasoningEffort,
+                attachments, permissionMode, dshPreset, ompApprovalMode, thinking, requestedCwd, callback);
     }
 
     private CompletableFuture<SDKResult> sendMessageWithPayload(
@@ -301,6 +362,7 @@ public abstract class MarkerCliBridge extends BaseSDKBridge {
             List<ClaudeSession.Attachment> attachments,
             String permissionMode,
             String dshPreset,
+            String ompApprovalMode,
             Boolean thinking,
             String requestedCwd,
             MessageCallback callback
@@ -308,6 +370,9 @@ public abstract class MarkerCliBridge extends BaseSDKBridge {
         JsonObject stdinPayload = buildCliStdinPayload(
                 message, sessionId, cwd, model, reasoningEffort,
                 attachments, permissionMode, dshPreset, thinking, requestedCwd);
+        if (ompApprovalMode != null) {
+            stdinPayload.addProperty("approvalMode", ompApprovalMode);
+        }
         String stdinJson = gson.toJson(stdinPayload);
         List<String> command = buildBaseCommand("send");
         if (command.isEmpty()) {

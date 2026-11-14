@@ -33,6 +33,7 @@ import { createInterface } from 'node:readline';
 import { EventEmitter } from 'node:events';
 import { redactCodexDiagnostic } from './codex-diagnostics.js';
 import { sniffForContextSupport } from './codex-ide-context.js';
+import { buildAppServerArgv, buildCodexProviderLaunchConfig } from './codex-native-runtime-config.js';
 
 export const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 export const DEFAULT_EXIT_DRAIN_TIMEOUT_MS = 5_000;
@@ -64,6 +65,8 @@ export class CodexAppServerClient extends EventEmitter {
    *        stdio://' is appended here.
    * @param {string} [opts.cwd] child working directory
    * @param {object} [opts.env] full child environment
+   * @param {object|null} [opts.nativeConfig] native provider table for process startup
+   * @param {string|null} [opts.modelProvider] selected native provider, also applied to thread RPCs
    * @param {string[]} [opts.sensitiveEnvNames] native provider credential names for diagnostic redaction
    * @param {{name: string, title: string|null, version: string}} [opts.clientInfo]
    * @param {number} [opts.requestTimeoutMs] default short-RPC budget
@@ -76,6 +79,8 @@ export class CodexAppServerClient extends EventEmitter {
     command,
     cwd = null,
     env = undefined,
+    nativeConfig = null,
+    modelProvider = null,
     sensitiveEnvNames = [],
     clientInfo = null,
     requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
@@ -93,8 +98,11 @@ export class CodexAppServerClient extends EventEmitter {
     this.contextSupportProbe = contextSupportProbe;
     this.contextSupportPromise = null;
     this.cwd = cwd;
-    this.env = env;
-    this.sensitiveEnvNames = new Set(sensitiveEnvNames.map(name => process.platform === 'win32' ? name.toUpperCase() : name));
+    const launchConfig = buildCodexProviderLaunchConfig({ modelProvider, config: nativeConfig, env });
+    this.env = launchConfig.env;
+    this.configArgs = launchConfig.configArgs;
+    this.sensitiveEnvNames = new Set([...sensitiveEnvNames, ...launchConfig.sensitiveEnvNames]
+      .map(name => process.platform === 'win32' ? name.toUpperCase() : name));
     this.clientInfo = clientInfo
       || { name: 'codemoss_intellij', title: 'CC GUI', version: '0.0.0' };
     this.requestTimeoutMs = requestTimeoutMs;
@@ -114,6 +122,7 @@ export class CodexAppServerClient extends EventEmitter {
     this.pendingRequests = new Map();   // our numeric ids -> entry
     this.serverRequests = new Map();    // server request ids -> {method, params}
     this.initializePromise = null;
+    this.userAgent = null;
     this.exitError = null;
     this.processExited = false;
     this.exitSettled = false;
@@ -167,7 +176,7 @@ export class CodexAppServerClient extends EventEmitter {
       return this.ensureInitialized();
     }
     this.#setState('starting');
-    const argv = [...this.command, 'app-server', '--listen', 'stdio://'];
+    const argv = buildAppServerArgv(this.command, this.configArgs);
     const launch = resolveCliSpawn(this.command[0], argv.slice(1), {
       cwd: this.cwd || undefined,
       env: buildCliSpawnEnv(this.command[0], undefined, this.env),
@@ -285,6 +294,7 @@ export class CodexAppServerClient extends EventEmitter {
         writeState: 'notWritten',
         resolve: (result) => {
           clearTimeout(timer);
+          this.userAgent = result?.userAgent ?? null;
           // Send the initialized notification only after the response arrived.
           try {
             this.#writeLine({ method: 'initialized', params: {} });

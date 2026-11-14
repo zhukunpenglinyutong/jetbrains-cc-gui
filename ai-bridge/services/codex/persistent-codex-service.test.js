@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -35,6 +35,7 @@ const {
   filterCodexProjectThreads,
   projectThreadFileChanges,
   codexReadThreadPersistent,
+  codexListThreadsPersistent,
   codexCountThreadMessagesPersistent,
   setCodexPristineBaseEnv,
   buildTurnSettings,
@@ -108,6 +109,20 @@ test('native auto review stays inside the workspace sandbox', () => {
   assert.equal(settings.sandbox, 'workspace-write');
 });
 
+test('Ultra selects native delegation in both effort fields without changing access or instructions', () => {
+  for (const permissionMode of ['default', 'plan']) {
+    const settings = buildTurnSettings({ model: 'gpt-6-astra', reasoningEffort: 'ultra', permissionMode });
+    assert.equal(settings.effort, 'ultra');
+    assert.equal(settings.collaborationMode.settings.reasoning_effort, 'ultra',
+      'native collaboration settings take precedence over the top-level effort');
+    assert.equal(settings.collaborationMode.mode, permissionMode);
+    assert.equal(settings.collaborationMode.settings.developer_instructions, null);
+    assert.equal(settings.approvalPolicy, 'on-request');
+    assert.equal(settings.sandbox, 'workspace-write');
+    assert.equal(settings.multiAgentMode, undefined, 'the deprecated native field must not replace Ultra');
+  }
+});
+
 test('an explicit per-turn sandbox selection wins over the mode mapping', () => {
   const settings = buildTurnSettings({
     permissionMode: 'default',
@@ -155,6 +170,30 @@ test('projects all session file changes without the visible history page limit',
   assert.equal(messages[0].message.content[0].id, 'edit-0');
   assert.equal(messages.at(-1).message.content[0].id, 'edit-39');
   assert.equal(messages[0].codexThreadId, 'whole');
+});
+
+test('the current chat access scope reaches both native thread creation and turn settings', async () => {
+  const base = { permissionMode: 'bypassPermissions', approvalPreset: 'full-access', sandboxSelection: 'danger-full-access',
+    approvalsReviewer: 'user',
+    sandboxSource: 'default', cwd: testCwd, message: 'inspect access',
+    codexCommandPrefix: peerCommandPrefix('permission-settings') };
+  for (const [index, settings, sandbox, policy] of [
+    [0, {}, 'danger-full-access', 'never'],
+    [1, { approvalPreset: 'request', sandboxSource: 'user', sandboxSelection: 'read-only' }, 'read-only', 'on-request'],
+    [2, { approvalPreset: 'request', sandboxSource: 'native', sandboxSelection: 'workspace-write' },
+      'workspace-write', 'on-request'],
+  ]) {
+    const channelId = `permission-${index}`;
+    const result = await codexSendPersistent({ ...base, ...settings, channelId },
+      { titleDependencies: { enabled: async () => false } });
+    assert.equal(result.outcome, 'completed');
+    const item = codexEvents().find(event => event.channelId === channelId && event.kind === 'itemCompleted');
+    const actual = JSON.parse(item.payload.item.text);
+    assert.equal(actual.threadSandbox, sandbox);
+    assert.equal(actual.sandboxPolicy.type, { 'read-only': 'readOnly', 'workspace-write': 'workspaceWrite',
+      'danger-full-access': 'dangerFullAccess' }[sandbox]);
+    assert.equal(actual.approvalPolicy, policy);
+  }
 });
 
 test('the persistent channel clears Fast with explicit standard input and keeps the cleared tier on later sends', async () => {
@@ -797,4 +836,115 @@ test('resetRuntime drains and disposes the session entry', async () => {
   });
   assert.equal(result.reset, true);
   assert.equal(getCodexRuntimeSnapshot().sessionCount, 0);
+});
+
+test('deleted rollout index rows stay absent after reopening history', async () => {
+  const original = CodexAppServerService.prototype.readOnly;
+  const path = join(testCwd, 'deleted-rollout.jsonl');
+  const thread = { id: 'deleted-rollout', cwd: testCwd, path };
+  writeFileSync(path, '{}');
+  CodexAppServerService.prototype.readOnly = async () => ({ data: [thread], nextCursor: null });
+  try {
+    const data = { channelId: 'deleted-rollout', cwd: testCwd,
+      codexCommandPrefix: peerCommandPrefix('early-notification'), params: { projectPath: [] } };
+    assert.equal((await codexListThreadsPersistent(data, { loadFavorites: () => ({}) })).data.length, 1);
+    unlinkSync(path);
+    assert.deepEqual((await codexListThreadsPersistent(data, { loadFavorites: () => ({}) })).data, []);
+    assert.deepEqual((await codexListThreadsPersistent(data, { loadFavorites: () => ({}) })).data, []);
+  } finally {
+    CodexAppServerService.prototype.readOnly = original;
+  }
+});
+
+test('stale-only pages advance the native cursor and cursor cycles terminate', async () => {
+  const original = CodexAppServerService.prototype.readOnly;
+  for (const cycle of [false, true]) {
+    const cursors = [];
+    CodexAppServerService.prototype.readOnly = async (method, params) => {
+      assert.equal(method, 'thread/list');
+      cursors.push(params.cursor);
+      return params.cursor === 'next' && !cycle
+        ? { data: [{ id: 'exists', cwd: testCwd }], nextCursor: 'last' }
+        : { data: [{ id: 'missing', path: join(testCwd, 'missing.jsonl') }], nextCursor: 'next' };
+    };
+    try {
+      const result = await codexListThreadsPersistent({ channelId: `stale-page-${cycle}`, cwd: testCwd,
+        codexCommandPrefix: peerCommandPrefix('early-notification'), params: { projectPath: [] } }, { loadFavorites: () => ({}) });
+      assert.deepEqual(result.data.map(thread => thread.id), cycle ? [] : ['exists']);
+      assert.equal(result.nextCursor, cycle ? 'next' : 'last');
+      assert.deepEqual(cursors, [undefined, 'next']);
+    } finally {
+      CodexAppServerService.prototype.readOnly = original;
+    }
+  }
+});
+
+test('a warm favorite catalog cannot restore a deleted rollout after upstream history filtering', async () => {
+  const original = CodexAppServerService.prototype.readOnly;
+  const path = join(testCwd, 'cached-favorite-deleted.jsonl');
+  const thread = { id: 'cached-favorite-deleted', cwd: testCwd, path };
+  writeFileSync(path, '{}');
+  CodexAppServerService.prototype.readOnly = async method => {
+    assert.equal(method, 'thread/list', 'favorite metadata never resumes or reads individual threads');
+    return { data: [thread], nextCursor: null };
+  };
+  try {
+    const data = { channelId: 'cached-favorite-deleted', cwd: testCwd,
+      codexCommandPrefix: peerCommandPrefix('early-notification'), params: { projectPath: [] } };
+    const dependencies = { loadFavorites: () => ({ [thread.id]: { favoritedAt: 1 }, unknown: {} }) };
+    assert.equal((await codexListThreadsPersistent(data, dependencies)).data[0].isFavorited, true);
+    unlinkSync(path);
+    assert.deepEqual((await codexListThreadsPersistent(data, dependencies)).data, []);
+    assert.deepEqual((await codexListThreadsPersistent(data, dependencies)).data, []);
+  } finally {
+    CodexAppServerService.prototype.readOnly = original;
+  }
+});
+
+test('skipping stale first pages still resolves off-page favorites only for the first request', async () => {
+  const original = CodexAppServerService.prototype.readOnly;
+  const cursors = [];
+  CodexAppServerService.prototype.readOnly = async (method, params) => {
+    assert.equal(method, 'thread/list');
+    cursors.push(params.cursor);
+    if (params.cursor === 'favorites') return { data: [{ id: 'off-page', cwd: testCwd }], nextCursor: null };
+    if (params.cursor === 'valid') return { data: [{ id: 'ordinary', cwd: testCwd }], nextCursor: 'favorites' };
+    return { data: [{ id: 'stale', path: join(testCwd, 'never-created-rollout.jsonl') }], nextCursor: 'valid' };
+  };
+  try {
+    const data = { channelId: 'stale-first-favorites', cwd: testCwd,
+      codexCommandPrefix: peerCommandPrefix('early-notification'), params: { projectPath: [] } };
+    const dependencies = { loadFavorites: () => ({ 'off-page': { favoritedAt: 1 } }) };
+    const first = await codexListThreadsPersistent(data, dependencies);
+    assert.deepEqual(first.data.map(row => row.id), ['off-page', 'ordinary']);
+    assert.equal(first.data[0].isFavorited, true);
+    assert.deepEqual(cursors, [undefined, 'valid', 'favorites']);
+    const page = await codexListThreadsPersistent({ ...data, params: { ...data.params, cursor: 'valid' } }, dependencies);
+    assert.deepEqual(page.data.map(row => row.id), ['ordinary']);
+    assert.deepEqual(cursors, [undefined, 'valid', 'favorites', 'valid']);
+  } finally {
+    CodexAppServerService.prototype.readOnly = original;
+  }
+});
+
+
+test('supplemental favorite page failures preserve a successfully loaded native first page', async () => {
+  const original = CodexAppServerService.prototype.readOnly;
+  const cursors = [];
+  CodexAppServerService.prototype.readOnly = async (method, params) => {
+    assert.equal(method, 'thread/list');
+    cursors.push(params.cursor);
+    if (params.cursor) throw new Error('supplemental list failure');
+    return { data: [{ id: 'first-page', cwd: testCwd }], nextCursor: 'failed-page' };
+  };
+  try {
+    const result = await codexListThreadsPersistent({ channelId: 'favorite-page-failure', cwd: testCwd,
+      codexCommandPrefix: peerCommandPrefix('early-notification'), params: { projectPath: [] } },
+    { loadFavorites: () => ({ unknown: {} }) });
+    assert.deepEqual(result.data.map(row => row.id), ['first-page']);
+    assert.equal(result.nextCursor, 'failed-page');
+    assert.deepEqual(cursors, [undefined, 'failed-page']);
+  } finally {
+    CodexAppServerService.prototype.readOnly = original;
+  }
 });

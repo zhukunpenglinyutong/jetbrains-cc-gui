@@ -944,6 +944,10 @@ public class CodemossSettingsService {
         return withConfigTransaction(() -> providerManager.setAlwaysThinkingEnabledInActiveProvider(enabled));
     }
 
+    public boolean setAlwaysThinkingEnabledInProvider(String id, boolean enabled) throws IOException {
+        return withConfigTransaction(() -> providerManager.setAlwaysThinkingEnabledInProvider(id, enabled));
+    }
+
     /**
      * alwaysThinkingEnabled of the active provider profile, or {@code null} when unset.
      * Mirrors the webview toggle's read order: provider settingsConfig first,
@@ -2342,6 +2346,22 @@ public class CodemossSettingsService {
             config.addProperty("commitGenerationEnabled", enabled);
             writeConfig(config);
             LOG.info("[CodemossSettings] Set commit generation enabled: " + enabled);
+        });
+    }
+
+    /** Whether history also includes matching full Git remote repository identities. Defaults to false. */
+    public boolean getSessionGitRepositoryMatchingEnabled() throws IOException {
+        JsonObject config = readConfig();
+        return config.has("sessionGitRepositoryMatchingEnabled")
+                && !config.get("sessionGitRepositoryMatchingEnabled").isJsonNull()
+                && config.get("sessionGitRepositoryMatchingEnabled").getAsBoolean();
+    }
+
+    public void setSessionGitRepositoryMatchingEnabled(boolean enabled) throws IOException {
+        runConfigTransaction(() -> {
+            JsonObject config = readConfig();
+            config.addProperty("sessionGitRepositoryMatchingEnabled", enabled);
+            writeConfig(config);
         });
     }
 

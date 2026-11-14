@@ -5,6 +5,7 @@ import com.github.claudecodegui.provider.common.MarkerCliBridge;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
 import com.github.claudecodegui.provider.zcode.ZcodeSDKBridge;
+import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.project.Project;
 import org.junit.Test;
@@ -15,6 +16,7 @@ import java.lang.reflect.Proxy;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -26,6 +28,94 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 public class SessionSendServiceTest {
+
+    @Test
+    public void workflowSnapshotKeepsItsExecutionOwnerAcrossOverlappingTurnSettlement() {
+        java.util.List<Boolean> selections = new java.util.ArrayList<>();
+        var firstResult = new java.util.concurrent.CompletableFuture<com.github.claudecodegui.provider.common.SDKResult>();
+        var nextResult = new java.util.concurrent.CompletableFuture<com.github.claudecodegui.provider.common.SDKResult>();
+        var bridge = new com.github.claudecodegui.provider.claude.ClaudeSDKBridge() {
+            @Override
+            public java.util.concurrent.CompletableFuture<com.github.claudecodegui.provider.common.SDKResult> sendMessage(
+                    String channelId, String message, String sessionId, String epoch, String cwd,
+                    java.util.List<ClaudeSession.Attachment> attachments, String permissionMode, String model,
+                    com.google.gson.JsonObject openedFiles, String agentPrompt, Boolean streaming,
+                    Boolean disableThinking, String effort, boolean ultracode,
+                    com.github.claudecodegui.provider.common.MessageCallback callback) {
+                selections.add(ultracode);
+                return selections.size() == 1 ? firstResult : nextResult;
+            }
+        };
+        SessionState state = new SessionState();
+        SessionSendService service = new SessionSendService(null, state, new SessionCallbackFacade(null),
+                new MessageParser(), new MessageMerger(), new com.google.gson.Gson(), bridge, null, null, null);
+        Object firstOwner = state.beginTurn();
+        SessionExecutionOwnership firstExecution = state.currentExecutionOwnership();
+        state.setClaudeUltracode(false);
+        var firstSend = service.sendMessageToProvider("channel", "first", null, null, "", null,
+                "default", "high", null, null, null, "first", null, true, firstOwner);
+
+        Object nextOwner = state.beginTurn();
+        state.setClaudeUltracode(true);
+        service.sendMessageToProvider("channel", "stale launch", null, null, "", null,
+                "default", "high", null, null, null, "stale", null, true, firstOwner).join();
+        var nextSend = service.sendMessageToProvider("channel", "next", null, null, "", null,
+                "default", "high", null, null, null, "next", null, false, nextOwner);
+        assertEquals(java.util.List.of(true, false), selections);
+        SessionExecutionState.Snapshot pendingNextTurn = state.getExecutionSnapshot();
+
+        var cancelled = com.github.claudecodegui.provider.common.SDKResult.error("Native cancellation confirmed");
+        cancelled.cancelled = true;
+        firstResult.complete(cancelled);
+        firstSend.join();
+        assertEquals(SessionExecutionState.Outcome.CANCELLED, firstExecution.state().snapshot().outcome());
+        assertEquals(pendingNextTurn, state.getExecutionSnapshot());
+        nextResult.complete(com.github.claudecodegui.provider.common.SDKResult.success("Next reply"));
+        nextSend.join();
+        assertEquals(SessionExecutionState.Outcome.SUCCEEDED, state.getExecutionSnapshot().outcome());
+    }
+
+    @Test
+    public void explicitWorkflowSelectionWinsOverMutableSessionForBothEnableAndDisable() {
+        java.util.List<Boolean> selections = new java.util.ArrayList<>();
+        java.util.List<String> efforts = new java.util.ArrayList<>();
+        var bridge = new com.github.claudecodegui.provider.claude.ClaudeSDKBridge() {
+            @Override
+            public java.util.concurrent.CompletableFuture<com.github.claudecodegui.provider.common.SDKResult> sendMessage(
+                    String channelId, String message, String sessionId, String epoch, String cwd,
+                    java.util.List<ClaudeSession.Attachment> attachments, String permissionMode, String model,
+                    com.google.gson.JsonObject openedFiles, String agentPrompt, Boolean streaming,
+                    Boolean disableThinking, String effort, boolean ultracode,
+                    com.github.claudecodegui.provider.common.MessageCallback callback) {
+                selections.add(ultracode);
+                efforts.add(effort);
+                return java.util.concurrent.CompletableFuture.completedFuture(new com.github.claudecodegui.provider.common.SDKResult());
+            }
+        };
+        SessionState state = new SessionState();
+        SessionSendService service = new SessionSendService(null, state, new SessionCallbackFacade(null),
+                new MessageParser(), new MessageMerger(), new com.google.gson.Gson(), bridge, null, null, null);
+        state.setClaudeUltracode(false);
+        service.sendMessageToProvider("channel", "first", null, null, "", null,
+                "default", "high", null, null, "first", null, true).join();
+        state.setClaudeUltracode(true);
+        service.sendMessageToProvider("channel", "next", null, null, "", null,
+                "default", "max", null, null, "next", null, false).join();
+        assertEquals(java.util.List.of(true, false), selections);
+        assertEquals(java.util.List.of("high", "max"), efforts);
+    }
+
+    @Test
+    public void ultraIsNativeCodexEffortAndCannotLeakToOtherProviders() {
+        assertEquals("ultra", SessionSendService.normalizeRequestedReasoningEffort(" ultra "));
+        assertEquals("ultra", SessionSendService.resolveEffectiveReasoningEffort("codex", "ultra", "high"));
+        assertEquals("ultra", SessionSendService.resolveEffectiveReasoningEffort("codex", null, "ultra"));
+        for (String provider : new String[]{"claude", "grok", "zcode", "kimi"}) {
+            assertNull(SessionSendService.resolveEffectiveReasoningEffort(provider, "ultra", "high"));
+            assertNull(SessionSendService.resolveEffectiveReasoningEffort(provider, null, "ultra"));
+            assertEquals("high", SessionSendService.resolveEffectiveReasoningEffort(provider, "high", "ultra"));
+        }
+    }
 
     @Test
     public void normalizeRequestedPermissionModeRejectsBlankAndUnknownValues() {
@@ -231,6 +321,84 @@ public class SessionSendServiceTest {
     }
 
     @Test
+    public void cliReasoningEffortPassesEveryLevelToOmpAndForcesNothingWhenUnset() {
+        for (String level : new String[]{"low", "medium", "high", "xhigh", "max"}) {
+            assertEquals(level, SessionSendService.normalizeCliReasoningEffort("omp", level));
+        }
+        assertEquals("xhigh", SessionSendService.normalizeCliReasoningEffort("omp", " XHigh "));
+        // No --thinking flag: the level configured in OMP itself applies.
+        assertEquals("", SessionSendService.normalizeCliReasoningEffort("omp", null));
+        assertEquals("", SessionSendService.normalizeCliReasoningEffort("omp", "extreme"));
+    }
+
+    @Test
+    public void cliReasoningEffortKeepsThreeLevelsAndMediumDefaultForOtherCliProviders() {
+        assertEquals("high", SessionSendService.normalizeCliReasoningEffort("pi", "high"));
+        assertEquals("medium", SessionSendService.normalizeCliReasoningEffort("pi", "xhigh"));
+        assertEquals("medium", SessionSendService.normalizeCliReasoningEffort("kimi", null));
+    }
+
+    @Test
+    public void ompApprovalModeKeepsKnownModesAndTreatsEverythingElseAsOmpsOwnSetting() {
+        SessionState state = new SessionState();
+        assertEquals("", state.getOmpApprovalMode());
+
+        for (String mode : new String[]{"always-ask", "write", "yolo"}) {
+            state.setOmpApprovalMode(mode);
+            assertEquals(mode, state.getOmpApprovalMode());
+        }
+        // "default" is the webview's name for "pass no --approval-mode flag".
+        for (String mode : new String[]{"default", "", "bypassPermissions", "always-ask-cached", null}) {
+            state.setOmpApprovalMode("yolo");
+            state.setOmpApprovalMode(mode);
+            assertEquals("", state.getOmpApprovalMode());
+        }
+    }
+
+    @Test
+    public void ompApprovalModeTravelsWithItsMessageAndOtherwiseFollowsTheTab() {
+        SessionState state = new SessionState();
+        state.setProvider("omp");
+        state.setOmpApprovalMode("always-ask");
+        List<String> sentModes = new ArrayList<>();
+        MarkerCliBridge omp = new MarkerCliBridge(SessionSendServiceTest.class) {
+            @Override
+            protected String getProviderName() {
+                return "omp";
+            }
+
+            @Override
+            protected String getStdinEnvKey() {
+                return "OMP_USE_STDIN";
+            }
+
+            @Override
+            public CompletableFuture<SDKResult> sendMessage(String channelId, String message, String sessionId,
+                    String cwd, String model, String reasoningEffort, List<ClaudeSession.Attachment> attachments,
+                    String permissionMode, String dshPreset, String ompApprovalMode, Boolean thinking,
+                    MessageCallback callback) {
+                sentModes.add(ompApprovalMode);
+                return CompletableFuture.completedFuture(SDKResult.success("ok"));
+            }
+        };
+        SessionSendService sender = new SessionSendService(null, state, new SessionCallbackFacade(null),
+                new MessageParser(), new MessageMerger(), new Gson(), null, null,
+                Map.of("omp", omp), new SessionContextService(null), null, null);
+
+        // Quick Fix states no mode: the tab's choice applies, not OMP's own (usually full auto) setting.
+        sender.sendMessageToProvider("ch", "fix this", null, null, "", null, null, null, null, null,
+                null, null, null, state.beginTurn()).join();
+        // A message carries its own mode, whatever the tab held when the send started.
+        sender.sendMessageToProvider("ch", "go", null, null, "", null, null, null, null, null,
+                "yolo", null, null, state.beginTurn()).join();
+        // "" is the webview's Default: no flag, even though the previous message ran in full auto.
+        sender.sendMessageToProvider("ch", "again", null, null, "", null, null, null, null, null,
+                "", null, null, state.beginTurn()).join();
+
+        assertEquals(List.of("always-ask", "yolo", ""), sentModes);
+    }
+
+    @Test
     public void getCodexRuntimeAccessErrorRequiresAuthorizationOrManagedProvider() {
         assertEquals(
                 "Codex local configuration access is not authorized. Please authorize local ~/.codex access or enable a managed Codex provider first.",
@@ -365,6 +533,7 @@ public class SessionSendServiceTest {
                 List<ClaudeSession.Attachment> attachments,
                 String permissionMode,
                 String dshPreset,
+                String ompApprovalMode,
                 Boolean thinking,
                 String requestedCwd,
                 MessageCallback callback
@@ -533,6 +702,7 @@ public class SessionSendServiceTest {
                 Boolean streaming,
                 Boolean disableThinking,
                 String reasoningEffort,
+                boolean ultracode,
                 MessageCallback callback
         ) {
             this.sendCalled = true;

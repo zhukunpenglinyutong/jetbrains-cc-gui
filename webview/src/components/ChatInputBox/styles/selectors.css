@@ -318,21 +318,6 @@
   font-size: 13px;
 }
 
-/* Beta tag for experimental CLI providers (Grok / Kimi / OpenCode / PI) */
-.provider-beta-badge {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  line-height: 1.2;
-  padding: 1px 5px;
-  border-radius: 4px;
-  color: #c4b5fd;
-  background: rgba(139, 92, 246, 0.18);
-  border: 1px solid rgba(139, 92, 246, 0.4);
-  flex-shrink: 0;
-  user-select: none;
-}
-
 /* "Retired" tag for a custom Claude model whose id the API no longer serves */
 .model-retired-badge {
   font-size: 10px;

@@ -278,6 +278,28 @@ describe('mergeConsecutiveAssistantMessages', () => {
     }
   });
 
+  it('keeps the duration stamped on the last native item so the footer still renders', () => {
+    const metadata = { codexThreadId: 'thread-1', codexTurnId: 'turn-1' };
+    const messages = [
+      makeMsg('assistant', 'Tool: bash', { raw: { ...metadata, uuid: 'tool',
+        content: [{ type: 'tool_use', id: 'tool', name: 'bash', input: { command: 'ls' } }] } }),
+      makeMsg('assistant', 'Done', { durationMs: 12000, raw: { ...metadata, uuid: 'final',
+        content: [{ type: 'text', text: 'Done' }] } }),
+    ];
+    const result = mergeConsecutiveAssistantMessages(messages, normalizeBlocks);
+    expect(result).toHaveLength(1);
+    expect(result[0].durationMs).toBe(12000);
+  });
+
+  it('leaves the duration unset while no native item of the turn has one', () => {
+    const metadata = { codexThreadId: 'thread-1', codexTurnId: 'turn-1' };
+    const messages = [
+      makeMsg('assistant', 'One', { raw: { ...metadata, uuid: 'one', content: [{ type: 'text', text: 'One' }] } }),
+      makeMsg('assistant', 'Two', { raw: { ...metadata, uuid: 'two', content: [{ type: 'text', text: 'Two' }] } }),
+    ];
+    expect(mergeConsecutiveAssistantMessages(messages, normalizeBlocks)[0].durationMs).toBeUndefined();
+  });
+
   const normalizeBlocks = (raw: unknown): any[] => {
     if (!raw || typeof raw !== 'object') return [];
     const r = raw as any;

@@ -2040,7 +2040,7 @@ export async function sendMessage({
       label: 'gemini',
       // The turn's prompt travels on stdin as one NDJSON user message —
       // see buildGeminiArgs for why it can never ride argv.
-      stdinPayload: buildGeminiStdinPayload(promptText),
+      stdinData: buildGeminiStdinPayload(promptText),
       emitEndStream: false,
       onSpawn: (child) => {
         reapChild = child;

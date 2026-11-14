@@ -4,6 +4,7 @@ import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.NodeJsServiceCaller;
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
+import com.github.claudecodegui.provider.claude.ClaudeHistoryReader;
 import com.github.claudecodegui.provider.dsh.DshHistoryReader;
 
 import com.github.claudecodegui.cache.SessionIndexCache;
@@ -314,7 +315,10 @@ class HistoryDeleteService {
             return new DeleteResult(false, 0);
         }
 
-        int[] result = deleteClaudeSession(sessionId, projectPath);
+        var reader = new ClaudeHistoryReader();
+        String projectRoot = context.getProject() == null ? projectPath : context.getProject().getBasePath();
+        String historyCwd = reader.resolveRepositoryHistoryCwd(sessionId, projectPath, projectRoot, context.getSettingsService());
+        int[] result = deleteClaudeSession(sessionId, historyCwd);
         return new DeleteResult(result[0] == 1, result[1]);
     }
 

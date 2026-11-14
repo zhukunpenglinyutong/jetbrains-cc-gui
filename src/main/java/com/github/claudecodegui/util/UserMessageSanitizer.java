@@ -21,13 +21,18 @@ public final class UserMessageSanitizer {
 
     private static final String[] SYSTEM_TAG_NAMES = {"agents-instructions", "system-reminder", "system-prompt", "skill", "recommended_plugins", "external_codex_apps_open_page"};
 
+    private static final String GLOBAL_GROK_RULES_HEADING = "## Global Grok Rules (~/.grok/grok-rules.md)";
+
     private static final String[] APPENDED_CONTEXT_MARKERS = {
         "\n\n## Agent Role and Instructions\n\n",
+        "\n\n" + GLOBAL_GROK_RULES_HEADING,
         "\n\n## Workspace Context\n\n",
         "\n\n## Project Modules\n\nThis project contains multiple modules:\n",
         "\n\n## Active Terminal Session\n\nThe user is working in the following terminal context:\n\n",
         "\n\n## Referenced Files\n\nThe following files were referenced by the user:\n\n",
         "\n\n## IDE Context\n\n",
+        "\n\n## IDE Context (opened files)\n",
+        "\n\n## Attachments\nUser attached: ",
         "\n\n## User's Current IDE Context\n\nThe user is viewing this file in their IDE.",
         "\n\n## User's Current IDE Context\n\nThe user is working in an IDE.",
         "\n\n### Multi-Project Workspace Structure\n\n",
@@ -50,6 +55,15 @@ public final class UserMessageSanitizer {
         String strippedImages = stripCodexImagePlaceholders(strippedTags);
         String strippedContext = stripAppendedContext(stripDesktopAttachmentEnvelope(strippedImages));
         return strippedContext.trim();
+    }
+
+    /** Keeps literal user XML while normalizing known legacy Claude attachment/context envelopes. */
+    public static String sanitizeClaudeUserFacingText(String text) {
+        if (text == null || text.isEmpty()) {
+            return text;
+        }
+        String normalized = text.replace("\r\n", "\n").replace("\r", "\n");
+        return stripAppendedContext(stripDesktopAttachmentEnvelope(normalized)).trim();
     }
 
     private static String stripDesktopAttachmentEnvelope(String text) {
@@ -118,6 +132,9 @@ public final class UserMessageSanitizer {
     }
 
     private static String stripAppendedContext(String text) {
+        if (text.stripLeading().startsWith(GLOBAL_GROK_RULES_HEADING)) {
+            return "";
+        }
         int cutIndex = -1;
         for (String marker : APPENDED_CONTEXT_MARKERS) {
             int idx = text.indexOf(marker);

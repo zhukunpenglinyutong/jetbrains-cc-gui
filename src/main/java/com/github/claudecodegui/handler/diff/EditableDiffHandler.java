@@ -10,11 +10,16 @@ import com.github.claudecodegui.handler.file.UndoFileHandler;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.intellij.diff.DiffContentFactory;
+import com.intellij.diff.DiffManager;
+import com.intellij.diff.requests.SimpleDiffRequest;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
+import com.intellij.openapi.fileTypes.FileType;
+import com.intellij.openapi.fileTypes.FileTypeManager;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 
@@ -25,6 +30,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashSet;
+import java.util.StringJoiner;
 import java.util.function.Consumer;
 
 /**
@@ -164,10 +170,51 @@ public class EditableDiffHandler implements DiffActionHandler {
                     });
 
             LOG.info("Interactive editable diff view opened for: " + filePath);
+        } catch (IllegalArgumentException refused) {
+            // An undo plan that cannot be rebuilt is an expected answer, not an internal error.
+            // With no baseline nothing may be applied or rejected, but the edits stay reviewable.
+            LOG.warn("Showing recorded edits only for " + filePath + ": " + refused.getMessage());
+            this.showRecordedEdits(filePath, operations, refused.getMessage());
         } catch (Exception e) {
             LOG.error("Failed to show editable diff: " + e.getMessage(), e);
             this.browserBridge.showErrorToast(ClaudeCodeGuiBundle.message("diff.openFailedDetail", e.getMessage()));
         }
+    }
+
+    void showRecordedEdits(String filePath, JsonArray operations, String refusal) {
+        String before = joinRecordedText(operations, "oldString");
+        String after = joinRecordedText(operations, "newString");
+        if (before.isEmpty() && after.isEmpty()) {
+            this.browserBridge.showErrorToast(ClaudeCodeGuiBundle.message("diff.openFailedDetail", refusal));
+            return;
+        }
+        try {
+            String fileName = new File(filePath).getName();
+            FileType fileType = FileTypeManager.getInstance().getFileTypeByFileName(fileName);
+            DiffContentFactory contents = DiffContentFactory.getInstance();
+            DiffManager.getInstance().showDiff(this.context.getProject(), new SimpleDiffRequest(
+                    ClaudeCodeGuiBundle.message("diff.edit", fileName) + " " + ClaudeCodeGuiBundle.message("diff.editOnly"),
+                    contents.create(this.context.getProject(), before, fileType),
+                    contents.create(this.context.getProject(), after, fileType),
+                    ClaudeCodeGuiBundle.message("diff.editBefore", fileName),
+                    ClaudeCodeGuiBundle.message("diff.editAfter", fileName)));
+        } catch (Exception e) {
+            LOG.error("Failed to show recorded edits: " + e.getMessage(), e);
+            this.browserBridge.showErrorToast(ClaudeCodeGuiBundle.message("diff.openFailedDetail", e.getMessage()));
+        }
+    }
+
+    /** The tool's recorded snippets in order, which are not the whole file. */
+    static String joinRecordedText(JsonArray operations, String field) {
+        StringJoiner joined = new StringJoiner("\n");
+        for (var operation : operations) {
+            JsonObject op = operation.getAsJsonObject();
+            String text = op.has(field) && !op.get(field).isJsonNull() ? op.get(field).getAsString() : "";
+            if (!text.isEmpty()) {
+                joined.add(text);
+            }
+        }
+        return joined.toString();
     }
 
     private void handleDiffResult(DiffResult result, String filePath, String originalContent, boolean isNewFile) {

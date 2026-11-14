@@ -32,6 +32,12 @@ public class CodexMessageHandler implements MessageCallback {
     private static final Logger LOG = Logger.getInstance(CodexMessageHandler.class);
 
     /**
+     * CLI providers whose bridge emits one Claude-schema {@code [USAGE]} marker per
+     * model step, with cache-exclusive input and the provider's own {@code cost_usd}.
+     */
+    private static final Set<String> STEP_USAGE_PROVIDERS = Set.of("gemini", "opencode", "omp");
+
+    /**
      * state.
      */
     private final SessionState state;
@@ -154,10 +160,16 @@ public class CodexMessageHandler implements MessageCallback {
                 // Handle session_id/thread_id (for session recovery)
                 handleSessionId(content);
             } else if ("usage".equals(type)) {
-                // Whole-turn usage from the shared [USAGE] marker (MarkerCliBridge).
-                // Gated to the gemini and opencode bridges: only their payload shape is vetted;
-                // markers from other CLI bridges (dsh/omp/pi) are dropped.
-                handleUsage(content);
+                // Gemini, OpenCode and OMP emit one [USAGE] marker per model step,
+                // which handleUsage sums into turnUsage (the latest step also feeds
+                // the context ring). Every other CLI provider (kimi / minimax /
+                // pi / dsh / ...) sends one usage snapshot per turn, which
+                // pushes the context ring directly.
+                if (STEP_USAGE_PROVIDERS.contains(state.getProvider())) {
+                    handleUsage(content);
+                } else {
+                    handleUsageMessage(content);
+                }
             } else if ("event_msg".equals(type)) {
                 handleEventMessage(content);
             } else if ("stream_start".equals(type)) {
@@ -648,7 +660,7 @@ public class CodexMessageHandler implements MessageCallback {
     /**
      * Handle a per-step usage marker ([USAGE] → onMessage("usage", json)).
      *
-     * <p>OpenCode emits one marker per model step. The latest step is the current
+     * <p>OpenCode and OMP emit one marker per model step. The latest step is the current
      * context snapshot ({@code message.usage}, read by the context ring); the steps
      * of a turn are summed into {@code turnUsage} for the message footer.</p>
      *
@@ -674,8 +686,9 @@ public class CodexMessageHandler implements MessageCallback {
         if (jsonContent == null || jsonContent.isEmpty()) {
             return;
         }
-        if (!"gemini".equals(state.getProvider()) && !"opencode".equals(state.getProvider())) {
-            LOG.debug("Usage marker dropped (provider '" + state.getProvider()
+        String provider = state.getProvider();
+        if (provider == null || !STEP_USAGE_PROVIDERS.contains(provider)) {
+            LOG.debug("Usage marker dropped (provider '" + provider
                     + "' is not vetted for [USAGE]): " + jsonContent);
             return;
         }
@@ -1309,6 +1322,44 @@ public class CodexMessageHandler implements MessageCallback {
      */
     private void handleMessageEnd() {
         LOG.debug("Codex message_end received, deferring stream cleanup to stream_end/onComplete");
+    }
+
+    /**
+     * Handle a usage update from a non-Codex CLI provider (e.g. minimax, dsh, kimi).
+     * The [USAGE] marker is forwarded by ai-bridge as type="usage" with the usage
+     * JSON object as content. This path directly pushes the context ring because
+     * Codex has no authoritative token_count event for these providers.
+     *
+     * @param jsonContent usage JSON content
+     * @since 1.0.0
+     */
+    private void handleUsageMessage(String jsonContent) {
+        try {
+            com.google.gson.Gson gson = new com.google.gson.Gson();
+            com.google.gson.JsonObject usage = gson.fromJson(jsonContent, com.google.gson.JsonObject.class);
+            // Raw shapes with no snake_case figures (Pi sends input/output/cacheRead)
+            // would push a 0 ring over the last real reading.
+            if (usage == null || !hasPositiveDisplayableFigure(usage)) {
+                return;
+            }
+
+            currentTurnContextUsage = usage.deepCopy();
+
+            boolean updated = attachUsageToLastAssistant(usage, null);
+            if (updated) {
+                callbackHandler.notifyMessageUpdate(state.getMessages());
+                LOG.debug("Codex usage applied from [USAGE] message");
+            } else {
+                LOG.debug("Codex usage received but no assistant message to attach");
+            }
+
+            int usedTokens = TokenUsageUtils.extractContextTokens(usage, state.getProvider());
+            int maxTokens = com.github.claudecodegui.handler.SettingsHandler.getModelContextLimit(state.getModel());
+            callbackHandler.notifyUsageUpdate(usedTokens, maxTokens);
+            LOG.debug("Codex usage push: usedTokens=" + usedTokens + ", maxTokens=" + maxTokens);
+        } catch (Exception e) {
+            LOG.debug("Failed to parse Codex usage message: " + e.getMessage());
+        }
     }
 
     /**

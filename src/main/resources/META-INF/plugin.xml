@@ -13,12 +13,12 @@
         <ul>
             <li><strong>Claude Code</strong> Anthropic 官方 AI 编程助手（支持 Opus 4.6 等多模型）</li>
             <li><strong>OpenAI Codex</strong> - OpenAI 强大的代码生成引擎</li>
-            <li><strong>Grok CLI</strong> <em>(Beta)</em> - xAI 的 Grok 命令行编程助手</li>
-            <li><strong>Kimi CLI</strong> <em>(Beta)</em> - 月之暗面 Kimi 编程助手</li>
-            <li><strong>OpenCode</strong> <em>(Beta)</em> - 开源多模型 AI 编程终端</li>
-            <li><strong>PI CLI</strong> <em>(Beta)</em></li>
-            <li><strong>OMP CLI</strong> <em>(Beta)</em></li>
-            <li><strong>DeepSeek Harness</strong> <em>(Beta)</em></li>
+            <li><strong>Grok CLI</strong> - xAI 的 Grok 命令行编程助手</li>
+            <li><strong>Kimi CLI</strong> - 月之暗面 Kimi 编程助手</li>
+            <li><strong>OpenCode</strong> - 开源多模型 AI 编程终端</li>
+            <li><strong>PI CLI</strong> - PI 命令行编程助手</li>
+            <li><strong>OMP CLI</strong> - OMP 命令行编程助手</li>
+            <li><strong>DeepSeek Harness</strong> - DeepSeek 命令行编程 Harness</li>
         </ul>
 
         <p><strong>Connection &amp; proxy disclosure / 连接与代理说明：</strong></p>

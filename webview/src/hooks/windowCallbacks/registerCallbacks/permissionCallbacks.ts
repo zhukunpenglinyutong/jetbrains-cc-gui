@@ -3,6 +3,13 @@ import { createElement } from 'react';
 import { Modal } from 'antd';
 import { sendBridgeEvent } from '../../../utils/bridge';
 import type { AskUserQuestionRequest, Question } from '../../../components/AskUserQuestionDialog';
+import {
+  CODEX_EMPTY_FORM_ALLOW_LABEL,
+  CODEX_EMPTY_FORM_DENY_LABEL,
+  CODEX_EMPTY_FORM_QUESTION_ID,
+  isEmptyFormSchema,
+  isToolSuggestion,
+} from '../../codexElicitation';
 
 type PermissionCallbacks = Pick<UseWindowCallbacksOptions,
   | 'openPermissionDialog' | 'openAskUserQuestionDialog' | 'openPlanApprovalDialog'
@@ -29,7 +36,21 @@ interface CodexRuntimeEnvelope {
     threadName?: string | null;
     message?: string;
     willRetry?: boolean;
+    version?: string;
+    minimumVersion?: string;
   };
+}
+
+const FALLBACK_MODEL_METADATA_WARNING = /^Model metadata for `[^`\n]*` not found\. Defaulting to fallback metadata; this can degrade performance and cause issues\.$/;
+
+/**
+ * The CLI re-sends this on every turn for any model outside its catalog, including
+ * third-party models that no update can help, while the chat keeps working. The
+ * native TUI only counts it in its footer, so it gets no toast here either. A CLI
+ * below the recommended minimum is told to update by its cliVersionOutdated notice.
+ */
+function isFallbackModelMetadataWarning(method?: string, message?: string): boolean {
+  return method === 'warning' && FALLBACK_MODEL_METADATA_WARNING.test(message ?? '');
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -130,6 +151,23 @@ function buildMcpQuestionRequest(
   let questions = mode === 'form'
     ? schemaQuestions(nativeRequest, serverName)
     : [];
+  // A form with no fields (MCP tool-call approvals) is a pure allow/deny prompt.
+  if (mode === 'form' && questions.length === 0 && isEmptyFormSchema(requestedSchema) && !isToolSuggestion(meta)) {
+    questions = [{
+      id: CODEX_EMPTY_FORM_QUESTION_ID,
+      question: typeof nativeRequest.message === 'string' && nativeRequest.message
+        ? nativeRequest.message
+        : 'Do you want to allow this MCP request?',
+      header: serverName ?? 'MCP server',
+      options: [
+        { label: CODEX_EMPTY_FORM_ALLOW_LABEL, description: 'Allow the MCP request.' },
+        { label: CODEX_EMPTY_FORM_DENY_LABEL, description: 'Deny the MCP request.' },
+      ],
+      multiSelect: false,
+      required: true,
+      choiceOnly: true,
+    }];
+  }
   if (mode === 'url') {
     questions = [{
       id: '__codex_url__',
@@ -177,7 +215,18 @@ function buildMcpQuestionRequest(
 
 export function registerPermissionCallbacks(options: PermissionCallbacks, getTranslation?: () => UseWindowCallbacksOptions['t']): void {
   const recentConfigurationWarnings = new Map<string, number>();
+  const shownOneShotWarnings = new Set<string>();
   const translate = (key: string, fallback: string) => (getTranslation?.() ?? options.t)?.(key, fallback) ?? fallback;
+  /** @returns false when this warning was already shown. */
+  const rememberOneShotWarning = (key: string) => {
+    if (shownOneShotWarnings.has(key)) return false;
+    shownOneShotWarnings.add(key);
+    if (shownOneShotWarnings.size > 64) {
+      const oldest = shownOneShotWarnings.values().next().value;
+      if (oldest !== undefined) shownOneShotWarnings.delete(oldest);
+    }
+    return true;
+  };
   const {
     openPermissionDialog,
     openAskUserQuestionDialog,
@@ -234,10 +283,33 @@ export function registerPermissionCallbacks(options: PermissionCallbacks, getTra
       if (event.kind === 'nativeWarning') {
         const currentThread = options.currentSessionIdRef.current;
         const warningRoot = event.rootThreadId ?? event.threadId;
-        if (options.currentProviderRef.current === 'codex' && (!warningRoot || !currentThread || warningRoot === currentThread)
-            && event.payload?.message) {
+        // The CLI version belongs to the chat window, whichever conversation the service last ran.
+        const inScope = event.payload?.method === 'cliVersionOutdated'
+          || !warningRoot || !currentThread || warningRoot === currentThread;
+        if (options.currentProviderRef.current === 'codex' && inScope && event.payload?.message) {
           const method = event.payload.method;
-          if (method === 'configWarning' || method === 'deprecationNotice') {
+          // Match the native TUI: successful reviews need no attention; subscribers already received the event.
+          if (method === 'guardianWarning' && event.payload.message.startsWith('Automatic approval review approved (')) {
+            return;
+          }
+          if (isFallbackModelMetadataWarning(method, event.payload.message)) {
+            return;
+          }
+          // API deprecations are addressed to client developers; users cannot act on them.
+          if (method === 'deprecationNotice') {
+            return;
+          }
+          if (method === 'cliVersionOutdated') {
+            const { message, version, minimumVersion } = event.payload;
+            // Stays true until the CLI changes, so a new runtime on this channel does not repeat it.
+            if (!rememberOneShotWarning(JSON.stringify([event.channelId, version]))) {
+              return;
+            }
+            const t = getTranslation?.() ?? options.t;
+            options.addToast(t?.('chat.codexCliOutdated', { defaultValue: message, version, minimumVersion }) ?? message, 'warning');
+            return;
+          }
+          if (method === 'configWarning') {
             // Startup and thread loading can repeat the same notice. Other warnings stay independent.
             const key = JSON.stringify([event.channelId, event.sessionEpoch, event.runtimeBackend, event.payload.message]);
             const now = Date.now();
@@ -249,19 +321,12 @@ export function registerPermissionCallbacks(options: PermissionCallbacks, getTra
               const oldest = recentConfigurationWarnings.keys().next().value;
               if (oldest !== undefined) recentConfigurationWarnings.delete(oldest);
             }
-          }
-          if (method === 'configWarning' || method === 'deprecationNotice') {
             const diagnostic = event.payload.message;
-            const isConfiguration = method === 'configWarning';
-            options.addToast(isConfiguration
-              ? translate('askUserQuestion.configWarning', 'Codex reported a configuration warning. Review the details.')
-              : translate('askUserQuestion.apiDeprecationWarning', 'Codex reported an API compatibility notice. Review the details.'), 'warning', {
+            options.addToast(translate('askUserQuestion.configWarning', 'Codex reported a configuration warning. Review the details.'), 'warning', {
               label: translate('askUserQuestion.warningDetails', 'View details'),
               onClick: () => Modal.warning({
                 zIndex: 12000,
-                title: isConfiguration
-                  ? translate('askUserQuestion.configWarningTitle', 'Codex configuration warning')
-                  : translate('askUserQuestion.apiDeprecationTitle', 'Codex API compatibility notice'),
+                title: translate('askUserQuestion.configWarningTitle', 'Codex configuration warning'),
                 content: createElement('pre', {
                   style: { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: '60vh', overflow: 'auto' },
                 }, diagnostic),

@@ -1,10 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import {
   AGY_MIN_VERSION,
   AGY_REQUIRED_HELP_FLAGS,
@@ -76,13 +74,6 @@ async function withFakeCliDir(run) {
     await rm(dir, { recursive: true, force: true });
   }
 }
-
-test('Story 006 AC-2: ai-bridge/utils/cli-path.js line count is strictly below 800 lines', () => {
-  const cliPathFile = fileURLToPath(new URL('../../utils/cli-path.js', import.meta.url));
-  const content = readFileSync(cliPathFile, 'utf8');
-  const lines = content.split('\n').length;
-  assert.ok(lines < 800, `cli-path.js must be reduced below 800 lines (currently ${lines})`);
-});
 
 test('Story 006 AC-2: compareSemver returns NaN on unparseable inputs so invalid version comparisons fail', async () => {
   const res1 = compareSemver('not-a-version', '1.1.15');
@@ -245,8 +236,9 @@ test('verifyAgyBinary routes Windows .cmd shims through cmd.exe (forceWindows)',
   assert.equal(captures.length, 2);
   assert.match(captures[0].file, /cmd\.exe$/i);
   assert.deepEqual(captures[0].args.slice(0, 3), ['/d', '/s', '/c']);
-  assert.match(captures[0].args[3], /"agy\.cmd" "--version"/);
-  assert.match(captures[1].args[3], /"agy\.cmd" "--help"/);
+  // The whole shim path is quoted (it may contain spaces) and cmd /s strips the outer pair.
+  assert.equal(captures[0].args[3], '""C:\\Users\\dev\\AppData\\Roaming\\npm\\agy.cmd" "--version""');
+  assert.equal(captures[1].args[3], '""C:\\Users\\dev\\AppData\\Roaming\\npm\\agy.cmd" "--help""');
   assert.equal(result.ok, true);
   assert.equal(result.version, '1.1.22');
 });

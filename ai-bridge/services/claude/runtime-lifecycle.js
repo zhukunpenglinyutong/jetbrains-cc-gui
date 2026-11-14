@@ -2,6 +2,7 @@ import { AsyncStream } from '../../utils/async-stream.js';
 import { loadClaudeSdk } from '../../utils/sdk-loader.js';
 import { extractResultError, isNoConversationFoundError } from './message-utils.js';
 import { createPreToolUseHook, normalizePermissionMode } from './permission-mode.js';
+import { assertUltracodeSupported, applyNativeFlagSettings, supportsIndependentUltracode } from './ultracode.js';
 import { parseTaskNotificationXml, buildTaskNotificationEvent, extractTaskNotificationXml } from './task-notification-parser.js';
 import {
   beginRuntimeTurn,
@@ -10,6 +11,7 @@ import {
   clearActiveTurnRuntimeIf,
   endRuntimeTurn,
   findRuntimeForRequest,
+  getAllRuntimes,
   rememberRuntime,
   promoteRuntimeToSession,
   removeRuntime,
@@ -93,8 +95,8 @@ function emitInterTurnEvent(sessionId) {
  * and executeTurn (in-turn) call this so every delivery path converges on
  * window.onTaskEvent, which dedups by tool_use_id + observable fields.
  */
-export function emitTaskEvent(sessionId, taskMsg) {
-  emitDaemonEvent('task_event', sessionId, { taskEvent: taskMsg });
+export function emitTaskEvent(sessionId, taskMsg, runtimeSessionEpoch = null) {
+  emitDaemonEvent('task_event', sessionId, { taskEvent: taskMsg, runtimeSessionEpoch });
 }
 
 /**
@@ -164,8 +166,10 @@ export function createTurnSink() {
   };
 }
 
-export function buildRuntimeSignature(options, systemPromptAppend, streamingEnabled, runtimeSessionEpoch, modelId) {
+export function buildRuntimeSignature(options, systemPromptAppend, streamingEnabled, runtimeSessionEpoch, modelId, supplierRevision) {
   const material = {
+    // Inside the JSON so canUpdateRuntimeSignature can still parse and compare it.
+    ...(supplierRevision ? { supplierRevision } : {}),
     cwd: options.cwd || '',
     additionalDirectories: options.additionalDirectories || [],
     systemPromptAppend: systemPromptAppend || '',
@@ -186,7 +190,8 @@ export function buildRuntimeSignature(options, systemPromptAppend, streamingEnab
     // Full Auto rebuilds the runtime with the correct launch flag. The other modes
     // (default/plan/acceptEdits/auto) need no launch flag and keep applying live via
     // setPermissionMode, so they intentionally do NOT change the signature.
-    bypassPermissions: options.permissionMode === 'bypassPermissions'
+    bypassPermissions: options.permissionMode === 'bypassPermissions',
+    settingSources: options.settingSources || []
   };
   return JSON.stringify(material);
 }
@@ -274,9 +279,14 @@ export function resetCachedQueryFn() {
 
 export function registerRuntimeSession(runtime, sessionId, callbacks) {
   promoteRuntimeToSession(runtime, sessionId, callbacks);
+  for (const event of runtime.pendingTaskEvents || []) {
+    emitTaskEvent(sessionId, event, runtime.runtimeSessionEpoch);
+  }
+  runtime.pendingTaskEvents = [];
 }
 
 export async function disposeRuntime(runtime, callbacks) {
+  if (runtime?.disposePromise) return runtime.disposePromise;
   if (!runtime || runtime.closed) return;
   console.log('[LIFECYCLE] disposeRuntime sessionId=' + (runtime.sessionId || '(new)')
     + ' epoch=' + (runtime.runtimeSessionEpoch || '(none)')
@@ -284,20 +294,35 @@ export async function disposeRuntime(runtime, callbacks) {
   runtime.closed = true;
   runtime.activeTurnCount = 0;
 
+  if (runtime.sessionId && (runtime.hasBackgroundTaskSnapshot || (runtime.backgroundTaskIds?.size || 0) > 0)) {
+    emitTaskEvent(runtime.sessionId, {
+      type: 'system', subtype: 'background_tasks_changed', tasks: [], session_id: runtime.sessionId,
+      ...(!runtime.hasBackgroundTaskSnapshot ? { source: 'legacy' } : {}),
+    }, runtime.runtimeSessionEpoch);
+  }
+  runtime.backgroundTaskIds?.clear();
+
   try {
     runtime.inputStream.done();
   } catch (err) {
     console.error('[LIFECYCLE] inputStream.done() failed:', err?.message || err);
   }
 
-  try {
-    runtime.query?.close?.();
-  } catch (err) {
-    console.error('[LIFECYCLE] query.close() failed:', err?.message || err);
-  }
-
-  removeRuntime(runtime, callbacks?.removeSession);
-  clearActiveTurnRuntimeIf(runtime);
+  runtime.disposePromise = (async () => {
+    try {
+      await runtime.query?.close?.();
+    } catch (err) {
+      // Best-effort cleanup callers keep their existing behavior. A Stop caller
+      // must inspect this evidence before acknowledging native cancellation.
+      runtime.closeError = err;
+      console.error('[LIFECYCLE] query.close() failed:', err?.message || err);
+    } finally {
+      runtime.disposeSettled = true;
+      removeRuntime(runtime, callbacks?.removeSession);
+      clearActiveTurnRuntimeIf(runtime);
+    }
+  })();
+  return runtime.disposePromise;
 }
 
 async function createRuntime(requestContext, callbacks) {
@@ -309,12 +334,17 @@ async function createRuntime(requestContext, callbacks) {
     sessionId: requestContext.requestedSessionId || null,
     runtimeSessionEpoch: requestContext.runtimeSessionEpoch || null,
     runtimeSignature: requestContext.runtimeSignature,
+    // Which settings this runtime's CLI loaded at spawn. The /context fast path compares it
+    // with the request's trust because it reuses runtimes without building a signature.
+    settingSources: [...(requestContext.options?.settingSources || [])],
     currentModel: requestContext.sdkModelName || null,
     modelId: requestContext.modelId || null, // Original model ID, may contain [1m] suffix
     currentResolvedModel: requestContext.resolvedModelId || null,
     currentPermissionMode: initialPermissionMode,
     permissionModeState: { value: initialPermissionMode },
     currentMaxThinkingTokens: requestContext.maxThinkingTokens ?? null,
+    currentUltracode: requestContext.options?.settings?.ultracode,
+    currentEffort: requestContext.options?.effort ?? null,
     createdAt: Date.now(),
     lastUsedAt: Date.now(),
     activeTurnCount: 0,
@@ -391,6 +421,18 @@ async function createRuntime(requestContext, callbacks) {
   // The reader will continuously consume runtime.query.next() for the runtime's lifetime
   startPerpetualReader(runtime, callbacks);
 
+  if (runtime.currentUltracode === true) {
+    try {
+      await assertUltracodeSupported(runtime.query, options);
+      // Exercise the native control path before accepting any user input: an
+      // unavailable workflow/model policy must not silently become a normal turn.
+      await applyNativeFlagSettings(runtime.query, { ultracode: true });
+    } catch (error) {
+      await disposeRuntime(runtime, callbacks);
+      throw error;
+    }
+  }
+
   return runtime;
 }
 
@@ -453,31 +495,79 @@ export function updateBackgroundTaskState(runtime, msg) {
     runtime.backgroundTaskIds = new Set();
   }
 
+  if (msg.type === 'system' && msg.subtype === 'background_tasks_changed' && Array.isArray(msg.tasks)) {
+    // Native level snapshots are authoritative and ordered independently of
+    // task_* edges. Once available, do not re-add tasks from a late bookend.
+    runtime.hasBackgroundTaskSnapshot = true;
+    runtime.backgroundTaskIds = new Set(msg.tasks.filter(task => !task.ambient).map(task => task.task_id).filter(Boolean));
+    runtime.legacyTaskDescriptions?.clear();
+    runtime.legacyTaskAliases?.clear();
+    return;
+  }
+  if (runtime.hasBackgroundTaskSnapshot) return;
+
+  // Older CLIs expose only edges. Present those known tasks with the same Stop
+  // affordance, without claiming their set is an authoritative native snapshot
+  // (in particular, it must not disable the six-hour legacy backstop).
+  const descriptions = runtime.legacyTaskDescriptions ||= new Map();
+  const aliases = runtime.legacyTaskAliases ||= new Map();
+  let changed = false;
+  const add = (id, description, taskId) => {
+    if (!id) return;
+    id = aliases.get(id) || id;
+    if (taskId && taskId !== id) {
+      aliases.set(taskId, id);
+      if (runtime.backgroundTaskIds.delete(taskId)) changed = true;
+      descriptions.delete(taskId);
+    }
+    if (!runtime.backgroundTaskIds.has(id)) changed = true;
+    runtime.backgroundTaskIds.add(id);
+    if (typeof description === 'string' && description.trim() && descriptions.get(id) !== description.trim()) {
+      descriptions.set(id, description.trim());
+      changed = true;
+    }
+  };
+  const remove = id => {
+    if (!id) return;
+    const canonical = aliases.get(id) || id;
+    if (runtime.backgroundTaskIds.delete(canonical)) changed = true;
+    descriptions.delete(canonical);
+    for (const [alias, task] of aliases) if (task === canonical) aliases.delete(alias);
+  };
+
   const content = msg?.message?.content ?? msg?.content;
   if (Array.isArray(content)) {
     for (const block of content) {
       if (block?.type !== 'tool_use' || block?.input?.run_in_background !== true) continue;
       const taskId = block.id || block.tool_use_id;
-      if (taskId) runtime.backgroundTaskIds.add(taskId);
+      add(taskId, block.input.description || block.input.command || block.name);
     }
   }
 
   if (msg?.type === 'system' && typeof msg.subtype === 'string') {
     const taskId = msg.tool_use_id || msg.task_id;
     if ((msg.subtype === 'task_started' || msg.subtype === 'task_progress') && taskId) {
-      runtime.backgroundTaskIds.add(taskId);
+      add(taskId, msg.description, msg.task_id);
     } else if (msg.subtype === 'task_notification') {
-      if (msg.tool_use_id) runtime.backgroundTaskIds.delete(msg.tool_use_id);
-      if (msg.task_id) runtime.backgroundTaskIds.delete(msg.task_id);
+      remove(msg.tool_use_id);
+      remove(msg.task_id);
     }
   }
 
   const taskNotificationXml = extractTaskNotificationXml(msg);
   if (taskNotificationXml !== null) {
     const parsed = parseTaskNotificationXml(taskNotificationXml);
-    if (parsed?.toolUseId) runtime.backgroundTaskIds.delete(parsed.toolUseId);
-    if (parsed?.taskId) runtime.backgroundTaskIds.delete(parsed.taskId);
+    remove(parsed?.toolUseId);
+    remove(parsed?.taskId);
   }
+  if (!changed) return;
+  return {
+    type: 'system', subtype: 'background_tasks_changed', source: 'legacy',
+    session_id: runtime.sessionId,
+    tasks: [...runtime.backgroundTaskIds].map(task_id => ({
+      task_id, task_type: 'legacy_task', description: descriptions.get(task_id) || task_id,
+    })),
+  };
 }
 
 /**
@@ -525,6 +615,16 @@ export function startPerpetualReader(runtime, callbacks) {
           break; // Exit loop on error
         }
 
+        // Disposal can finish while next() is pending. Its terminal task
+        // snapshot must not be followed by buffered output from the old query.
+        // A turn still waiting on this reader (e.g. after a stuck-runtime reap)
+        // must end here, or executeTurn blocks the daemon command queue forever.
+        if (runtime.closed) {
+          runtime.turnSink?.fail(runtime.terminalError
+            || Object.assign(new Error('Claude runtime was closed'), { runtimeTerminated: true }));
+          break;
+        }
+
         // Check for iterator completion
         if (next.done) {
           console.log('[PERPETUAL_READER] Iterator completed (done: true)');
@@ -554,7 +654,11 @@ export function startPerpetualReader(runtime, callbacks) {
         // also checks active turns, CLI activity, and tracked background tasks, so a
         // long-running sidechain is not terminated between progress notifications.
         touchRuntime(runtime);
-        updateBackgroundTaskState(runtime, msg);
+        const legacySnapshot = updateBackgroundTaskState(runtime, msg);
+        if (legacySnapshot) {
+          if (runtime.sessionId) emitTaskEvent(runtime.sessionId, legacySnapshot, runtime.runtimeSessionEpoch);
+          else (runtime.pendingTaskEvents ||= []).push(legacySnapshot);
+        }
 
         // CLI turn accounting for executeTurn's quiescence gate. Substantive
         // output (assistant / user / stream_event) means a CLI run is in flight;
@@ -564,15 +668,31 @@ export function startPerpetualReader(runtime, callbacks) {
         // a still-in-flight run (e.g. a run_in_background completion, #1305)
         // instead of absorbing its output — and worse, its result — which is the
         // sticky "answered my previous message" / one-behind shift (#1410).
-        if (msg?.type === 'result') {
+        if (!msg?.parent_tool_use_id && msg?.type === 'result') {
           runtime.cliTurnInFlight = false;
-        } else if (msg?.type === 'assistant' || msg?.type === 'user' || msg?.type === 'stream_event') {
+        } else if (!msg?.parent_tool_use_id && (msg?.type === 'assistant' || msg?.type === 'user' || msg?.type === 'stream_event')) {
           runtime.cliTurnInFlight = true;
         }
         // readerProgress ticks once per processed message so waitForReaderQuiescent
         // can tell a parked reader (no progress across a macrotask) from one still
         // draining the pipe.
         runtime.readerProgress = (runtime.readerProgress || 0) + 1;
+
+        // Lifecycle frames must not sit behind a foreground result in turnSink:
+        // executeTurn stops at that result and discards its remaining queue.
+        // Use one process-level route in both phases so replace-set snapshots
+        // cannot be lost or replayed out of order by a second delivery path.
+        if (msg?.type === 'system' && typeof msg.subtype === 'string'
+            && (msg.subtype.startsWith('task_') || msg.subtype === 'background_tasks_changed')) {
+          if (runtime.sessionId) {
+            emitTaskEvent(runtime.sessionId, msg, runtime.runtimeSessionEpoch);
+          } else {
+            // system/init can still be queued ahead of us. Flush only after
+            // executeTurn publishes SESSION_ID, so Java can route this event.
+            (runtime.pendingTaskEvents ||= []).push(msg);
+          }
+          continue;
+        }
 
         // Dual-mode routing: check if we're in an active turn or inter-turn period
         if (runtime.turnSink) {
@@ -595,29 +715,6 @@ export function startPerpetualReader(runtime, callbacks) {
             } else {
               // Anonymous runtime - silently consume
               console.log('[PERPETUAL_READER] Inter-turn result for anonymous runtime, consuming silently');
-            }
-          }
-          // task_* SDK system events (async subagent lifecycle) that reach
-          // this inter-turn branch are the late ones - they settle AFTER the
-          // turn's result, by which point executeTurn has already exited and
-          // cleared turnSink, so they could not ride the in-turn [MESSAGE]
-          // stream. A task_notification that settles BEFORE the result is
-          // pushed to turnSink while it is still live, so executeTurn emits
-          // it in-turn and it never reaches this branch. Forward the late
-          // ones to Java so the frontend subagent list can mark the agent
-          // done instead of staying stuck on "running" until a manual reload.
-          // Other inter-turn message types are still silently consumed
-          // (already persisted to JSONL by the CLI).
-          if (msg?.type === 'system' && typeof msg.subtype === 'string' && msg.subtype.startsWith('task_')) {
-            // Mirror emitInterTurnEvent's sessionId guard: anonymous runtimes
-            // (no session_id yet) have no Java listener to claim the event, so
-            // emitting {sessionId: null} only wastes a cross-process hop and
-            // risks JsonNull handling on the Java side. Silently consume instead.
-            if (runtime.sessionId) {
-              console.log('[PERPETUAL_READER] Inter-turn task_* event for sessionId=' + runtime.sessionId + ', subtype=' + msg.subtype);
-              emitTaskEvent(runtime.sessionId, msg);
-            } else {
-              console.log('[PERPETUAL_READER] Inter-turn task_* event for anonymous runtime, consuming silently (subtype=' + msg.subtype + ')');
             }
           }
           // Recent Claude Code terminates a background Agent by injecting a
@@ -643,7 +740,7 @@ export function startPerpetualReader(runtime, callbacks) {
               const event = buildTaskNotificationEvent(parsed);
               if (event) {
                 console.log('[PERPETUAL_READER] Inter-turn task-notification message for sessionId=' + runtime.sessionId + ', toolUseId=' + parsed.toolUseId + ', status=' + event.status);
-                emitTaskEvent(runtime.sessionId, event);
+                emitTaskEvent(runtime.sessionId, event, runtime.runtimeSessionEpoch);
               } else {
                 console.log('[PERPETUAL_READER] Inter-turn task-notification message could not be parsed (no tool_use_id or non-terminal status), consuming silently');
               }
@@ -684,14 +781,57 @@ export function startPerpetualReader(runtime, callbacks) {
 async function applyDynamicControls(runtime, requestContext) {
   if (!runtime || runtime.closed) return;
 
+  const targetEffort = requestContext.reasoningEffort ?? requestContext.options?.effort ?? null;
+  const effortChanged = (runtime.currentEffort ?? null) !== targetEffort;
+  const targetModel = requestContext.sdkModelName || null;
+  const targetResolvedModel = requestContext.resolvedModelId || null;
+  const modelChanged = runtime.currentModel !== targetModel || runtime.currentResolvedModel !== targetResolvedModel;
+  const settingsUncertain = runtime.nativeSettingsUncertain === true;
+  const ultracodeChanged = typeof requestContext.ultracode === 'boolean'
+    && (runtime.currentUltracode !== requestContext.ultracode || settingsUncertain);
+  const nativeReconfigure = (effortChanged || modelChanged || settingsUncertain) && await canApplyNativeRuntimeSettings(runtime);
+
+  if (ultracodeChanged || nativeReconfigure) {
+    await waitForReaderQuiescent(runtime);
+    const targetUltracode = requestContext.ultracode ?? runtime.currentUltracode;
+    if (targetUltracode) {
+      await assertUltracodeSupported(runtime.query, requestContext.options);
+    }
+    if (typeof runtime.query?.applyFlagSettings !== 'function') {
+      // A runtime created without Ultracode on an older SDK already has it off.
+      if (runtime.currentUltracode === true) throw new Error('The running Claude SDK cannot turn Ultracode off. Update Claude in Settings > Dependencies.');
+    } else {
+      try {
+        await applyNativeFlagSettings(runtime.query, {
+          ...(nativeReconfigure && (modelChanged || settingsUncertain) ? { model: targetResolvedModel || targetModel } : {}),
+          ...(nativeReconfigure && (effortChanged || settingsUncertain) ? { effortLevel: targetEffort } : {}),
+          // A native effort-only update turns Ultracode off. Carry its explicit
+          // state in the same control request so the two UI controls stay independent.
+          ...(typeof targetUltracode === 'boolean' ? { ultracode: targetUltracode } : {}),
+        });
+        runtime.nativeSettingsUncertain = false;
+      } catch (error) {
+        // Native settings may have been acknowledged before capability
+        // verification failed. Resend the complete next-turn selection on the
+        // next attempt, including an explicit off, without killing workers.
+        runtime.nativeSettingsUncertain = true;
+        throw error;
+      }
+    }
+    runtime.currentUltracode = targetUltracode;
+    if (nativeReconfigure) {
+      runtime.currentEffort = targetEffort;
+      runtime.currentModel = targetModel;
+      runtime.currentResolvedModel = targetResolvedModel;
+    }
+  }
+
   const targetPermissionMode = normalizePermissionMode(requestContext.permissionMode);
   const applied = await applyPermissionModeToRuntime(runtime, targetPermissionMode);
   if (!applied) {
     console.error('[DAEMON] setPermissionMode failed; keeping local state unchanged:', targetPermissionMode);
   }
 
-  const targetModel = requestContext.sdkModelName || null;
-  const targetResolvedModel = requestContext.resolvedModelId || null;
   // Compare both the SDK short name AND the resolved model ID: a settings-side
   // remap (e.g. sonnet -> "MiniMax-M2.5") changes only the resolved ID.
   // Pass the resolved ID to setModel, not the short name: the CLI subprocess
@@ -748,28 +888,67 @@ function assertRuntimeOwnership(runtime, requestContext) {
 
 const acquireLocks = new Map();
 
+async function canApplyNativeRuntimeSettings(runtime) {
+  if (typeof runtime.query?.applyFlagSettings !== 'function' || typeof runtime.query?.initializationResult !== 'function') return false;
+  const initialization = await runtime.query.initializationResult();
+  return supportsIndependentUltracode(initialization?.claude_code_version);
+}
+
+async function canUpdateRuntimeSignature(runtime, signature) {
+  try {
+    const previous = JSON.parse(runtime.runtimeSignature);
+    const next = JSON.parse(signature);
+    delete previous.effort;
+    delete next.effort;
+    delete previous.model;
+    delete next.model;
+    return JSON.stringify(previous) === JSON.stringify(next) && await canApplyNativeRuntimeSettings(runtime);
+  } catch {
+    return false;
+  }
+}
+
 async function acquireRuntimeUnlocked(requestContext, callbacks) {
-  await cleanupAnonymousFromRegistry((runtime) => disposeRuntime(runtime, callbacks));
-  await cleanupSessionsFromRegistry((runtime) => disposeRuntime(runtime, callbacks));
+  // Scheduling cleanup closes input synchronously and leaves the owner in the
+  // registry until transport disposal settles. A hung unrelated cleanup must
+  // not hold this request; its own retiring runtime is fenced below.
+  await cleanupAnonymousFromRegistry((runtime) => disposeRuntime(runtime, callbacks), { waitForDisposal: false });
+  await cleanupSessionsFromRegistry((runtime) => disposeRuntime(runtime, callbacks), { waitForDisposal: false });
 
   let runtime = findRuntimeForRequest(requestContext);
 
-  // Never reuse a runtime that is closed but somehow still registered. If it
-  // reached acquireRuntime, executeTurn would immediately throw "Runtime is
-  // closed", and the prior abort left abortRequested=true on it, so sendInternal
-  // would swallow that failure as a graceful "User interrupted" — silently
-  // eating the message the user just sent. Evict it from the registry and treat
-  // it as absent so a fresh runtime is created instead. (disposeRuntime removes
-  // the runtime from the registry synchronously, so this branch is a defensive
-  // invariant, not a common path.)
+  // Stop releases the foreground send before its native interrupt handshake
+  // finishes. A fast follow-up must wait for that retirement, never enqueue
+  // into the query that the preceding Stop is about to close.
+  if (runtime?.abortPromise) {
+    // A previous turn's failed interrupt belongs to that Stop/send, not to
+    // this new request. Retirement is the separate prerequisite for reuse.
+    try { await runtime.abortPromise; } catch { /* checked independently below */ }
+    if (!runtime.closed || getAllRuntimes().has(runtime)) {
+      throw new Error('Claude is still closing the previous runtime. Retry after cleanup finishes.');
+    }
+    runtime = null;
+  }
+
+  // Input closure precedes asynchronous transport disposal. Never reuse that
+  // runtime or erase its ownership fence while cleanup is still pending.
+  // A stale closed entry with no pending cleanup is safe to evict.
   if (runtime && runtime.closed) {
+    if (runtime.disposePromise && !runtime.disposeSettled) {
+      throw new Error('Claude is still closing the previous runtime. Retry after cleanup finishes.');
+    }
     console.log('[LIFECYCLE] discardClosedRuntime sessionId=' + (runtime.sessionId || '(new)')
       + ' epoch=' + (runtime.runtimeSessionEpoch || '(none)'));
     removeRuntime(runtime, callbacks?.removeSession);
     runtime = null;
   }
 
-  if (runtime && runtime.runtimeSignature !== requestContext.runtimeSignature) {
+  if (runtime && runtime.runtimeSignature !== requestContext.runtimeSignature
+      && !await canUpdateRuntimeSignature(runtime, requestContext.runtimeSignature)) {
+    await waitForReaderQuiescent(runtime);
+    if ((runtime.backgroundTaskIds?.size || 0) > 0) {
+      throw new Error('Claude is still running background tasks. Wait for them to finish or stop them before changing settings that restart the session.');
+    }
     await disposeRuntime(runtime, callbacks);
     runtime = null;
   }
@@ -791,6 +970,7 @@ async function acquireRuntimeUnlocked(requestContext, callbacks) {
 
   assertRuntimeOwnership(runtime, requestContext);
   await applyDynamicControls(runtime, requestContext);
+  runtime.runtimeSignature = requestContext.runtimeSignature;
   touchRuntime(runtime);
   return runtime;
 }
@@ -814,11 +994,11 @@ export async function acquireRuntime(requestContext, callbacks) {
 }
 
 export async function cleanupStaleAnonymousRuntimes(callbacks) {
-  return cleanupAnonymousFromRegistry((runtime) => disposeRuntime(runtime, callbacks));
+  return cleanupAnonymousFromRegistry((runtime) => disposeRuntime(runtime, callbacks), { waitForDisposal: false });
 }
 
 export async function cleanupStaleSessionRuntimes(callbacks) {
-  return cleanupSessionsFromRegistry((runtime) => disposeRuntime(runtime, callbacks));
+  return cleanupSessionsFromRegistry((runtime) => disposeRuntime(runtime, callbacks), { waitForDisposal: false });
 }
 
 export { beginRuntimeTurn, endRuntimeTurn, touchRuntime, applyDynamicControls };

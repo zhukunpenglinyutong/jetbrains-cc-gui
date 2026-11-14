@@ -98,7 +98,7 @@ export const ModeSelect = ({
       // OMP-only and native auto review is a Claude/Codex feature.
       return AVAILABLE_MODES.filter((mode) => mode.id !== 'auto' && mode.id !== 'smol' && mode.id !== 'slow');
     }
-    if (provider === 'grok' || provider === 'kimi' || provider === 'minimax' || provider === 'zcode' || provider === 'opencode' || provider === 'pi' || provider === 'dsh') {
+    if (provider === 'grok' || provider === 'kimi' || provider === 'minimax' || provider === 'zcode' || provider === 'opencode' || provider === 'pi' || provider === 'omp' || provider === 'dsh') {
       // Headless CLI providers do not expose Claude/Codex native automatic reviewers.
       return AVAILABLE_MODES.filter((mode) => mode.id !== 'auto' && mode.id !== 'plan' && mode.id !== 'smol' && mode.id !== 'slow' && mode.id !== 'sandbox');
     }

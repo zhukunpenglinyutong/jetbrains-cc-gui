@@ -2,6 +2,7 @@
 package com.github.claudecodegui.bridge;
 
 import com.github.claudecodegui.settings.CodemossSettingsService;
+import com.github.claudecodegui.util.CodexHomeResolver;
 import com.github.claudecodegui.util.PlatformUtils;
 import com.github.claudecodegui.util.ShellExecutor;
 import com.intellij.openapi.diagnostic.Logger;
@@ -34,6 +35,7 @@ public class EnvironmentConfigurator {
     private static final String CLAUDE_SESSION_ID_ENV = "CLAUDE_SESSION_ID";
     private static final String CLAUDE_PERMISSION_SAFETY_NET_ENV = "CLAUDE_PERMISSION_SAFETY_NET_MS";
     private static final String CODEX_HOME_ENV = "CODEX_HOME";
+    private static final String CODEX_INHERIT_PROXY_ENV = "CC_GUI_CODEX_INHERIT_PROXY";
     private static final String HOME_ENV = "HOME";
     private static final Pattern WSL_MOUNT_PATH_PATTERN = Pattern.compile("^/mnt/([a-zA-Z])(?:/(.*))?$");
 
@@ -212,7 +214,7 @@ public class EnvironmentConfigurator {
         return windowsPath != null ? windowsPath : path;
     }
 
-    static String convertWslMountPathToWindowsPath(String path) {
+    public static String convertWslMountPathToWindowsPath(String path) {
         if (!PlatformUtils.isWindows() || path == null || path.isEmpty()) {
             return null;
         }
@@ -269,14 +271,15 @@ public class EnvironmentConfigurator {
         propagateWslEnv(env, isWsl);
     }
 
-    // Permission vars that must cross the Windows→WSL boundary via WSLENV.
+    // Vars that must cross the Windows→WSL boundary via WSLENV. An unset var simply does not cross.
     private static final String[] WSL_PROPAGATED_KEYS = {
             CLAUDE_PERMISSION_ENV,
             CLAUDE_SESSION_ID_ENV,
-            CLAUDE_PERMISSION_SAFETY_NET_ENV
+            CLAUDE_PERMISSION_SAFETY_NET_ENV,
+            CODEX_INHERIT_PROXY_ENV
     };
 
-    /** Appends permission-bridge keys to WSLENV so they reach the daemon inside WSL. */
+    /** Appends the propagated keys to WSLENV so they reach the daemon inside WSL. */
     private static void propagateWslEnv(Map<String, String> env, boolean isWsl) {
         if (!isWsl) {
             return;
@@ -554,18 +557,16 @@ public class EnvironmentConfigurator {
     }
 
     /**
-     * Parse ~/.codex/config.toml to extract all env_key values.
+     * Parse the active Codex home's config.toml to extract all env_key values.
      *
      * @return Set of environment variable names referenced by env_key
      */
     private Set<String> parseCodexConfigEnvKeys() {
-        Set<String> envKeys = new HashSet<>();
-        String home = NodeDetector.resolveHomeForFileOps();
-        if (home == null || home.isEmpty()) {
-            return envKeys;
-        }
+        return parseCodexConfigEnvKeys(CodexHomeResolver.resolve().resolve("config.toml"));
+    }
 
-        Path configPath = Paths.get(home, ".codex", "config.toml");
+    static Set<String> parseCodexConfigEnvKeys(Path configPath) {
+        Set<String> envKeys = new HashSet<>();
         if (!Files.exists(configPath)) {
             LOG.debug("[Codex] config.toml not found: " + configPath);
             return envKeys;

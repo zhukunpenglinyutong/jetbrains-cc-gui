@@ -119,6 +119,7 @@ export const ModelSelect = ({
   } = useModelSelectHandlers({
     isOpen,
     inline,
+    value,
     currentProvider,
     recalculate,
     onChange,

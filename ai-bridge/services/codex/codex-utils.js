@@ -23,7 +23,10 @@ export function debugLog(level, tag, ...args) {
 export const logWarn = (tag, ...args) => debugLog(2, tag, ...args);
 export const logInfo = (tag, ...args) => debugLog(3, tag, ...args);
 export const logDebug = (tag, ...args) => debugLog(4, tag, ...args);
-export const CODEX_NATIVE_AUTO_REVIEW_MIN_VERSION = '0.146.0';
+// First CLI whose bundled catalog covers the plugin's built-in models. Older CLIs
+// still run but warn about fallback model metadata on every turn, and 0.123.x or
+// earlier also reject approvalsReviewer="auto_review" outright.
+export const CODEX_CLI_RECOMMENDED_MIN_VERSION = '0.160.0';
 export const VALID_SANDBOX_MODES = new Set(['read-only', 'workspace-write', 'danger-full-access']);
 export const VALID_APPROVAL_POLICIES = new Set(['never', 'on-request', 'on-failure']);
 // Note: 'untrusted' was removed in Codex CLI v0.149.0 - its semantics were merged
@@ -140,13 +143,28 @@ export function applyCodexApprovalsReviewerConfig(codexOptions, permissionConfig
 }
 
 /**
- * Check whether an installed Codex CLI can honor approvals_reviewer.
+ * Read the CLI version from the app-server's initialize user agent, e.g.
+ * `codemoss_intellij/0.164.0 (Mac OS 27.0.1; arm64) unknown (codemoss_intellij; 0.6.4)`.
+ * Local builds report 0.0.0, which says nothing about their age.
+ *
+ * @param {unknown} userAgent
+ * @returns {string|null} the x.y.z version, or null when it is not proven
+ */
+export function parseCodexCliVersion(userAgent) {
+  const version = typeof userAgent === 'string' ? userAgent.trim().match(/^[^/\s]+\/(\d+\.\d+\.\d+)/)?.[1] : null;
+  return version && version !== '0.0.0' ? version : null;
+}
+
+/**
+ * Check whether a proven CLI version is below the recommended minimum.
+ * An unknown version is never reported as outdated.
+ *
  * @param {string|null|undefined} version
  * @returns {boolean}
  */
-export function isCodexNativeAutoReviewSupported(version) {
+export function isCodexCliOutdated(version) {
   const actual = typeof version === 'string' ? version.trim().match(/^(?:v)?(\d+)\.(\d+)\.(\d+)/) : null;
-  const required = CODEX_NATIVE_AUTO_REVIEW_MIN_VERSION.match(/^(\d+)\.(\d+)\.(\d+)/);
+  const required = CODEX_CLI_RECOMMENDED_MIN_VERSION.match(/^(\d+)\.(\d+)\.(\d+)/);
   if (!actual || !required) {
     return false;
   }
@@ -155,10 +173,10 @@ export function isCodexNativeAutoReviewSupported(version) {
     const actualPart = Number(actual[index]);
     const requiredPart = Number(required[index]);
     if (actualPart !== requiredPart) {
-      return actualPart > requiredPart;
+      return actualPart < requiredPart;
     }
   }
-  return true;
+  return false;
 }
 
 export function normalizeCodexPermissionMode(mode) {
