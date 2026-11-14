@@ -183,7 +183,7 @@ public abstract class MarkerCliBridge extends BaseSDKBridge {
             MessageCallback callback
     ) {
         return sendMessage(channelId, message, sessionId, cwd, model, reasoningEffort,
-                null, null, null, null, null, callback);
+                null, null, null, null, (Boolean) null, callback);
     }
 
     /**
@@ -204,7 +204,7 @@ public abstract class MarkerCliBridge extends BaseSDKBridge {
             MessageCallback callback
     ) {
         return sendMessage(channelId, message, sessionId, cwd, model, reasoningEffort,
-                attachments, null, null, null, null, callback);
+                attachments, null, null, null, (Boolean) null, callback);
     }
 
     /**
@@ -217,6 +217,27 @@ public abstract class MarkerCliBridge extends BaseSDKBridge {
      * <p>{@code thinking} carries the plugin "always thinking" toggle for
      * providers that gate reasoning on a CLI flag (OpenCode {@code --thinking});
      * {@code null} means the daemon default (enabled).
+     */
+    public CompletableFuture<SDKResult> sendMessage(
+            String channelId,
+            String message,
+            String sessionId,
+            String cwd,
+            String model,
+            String reasoningEffort,
+            List<ClaudeSession.Attachment> attachments,
+            String permissionMode,
+            String dshPreset,
+            Boolean thinking,
+            MessageCallback callback
+    ) {
+        return sendMessageWithPayload(
+                channelId, message, sessionId, cwd, model, reasoningEffort,
+                attachments, permissionMode, dshPreset, null, thinking, null, callback);
+    }
+
+    /**
+     * Send a message with an OMP approval mode override.
      *
      * <p>{@code ompApprovalMode} is the OMP {@code --approval-mode} override;
      * empty means OMP's own setting decides, {@code null} omits the field.
@@ -235,28 +256,124 @@ public abstract class MarkerCliBridge extends BaseSDKBridge {
             Boolean thinking,
             MessageCallback callback
     ) {
-        JsonObject stdinInput = new JsonObject();
-        stdinInput.addProperty("message", message != null ? message : "");
-        stdinInput.addProperty("sessionId", sessionId != null ? sessionId : "");
-        stdinInput.addProperty("cwd", cwd != null ? cwd : "");
-        stdinInput.addProperty("model", model != null ? model : "");
-        stdinInput.addProperty("reasoningEffort", reasoningEffort != null ? reasoningEffort : "");
-        // Always send permissionMode (even "default") so Grok/other CLIs never
-        // fall back to an implicit default that ignores the UI mode selection.
-        String mode = permissionMode != null && !permissionMode.isBlank() ? permissionMode.trim() : "default";
-        stdinInput.addProperty("permissionMode", mode);
-        stdinInput.addProperty("thinking", thinking == null || thinking);
-        if (dshPreset != null) {
-            stdinInput.addProperty("preset", dshPreset);
-        }
-        if (ompApprovalMode != null) {
-            stdinInput.addProperty("approvalMode", ompApprovalMode);
-        }
-        if (attachments != null && !attachments.isEmpty()) {
-            stdinInput.add("attachments", buildAttachmentArray(attachments));
-        }
+        return sendMessageWithPayload(
+                channelId, message, sessionId, cwd, model, reasoningEffort,
+                attachments, permissionMode, dshPreset, ompApprovalMode, thinking, null, callback);
+    }
 
-        String stdinJson = gson.toJson(stdinInput);
+    /**
+     * Send a message with the cwd as requested BEFORE the send-path guard.
+     *
+     * <p>{@code cwd} is the guarded workspace the turn actually runs in (already
+     * clamped to the project base by {@code PathUtils.guardWorkingDirectory});
+     * {@code requestedCwd} is what the user asked for before that clamp. When the
+     * two differ, provider services surface a visible substitution notice —
+     * substitution must never be silent (AC5/NFR2). The field is provider-neutral:
+     * services that don't use it simply ignore the extra stdin key.
+     */
+    public CompletableFuture<SDKResult> sendMessage(
+            String channelId,
+            String message,
+            String sessionId,
+            String cwd,
+            String model,
+            String reasoningEffort,
+            List<ClaudeSession.Attachment> attachments,
+            String permissionMode,
+            String dshPreset,
+            String requestedCwd,
+            MessageCallback callback
+    ) {
+        return sendMessageWithPayload(
+                channelId, message, sessionId, cwd, model, reasoningEffort,
+                attachments, permissionMode, dshPreset, null, null, requestedCwd, callback);
+    }
+
+    /**
+     * Send a message with both the thinking toggle and the pre-clamp requestedCwd.
+     */
+    public CompletableFuture<SDKResult> sendMessage(
+            String channelId,
+            String message,
+            String sessionId,
+            String cwd,
+            String model,
+            String reasoningEffort,
+            List<ClaudeSession.Attachment> attachments,
+            String permissionMode,
+            String dshPreset,
+            Boolean thinking,
+            String requestedCwd,
+            MessageCallback callback
+    ) {
+        if (requestedCwd == null) {
+            return sendMessage(
+                    channelId, message, sessionId, cwd, model, reasoningEffort,
+                    attachments, permissionMode, dshPreset, thinking, callback);
+        }
+        return sendMessageWithPayload(
+                channelId, message, sessionId, cwd, model, reasoningEffort,
+                attachments, permissionMode, dshPreset, null, thinking, requestedCwd, callback);
+    }
+
+    /**
+     * Full send: OMP approval mode, thinking toggle and pre-clamp requestedCwd.
+     *
+     * <p>Routes through the narrower overloads when a field is absent, so a
+     * subclass that overrides one of those still sees the call.
+     */
+    public CompletableFuture<SDKResult> sendMessage(
+            String channelId,
+            String message,
+            String sessionId,
+            String cwd,
+            String model,
+            String reasoningEffort,
+            List<ClaudeSession.Attachment> attachments,
+            String permissionMode,
+            String dshPreset,
+            String ompApprovalMode,
+            Boolean thinking,
+            String requestedCwd,
+            MessageCallback callback
+    ) {
+        if (requestedCwd == null) {
+            return sendMessage(
+                    channelId, message, sessionId, cwd, model, reasoningEffort,
+                    attachments, permissionMode, dshPreset, ompApprovalMode, thinking, callback);
+        }
+        if (ompApprovalMode == null) {
+            return sendMessage(
+                    channelId, message, sessionId, cwd, model, reasoningEffort,
+                    attachments, permissionMode, dshPreset, thinking, requestedCwd, callback);
+        }
+        return sendMessageWithPayload(
+                channelId, message, sessionId, cwd, model, reasoningEffort,
+                attachments, permissionMode, dshPreset, ompApprovalMode, thinking, requestedCwd, callback);
+    }
+
+    private CompletableFuture<SDKResult> sendMessageWithPayload(
+            String channelId,
+            String message,
+            String sessionId,
+            String cwd,
+            String model,
+            String reasoningEffort,
+            List<ClaudeSession.Attachment> attachments,
+            String permissionMode,
+            String dshPreset,
+            String ompApprovalMode,
+            Boolean thinking,
+            String requestedCwd,
+            MessageCallback callback
+    ) {
+        JsonObject stdinPayload = buildCliStdinPayload(
+                message, sessionId, cwd, model, reasoningEffort,
+                attachments, permissionMode, dshPreset, thinking, requestedCwd);
+        if (ompApprovalMode != null) {
+            stdinPayload.addProperty("approvalMode", ompApprovalMode);
+        }
+        String stdinJson = gson.toJson(stdinPayload);
         List<String> command = buildBaseCommand("send");
         if (command.isEmpty()) {
             SDKResult error = new SDKResult();
@@ -267,6 +384,9 @@ public abstract class MarkerCliBridge extends BaseSDKBridge {
         }
 
         int attachmentCount = attachments != null ? attachments.size() : 0;
+        // Read the mode back from the payload so the log line can never drift
+        // from what was actually piped to the channel.
+        String mode = stdinPayload.get("permissionMode").getAsString();
         LOG.info("[" + getProviderName() + "] send sessionId="
                 + (sessionId != null && !sessionId.isEmpty() ? sessionId : "(new)")
                 + " model=" + (model != null && !model.isEmpty() ? model : "(default)")
@@ -277,7 +397,70 @@ public abstract class MarkerCliBridge extends BaseSDKBridge {
         return executeStreamingCommand(channelId, command, stdinJson, cwd, callback);
     }
 
-    private JsonArray buildAttachmentArray(List<ClaudeSession.Attachment> attachments) {
+    /**
+     * Build the JSON payload piped to channel-manager on stdin.
+     *
+     * <p>Static so the stdin contract is pinned by tests
+     * ({@code GeminiCliBridgeTest}): {@code cwd} is the guarded workspace, and
+     * {@code requestedCwd} (optional) is what the user asked for BEFORE the
+     * Java-side clamp — the Node notice compares the two (AC5).
+     */
+    public static JsonObject buildCliStdinPayload(
+            String message,
+            String sessionId,
+            String cwd,
+            String model,
+            String reasoningEffort,
+            List<ClaudeSession.Attachment> attachments,
+            String permissionMode,
+            String dshPreset,
+            String requestedCwd
+    ) {
+        return buildCliStdinPayload(
+                message, sessionId, cwd, model, reasoningEffort,
+                attachments, permissionMode, dshPreset, null, requestedCwd);
+    }
+
+    /**
+     * Build the JSON payload piped to channel-manager on stdin, including
+     * both {@code thinking} and {@code requestedCwd}.
+     */
+    public static JsonObject buildCliStdinPayload(
+            String message,
+            String sessionId,
+            String cwd,
+            String model,
+            String reasoningEffort,
+            List<ClaudeSession.Attachment> attachments,
+            String permissionMode,
+            String dshPreset,
+            Boolean thinking,
+            String requestedCwd
+    ) {
+        JsonObject stdinInput = new JsonObject();
+        stdinInput.addProperty("message", message != null ? message : "");
+        stdinInput.addProperty("sessionId", sessionId != null ? sessionId : "");
+        stdinInput.addProperty("cwd", cwd != null ? cwd : "");
+        if (requestedCwd != null && !requestedCwd.isBlank()) {
+            stdinInput.addProperty("requestedCwd", requestedCwd);
+        }
+        stdinInput.addProperty("model", model != null ? model : "");
+        stdinInput.addProperty("reasoningEffort", reasoningEffort != null ? reasoningEffort : "");
+        // Always send permissionMode (even "default") so Grok/other CLIs never
+        // fall back to an implicit default that ignores the UI mode selection.
+        String mode = permissionMode != null && !permissionMode.isBlank() ? permissionMode.trim() : "default";
+        stdinInput.addProperty("permissionMode", mode);
+        stdinInput.addProperty("thinking", thinking == null || thinking);
+        if (dshPreset != null) {
+            stdinInput.addProperty("preset", dshPreset);
+        }
+        if (attachments != null && !attachments.isEmpty()) {
+            stdinInput.add("attachments", buildAttachmentArray(attachments));
+        }
+        return stdinInput;
+    }
+
+    private static JsonArray buildAttachmentArray(List<ClaudeSession.Attachment> attachments) {
         JsonArray attArr = new JsonArray();
         for (ClaudeSession.Attachment attachment : attachments) {
             if (attachment == null) {

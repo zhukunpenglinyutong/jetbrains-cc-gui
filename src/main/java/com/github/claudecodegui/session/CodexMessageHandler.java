@@ -35,7 +35,7 @@ public class CodexMessageHandler implements MessageCallback {
      * CLI providers whose bridge emits one Claude-schema {@code [USAGE]} marker per
      * model step, with cache-exclusive input and the provider's own {@code cost_usd}.
      */
-    private static final Set<String> STEP_USAGE_PROVIDERS = Set.of("opencode", "omp");
+    private static final Set<String> STEP_USAGE_PROVIDERS = Set.of("gemini", "opencode", "omp");
 
     /**
      * state.
@@ -129,11 +129,10 @@ public class CodexMessageHandler implements MessageCallback {
     }
 
     /**
-     * Handle a received message by dispatching to the appropriate handler based on type.
+     * Dispatches a received stream message to the appropriate handler based on type.
      *
-     * @param type type
-     * @param content content
-     * @since 1.0.0
+     * @param type Message type identifier
+     * @param content Message payload content
      */
     @Override
     public void onMessage(String type, String content) {
@@ -161,8 +160,8 @@ public class CodexMessageHandler implements MessageCallback {
                 // Handle session_id/thread_id (for session recovery)
                 handleSessionId(content);
             } else if ("usage".equals(type)) {
-                // OpenCode and OMP emit one [USAGE] marker per model step, which
-                // handleUsage sums into turnUsage (the latest step also feeds
+                // Gemini, OpenCode and OMP emit one [USAGE] marker per model step,
+                // which handleUsage sums into turnUsage (the latest step also feeds
                 // the context ring). Every other CLI provider (kimi / minimax /
                 // pi / dsh / ...) sends one usage snapshot per turn, which
                 // pushes the context ring directly.
@@ -665,6 +664,22 @@ public class CodexMessageHandler implements MessageCallback {
      * context snapshot ({@code message.usage}, read by the context ring); the steps
      * of a turn are summed into {@code turnUsage} for the message footer.</p>
      *
+     * <p><b>Provider gate:</b> only the gemini bridge's marker is consumed.
+     * dsh/omp/pi also emit [USAGE] through the shared marker protocol, but
+     * their payload shapes and per-call emission semantics are unvetted and
+     * their markers are dropped.
+     *
+     * <p>The gemini payload is the canonical claude-shape usage (input_tokens /
+     * output_tokens / cache_creation_input_tokens / cache_read_input_tokens,
+     * plus an additive thinking_tokens) and is stored VERBATIM: the provider's
+     * input figure is reported cache-exclusive, so the codex buildTurnUsage
+     * normalization (input includes cache → subtract cacheRead) must NOT be
+     * applied here. thinking_tokens passes through for the per-turn display
+     * but is never part of the context-ring math.
+     *
+     * <p>A payload with no non-zero displayable figure is ignored entirely:
+     * stamping it would record a genuinely free turn, which would be a lie.
+     *
      * @param jsonContent canonical usage JSON
      */
     private void handleUsage(String jsonContent) {
@@ -684,6 +699,11 @@ public class CodexMessageHandler implements MessageCallback {
                 return;
             }
 
+            // A turn whose text arrives only via the result-fallback delta (or an
+            // ERROR turn with no text) has no current assistant message yet — create
+            // THIS turn's message instead of letting the marker fall onto the
+            // previous turn's bubble (or vanish on the first turn). A fallback
+            // content_delta later in the same turn then fills this message.
             ensureCurrentAssistantMessageExists();
             Message target = currentAssistantMessage;
             assistantMessageObject(target.raw).add("usage", usage.deepCopy());

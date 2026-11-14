@@ -509,4 +509,516 @@ describe('extractSubagentsFromMessages', () => {
       tu_spawn: { success: true, completed: true, messages: [] },
     })[0].status).toBe('error');
   });
+
+  describe('Story 1.11: Gemini invoke_subagent', () => {
+    it('AC1/AC3: projects a single invoke_subagent call into one running row and suppresses launch ack text', () => {
+      const messages: ClaudeMessage[] = [
+        {
+          type: 'assistant',
+          content: '',
+          raw: {
+            message: {
+              content: [
+                {
+                  type: 'tool_use',
+                  id: 'call_451383',
+                  name: 'invoke_subagent',
+                  input: {
+                    Subagents: [
+                      {
+                        Model: 'inherit',
+                        Prompt: 'Read /Volumes/dx/dev/_home/jetbrains-cc-gui/_bmad-output/implementation-artifacts/3-2-reply-translation-toggle.md fully and implement it — the spec is the sole source of truth.',
+                        Role: 'Full-Stack Developer',
+                        TypeName: 'self',
+                        Workspace: 'inherit',
+                      },
+                    ],
+                    toolAction: 'Invoking subagent',
+                    toolSummary: 'Launch subagent to implement story 3-2',
+                  },
+                },
+              ],
+            },
+          },
+        },
+        {
+          type: 'user',
+          content: '',
+          raw: {
+            content: [
+              {
+                type: 'tool_result',
+                tool_use_id: 'call_451383',
+                content:
+                  'Created the following subagents:\n' +
+                  '  "conversationId": "ac5686b0-9ad8-4a25-b988-14b42f175f7f",\n' +
+                  '  "logAbsoluteUri": "file:///Users/afanasyev/.gemini/antigravity-cli/brain/ac5686b0-9ad8-4a25-b988-14b42f175f7f/.system_generated/logs/transcript.jsonl"\n' +
+                  'The subagents will send you a message when they have completed their task or require guidance. There is no need to poll for their responses.',
+              },
+            ],
+          },
+        },
+      ];
+
+      const subagents = extractSubagentsFromMessages(
+        messages,
+        getContentBlocks,
+        findToolResult(messages),
+        getToolResultRaw(messages),
+      );
+
+      expect(subagents).toHaveLength(1);
+      expect(subagents[0]).toMatchObject({
+        id: 'call_451383',
+        type: 'Full-Stack Developer',
+        description: 'Launch subagent to implement story 3-2',
+        prompt:
+          'Read /Volumes/dx/dev/_home/jetbrains-cc-gui/_bmad-output/implementation-artifacts/3-2-reply-translation-toggle.md fully and implement it — the spec is the sole source of truth.',
+        agentId: 'ac5686b0-9ad8-4a25-b988-14b42f175f7f',
+        status: 'running',
+        isAsync: true,
+      });
+      expect(subagents[0].toolUseId).toBeUndefined();
+      expect(subagents[0].resultText).toBeUndefined();
+
+      const completed = applySubagentHistoryCompletion(subagents, {
+        call_451383: {
+          success: true,
+          completed: true,
+          status: 'completed',
+          resultText: 'Story 3.2 completed successfully.',
+        },
+      });
+      expect(completed[0].status).toBe('completed');
+      expect(completed[0].resultText).toBe('Story 3.2 completed successfully.');
+    });
+
+    it('marks a reviewer completed when manage_subagents reports that role idle', () => {
+      const messages: ClaudeMessage[] = [
+        {
+          type: 'assistant',
+          content: '',
+          raw: {
+            message: {
+              content: [
+                {
+                  type: 'tool_use',
+                  id: 'call_90027',
+                  name: 'invoke_subagent',
+                  input: {
+                    Subagents: [
+                      { Model: 'inherit', Prompt: 'Hunt', Role: 'Blind Hunter Reviewer', TypeName: 'research' },
+                      { Model: 'inherit', Prompt: 'Review the story', Role: 'Verification Gap Reviewer', TypeName: 'research' },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        },
+        {
+          type: 'user',
+          content: '',
+          raw: {
+            content: [
+              {
+                type: 'tool_result',
+                tool_use_id: 'call_90027',
+                content: 'Launch four review subagents',
+              },
+            ],
+          },
+        },
+        {
+          type: 'assistant',
+          content: '',
+          raw: {
+            message: {
+              content: [
+                {
+                  type: 'tool_use',
+                  id: 'call_status',
+                  name: 'manage_subagents',
+                  input: { toolSummary: 'Check review subagents state' },
+                },
+              ],
+            },
+          },
+        },
+        {
+          type: 'user',
+          content: '',
+          raw: {
+            content: [
+              {
+                type: 'tool_result',
+                tool_use_id: 'call_status',
+                content: 'You have 2 active subagent(s):\n'
+                  + '[{"role":"Blind Hunter Reviewer","type":"research","conversationId":"9793bf02-8f6e-4e11-9fb6-ccc32410a9bb","state":"running"},'
+                  + '{"role":"Verification Gap Reviewer","type":"research","conversationId":"dee8447e-ed74-457e-96cc-459d20ff4f4f","state":"idle"}]',
+              },
+            ],
+          },
+        },
+      ];
+
+      const subagents = extractSubagentsFromMessages(
+        messages,
+        getContentBlocks,
+        findToolResult(messages),
+        getToolResultRaw(messages),
+      );
+
+      expect(subagents).toHaveLength(2);
+      expect(subagents[0]).toMatchObject({
+        type: 'Blind Hunter Reviewer',
+        prompt: 'Hunt',
+        agentId: '9793bf02-8f6e-4e11-9fb6-ccc32410a9bb',
+        status: 'running',
+      });
+      expect(subagents[1]).toMatchObject({
+        type: 'Verification Gap Reviewer',
+        prompt: 'Review the story',
+        agentId: 'dee8447e-ed74-457e-96cc-459d20ff4f4f',
+        status: 'completed',
+      });
+    });
+
+    it('does not overwrite an already-assigned agentId when a second subagent shares the same role', () => {
+      const messages: ClaudeMessage[] = [
+        {
+          type: 'assistant',
+          content: '',
+          raw: {
+            message: {
+              content: [
+                {
+                  type: 'tool_use',
+                  id: 'call_same_role',
+                  name: 'invoke_subagent',
+                  input: {
+                    Subagents: [
+                      { Model: 'inherit', Prompt: 'First task', Role: 'Researcher', TypeName: 'research' },
+                      { Model: 'inherit', Prompt: 'Second task', Role: 'Researcher', TypeName: 'research' },
+                    ],
+                    toolSummary: 'Launch 2 researchers',
+                  },
+                },
+              ],
+            },
+          },
+        },
+        {
+          type: 'user',
+          content: '',
+          raw: {
+            content: [
+              {
+                type: 'tool_result',
+                tool_use_id: 'call_same_role',
+                content: 'Launched 2 subagents successfully.',
+              },
+            ],
+          },
+        },
+        {
+          type: 'assistant',
+          content: '',
+          raw: {
+            message: {
+              content: [
+                {
+                  type: 'tool_use',
+                  id: 'call_manage',
+                  name: 'manage_subagents',
+                  input: { toolSummary: 'Check state' },
+                },
+              ],
+            },
+          },
+        },
+        {
+          type: 'user',
+          content: '',
+          raw: {
+            content: [
+              {
+                type: 'tool_result',
+                tool_use_id: 'call_manage',
+                content: 'You have 2 active subagent(s):\n'
+                  + '[{"role":"Researcher","type":"research","conversationId":"11111111-1111-1111-1111-111111111111","state":"running"},'
+                  + '{"role":"Researcher","type":"research","conversationId":"22222222-2222-2222-2222-222222222222","state":"idle"}]',
+              },
+            ],
+          },
+        },
+      ];
+
+      const subagents = extractSubagentsFromMessages(
+        messages,
+        getContentBlocks,
+        findToolResult(messages),
+        getToolResultRaw(messages),
+      );
+
+      expect(subagents).toHaveLength(2);
+      expect(subagents[0].agentId).toBe('11111111-1111-1111-1111-111111111111');
+      expect(subagents[0].status).toBe('running');
+      expect(subagents[1].agentId).toBe('22222222-2222-2222-2222-222222222222');
+      expect(subagents[1].status).toBe('completed');
+    });
+
+    it('AC2: zips multiple subagents and conversationId UUIDs by index', () => {
+      const messages: ClaudeMessage[] = [
+        {
+          type: 'assistant',
+          content: '',
+          raw: {
+            message: {
+              content: [
+                {
+                  type: 'tool_use',
+                  id: 'call_multi',
+                  name: 'invoke_subagent',
+                  input: {
+                    Subagents: [
+                      { Role: 'Developer 1', Prompt: 'Task 1' },
+                      { Role: 'Developer 2', Prompt: 'Task 2' },
+                    ],
+                    toolAction: 'Invoking subagents',
+                    toolSummary: 'Launch 2 subagents',
+                  },
+                },
+              ],
+            },
+          },
+        },
+        {
+          type: 'user',
+          content: '',
+          raw: {
+            content: [
+              {
+                type: 'tool_result',
+                tool_use_id: 'call_multi',
+                content:
+                  'Created the following subagents:\n' +
+                  '  "conversationId": "ac5686b0-9ad8-4a25-b988-14b42f175f7f",\n' +
+                  '  "conversationId": "bd6797c1-0be9-5b36-a999-25b53f286f8f",\n',
+              },
+            ],
+          },
+        },
+      ];
+
+      const subagents = extractSubagentsFromMessages(
+        messages,
+        getContentBlocks,
+        findToolResult(messages),
+        getToolResultRaw(messages),
+      );
+
+      expect(subagents).toHaveLength(2);
+      expect(subagents[0]).toMatchObject({
+        id: 'call_multi--0',
+        toolUseId: 'call_multi',
+        type: 'Developer 1',
+        description: 'Launch 2 subagents',
+        prompt: 'Task 1',
+        agentId: 'ac5686b0-9ad8-4a25-b988-14b42f175f7f',
+        status: 'running',
+        isAsync: true,
+      });
+      expect(subagents[1]).toMatchObject({
+        id: 'call_multi--1',
+        toolUseId: 'call_multi',
+        type: 'Developer 2',
+        description: 'Launch 2 subagents',
+        prompt: 'Task 2',
+        agentId: 'bd6797c1-0be9-5b36-a999-25b53f286f8f',
+        status: 'running',
+        isAsync: true,
+      });
+    });
+
+    it('AC2: handles missing conversationId leaving row running without agentId, and extra conversationId produces toolSummary row', () => {
+      // 2 subagents, 1 conversationId
+      const missingIdMessages: ClaudeMessage[] = [
+        {
+          type: 'assistant',
+          content: '',
+          raw: {
+            message: {
+              content: [
+                {
+                  type: 'tool_use',
+                  id: 'call_missing_id',
+                  name: 'invoke_subagent',
+                  input: {
+                    Subagents: [
+                      { Role: 'Worker 1', Prompt: 'P1' },
+                      { Role: 'Worker 2', Prompt: 'P2' },
+                    ],
+                    toolSummary: 'Worker summary',
+                  },
+                },
+              ],
+            },
+          },
+        },
+        {
+          type: 'user',
+          content: '',
+          raw: {
+            content: [
+              {
+                type: 'tool_result',
+                tool_use_id: 'call_missing_id',
+                content: 'conversationId: ac5686b0-9ad8-4a25-b988-14b42f175f7f',
+              },
+            ],
+          },
+        },
+      ];
+
+      const missingIdRows = extractSubagentsFromMessages(
+        missingIdMessages,
+        getContentBlocks,
+        findToolResult(missingIdMessages),
+        getToolResultRaw(missingIdMessages),
+      );
+      expect(missingIdRows).toHaveLength(2);
+      expect(missingIdRows[0].agentId).toBe('ac5686b0-9ad8-4a25-b988-14b42f175f7f');
+      expect(missingIdRows[1].agentId).toBeUndefined();
+      expect(missingIdRows[1].status).toBe('running');
+
+      // 1 subagent, 2 conversationIds
+      const extraIdMessages: ClaudeMessage[] = [
+        {
+          type: 'assistant',
+          content: '',
+          raw: {
+            message: {
+              content: [
+                {
+                  type: 'tool_use',
+                  id: 'call_extra_id',
+                  name: 'invoke_subagent',
+                  input: {
+                    Subagents: [{ Role: 'Worker 1', Prompt: 'P1' }],
+                    toolSummary: 'Extra id summary',
+                  },
+                },
+              ],
+            },
+          },
+        },
+        {
+          type: 'user',
+          content: '',
+          raw: {
+            content: [
+              {
+                type: 'tool_result',
+                tool_use_id: 'call_extra_id',
+                content:
+                  'conversationId: ac5686b0-9ad8-4a25-b988-14b42f175f7f\n' +
+                  'conversationId: bd6797c1-0be9-5b36-a999-25b53f286f8f',
+              },
+            ],
+          },
+        },
+      ];
+
+      const extraIdRows = extractSubagentsFromMessages(
+        extraIdMessages,
+        getContentBlocks,
+        findToolResult(extraIdMessages),
+        getToolResultRaw(extraIdMessages),
+      );
+      expect(extraIdRows).toHaveLength(2);
+      expect(extraIdRows[1].description).toBe('Extra id summary');
+      expect(extraIdRows[1].agentId).toBe('bd6797c1-0be9-5b36-a999-25b53f286f8f');
+    });
+
+    it('AC3: marks tool error as error immediately without requiring child database', () => {
+      const messages: ClaudeMessage[] = [
+        {
+          type: 'assistant',
+          content: '',
+          raw: {
+            message: {
+              content: [
+                {
+                  type: 'tool_use',
+                  id: 'call_err',
+                  name: 'invoke_subagent',
+                  input: {
+                    Subagents: [{ Role: 'Worker', Prompt: 'Task' }],
+                    toolSummary: 'Failing subagent',
+                  },
+                },
+              ],
+            },
+          },
+        },
+        {
+          type: 'user',
+          content: '',
+          raw: {
+            content: [
+              {
+                type: 'tool_result',
+                tool_use_id: 'call_err',
+                content: 'Failed to launch subagent: model quota exceeded',
+                is_error: true,
+              },
+            ],
+          },
+        },
+      ];
+
+      const subagents = extractSubagentsFromMessages(
+        messages,
+        getContentBlocks,
+        findToolResult(messages),
+        getToolResultRaw(messages),
+      );
+
+      expect(subagents).toHaveLength(1);
+      expect(subagents[0].status).toBe('error');
+      expect(subagents[0].resultText).toBe('Failed to launch subagent: model quota exceeded');
+    });
+
+    it('AC1: manage_task, view_file, run_command, and replace_file_content produce no row', () => {
+      const otherTools = ['manage_task', 'view_file', 'run_command', 'replace_file_content'];
+      for (const name of otherTools) {
+        const messages: ClaudeMessage[] = [
+          {
+            type: 'assistant',
+            content: '',
+            raw: {
+              message: {
+                content: [
+                  {
+                    type: 'tool_use',
+                    id: `call_${name}`,
+                    name,
+                    input: { Action: 'status', TaskId: 'task-1' },
+                  },
+                ],
+              },
+            },
+          },
+        ];
+        const subagents = extractSubagentsFromMessages(
+          messages,
+          getContentBlocks,
+          findToolResult(messages),
+          getToolResultRaw(messages),
+        );
+        expect(subagents).toHaveLength(0);
+      }
+    });
+  });
 });

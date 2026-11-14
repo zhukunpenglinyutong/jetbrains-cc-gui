@@ -54,6 +54,24 @@ describe('AgentGroupBlock', () => {
       .toEqual(Array(childCount).fill(prompt));
   });
 
+  it('shows the invoke_subagent child Prompt on the one-child card', () => {
+    const prompt = 'Read the story and implement it — the spec is the sole source of truth.';
+    const { container } = render(<AgentGroupBlock
+      agentBlock={{
+        type: 'tool_use',
+        id: 'call-sub',
+        name: 'invoke_subagent',
+        input: {
+          Subagents: [{ Role: 'Full-Stack Developer', Prompt: prompt }],
+          toolSummary: 'Launch subagent to implement story 3-2',
+        },
+      }}
+      followingBlocks={[]} messageIndex={0} isStreaming isLastMessage isThinking={false}
+      findToolResult={() => null} />);
+    fireEvent.click(container.querySelector('.task-header') as HTMLElement);
+    expect(container.querySelector('.subagent-prompt-card')?.textContent).toBe(prompt);
+  });
+
   it('shares native completion and report with the StatusPanel instead of showing a launch receipt', () => {
     mockSubagentStates = [{ id: 'native-spawn', type: 'reviewer', description: '', status: 'completed',
       isAsync: true, messageIndex: 0, agentId: 'native-child', agentPath: '/root/reviewer', resultText: 'Review finished' }];

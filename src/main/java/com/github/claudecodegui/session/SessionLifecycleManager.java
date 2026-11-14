@@ -131,8 +131,9 @@ public class SessionLifecycleManager {
             LOG.info("Old session interrupted, creating new session");
 
             ClaudeSession newSession = createDefaultSession();
-            newSession.setPermissionMode(previousPermissionMode);
+            // Provider first: SessionState drops "sandbox" while the provider is not gemini.
             newSession.setProvider(targetProvider != null && !targetProvider.isBlank() ? targetProvider : previousProvider);
+            newSession.setPermissionMode(previousPermissionMode);
             // Verbatim copy: the live value was already sanitized when set (migrated
             // on restore, or an explicit custom id via set_model), so re-migrating
             // here could only rewrite a user's custom model behind their back.
@@ -175,11 +176,12 @@ public class SessionLifecycleManager {
             ClaudeSession newSession = createDefaultSession();
 
             // Apply template settings
-            if (template.getPermissionMode() != null) {
-                newSession.setPermissionMode(template.getPermissionMode());
-            }
+            // Provider first: SessionState drops "sandbox" while the provider is not gemini.
             if (template.getProvider() != null) {
                 newSession.setProvider(template.getProvider());
+            }
+            if (template.getPermissionMode() != null) {
+                newSession.setPermissionMode(template.getPermissionMode());
             }
             if (template.getModel() != null) {
                 // Templates hold an explicit user choice (possibly a custom model id),
@@ -271,8 +273,9 @@ public class SessionLifecycleManager {
             host.clearPermissionDecisionMemory();
 
             ClaudeSession newSession = createDefaultSession();
-            newSession.setPermissionMode(previousPermissionMode);
+            // Provider first: SessionState drops "sandbox" while the provider is not gemini.
             newSession.setProvider(provider != null && !provider.trim().isEmpty() ? provider : previousProvider);
+            newSession.setPermissionMode(previousPermissionMode);
             // Verbatim: a payload model comes from the webview, which is the authority
             // on custom ids and already applied retired-id migration where it is safe;
             // a fallback previousModel is a live value that was sanitized when set.

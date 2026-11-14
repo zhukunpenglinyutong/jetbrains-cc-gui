@@ -1,0 +1,1682 @@
+package com.github.claudecodegui.provider.gemini;
+
+import com.github.claudecodegui.bridge.NodeDetector;
+import com.github.claudecodegui.provider.common.HistoryPathMatcher;
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import com.intellij.openapi.diagnostic.Logger;
+
+import java.io.IOException;
+import java.net.URI;
+import java.net.URLDecoder;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.DirectoryStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+/**
+ * Reads Gemini CLI (agy) conversation history from the CLI-owned storage at
+ * {@code ~/.gemini/antigravity-cli/}:
+ * <ul>
+ *   <li>{@code cache/conversation_metadata.json} — legacy listing cache. The current
+ *       CLI no longer maintains it (live 2026-09-04: entries months stale, none backed
+ *       by an existing database), so an entry is trusted only when its
+ *       {@code conversations/<id>.db} still exists; when nothing survives the filter,
+ *       listing falls back to scanning the databases. A scanned database is scoped
+ *       to a project by the workspace URI in {@code trajectory_metadata_blob}
+ *       (field 1.1, or field 7 when the list is empty).
+ *       {@code cache/last_conversations.json} — cwd → latest-conversation fallback
+ *       when that blob has no workspace.</li>
+ *   <li>{@code conversations/<uuid>.db} — one SQLite database per conversation
+ *       (with {@code -shm}/{@code -wal} sidecars); {@code steps.step_payload} holds
+ *       protobuf-encoded step content.</li>
+ * </ul>
+ *
+ * <p>The CLI's internal protobuf schema is not a stable public contract, so the
+ * payload decoder is intentionally minimal and defensive: only a small,
+ * live-verified field map is read and anything else is skipped with a log line —
+ * content is never fabricated. The storage contract (wire map, step-type enum,
+ * cache shapes) is documented in {@code docs/gemini/GEMINI-INTEGRATION-QUICKSTART.md}.
+ */
+public class GeminiHistoryReader {
+
+    private static final Logger LOG = Logger.getInstance(GeminiHistoryReader.class);
+    private static final int MAX_TITLE_CHARS = 80;
+    private static final int MAX_TOOL_RESULT_CHARS = 20_000;
+    private static final String SQLITE_JDBC = "org.sqlite.JDBC";
+    /** Same whitelist the shared delete service enforces before any path is resolved. */
+    private static final String SAFE_ID_PATTERN = "^[A-Za-z0-9._-]+$";
+
+    // Live step_type enum values (integer column, verified against agy 1.1.22).
+    private static final int STEP_TYPE_USER = 14;
+    private static final int STEP_TYPE_AGENT = 15;
+    private static final int STEP_TYPE_TOOL = 132;
+
+    private static final int MAX_SCAN_CACHE_ENTRIES = 2048;
+    private static final Map<Path, CachedScanMeta> SCAN_META_CACHE = new ConcurrentHashMap<>();
+    // Sender runs to whitespace. Truncating at '/' would treat sender=<id>/task-N as <id>
+    // and hide the parent session. task- and <id>/task- senders are background tasks,
+    // the same exclusion GeminiSubagentHistoryLoader uses.
+    private static final Pattern STEP101_SENDER_PATTERN =
+            Pattern.compile("\\[Message\\]\\s+timestamp=\\S+\\s+sender=(\\S+)");
+    private static final Pattern SUBAGENT_CONVERSATION_ID_PATTERN =
+            Pattern.compile("\"conversationId\"\\s*:\\s*\"([A-Za-z0-9._-]+)\"");
+
+    private final Gson gson;
+    private final Path cliHome;
+    /** Guards {@link #currentStepIsError} for the duration of one {@link #decodeStep} call. */
+    private final Object stepDecodeLock = new Object();
+    /** Error/cancel flag for the step {@link #decodeStep} is decoding. */
+    private boolean currentStepIsError;
+
+    public GeminiHistoryReader() {
+        this(defaultCliHome(), new Gson());
+    }
+
+    /** Test constructor that points the reader at an isolated CLI-home fixture. */
+    public GeminiHistoryReader(Path cliHome, Gson gson) {
+        this.cliHome = cliHome;
+        this.gson = gson;
+    }
+
+    public Path conversationDatabase(String sessionId) {
+        if (!isSafeSessionId(sessionId)) {
+            return null;
+        }
+        return conversationsPath().resolve(sessionId.trim() + ".db");
+    }
+
+    public static Path defaultCliHome() {
+        String home = NodeDetector.resolveHomeForFileOps();
+        return Paths.get(home, ".gemini", "antigravity-cli");
+    }
+
+    public static class SessionInfo {
+        public String sessionId;
+        public String title;
+        public int messageCount;
+        public long lastTimestamp;
+        public long firstTimestamp;
+        public String cwd;
+        public String provider = "gemini";
+        /** Decoded workspace paths from the CLI's WorkspaceURIs (first one mirrors cwd). */
+        public List<String> workspaces;
+    }
+
+    // ── Listing ──────────────────────────────────────────────────────────────
+
+    public String getSessionsForProjectAsJson(String projectPath) {
+        try {
+            List<SessionInfo> sessions = listSessionsForProject(projectPath);
+            Map<String, Object> result = new HashMap<>();
+            result.put("success", true);
+            result.put("sessions", sessions);
+            result.put("sessionCount", sessions.size());
+            int totalMessages = sessions.stream().mapToInt(s -> s.messageCount).sum();
+            result.put("total", totalMessages);
+            return gson.toJson(result);
+        } catch (Exception e) {
+            LOG.error("[GeminiHistoryReader] Failed to list sessions: " + e.getMessage(), e);
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("error", "Failed to read Gemini sessions: " + e.getMessage());
+            return gson.toJson(error);
+        }
+    }
+
+    public List<SessionInfo> listSessionsForProject(String projectPath) throws IOException {
+        List<SessionInfo> all = listAllSessions();
+        if (projectPath == null || projectPath.trim().isEmpty()) {
+            return all;
+        }
+        String normalizedProject = normalizePath(projectPath);
+        Set<String> lastConversationIds = lastConversationIdsForProject(normalizedProject);
+        List<SessionInfo> filtered = new ArrayList<>();
+        for (SessionInfo session : all) {
+            if (matchesProject(session, normalizedProject, lastConversationIds, projectPath)) {
+                filtered.add(session);
+            }
+        }
+        filtered.sort(Comparator.comparingLong((SessionInfo s) -> s.lastTimestamp).reversed());
+        return filtered;
+    }
+
+    /**
+     * Scans conversation databases on disk and merges metadata cache entries by session id.
+     *
+     * @return all non-internal top-level sessions sorted by last timestamp descending
+     * @throws IOException если не удалось прочитать каталог сессий
+     */
+    public List<SessionInfo> listAllSessions() throws IOException {
+        List<SessionInfo> scanned = listSessionsByScanningDatabases();
+        Path cache = metadataCachePath();
+        if (!Files.isRegularFile(cache)) {
+            return scanned;
+        }
+        Set<String> internalIds = new HashSet<>();
+        List<SessionInfo> fromCache = listSessionsFromMetadataCache(cache, internalIds);
+        if (fromCache.isEmpty() && internalIds.isEmpty()) {
+            LOG.debug("[GeminiHistoryReader] Metadata cache yielded no sessions with an "
+                    + "existing conversation database, scanning conversations/");
+            return scanned;
+        }
+        Map<String, SessionInfo> mergedById = new LinkedHashMap<>();
+        for (SessionInfo session : scanned) {
+            if (!internalIds.contains(session.sessionId.toLowerCase(Locale.ROOT))) {
+                mergedById.put(session.sessionId, session);
+            }
+        }
+        for (SessionInfo cached : fromCache) {
+            SessionInfo target = mergedById.get(cached.sessionId);
+            if (target == null) {
+                continue;
+            }
+            if (cached.title != null && !cached.title.isBlank()) {
+                target.title = cached.title;
+            }
+            if (cached.messageCount > 0) {
+                target.messageCount = cached.messageCount;
+            }
+            // Current CLIs no longer maintain the cache: its time must not hide newer DB writes.
+            if (cached.lastTimestamp > target.lastTimestamp) {
+                target.lastTimestamp = cached.lastTimestamp;
+            }
+            if (cached.firstTimestamp > 0 && cached.firstTimestamp < target.firstTimestamp) {
+                target.firstTimestamp = cached.firstTimestamp;
+            }
+            if (cached.workspaces != null && !cached.workspaces.isEmpty()) {
+                target.workspaces = cached.workspaces;
+                target.cwd = cached.cwd;
+            }
+        }
+        List<SessionInfo> merged = new ArrayList<>(mergedById.values());
+        merged.sort(Comparator.comparingLong((SessionInfo s) -> s.lastTimestamp).reversed());
+        return merged;
+    }
+
+    private List<SessionInfo> listSessionsFromMetadataCache(Path cache, Set<String> internalIds) {
+        List<SessionInfo> sessions = new ArrayList<>();
+        JsonObject root;
+        try {
+            root = JsonParser.parseString(Files.readString(cache, StandardCharsets.UTF_8))
+                    .getAsJsonObject();
+        } catch (Exception e) {
+            LOG.warn("[GeminiHistoryReader] Metadata cache unreadable, falling back to db scan: "
+                    + e.getMessage());
+            return sessions;
+        }
+        JsonObject conversations = root.has("conversations") && root.get("conversations").isJsonObject()
+                ? root.getAsJsonObject("conversations")
+                : null;
+        if (conversations == null) {
+            return sessions;
+        }
+        int skipped = 0;
+        for (Map.Entry<String, JsonElement> entry : conversations.entrySet()) {
+            try {
+                SessionInfo info = sessionFromCacheEntry(entry.getKey(), entry.getValue(), internalIds);
+                if (info != null) {
+                    sessions.add(info);
+                } else {
+                    skipped++;
+                }
+            } catch (Exception e) {
+                // Skip malformed entries; a broken one must never break the listing.
+                skipped++;
+                LOG.debug("[GeminiHistoryReader] Skipping malformed cache entry "
+                        + entry.getKey() + ": " + e.getMessage());
+            }
+        }
+        if (skipped > 0) {
+            LOG.debug("[GeminiHistoryReader] Skipped " + skipped
+                    + " metadata-cache entr(ies) (malformed, internal, or without an "
+                    + "existing conversation database)");
+        }
+        sessions.sort(Comparator.comparingLong((SessionInfo s) -> s.lastTimestamp).reversed());
+        return sessions;
+    }
+
+    private SessionInfo sessionFromCacheEntry(String key, JsonElement element, Set<String> internalIds) {
+        if (element == null || !element.isJsonObject()) {
+            return null;
+        }
+        JsonObject entry = element.getAsJsonObject();
+        if (entry.has("is_internal") && entry.get("is_internal").isJsonPrimitive()
+                && entry.get("is_internal").getAsBoolean()) {
+            rememberInternalIds(key, entry, internalIds);
+            return null;
+        }
+        JsonElement summaryElement = entry.get("summary");
+        if (summaryElement == null || !summaryElement.isJsonObject()) {
+            return null;
+        }
+        JsonObject summary = summaryElement.getAsJsonObject();
+        String id = stringField(summary, "ID");
+        if (id == null || id.isBlank() || !isSafeSessionId(id)) {
+            return null;
+        }
+        SessionInfo info = new SessionInfo();
+        info.sessionId = id.trim();
+        // The cache is stale whenever the CLI resets its storage: entries whose
+        // conversation database no longer exists must not shadow the real ones
+        // (live 2026-09-04: 84 entries, 0 with a database on disk).
+        if (!Files.isRegularFile(conversationDbPath(info.sessionId))) {
+            return null;
+        }
+        String title = stringField(summary, "Title");
+        String preview = stringField(summary, "Preview");
+        info.title = resolveSessionTitle(title, preview, info.sessionId);
+        info.messageCount = intField(summary, "NumSteps");
+        info.lastTimestamp = resolveCacheLastTimestamp(entry, summary, info.sessionId);
+        info.firstTimestamp = info.lastTimestamp;
+        info.workspaces = decodeWorkspaceUris(summary);
+        info.cwd = info.workspaces != null && !info.workspaces.isEmpty() ? info.workspaces.get(0) : null;
+        return info;
+    }
+
+    private static void rememberInternalIds(String key, JsonObject entry, Set<String> internalIds) {
+        if (key != null && !key.isBlank()) {
+            internalIds.add(key.trim().toLowerCase(Locale.ROOT));
+        }
+        JsonElement summaryEl = entry.get("summary");
+        if (summaryEl != null && summaryEl.isJsonObject()) {
+            String summaryId = stringField(summaryEl.getAsJsonObject(), "ID");
+            if (summaryId != null && !summaryId.isBlank()) {
+                internalIds.add(summaryId.trim().toLowerCase(Locale.ROOT));
+            }
+        }
+    }
+
+    private long resolveCacheLastTimestamp(JsonObject entry, JsonObject summary, String sessionId) {
+        long lastTimestamp = parseTimestamp(stringField(summary, "UpdatedAt"));
+        if (lastTimestamp <= 0) {
+            lastTimestamp = parseTimestamp(stringField(entry, "last_modified_time"));
+        }
+        if (lastTimestamp <= 0) {
+            lastTimestamp = fileMtime(conversationDbPath(sessionId));
+        }
+        if (lastTimestamp <= 0) {
+            lastTimestamp = System.currentTimeMillis();
+        }
+        return lastTimestamp;
+    }
+
+    private static final class ScannedDbEntry {
+        private final String sessionId;
+        private final long mtime;
+        private final ScanMeta meta;
+
+        private ScannedDbEntry(String sessionId, long mtime, ScanMeta meta) {
+            this.sessionId = sessionId;
+            this.mtime = mtime;
+            this.meta = meta;
+        }
+    }
+
+    /**
+     * Scan the per-conversation databases directly. Titles come from the CLI's
+     * summaries database when it can be opened (best-effort — it is equally stale
+     * on current installs); otherwise the first user prompt or session id is used.
+     */
+    private List<SessionInfo> listSessionsByScanningDatabases() throws IOException {
+        Map<String, String[]> summaries = loadConversationSummaries();
+        List<SessionInfo> sessions = new ArrayList<>();
+        Path conversationsDir = conversationsPath();
+        if (!Files.isDirectory(conversationsDir)) {
+            return sessions;
+        }
+        List<ScannedDbEntry> entries = new ArrayList<>();
+        Set<String> subagentChildIds = new HashSet<>();
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(conversationsDir, "*.db")) {
+            for (Path db : stream) {
+                String fileName = db.getFileName().toString();
+                String id = fileName.substring(0, fileName.length() - ".db".length());
+                if (!isSafeSessionId(id)) {
+                    continue;
+                }
+                // New steps land in -wal and leave the .db mtime alone until a checkpoint.
+                long mtime = Math.max(fileMtime(db), fileMtime(db.resolveSibling(fileName + "-wal")));
+                ScanMeta meta = readScanMeta(db, mtime);
+                if (meta.childSessionIds != null && !meta.childSessionIds.isEmpty()) {
+                    subagentChildIds.addAll(meta.childSessionIds);
+                }
+                entries.add(new ScannedDbEntry(id, mtime, meta));
+            }
+        }
+        for (ScannedDbEntry entry : entries) {
+            String id = entry.sessionId;
+            if (subagentChildIds.contains(id.toLowerCase(Locale.ROOT))) {
+                continue;
+            }
+            ScanMeta meta = entry.meta;
+            SessionInfo info = new SessionInfo();
+            info.sessionId = id;
+            String[] summary = summaries.get(id);
+            if (summary != null) {
+                info.title = resolveSessionTitle(summary[0], summary[1], id);
+            } else if (meta.firstUserText != null && !meta.firstUserText.isBlank()) {
+                info.title = resolveSessionTitle(meta.firstUserText, null, id);
+            } else {
+                info.title = id;
+            }
+            info.lastTimestamp = entry.mtime;
+            info.firstTimestamp = info.lastTimestamp;
+            info.messageCount = meta.messageCount;
+            info.workspaces = meta.workspaces;
+            info.cwd = meta.workspaces != null && !meta.workspaces.isEmpty()
+                    ? meta.workspaces.get(0) : null;
+            sessions.add(info);
+        }
+        sessions.sort(Comparator.comparingLong((SessionInfo s) -> s.lastTimestamp).reversed());
+        return sessions;
+    }
+
+    /** conversation_id → {title, preview} from the CLI's summaries database (best effort). */
+    private Map<String, String[]> loadConversationSummaries() {
+        Map<String, String[]> out = new HashMap<>();
+        Path summariesDb = cliHome.resolve("conversation_summaries.db");
+        if (!Files.isRegularFile(summariesDb)) {
+            return out;
+        }
+        try (Connection conn = openReadOnlyConnection(summariesDb)) {
+            if (conn == null) {
+                return out;
+            }
+            String sql = "SELECT conversation_id, title, preview FROM conversation_summaries";
+            try (Statement st = conn.createStatement();
+                 ResultSet rs = st.executeQuery(sql)) {
+                while (rs.next()) {
+                    String id = rs.getString(1);
+                    if (id != null && !id.isBlank()) {
+                        out.put(id.trim(), new String[]{rs.getString(2), rs.getString(3)});
+                    }
+                }
+            }
+        } catch (Exception e) {
+            LOG.debug("[GeminiHistoryReader] Summaries database unusable: " + e.getMessage());
+        }
+        return out;
+    }
+
+    /** Workspace paths, first user prompt, step count, and subagent child ids from one database. */
+    private static final class ScanMeta {
+        private List<String> workspaces;
+        private String firstUserText;
+        private int messageCount;
+        private Set<String> childSessionIds = Set.of();
+    }
+
+    private static final class CachedScanMeta {
+        private final long mtime;
+        private final ScanMeta meta;
+
+        private CachedScanMeta(long mtime, ScanMeta meta) {
+            this.mtime = mtime;
+            this.meta = meta;
+        }
+    }
+
+    /**
+     * Best-effort metadata from one conversation database, cached by {@code (path, mtime)}.
+     * A missing table or a locked live file leaves the fields empty; the session stays
+     * listable through {@code last_conversations.json}.
+     */
+    private ScanMeta readScanMeta(Path db, long mtime) {
+        Path key = db.toAbsolutePath().normalize();
+        if (mtime > 0L) {
+            CachedScanMeta cached = SCAN_META_CACHE.get(key);
+            if (cached != null && cached.mtime == mtime) {
+                return cached.meta;
+            }
+        }
+        ScanMeta meta = new ScanMeta();
+        Connection conn = null;
+        try {
+            conn = openReadOnlyConnection(db);
+            meta.workspaces = readWorkspaces(conn);
+            meta.firstUserText = readFirstUserText(conn);
+            meta.messageCount = readMessageCount(conn);
+            meta.childSessionIds = readChildSessionIds(conn);
+            if (mtime > 0L) {
+                if (SCAN_META_CACHE.size() >= MAX_SCAN_CACHE_ENTRIES) {
+                    SCAN_META_CACHE.clear();
+                }
+                SCAN_META_CACHE.put(key, new CachedScanMeta(mtime, meta));
+            }
+        } catch (SQLException e) {
+            LOG.debug("[GeminiHistoryReader] Scan metadata unreadable for "
+                    + db.getFileName() + ": " + e.getMessage());
+        } finally {
+            closeQuietly(conn);
+        }
+        return meta;
+    }
+
+    private int readMessageCount(Connection conn) {
+        String sql = "SELECT COUNT(*) FROM steps "
+                + "WHERE step_type IN (14, 15, '14', '15', 'user', 'agent')";
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery(sql)) {
+            if (rs.next()) {
+                return Math.max(0, rs.getInt(1));
+            }
+        } catch (SQLException e) {
+            return 0;
+        }
+        return 0;
+    }
+
+    private Set<String> readChildSessionIds(Connection conn) {
+        Set<String> childIds = new HashSet<>();
+        String sql = "SELECT step_payload FROM steps "
+                + "WHERE step_type IN (101, 132, '101', '132', 'tool')";
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery(sql)) {
+            while (rs.next()) {
+                byte[] payload = rs.getBytes(1);
+                if (payload == null || payload.length == 0) {
+                    continue;
+                }
+                collectChildSessionIds(new String(payload, StandardCharsets.UTF_8), childIds);
+            }
+        } catch (SQLException ignored) {
+            // Missing steps table or a locked read: no child ids, session stays listable.
+        }
+        return childIds.isEmpty() ? Set.of() : childIds;
+    }
+
+    private static void collectChildSessionIds(String text, Set<String> childIds) {
+        Matcher senderMatcher = STEP101_SENDER_PATTERN.matcher(text);
+        while (senderMatcher.find()) {
+            String sender = senderMatcher.group(1);
+            if (isSubagentChildSender(sender)) {
+                childIds.add(sender.toLowerCase(Locale.ROOT));
+            }
+        }
+        Matcher convIdMatcher = SUBAGENT_CONVERSATION_ID_PATTERN.matcher(text);
+        while (convIdMatcher.find()) {
+            String convId = convIdMatcher.group(1);
+            if (isSafeSessionId(convId)) {
+                childIds.add(convId.trim().toLowerCase(Locale.ROOT));
+            }
+        }
+    }
+
+    private static boolean isSubagentChildSender(String sender) {
+        if (sender == null || sender.isBlank() || sender.startsWith("task-") || sender.contains("/task-")) {
+            return false;
+        }
+        return isSafeSessionId(sender);
+    }
+
+    private List<String> readWorkspaces(Connection conn) {
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery(
+                     "SELECT data FROM trajectory_metadata_blob LIMIT 1")) {
+            if (!rs.next()) {
+                return null;
+            }
+            byte[] data = rs.getBytes(1);
+            if (data == null || data.length == 0) {
+                return null;
+            }
+            return workspacesFromMetadataBlob(data);
+        } catch (SQLException e) {
+            return null;
+        }
+    }
+
+    /**
+     * Workspace list from {@code trajectory_metadata_blob}. Field 1 is a repeated
+     * message whose field 1 is a {@code file://} URI. Field 7 repeats the primary
+     * workspace as a bare string.
+     */
+    private static List<String> workspacesFromMetadataBlob(byte[] data) {
+        ProtoFields meta = ProtoFields.parse(data);
+        List<String> out = new ArrayList<>();
+        for (byte[] uriMessage : meta.messages(1)) {
+            String path = decodeFileUri(ProtoFields.parse(uriMessage).string(1));
+            if (path != null && !path.isEmpty() && !out.contains(path)) {
+                out.add(path);
+            }
+        }
+        if (out.isEmpty()) {
+            String path = decodeFileUri(meta.string(7));
+            if (path != null && !path.isEmpty()) {
+                out.add(path);
+            }
+        }
+        return out.isEmpty() ? null : out;
+    }
+
+    private String readFirstUserText(Connection conn) {
+        String sql = "SELECT step_type, step_payload FROM steps "
+                + "WHERE step_type = 14 OR step_type = 'user' ORDER BY idx LIMIT 1";
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery(sql)) {
+            if (!rs.next()) {
+                return null;
+            }
+            byte[] payload = rs.getBytes("step_payload");
+            List<JsonObject> envelopes = decodeStep(StepRole.USER, payload, 0, new HashSet<>());
+            for (JsonObject envelope : envelopes) {
+                JsonObject message = envelope.getAsJsonObject("message");
+                if (message == null || !message.has("content")) {
+                    continue;
+                }
+                for (JsonElement element : message.getAsJsonArray("content")) {
+                    JsonObject block = element.getAsJsonObject();
+                    if (block.has("text") && !block.get("text").getAsString().isBlank()) {
+                        return block.get("text").getAsString();
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            return null;
+        }
+        return null;
+    }
+
+    private boolean matchesProject(SessionInfo session, String normalizedProject,
+                                   Set<String> lastConversationIds, String rawProjectPath) {
+        if (session.workspaces != null) {
+            for (String workspace : session.workspaces) {
+                if (workspace != null && pathsMatch(workspace, normalizedProject)) {
+                    return true;
+                }
+            }
+        }
+        if (lastConversationIds.contains(session.sessionId)) {
+            // The CLI itself launched this conversation from the current project
+            // directory even though no workspace URI points here.
+            if (session.cwd == null) {
+                session.cwd = rawProjectPath;
+            }
+            return true;
+        }
+        return false;
+    }
+
+    /** Ids the CLI recorded as its latest conversation for the given project directory. */
+    private Set<String> lastConversationIdsForProject(String normalizedProject) {
+        Set<String> ids = new HashSet<>();
+        Path lastConversations = cliHome.resolve("cache").resolve("last_conversations.json");
+        if (!Files.isRegularFile(lastConversations)) {
+            return ids;
+        }
+        try {
+            JsonObject root = JsonParser.parseString(
+                    Files.readString(lastConversations, StandardCharsets.UTF_8)).getAsJsonObject();
+            for (Map.Entry<String, JsonElement> entry : root.entrySet()) {
+                if (!entry.getValue().isJsonPrimitive()) {
+                    continue;
+                }
+                String cwd = normalizePath(entry.getKey());
+                if (cwd.equals(normalizedProject) || pathsMatch(cwd, normalizedProject)) {
+                    ids.add(entry.getValue().getAsString());
+                }
+            }
+        } catch (Exception e) {
+            LOG.debug("[GeminiHistoryReader] last_conversations.json unreadable: " + e.getMessage());
+        }
+        return ids;
+    }
+
+    // ── Content loading ──────────────────────────────────────────────────────
+
+    /**
+     * Loads and decodes conversation steps for the given session id, falling back to a temporary database copy on SQLite read failure.
+     *
+     * @param sessionId Identifier of the conversation session to load
+     * @param cwd Working directory associated with the session
+     * @return decoded message envelopes in step order
+     * @throws IOException when the database cannot be copied into a temporary directory
+     */
+    public List<JsonObject> getSessionMessages(String sessionId, String cwd) throws IOException {
+        if (!isSafeSessionId(sessionId)) {
+            LOG.warn("[GeminiHistoryReader] Refusing session id outside the shared whitelist: "
+                    + sessionId);
+            return List.of();
+        }
+        Path db = conversationDbPath(sessionId.trim());
+        if (!Files.isRegularFile(db)) {
+            return List.of();
+        }
+        Connection conn = null;
+        Path tempCopy = null;
+        try {
+            try {
+                conn = openReadOnlyConnection(db);
+                return readStepsIntoEnvelopes(conn);
+            } catch (SQLException e) {
+                // A live -wal sidecar can defeat mode=ro on open or lazy query; fall back to reading a copy.
+                closeQuietly(conn);
+                conn = null;
+                tempCopy = copyWithSidecarsToTemp(db);
+                if (tempCopy == null) {
+                    throw e;
+                }
+                conn = openReadOnlyConnection(tempCopy);
+                return readStepsIntoEnvelopes(conn);
+            }
+        } catch (SQLException e) {
+            LOG.warn("[GeminiHistoryReader] Failed to load conversation " + sessionId + ": "
+                    + e.getMessage());
+            return List.of();
+        } finally {
+            closeQuietly(conn);
+            if (tempCopy != null) {
+                deleteTempCopy(tempCopy);
+            }
+        }
+    }
+
+    private static void closeQuietly(Connection conn) {
+        if (conn != null) {
+            try {
+                conn.close();
+            } catch (SQLException ignored) {
+                // Best-effort close on read-only SQLite connection.
+            }
+        }
+    }
+
+    private List<JsonObject> readStepsIntoEnvelopes(Connection conn) throws SQLException {
+        List<JsonObject> messages = new ArrayList<>();
+        String sql = "SELECT * FROM steps ORDER BY idx";
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery(sql)) {
+            boolean hasMetadataColumn = hasColumn(rs, "metadata");
+            boolean hasStatusColumn = hasColumn(rs, "status");
+            GeminiHistoryUsage historyUsage = new GeminiHistoryUsage();
+            int counter = 0;
+            Set<String> emittedToolUseIds = new HashSet<>();
+            int undecodable = 0;
+            int unknownTypes = 0;
+            Set<String> unknownTypeValues = new TreeSet<>();
+            while (rs.next()) {
+                Object rawStepType = rs.getObject("step_type");
+                StepRole role = roleOf(rawStepType);
+                if (role == null) {
+                    // Bounded count-then-summarize instead of a line per step —
+                    // live histories carry hundreds of bookkeeping steps.
+                    unknownTypes++;
+                    if (rawStepType != null) {
+                        unknownTypeValues.add(String.valueOf(rawStepType));
+                    }
+                    continue;
+                }
+                byte[] payload = rs.getBytes("step_payload");
+                boolean stepIsError = hasStatusColumn && isErrorStepStatus(rs.getObject("status"));
+                List<JsonObject> envelopes = decodeCurrentStep(
+                        role, payload, ++counter, emittedToolUseIds, stepIsError);
+                JsonObject stepUsage = (role == StepRole.AGENT && hasMetadataColumn)
+                        ? decodeStepUsage(rs.getBytes("metadata"))
+                        : null;
+                if (envelopes.isEmpty() && stepUsage == null) {
+                    undecodable++;
+                    continue;
+                }
+                if (role == StepRole.USER) {
+                    historyUsage.finishTurn();
+                } else {
+                    historyUsage.onStep(envelopes, stepUsage);
+                }
+                messages.addAll(envelopes);
+            }
+            historyUsage.finishTurn();
+            if (unknownTypes > 0) {
+                LOG.info("[GeminiHistoryReader] Skipped " + unknownTypes
+                        + " step(s) with unknown step_type(s) " + unknownTypeValues
+                        + " (CLI-injected/context bookkeeping — no content fabricated)");
+            }
+            if (undecodable > 0) {
+                LOG.info("[GeminiHistoryReader] Skipped " + undecodable
+                        + " step(s) with undecodable payloads (no content fabricated)");
+            }
+        }
+        return messages;
+    }
+
+    private static boolean hasColumn(ResultSet rs, String columnName) {
+        try {
+            java.sql.ResultSetMetaData meta = rs.getMetaData();
+            int count = meta.getColumnCount();
+            for (int i = 1; i <= count; i++) {
+                if (columnName.equalsIgnoreCase(meta.getColumnName(i))) {
+                    return true;
+                }
+            }
+        } catch (SQLException ignored) {
+        }
+        return false;
+    }
+
+    /**
+     * Decode per-step {@code ModelUsageStats} from {@code steps.metadata} field 9:
+     * field 2 = input_tokens, field 3 = output_tokens, field 4 = cache_write_tokens,
+     * field 5 = cache_read_tokens, field 9 = thinking_output_tokens.
+     */
+    private static JsonObject decodeStepUsage(byte[] metadata) {
+        if (metadata == null || metadata.length == 0) {
+            return null;
+        }
+        ProtoFields meta = ProtoFields.parse(metadata);
+        ProtoFields usageProto = meta.firstMessage(9);
+        if (usageProto == null) {
+            return null;
+        }
+        long input = usageProto.varints.getOrDefault(2, 0L);
+        long output = usageProto.varints.getOrDefault(3, 0L);
+        long cacheCreation = usageProto.varints.getOrDefault(4, 0L);
+        long cacheRead = usageProto.varints.getOrDefault(5, 0L);
+        long thinking = usageProto.varints.getOrDefault(9, 0L);
+        if (input <= 0 && output <= 0 && cacheCreation <= 0 && cacheRead <= 0) {
+            return null;
+        }
+        JsonObject usage = new JsonObject();
+        usage.addProperty("input_tokens", Math.max(0L, input));
+        usage.addProperty("output_tokens", Math.max(0L, output));
+        if (cacheCreation > 0) {
+            usage.addProperty("cache_creation_input_tokens", cacheCreation);
+        }
+        usage.addProperty("cache_read_input_tokens", Math.max(0L, cacheRead));
+        if (thinking > 0) {
+            usage.addProperty("thinking_tokens", thinking);
+        }
+        return usage;
+    }
+
+    private enum StepRole { USER, AGENT, TOOL }
+
+    /**
+     * The step_type column is an integer enum in live databases (14/15/132; 101 and
+     * 17/23/90/98 among other values are CLI-injected/context bookkeeping, not
+     * conversation turns — skipped deliberately, summarized in one log line per
+     * load). Fixture databases and future CLI revisions may carry the role as text
+     * instead.
+     */
+    private static StepRole roleOf(Object stepType) {
+        if (stepType instanceof Number) {
+            int value = ((Number) stepType).intValue();
+            if (value == STEP_TYPE_USER) {
+                return StepRole.USER;
+            }
+            if (value == STEP_TYPE_AGENT) {
+                return StepRole.AGENT;
+            }
+            if (value == STEP_TYPE_TOOL) {
+                return StepRole.TOOL;
+            }
+            return null;
+        }
+        if (stepType instanceof String) {
+            switch (((String) stepType).trim().toLowerCase()) {
+                case "user":
+                    return StepRole.USER;
+                case "agent":
+                    return StepRole.AGENT;
+                case "tool":
+                    return StepRole.TOOL;
+                default:
+                    return null;
+            }
+        }
+        return null;
+    }
+
+    private static boolean isErrorStepStatus(Object rawStatus) {
+        if (rawStatus instanceof Number number) {
+            return number.intValue() >= 4;
+        }
+        if (rawStatus instanceof String text) {
+            String normalized = text.trim().toLowerCase(Locale.ROOT);
+            return normalized.contains("error")
+                    || normalized.contains("fail")
+                    || normalized.contains("cancel");
+        }
+        return false;
+    }
+
+    /**
+     * Decodes one step while {@link #currentStepIsError} is visible to
+     * {@link #buildToolResultMessage}. The flag is cleared before this returns,
+     * including when decoding throws.
+     */
+    private List<JsonObject> decodeCurrentStep(StepRole role, byte[] payload, int counter,
+                                                Set<String> emittedToolUseIds, boolean stepIsError) {
+        synchronized (stepDecodeLock) {
+            currentStepIsError = stepIsError;
+            try {
+                return decodeStep(role, payload, counter, emittedToolUseIds);
+            } finally {
+                currentStepIsError = false;
+            }
+        }
+    }
+
+    /**
+     * Decode one step into zero or more message envelopes. Only fields present in the
+     * storage contract are read; a payload that yields nothing is skipped — never guessed.
+     *
+     * <p>Two wire shapes are honoured. The live shape nests content one level down:
+     * user text under field 19, agent text plus tool calls under field 20, the executed
+     * tool call under field 5 and its render/result under field 140. The flat shape
+     * (fields 1–4 as strings) is the fixture contract kept for the decode pipeline.
+     */
+    private List<JsonObject> decodeStep(StepRole role, byte[] payload, int counter,
+                                        Set<String> emittedToolUseIds) {
+        List<JsonObject> out = new ArrayList<>();
+        if (payload == null || payload.length == 0) {
+            return out;
+        }
+        ProtoFields fields = ProtoFields.parse(payload);
+        switch (role) {
+            case USER: {
+                String text = nestedText(fields, 19, 2);
+                if (text == null) {
+                    text = fields.string(1);
+                }
+                if (text != null && !text.isBlank()) {
+                    out.add(buildUserTextMessage(text, "gemini-user-" + counter));
+                }
+                break;
+            }
+            case AGENT: {
+                // Iterate EVERY repeated field-20 blob and collect text plus tool
+                // calls across all of them — committing to one blob silently dropped
+                // whatever sat in the others. (Live corpus 2026-09-04: 22382/22382
+                // agent steps carry exactly one blob, so this is behaviour-preserving
+                // there and lossless everywhere else.)
+                // agy 1.4 stores the reply the user saw in field 1 (field 8 repeats
+                // it). Field 3 next to field 11 is the thinking summary, including
+                // on tool-only steps that have no field 1 (session faa7b6e2).
+                // The 2026-09-04 shape stored the reply in field 3 with neither
+                // field 1 nor field 11, so that text stays the answer.
+                StringBuilder visible = null;
+                StringBuilder legacy = null;
+                StringBuilder thinking = null;
+                List<byte[]> callBlobs = new ArrayList<>();
+                for (byte[] blob : fields.messages(20)) {
+                    ProtoFields nested = ProtoFields.parse(blob);
+                    String answer = nested.string(1);
+                    boolean hasAnswer = answer != null && !answer.isBlank();
+                    if (hasAnswer) {
+                        visible = visible == null ? new StringBuilder(answer)
+                                : visible.append("\n\n").append(answer);
+                    }
+                    boolean hasThinkingMarker = !nested.messages(11).isEmpty()
+                            || !nested.messages(14).isEmpty();
+                    String field3 = nested.string(3);
+                    if (field3 != null && !field3.isBlank()) {
+                        if (hasAnswer || hasThinkingMarker) {
+                            String trimmedThought = field3.trim();
+                            if (!hasAnswer || !trimmedThought.equals(answer.trim())) {
+                                thinking = thinking == null ? new StringBuilder(trimmedThought)
+                                        : thinking.append("\n\n").append(trimmedThought);
+                            }
+                        } else {
+                            legacy = legacy == null ? new StringBuilder(field3)
+                                    : legacy.append("\n\n").append(field3);
+                        }
+                    }
+                    callBlobs.addAll(nested.messages(7));
+                }
+                StringBuilder text = visible != null ? visible : legacy;
+                if (text == null) {
+                    // Flat fixture shape: field 2 carries the agent response.
+                    String flat = fields.string(2);
+                    if (flat != null && !flat.isBlank()) {
+                        text = new StringBuilder(flat);
+                    }
+                }
+                String thinkingText = thinking != null && thinking.length() > 0
+                        ? thinking.toString() : null;
+                if (text != null && text.length() > 0) {
+                    out.add(buildAssistantMessage(thinkingText, text.toString(), "gemini-assistant-" + counter));
+                    thinkingText = null;
+                }
+                for (byte[] callBlob : callBlobs) {
+                    appendToolUse(callBlob, counter, emittedToolUseIds, out);
+                }
+                if (thinkingText != null) {
+                    if (!out.isEmpty()) {
+                        prependThinkingBlock(out.get(0), thinkingText);
+                    } else {
+                        out.add(buildAssistantMessage(thinkingText, null, "gemini-assistant-" + counter));
+                    }
+                }
+                break;
+            }
+            case TOOL: {
+                byte[] callBlob = null;
+                for (byte[] blob : fields.messages(5)) {
+                    ProtoFields nested = ProtoFields.parse(blob);
+                    byte[] candidate = nested.first(4);
+                    if (candidate != null) {
+                        callBlob = candidate;
+                        break;
+                    }
+                }
+                String toolSummary = null;
+                String resultText = null;
+                ProtoFields render = fields.firstMessage(140);
+                if (render != null) {
+                    for (byte[] entry : render.messages(1)) {
+                        ProtoFields kv = ProtoFields.parse(entry);
+                        String key = kv.string(1);
+                        if ("toolSummary".equals(key)) {
+                            toolSummary = kv.string(2);
+                        }
+                    }
+                    resultText = toolResultBody(render);
+                }
+                if (callBlob != null) {
+                    String callId = appendToolUse(callBlob, counter, emittedToolUseIds, out);
+                    // A call blob without a name emits no tool_use envelope — a
+                    // tool_result without a call id would be an orphan block
+                    // (Gson drops the null tool_use_id property).
+                    if (callId != null) {
+                        String contentText = resultText != null && !resultText.isBlank()
+                                ? resultText
+                                : toolSummary;
+                        if (contentText != null && !contentText.isBlank()) {
+                            out.add(buildToolResultMessage(callId,
+                                    truncate(contentText, MAX_TOOL_RESULT_CHARS)));
+                        }
+                    }
+                } else {
+                    // Flat fixture shape: field 3 name + field 4 summary.
+                    String name = fields.string(3);
+                    String summary = fields.string(4);
+                    if (name != null && !name.isBlank()) {
+                        String callId = "gemini-tool-" + counter;
+                        out.add(buildToolUseMessage(callId, name, new JsonObject()));
+                        if (summary != null && !summary.isBlank()) {
+                            out.add(buildToolResultMessage(callId, truncate(summary, MAX_TOOL_RESULT_CHARS)));
+                        }
+                    }
+                }
+                break;
+            }
+            default:
+                break;
+        }
+        return out;
+    }
+
+    /**
+     * Emit a tool_use envelope for the call unless its id was already emitted (the CLI
+     * records the same call both on the agent step and on the executed tool step).
+     *
+     * @return the call id used for the envelope (synthesized when the payload has none)
+     */
+    private String appendToolUse(byte[] callBlob, int counter, Set<String> emittedToolUseIds,
+                                 List<JsonObject> out) {
+        ProtoFields call = ProtoFields.parse(callBlob);
+        String callId = call.string(1);
+        String name = call.string(2);
+        String argsJson = call.string(3);
+        if (name == null || name.isBlank()) {
+            return null;
+        }
+        boolean synthesized = callId == null || callId.isBlank();
+        String dedupeId = synthesized ? "gemini-tool-" + counter : callId.trim();
+        if (!synthesized && emittedToolUseIds.contains(dedupeId)) {
+            return dedupeId;
+        }
+        emittedToolUseIds.add(dedupeId);
+        out.add(buildToolUseMessage(dedupeId, name.trim(), parseToolInput(argsJson)));
+        return dedupeId;
+    }
+
+    private static JsonObject parseToolInput(String argsJson) {
+        if (argsJson == null || argsJson.isBlank()) {
+            return new JsonObject();
+        }
+        try {
+            JsonElement parsed = JsonParser.parseString(argsJson);
+            if (parsed.isJsonObject()) {
+                return parsed.getAsJsonObject();
+            }
+            JsonObject wrap = new JsonObject();
+            wrap.add("value", parsed);
+            return wrap;
+        } catch (Exception e) {
+            JsonObject wrap = new JsonObject();
+            wrap.addProperty("raw", argsJson);
+            return wrap;
+        }
+    }
+
+    // ── Delete ───────────────────────────────────────────────────────────────
+
+    /**
+     * Physical removal of the conversation database plus its -shm/-wal sidecars.
+     * Sibling conversations and the CLI-owned caches are not touched.
+     */
+    public boolean deleteSession(String sessionId, String projectPath) throws IOException {
+        if (!isSafeSessionId(sessionId)) {
+            LOG.warn("[GeminiHistoryReader] Refusing to delete session with invalid id: " + sessionId);
+            return false;
+        }
+        Path conversationsDir = conversationsPath().normalize();
+        String trimmed = sessionId.trim();
+        Path db = conversationsDir.resolve(trimmed + ".db").normalize();
+        if (!db.startsWith(conversationsDir)) {
+            LOG.warn("[GeminiHistoryReader] Refusing out-of-bounds delete path: " + db);
+            return false;
+        }
+        boolean deleted = Files.deleteIfExists(db);
+        Files.deleteIfExists(conversationsDir.resolve(trimmed + ".db-shm"));
+        Files.deleteIfExists(conversationsDir.resolve(trimmed + ".db-wal"));
+        Files.deleteIfExists(conversationsDir.resolve(trimmed + ".translated.json"));
+        Files.deleteIfExists(conversationsDir.resolve(trimmed + ".translated.json.bak"));
+        if (deleted) {
+            LOG.info("[GeminiHistoryReader] Deleted conversation " + sessionId);
+        }
+        return deleted;
+    }
+
+    // ── Protobuf wire walking (minimal, read-only) ───────────────────────────
+
+    /**
+     * One pass over a protobuf message collecting varint and length-delimited fields
+     * by number. Anything malformed stops the scan quietly — partial data is fine,
+     * an exception is not.
+     */
+    private static final class ProtoFields {
+        private final Map<Integer, Long> varints = new HashMap<>();
+        private final Map<Integer, List<byte[]>> messages = new LinkedHashMap<>();
+
+        static ProtoFields parse(byte[] data) {
+            ProtoFields out = new ProtoFields();
+            if (data == null) {
+                return out;
+            }
+            int i = 0;
+            try {
+                while (i < data.length) {
+                    long tag = readVarint(data, i);
+                    i = varintEnd(data, i);
+                    int field = (int) (tag >>> 3);
+                    long wire = tag & 0x7;
+                    if (field <= 0) {
+                        break;
+                    }
+                    if (wire == 0) {
+                        out.varints.put(field, readVarint(data, i));
+                        i = varintEnd(data, i);
+                    } else if (wire == 2) {
+                        long len = readVarint(data, i);
+                        i = varintEnd(data, i);
+                        if (len < 0 || i + len > data.length) {
+                            break;
+                        }
+                        out.messages.computeIfAbsent(field, k -> new ArrayList<>())
+                                .add(java.util.Arrays.copyOfRange(data, i, (int) (i + len)));
+                        i += (int) len;
+                    } else if (wire == 1) {
+                        i += 8;
+                    } else if (wire == 5) {
+                        i += 4;
+                    } else {
+                        break;
+                    }
+                    if (i > data.length) {
+                        break;
+                    }
+                }
+            } catch (IndexOutOfBoundsException e) {
+                // Truncated or garbage payload — keep whatever parsed cleanly.
+            }
+            return out;
+        }
+
+        String string(int field) {
+            List<byte[]> blobs = messages.get(field);
+            if (blobs == null) {
+                return null;
+            }
+            for (byte[] blob : blobs) {
+                String text = utf8(blob);
+                if (text != null && !text.isEmpty()) {
+                    return text;
+                }
+            }
+            return null;
+        }
+
+        byte[] first(int field) {
+            List<byte[]> blobs = messages.get(field);
+            return blobs != null && !blobs.isEmpty() ? blobs.get(0) : null;
+        }
+
+        ProtoFields firstMessage(int field) {
+            byte[] blob = first(field);
+            return blob != null ? parse(blob) : null;
+        }
+
+        List<byte[]> messages(int field) {
+            List<byte[]> blobs = messages.get(field);
+            return blobs != null ? blobs : List.of();
+        }
+    }
+
+    private static long readVarint(byte[] data, int offset) {
+        long result = 0;
+        int shift = 0;
+        int i = offset;
+        while (true) {
+            if (i >= data.length || shift > 63) {
+                throw new ArrayIndexOutOfBoundsException("varint overruns payload");
+            }
+            byte b = data[i++];
+            result |= (long) (b & 0x7F) << shift;
+            if ((b & 0x80) == 0) {
+                return result;
+            }
+            shift += 7;
+        }
+    }
+
+    private static int varintEnd(byte[] data, int offset) {
+        int i = offset;
+        while (i < data.length && (data[i] & 0x80) != 0) {
+            i++;
+        }
+        return i + 1;
+    }
+
+    private static String utf8(byte[] data) {
+        try {
+            return StandardCharsets.UTF_8.newDecoder().decode(java.nio.ByteBuffer.wrap(data)).toString();
+        } catch (CharacterCodingException e) {
+            return null;
+        }
+    }
+
+    /**
+     * Field 140.2 is raw UTF-8 on the flat shape, including tool output that starts
+     * with a newline. On the live shape it is a protobuf message whose field 1 is
+     * the result text and whose later fields (3, 6, 7, …) are metadata. That
+     * message starts with the field-1 tag (0x0A). A newline-prefixed string is not
+     * a complete protobuf message, so it is returned unchanged.
+     */
+    private static String toolResultBody(ProtoFields render) {
+        String direct = null;
+        for (byte[] blob : render.messages(2)) {
+            if (blob == null || blob.length == 0) {
+                continue;
+            }
+            String nested = unwrapToolResultField1(blob);
+            if (nested != null && !nested.isBlank()) {
+                return nested;
+            }
+            if (direct == null) {
+                String text = utf8(blob);
+                if (text != null && !text.isBlank()) {
+                    direct = text;
+                }
+            }
+        }
+        return direct;
+    }
+
+    /**
+     * Field 1 text of a 140.2 blob that is itself a complete protobuf message.
+     * A raw UTF-8 result that merely starts with {@code 0x0A} ({@code '\\n'}) does
+     * not parse to the end, so this returns null and the caller keeps the raw text.
+     */
+    private static String unwrapToolResultField1(byte[] blob) {
+        if (blob.length < 2 || (blob[0] & 0xFF) != 0x0A || !consumesEntireMessage(blob)) {
+            return null;
+        }
+        // Printable text can also parse as protobuf: "\n\n## Acknowledgements\n" reads as
+        // field 1 "## Acknowl" plus two fixed32 fields. A real multi-field wrapper carries
+        // tag/length bytes that are not text, so text is only unwrapped when field 1
+        // alone spans the whole blob.
+        if (isPrintableText(blob) && nextFieldOffset(blob, 0) != blob.length) {
+            return null;
+        }
+        return ProtoFields.parse(blob).string(1);
+    }
+
+    /** True when {@code data} is valid UTF-8 with no control characters other than tab, LF and CR. */
+    private static boolean isPrintableText(byte[] data) {
+        String text = utf8(data);
+        if (text == null) {
+            return false;
+        }
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if ((c < 0x20 && c != '\t' && c != '\n' && c != '\r') || c == 0x7F) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** True when {@code data} is one protobuf message and every byte belongs to a field. */
+    private static boolean consumesEntireMessage(byte[] data) {
+        int offset = 0;
+        try {
+            while (offset < data.length) {
+                offset = nextFieldOffset(data, offset);
+                if (offset < 0) {
+                    return false;
+                }
+            }
+            return true;
+        } catch (IndexOutOfBoundsException e) {
+            return false;
+        }
+    }
+
+    /** Index just after the field at {@code offset}, or {@code -1} when it is not a field. */
+    private static int nextFieldOffset(byte[] data, int offset) {
+        long tag = readVarint(data, offset);
+        int afterTag = varintEnd(data, offset);
+        if ((int) (tag >>> 3) <= 0) {
+            return -1;
+        }
+        return skipWirePayload(data, afterTag, tag & 0x7);
+    }
+
+    private static int skipWirePayload(byte[] data, int offset, long wire) {
+        if (wire == 0) {
+            readVarint(data, offset);
+            return varintEnd(data, offset);
+        }
+        if (wire == 1) {
+            return offset <= data.length - 8 ? offset + 8 : -1;
+        }
+        if (wire == 5) {
+            return offset <= data.length - 4 ? offset + 4 : -1;
+        }
+        if (wire != 2) {
+            return -1;
+        }
+        long len = readVarint(data, offset);
+        int start = varintEnd(data, offset);
+        if (len < 0 || len > data.length - start) {
+            return -1;
+        }
+        return start + (int) len;
+    }
+
+    /**
+     * First nested blob of {@code outer} whose sub-field {@code inner} carries a
+     * non-blank string. Live payloads repeat the outer field number, so the blobs
+     * are iterated until the text one is found — the first occurrence carries no
+     * special meaning.
+     */
+    private static String nestedText(ProtoFields fields, int outer, int inner) {
+        for (byte[] blob : fields.messages(outer)) {
+            ProtoFields nested = ProtoFields.parse(blob);
+            String candidate = nested.string(inner);
+            if (candidate != null && !candidate.isBlank()) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    // ── Envelope builders (shared Claude-compatible load format) ─────────────
+
+    private static JsonObject buildUserTextMessage(String text, String uuid) {
+        JsonObject root = new JsonObject();
+        root.addProperty("type", "user");
+        root.addProperty("uuid", uuid);
+        JsonObject message = new JsonObject();
+        message.addProperty("role", "user");
+        JsonArray content = new JsonArray();
+        JsonObject block = new JsonObject();
+        block.addProperty("type", "text");
+        block.addProperty("text", text);
+        content.add(block);
+        message.add("content", content);
+        root.add("message", message);
+        return root;
+    }
+
+    private static JsonObject buildAssistantMessage(String thinkingText, String text, String uuid) {
+        JsonObject root = new JsonObject();
+        root.addProperty("type", "assistant");
+        root.addProperty("uuid", uuid);
+        JsonObject message = new JsonObject();
+        message.addProperty("role", "assistant");
+        JsonArray content = new JsonArray();
+        if (thinkingText != null && !thinkingText.isBlank()) {
+            JsonObject thinkingBlock = new JsonObject();
+            thinkingBlock.addProperty("type", "thinking");
+            thinkingBlock.addProperty("thinking", thinkingText);
+            content.add(thinkingBlock);
+        }
+        if (text != null && !text.isBlank()) {
+            JsonObject textBlock = new JsonObject();
+            textBlock.addProperty("type", "text");
+            textBlock.addProperty("text", text);
+            content.add(textBlock);
+        }
+        message.add("content", content);
+        root.add("message", message);
+        return root;
+    }
+
+    private static void prependThinkingBlock(JsonObject assistantEnvelope, String thinkingText) {
+        if (assistantEnvelope == null || thinkingText == null || thinkingText.isBlank()) {
+            return;
+        }
+        JsonObject message = assistantEnvelope.getAsJsonObject("message");
+        if (message == null) {
+            return;
+        }
+        JsonArray existing = message.getAsJsonArray("content");
+        JsonArray updated = new JsonArray();
+        JsonObject thinkingBlock = new JsonObject();
+        thinkingBlock.addProperty("type", "thinking");
+        thinkingBlock.addProperty("thinking", thinkingText);
+        updated.add(thinkingBlock);
+        if (existing != null) {
+            for (JsonElement el : existing) {
+                updated.add(el);
+            }
+        }
+        message.add("content", updated);
+    }
+
+    private static JsonObject buildToolUseMessage(String id, String name, JsonObject input) {
+        JsonObject root = new JsonObject();
+        root.addProperty("type", "assistant");
+        JsonObject message = new JsonObject();
+        message.addProperty("role", "assistant");
+        JsonArray content = new JsonArray();
+        JsonObject block = new JsonObject();
+        block.addProperty("type", "tool_use");
+        block.addProperty("id", id);
+        block.addProperty("name", name);
+        block.add("input", input != null ? input : new JsonObject());
+        content.add(block);
+        message.add("content", content);
+        root.add("message", message);
+        return root;
+    }
+
+    private JsonObject buildToolResultMessage(String toolUseId, String contentText) {
+        JsonObject root = new JsonObject();
+        root.addProperty("type", "user");
+        JsonObject message = new JsonObject();
+        message.addProperty("role", "user");
+        JsonArray content = new JsonArray();
+        JsonObject block = new JsonObject();
+        block.addProperty("type", "tool_result");
+        block.addProperty("tool_use_id", toolUseId);
+        block.addProperty("is_error", currentStepIsError);
+        block.addProperty("content", contentText != null ? contentText : "");
+        content.add(block);
+        message.add("content", content);
+        root.add("message", message);
+        return root;
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    private Path conversationsPath() {
+        return cliHome.resolve("conversations");
+    }
+
+    private Path metadataCachePath() {
+        return cliHome.resolve("cache").resolve("conversation_metadata.json");
+    }
+
+    private Path conversationDbPath(String sessionId) {
+        return conversationsPath().resolve(sessionId + ".db");
+    }
+
+    static boolean isSafeSessionId(String sessionId) {
+        if (sessionId == null || sessionId.trim().isEmpty()) {
+            return false;
+        }
+        return sessionId.trim().matches(SAFE_ID_PATTERN);
+    }
+
+    Connection openReadOnlyConnection(Path database) throws SQLException {
+        ensureSqliteDriver();
+        String url = "jdbc:sqlite:file:" + database.toAbsolutePath() + "?mode=ro";
+        Connection conn = DriverManager.getConnection(url);
+        try (Statement st = conn.createStatement()) {
+            st.execute("PRAGMA query_only = ON");
+        } catch (SQLException ignored) {
+            // Older SQLite builds may not support query_only; mode=ro is enough.
+        }
+        return conn;
+    }
+
+    /**
+     * Copy a conversation database and its -shm/-wal sidecars to a temporary directory
+     * so a live writer cannot defeat the read-only open. Package-private for the
+     * temp-hygiene test.
+     *
+     * <p>Hygiene: a successful copy is removed with its directory by the caller's
+     * finally ({@link #deleteTempCopy}); a failed copy removes the directory it
+     * created here — nothing leaks.
+     *
+     * @return path of the copied database, or null when nothing was copied
+     */
+    Path copyWithSidecarsToTemp(Path db) throws IOException {
+        Path tempDir;
+        try {
+            tempDir = Files.createTempDirectory("gemini-history-");
+        } catch (IOException e) {
+            LOG.debug("[GeminiHistoryReader] Temp dir creation failed: " + e.getMessage());
+            return null;
+        }
+        try {
+            Path target = tempDir.resolve(db.getFileName().toString());
+            Files.copy(db, target, StandardCopyOption.REPLACE_EXISTING);
+            for (String sidecar : new String[]{"-shm", "-wal"}) {
+                Path source = db.resolveSibling(db.getFileName() + sidecar);
+                if (Files.isRegularFile(source)) {
+                    Files.copy(source, tempDir.resolve(source.getFileName().toString()),
+                            StandardCopyOption.REPLACE_EXISTING);
+                }
+            }
+            return target;
+        } catch (IOException e) {
+            LOG.debug("[GeminiHistoryReader] Temp copy failed: " + e.getMessage());
+            deleteTempDir(tempDir);
+            return null;
+        }
+    }
+
+    /** Best-effort removal of a temp directory and whatever a failed copy left in it. */
+    private static void deleteTempDir(Path dir) {
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir)) {
+            for (Path leftover : stream) {
+                deleteOrDefer(leftover);
+            }
+        } catch (IOException ignored) {
+            // Best-effort directory listing before removing the directory itself.
+        }
+        deleteOrDefer(dir);
+    }
+
+    static void deleteTempCopy(Path db) {
+        Path parent = db.getParent();
+        deleteOrDefer(db);
+        if (parent != null && Files.isDirectory(parent)) {
+            try (DirectoryStream<Path> stream = Files.newDirectoryStream(parent)) {
+                for (Path leftover : stream) {
+                    deleteOrDefer(leftover);
+                }
+            } catch (IOException ignored) {
+                // Best-effort sidecar cleanup before removing the temp directory.
+            }
+            deleteOrDefer(parent);
+        }
+    }
+
+    private static void deleteOrDefer(Path path) {
+        try {
+            Files.deleteIfExists(path);
+        } catch (IOException ignored) {
+            path.toFile().deleteOnExit();
+        }
+    }
+
+    private static void ensureSqliteDriver() throws SQLException {
+        try {
+            Class.forName(SQLITE_JDBC);
+        } catch (ClassNotFoundException e) {
+            throw new SQLException("sqlite-jdbc driver not on classpath", e);
+        }
+    }
+
+    private static String stringField(JsonObject obj, String field) {
+        if (obj == null || !obj.has(field) || obj.get(field).isJsonNull()) {
+            return null;
+        }
+        try {
+            return obj.get(field).getAsString();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static int intField(JsonObject obj, String field) {
+        if (obj == null || !obj.has(field) || obj.get(field).isJsonNull()
+                || !obj.get(field).isJsonPrimitive()) {
+            return 0;
+        }
+        try {
+            return obj.get(field).getAsInt();
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    private static long parseTimestamp(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return 0L;
+        }
+        try {
+            return Instant.parse(raw.trim()).toEpochMilli();
+        } catch (Exception e) {
+            return 0L;
+        }
+    }
+
+    /** Title priority: CLI Title → first-prompt Preview → session id. */
+    static String resolveSessionTitle(String title, String preview, String sessionId) {
+        if (title != null && !title.trim().isEmpty()) {
+            return truncate(title.trim(), MAX_TITLE_CHARS);
+        }
+        if (preview != null && !preview.trim().isEmpty()) {
+            return truncate(preview.trim(), MAX_TITLE_CHARS);
+        }
+        return sessionId != null ? sessionId : "";
+    }
+
+    private static List<String> decodeWorkspaceUris(JsonObject summary) {
+        if (!summary.has("WorkspaceURIs") || !summary.get("WorkspaceURIs").isJsonArray()) {
+            return null;
+        }
+        List<String> out = new ArrayList<>();
+        for (JsonElement element : summary.getAsJsonArray("WorkspaceURIs")) {
+            if (!element.isJsonPrimitive()) {
+                continue;
+            }
+            String path = decodeFileUri(element.getAsString());
+            if (path != null && !path.isEmpty()) {
+                out.add(path);
+            }
+        }
+        return out;
+    }
+
+    private static String decodeFileUri(String uri) {
+        if (uri == null || uri.isBlank()) {
+            return null;
+        }
+        String trimmed = uri.trim();
+        try {
+            String path = new URI(trimmed).getPath();
+            if (path != null && !path.isEmpty()) {
+                return stripWindowsDriveLeadingSlash(path);
+            }
+        } catch (Exception ignored) {
+            // Not a parseable URI — fall through to manual decoding.
+        }
+        if (trimmed.startsWith("file://")) {
+            String raw = trimmed.substring("file://".length());
+            try {
+                return stripWindowsDriveLeadingSlash(URLDecoder.decode(raw, StandardCharsets.UTF_8));
+            } catch (Exception e) {
+                return stripWindowsDriveLeadingSlash(raw);
+            }
+        }
+        return trimmed.startsWith("/") ? stripWindowsDriveLeadingSlash(trimmed) : null;
+    }
+
+    private static String stripWindowsDriveLeadingSlash(String path) {
+        if (path != null && path.length() >= 3 && path.charAt(0) == '/'
+                && Character.isLetter(path.charAt(1)) && path.charAt(2) == ':') {
+            return path.substring(1);
+        }
+        return path;
+    }
+
+    static String normalizePath(String path) {
+        return HistoryPathMatcher.normalize(path);
+    }
+
+    static boolean pathsMatch(String sessionCwd, String projectPath) {
+        return HistoryPathMatcher.matches(sessionCwd, projectPath);
+    }
+
+    private static long fileMtime(Path path) {
+        try {
+            if (path != null && Files.isRegularFile(path)) {
+                return Files.getLastModifiedTime(path).toMillis();
+            }
+        } catch (IOException ignored) {
+        }
+        return 0L;
+    }
+
+    private static String truncate(String value, int maxChars) {
+        if (value == null) {
+            return "";
+        }
+        if (value.length() <= maxChars) {
+            return value;
+        }
+        return value.substring(0, maxChars) + "…";
+    }
+}

@@ -1,0 +1,1 @@
+{"event":"init","conversation_id":"6f1c2a54-93b7-4c0e-8a41-7d2e5b9c1a01","init":{"cwd":"<TMP>","tools":["read_file","write_to_file","run_command"],"permission_mode":"request-review"}}

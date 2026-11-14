@@ -69,6 +69,26 @@ describe('SubagentProcessDetails', () => {
     expect(container.querySelector('.subagent-error')?.textContent).toBe('Subagent history failed');
   });
 
+  it('hides Gemini pending log-not-found while the child is still running', () => {
+    const { container, rerender } = render(
+      <SubagentProcessDetails
+        history={{ success: false, provider: 'gemini', status: 'running', error: 'Subagent log not found yet' }}
+        canLoad
+      />,
+    );
+
+    expect(container.querySelector('.subagent-error')).toBeNull();
+
+    rerender(
+      <SubagentProcessDetails
+        history={{ success: false, provider: 'gemini', status: 'error', error: 'Invalid agent id' }}
+        canLoad
+      />,
+    );
+
+    expect(container.querySelector('.subagent-error')?.textContent).toBe('Invalid agent id');
+  });
+
   it('keeps Claude lookup failures visible even with a running status', () => {
     const { container } = render(
       <SubagentProcessDetails

@@ -13,6 +13,7 @@ import {
   resolveWindowsSpawnableBin,
   resolveOmpCliPath,
   resolveCliPath,
+  resolveGeminiCliPath,
   commonCliBinDirs,
   versionManagerBinDirs,
   whichViaLoginShell,
@@ -412,6 +413,34 @@ test('buildCliSpawnEnv leads PATH with the resolved binary own dir', () => {
   const bare = buildCliSpawnEnv('pi', home, { PATH: '/usr/bin' });
   assert.notEqual(bare.PATH.split(':')[0], 'pi');
   assert.ok(bare.PATH.split(':').pop() === '/usr/bin');
+});
+
+test('resolveGeminiCliPath respects env override precedence', () => {
+  const originalBin = process.env.GEMINI_BIN;
+  const originalPath = process.env.GEMINI_PATH;
+  const originalCliPath = process.env.GEMINI_CLI_PATH;
+
+  try {
+    delete process.env.GEMINI_BIN;
+    delete process.env.GEMINI_PATH;
+    delete process.env.GEMINI_CLI_PATH;
+
+    process.env.GEMINI_CLI_PATH = '/custom/path/to/gemini-cli-path';
+    assert.equal(resolveGeminiCliPath(), '/custom/path/to/gemini-cli-path');
+
+    process.env.GEMINI_PATH = '/custom/path/to/gemini-path';
+    assert.equal(resolveGeminiCliPath(), '/custom/path/to/gemini-path');
+
+    process.env.GEMINI_BIN = '/custom/path/to/gemini-bin';
+    assert.equal(resolveGeminiCliPath(), '/custom/path/to/gemini-bin');
+  } finally {
+    if (originalBin !== undefined) process.env.GEMINI_BIN = originalBin;
+    else delete process.env.GEMINI_BIN;
+    if (originalPath !== undefined) process.env.GEMINI_PATH = originalPath;
+    else delete process.env.GEMINI_PATH;
+    if (originalCliPath !== undefined) process.env.GEMINI_CLI_PATH = originalCliPath;
+    else delete process.env.GEMINI_CLI_PATH;
+  }
 });
 
 test('isDeadCmdShim flags a shim whose last quoted target is missing', () => {

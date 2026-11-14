@@ -807,3 +807,13 @@ export function resolveMiniMaxCliPath() {
   // result (it may be a real path) and only fall back to `minimax` at the very end.
   return mcode !== 'mcode' ? mcode : minimax;
 }
+
+export function resolveGeminiCliPath() {
+  return resolveCliPath({
+    binaryName: 'agy',
+    envKeys: ['GEMINI_BIN', 'GEMINI_PATH', 'GEMINI_CLI_PATH'],
+    homeCandidates: [
+      '{home}/.local/bin/{bin}',
+    ],
+  });
+}

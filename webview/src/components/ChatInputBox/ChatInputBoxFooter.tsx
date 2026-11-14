@@ -53,6 +53,7 @@ export function ChatInputBoxFooter({
   onOpenCliSettings,
   longContextEnabled = true,
   onLongContextChange,
+  addToast,
   fileCompletion,
   commandCompletion,
   agentCompletion,
@@ -98,6 +99,7 @@ export function ChatInputBoxFooter({
   onOpenCliSettings?: () => void;
   longContextEnabled?: boolean;
   onLongContextChange?: (enabled: boolean) => void;
+  addToast?: (message: string, type: 'info' | 'success' | 'warning' | 'error') => void;
   fileCompletion: CompletionController;
   commandCompletion: CompletionController;
   agentCompletion: CompletionController;
@@ -161,6 +163,7 @@ export function ChatInputBoxFooter({
         onOpenCliSettings={onOpenCliSettings}
         longContextEnabled={longContextEnabled}
         onLongContextChange={onLongContextChange}
+        addToast={addToast}
       />
 
       {/* @ file reference dropdown menu */}

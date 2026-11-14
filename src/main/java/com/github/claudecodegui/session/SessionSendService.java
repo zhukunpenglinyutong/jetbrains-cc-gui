@@ -1,5 +1,6 @@
 package com.github.claudecodegui.session;
 
+import com.github.claudecodegui.cli.CliToolId;
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.settings.CodexSettingsManager;
@@ -29,6 +30,9 @@ public class SessionSendService {
 
     private static final Logger LOG = Logger.getInstance(SessionSendService.class);
     public static final String CODEX_FAST_SERVICE_TIER = "fast";
+    private static final String PROVIDER_GROK = "grok";
+    private static final String PROVIDER_ZCODE = "zcode";
+    private static final String PROVIDER_GEMINI = "gemini";
 
     private final Project project;
     private final SessionState state;
@@ -248,6 +252,24 @@ public class SessionSendService {
                 requestedOmpApprovalMode, clientMessageId, nativeCodexSettings, null, expectedTurnOwner);
     }
 
+    /**
+     * Routes a user turn to the active provider while verifying turn ownership.
+     *
+     * @param channelId Chat host identifier
+     * @param input Normalized user input
+     * @param attachments User attachments
+     * @param openedFilesJson Editor context
+     * @param externalAgentPrompt Selected role instructions
+     * @param fileTagPaths Selected file references
+     * @param requestedPermissionMode Requested permission mode
+     * @param requestedReasoningEffort Requested reasoning effort
+     * @param requestedCodexFastMode Requested Codex service tier
+     * @param requestedDshPreset Requested DSH preset
+     * @param clientMessageId Stable optimistic-message identity
+     * @param nativeCodexSettings Filtered native Codex settings
+     * @param expectedTurnOwner Turn ownership marker expected to remain active
+     * @return future completed after the provider turn has finished
+     */
     public CompletableFuture<Void> sendMessageToProvider(
             String channelId, String input, List<ClaudeSession.Attachment> attachments, JsonObject openedFilesJson,
             String externalAgentPrompt, List<String> fileTagPaths, String requestedPermissionMode,
@@ -317,7 +339,7 @@ public class SessionSendService {
             );
         }
 
-        if ("grok".equals(currentProvider) && grokSDKBridge != null) {
+        if (PROVIDER_GROK.equals(currentProvider) && grokSDKBridge != null) {
             return sendToGrok(
                     channelId,
                     input,
@@ -330,7 +352,7 @@ public class SessionSendService {
                     expectedTurnOwner
             );
         }
-        if ("zcode".equals(currentProvider) && zcodeSDKBridge != null) {
+        if (PROVIDER_ZCODE.equals(currentProvider) && zcodeSDKBridge != null) {
             return sendToZcode(
                     channelId,
                     input,
@@ -344,7 +366,7 @@ public class SessionSendService {
             );
         }
 
-        if (cliBridges.containsKey(currentProvider) && !"grok".equals(currentProvider)) {
+        if (cliBridges.containsKey(currentProvider) && !isDedicatedSdkProvider(currentProvider)) {
             if ("dsh".equals(currentProvider) && requestedDshPreset != null) {
                 state.setDshPreset(requestedDshPreset);
             }
@@ -366,10 +388,32 @@ public class SessionSendService {
             );
         }
 
+        // Registered CLI tool whose bridge is not registered: fail loudly via
+        // the channel error path instead of silently routing the turn to the
+        // Claude SDK. Grok and ZCode keep their historic fallthrough when their
+        // bridges are missing.
+        CliToolId cliTool = !isDedicatedSdkProvider(currentProvider)
+                ? CliToolId.fromId(currentProvider)
+                : null;
+        if (cliTool != null && !cliBridges.containsKey(currentProvider)) {
+            LOG.warn("[Lifecycle] provider=" + currentProvider
+                    + " has no CLI bridge; rejecting send instead of falling through to claude");
+            MessageCallback handler = createCliMessageHandler(currentProvider);
+            handler.onError(ClaudeCodeGuiBundle.message(
+                    "error.cliProviderNotImplemented",
+                    cliTool.getDisplayName()
+            ));
+            return CompletableFuture.completedFuture(null);
+        }
+
         return sendToClaude(channelId, input, attachments, openedFilesJson, agentPrompt,
                 effectivePermissionMode, normalizedRequestedEffort,
                 requestedClaudeUltracode != null ? requestedClaudeUltracode : state.isClaudeUltracode(),
                 expectedTurnOwner);
+    }
+
+    private static boolean isDedicatedSdkProvider(String provider) {
+        return PROVIDER_GROK.equals(provider) || PROVIDER_ZCODE.equals(provider);
     }
 
     public static String normalizeRequestedReasoningEffort(String effort) {
@@ -414,6 +458,14 @@ public class SessionSendService {
         return null;
     }
 
+    /**
+     * Resolves the effective permission mode for a turn, normalizing modes unsupported by the target provider.
+     *
+     * @param provider Active provider identifier
+     * @param requestedMode Explicitly requested permission mode for the turn, or null
+     * @param sessionMode Current session permission mode fallback, or null
+     * @return effective permission mode for the provider turn
+     */
     public static String resolveEffectivePermissionMode(String provider, String requestedMode, String sessionMode) {
         String resolvedMode = requestedMode;
         if (resolvedMode == null) {
@@ -422,17 +474,22 @@ public class SessionSendService {
         if (resolvedMode == null) {
             resolvedMode = "default";
         }
+        if ("sandbox".equals(resolvedMode) && !PROVIDER_GEMINI.equals(provider)) {
+            return "default";
+        }
 
         boolean isProviderWithoutPlanMode = "grok".equals(provider)
                 || "zcode".equals(provider)
-                || (SessionProviderRouter.isCliProvider(provider) && !"omp".equals(provider));
+                || (SessionProviderRouter.isCliProvider(provider)
+                        && !"omp".equals(provider) && !PROVIDER_GEMINI.equals(provider));
         boolean isCliProviderWithoutNativeAuto = SessionProviderRouter.isCliProvider(provider);
         // Grok and ZCode run as full SDK bridges (not MarkerCli providers, so they
         // are absent from CLI_PROVIDER_IDS), but like the headless CLI providers
         // they have no plan-mode equivalent — so plan still downgrades to default.
         // EXCEPT omp, where "plan" is a model role (`omp --model plan`), not Claude
-        // plan mode. Codex owns its native collaboration mode in app-server;
-        // native auto review is limited to Claude/Codex; Grok retains its
+        // plan mode. Codex owns its native collaboration mode in app-server.
+        // Gemini keeps plan: its CLI supports plan/read-only (`agy --mode plan`).
+        // Native auto review is limited to Claude/Codex; Grok retains its
         // existing internal auto-approve alias, while the Webview still hides auto there.
         if (isProviderWithoutPlanMode
                 && "plan".equals(resolvedMode)) {
@@ -666,7 +723,27 @@ public class SessionSendService {
         ));
     }
 
-    private CompletableFuture<Void> sendToCliProvider(
+    // Package-private (not private) so the forwarded argument tuple is pinned
+    // by a test: swapping the adjacent cwd/requestedCwd positionals must fail
+    // there instead of silently inverting the substitution notice.
+    CompletableFuture<Void> sendToCliProvider(
+            String provider,
+            String channelId,
+            String input,
+            List<ClaudeSession.Attachment> attachments,
+            JsonObject openedFilesJson,
+            String agentPrompt,
+            List<String> fileTagPaths,
+            String requestedReasoningEffort,
+            String permissionMode
+    ) {
+        return sendToCliProvider(
+                provider, channelId, input, attachments, openedFilesJson,
+                agentPrompt, fileTagPaths, requestedReasoningEffort,
+                permissionMode, null, state.getTurnOwner());
+    }
+
+    CompletableFuture<Void> sendToCliProvider(
             String provider,
             String channelId,
             String input,
@@ -714,9 +791,35 @@ public class SessionSendService {
                 : state.getOmpApprovalMode();
         int attachmentCount = attachments != null ? attachments.size() : 0;
 
+        // Clamp the workspace to the project base before spawn — the same guard
+        // the grok send path applies. A cwd outside the project (or a sentinel)
+        // must never reach the CLI as the agent workspace. The PRE-clamp value is
+        // forwarded as `requestedCwd` so the Node side can surface a visible
+        // substitution notice (AC5) — the clamp itself erases that difference.
+        //
+        // Scoped to GEMINI only (review loop 3 decision): the clamp + notice are
+        // new in Story 1.2, and the sibling CLI providers neither read
+        // requestedCwd nor emit the notice — clamping them here would change
+        // their behavior silently. A family-wide clamp is a separate follow-up
+        // (one fix per PR).
+        String projectBase = project != null ? project.getBasePath() : null;
+        boolean cwdGuardApplies = PROVIDER_GEMINI.equals(provider);
+        String requestedCwd = cwdGuardApplies ? state.getCwd() : null;
+        String guardedCwd = cwdGuardApplies ? resolveCliSendCwd(requestedCwd, projectBase) : state.getCwd();
+        if (cwdGuardApplies) {
+            if (projectBase == null || projectBase.isEmpty()) {
+                LOG.warn("[Lifecycle] sendToCli cwd guard (" + provider + "): no project base"
+                        + " available; passing raw cwd through: " + guardedCwd);
+            } else if (guardedCwd == null || requestedCwd == null || !guardedCwd.equals(requestedCwd)) {
+                LOG.warn("[Lifecycle] sendToCli cwd guard (" + provider + "): "
+                        + requestedCwd + " -> " + guardedCwd);
+                state.setCwd(guardedCwd);
+            }
+        }
+
         LOG.info("[Lifecycle] sendToCli provider=" + provider
                 + " sessionId=" + (state.getSessionId() != null ? state.getSessionId() : "(new)")
-                + ", cwd=" + state.getCwd()
+                + ", cwd=" + guardedCwd
                 + ", modelRaw=" + state.getModel()
                 + ", modelCli=" + (modelForCli != null ? modelForCli : "(config-default)")
                 + ", effort=" + effort
@@ -728,7 +831,7 @@ public class SessionSendService {
                 channelId,
                 finalInput,
                 state.getSessionId(),
-                state.getCwd(),
+                guardedCwd,
                 modelForCli != null ? modelForCli : "",
                 effort,
                 attachments,
@@ -736,6 +839,7 @@ public class SessionSendService {
                 "dsh".equals(provider) ? state.getDshPreset() : null,
                 "omp".equals(provider) ? ompApprovalMode : null,
                 thinking,
+                requestedCwd,
                 handler
         ));
     }
@@ -757,6 +861,19 @@ public class SessionSendService {
             LOG.warn("[Thinking] Failed to read thinking config: " + e.getMessage());
         }
         return null;
+    }
+
+    /**
+     * Workspace a CLI-provider turn runs in: clamped to the project base when
+     * one exists, passed through unchanged when it does not (no anchor to clamp
+     * to — the raw cwd is kept and the caller logs the degraded guard).
+     *
+     * <p>Static so the clamp decision is pinned by tests
+     * ({@code SessionSendServiceTest}) rather than only observable live.
+     */
+    static String resolveCliSendCwd(String cwd, String projectBase) {
+        String guarded = com.github.claudecodegui.util.PathUtils.guardWorkingDirectory(cwd, projectBase);
+        return guarded != null ? guarded : cwd;
     }
 
     /**
@@ -819,8 +936,14 @@ public class SessionSendService {
         }
         // Leftovers after a provider switch without model reset. OpenCode
         // legitimately supports OpenAI models, so gpt-* is only filtered for
-        // the other CLI providers.
-        if (lower.startsWith("claude-") || (lower.startsWith("gpt-") && !"opencode".equals(provider))) {
+        // the other CLI providers. Gemini (agy) is exempt too: its live
+        // catalog contains cross-vendor slugs (claude-sonnet-4-6,
+        // claude-opus-4-6-thinking, gpt-oss-120b-medium) the user can really
+        // pick — stripping them would silently run the CLI default instead of
+        // the selected model.
+        boolean isGemini = PROVIDER_GEMINI.equals(provider);
+        if ((lower.startsWith("claude-") && !isGemini)
+                || (lower.startsWith("gpt-") && !"opencode".equals(provider) && !isGemini)) {
             LOG.warn("[" + provider + "] Ignoring non-provider model leftover for CLI: " + trimmed);
             return null;
         }

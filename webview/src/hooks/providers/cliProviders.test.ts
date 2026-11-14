@@ -14,10 +14,33 @@ describe('normalizeCliPermissionMode', () => {
   });
 
   it('keeps coercing unsupported plan/auto modes to default for the other CLI providers', () => {
-    for (const provider of ['pi', 'grok', 'kimi', 'opencode']) {
+    // gemini is excluded: its CLI natively supports the plan posture.
+    for (const provider of ['pi', 'grok', 'kimi', 'opencode', 'dsh', 'minimax']) {
       expect(normalizeCliPermissionMode('plan', provider)).toBe('default');
       expect(normalizeCliPermissionMode('auto', provider)).toBe('default');
       expect(normalizeCliPermissionMode('autoEdit', provider)).toBe('acceptEdits');
+    }
+  });
+
+  it('keeps plan for gemini (native `agy --mode plan` posture)', () => {
+    expect(normalizeCliPermissionMode('plan', 'gemini')).toBe('plan');
+  });
+
+  it('keeps sandbox only for gemini and coerces it to default everywhere else', () => {
+    // Review patch P5: sandbox is a gemini-only posture — a stale/corrupted
+    // snapshot must never send it for another provider while the selector
+    // silently displays Default (displayed-vs-sent divergence).
+    expect(normalizeCliPermissionMode('sandbox', 'gemini')).toBe('sandbox');
+    for (const provider of ['kimi', 'opencode', 'pi', 'dsh', 'codex', 'grok', 'omp', undefined]) {
+      expect(normalizeCliPermissionMode('sandbox', provider)).toBe('default');
+    }
+  });
+
+  it('filters the gemini slot to the five native postures (omp roles do not restore into gemini)', () => {
+    expect(normalizeCliPermissionMode('smol', 'gemini')).toBe('default');
+    expect(normalizeCliPermissionMode('slow', 'gemini')).toBe('default');
+    for (const mode of ['default', 'plan', 'acceptEdits', 'bypassPermissions', 'sandbox']) {
+      expect(normalizeCliPermissionMode(mode, 'gemini')).toBe(mode);
     }
   });
 
@@ -31,6 +54,7 @@ describe('normalizeCliPermissionMode', () => {
     expect(normalizeCliPermissionMode('acceptEdits', 'pi')).toBe('acceptEdits');
     expect(normalizeCliPermissionMode('autoEdit', 'pi')).toBe('acceptEdits');
     expect(normalizeCliPermissionMode('bypassPermissions', 'grok')).toBe('bypassPermissions');
+    expect(normalizeCliPermissionMode('acceptEdits', 'gemini')).toBe('acceptEdits');
   });
 });
 
@@ -57,6 +81,7 @@ describe('isCliOnlyProvider', () => {
   it('recognizes omp as a CLI-only provider', () => {
     expect(isCliOnlyProvider('omp')).toBe(true);
     expect(isCliOnlyProvider('pi')).toBe(true);
+    expect(isCliOnlyProvider('gemini')).toBe(true);
     expect(isCliOnlyProvider('claude')).toBe(false);
     expect(isCliOnlyProvider(undefined)).toBe(false);
   });

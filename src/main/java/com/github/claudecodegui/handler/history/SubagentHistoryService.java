@@ -3,6 +3,8 @@ package com.github.claudecodegui.handler.history;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.provider.codex.CodexNativeHistoryReader;
+import com.github.claudecodegui.provider.gemini.GeminiHistoryReader;
+import com.github.claudecodegui.provider.gemini.GeminiSubagentHistoryLoader;
 import com.github.claudecodegui.util.PathUtils;
 import com.github.claudecodegui.util.JsUtils;
 import com.google.gson.Gson;
@@ -57,18 +59,26 @@ class SubagentHistoryService {
 
     private final HandlerContext context;
     private final CodexSubagentHistoryLoader codexLoader;
+    private final GeminiSubagentHistoryLoader geminiLoader;
     private final Set<String> inFlightCodexRequests = ConcurrentHashMap.newKeySet();
     private final Set<String> inFlightCodexStatusSessions = ConcurrentHashMap.newKeySet();
+    private final Set<String> inFlightGeminiStatusSessions = ConcurrentHashMap.newKeySet();
     private final java.util.concurrent.atomic.AtomicInteger statusBatchOffset = new java.util.concurrent.atomic.AtomicInteger();
 
     SubagentHistoryService(HandlerContext context) {
         this(context, new CodexSubagentHistoryLoader(
-                Path.of(NodeDetector.resolveHomeForFileOps(), ".codex", "sessions")));
+                Path.of(NodeDetector.resolveHomeForFileOps(), ".codex", "sessions")),
+                new GeminiSubagentHistoryLoader(GeminiHistoryReader.defaultCliHome()));
     }
 
     SubagentHistoryService(HandlerContext context, CodexSubagentHistoryLoader codexLoader) {
+        this(context, codexLoader, new GeminiSubagentHistoryLoader(GeminiHistoryReader.defaultCliHome()));
+    }
+
+    SubagentHistoryService(HandlerContext context, CodexSubagentHistoryLoader codexLoader, GeminiSubagentHistoryLoader geminiLoader) {
         this.context = context;
         this.codexLoader = codexLoader;
+        this.geminiLoader = geminiLoader;
     }
 
     void handleLoadSubagentSession(String content) {
@@ -97,6 +107,10 @@ class SubagentHistoryService {
 
         if ("codex".equals(provider)) {
             this.loadCodexSubagentAsync(sessionId, toolUseId, agentPath, agentId, response);
+            return;
+        }
+        if ("gemini".equals(provider)) {
+            this.loadGeminiSubagentAsync(sessionId, toolUseId, agentId, response);
             return;
         }
         if (provider != null && !"claude".equals(provider)) {
@@ -151,6 +165,36 @@ class SubagentHistoryService {
         sendResponse(response);
     }
 
+    private void loadGeminiSubagentAsync(String sessionId, String toolUseId, String agentId, JsonObject response) {
+        CompletableFuture.runAsync(() -> {
+            try {
+                GeminiSubagentHistoryLoader.SessionResult result = this.geminiLoader.loadChildSession(sessionId, toolUseId, agentId);
+                response.addProperty("success", result.success());
+                response.addProperty("status", result.status());
+                response.addProperty("completed", result.completed());
+                if (result.resultText() != null) {
+                    response.addProperty("resultText", result.resultText());
+                }
+                if (result.error() != null) {
+                    response.addProperty("error", result.error());
+                }
+                if (result.success() && result.messages() != null) {
+                    JsonArray messagesArray = new JsonArray();
+                    for (JsonObject msg : result.messages()) {
+                        messagesArray.add(msg);
+                    }
+                    response.add("messages", messagesArray);
+                }
+            } catch (Exception e) {
+                LOG.warn("[SubagentHistory] Failed to load Gemini subagent session: " + e.getMessage());
+                response.addProperty("success", false);
+                response.addProperty("status", "error");
+                response.addProperty("error", e.getMessage() != null ? e.getMessage() : "Unknown error");
+            }
+            this.sendResponse(response);
+        }, AppExecutorUtil.getAppExecutorService());
+    }
+
     void handleLoadSubagentStatuses(String content) {
         JsonObject response = new JsonObject();
         response.add("statuses", new JsonArray());
@@ -161,6 +205,7 @@ class SubagentHistoryService {
         List<CodexSubagentHistoryLoader.StatusRequest> agents;
         java.util.Map<String, String> nativeTasks = new java.util.HashMap<>();
         java.util.Map<String, String> previousTurns = new java.util.HashMap<>();
+        JsonArray agentArray = null;
         try {
             JsonObject request = parseRequest(content);
             sessionId = getString(request, "sessionId");
@@ -172,27 +217,31 @@ class SubagentHistoryService {
 
             validateId("sessionId", sessionId);
             validateRequestId(requestId);
-            if (!"codex".equals(provider)) {
+            if (!"codex".equals(provider) && !"gemini".equals(provider)) {
                 throw new IllegalArgumentException("Invalid provider");
             }
             if (!request.has("agents") || !request.get("agents").isJsonArray()) {
                 throw new IllegalArgumentException("Invalid agents");
             }
-            JsonArray agentArray = request.getAsJsonArray("agents");
-            if (agentArray.size() > CodexSubagentHistoryLoader.MAX_STATUS_REQUESTS) {
+            agentArray = request.getAsJsonArray("agents");
+            if (agentArray.size() > 64) {
                 throw new IllegalArgumentException("Too many agents");
             }
-            agents = parseStatusRequests(agentArray);
-            for (JsonElement element : agentArray) {
-                JsonObject agent = element.getAsJsonObject();
-                String nativeTask = getString(agent, "nativeTaskId");
-                if (nativeTask != null) {
-                    nativeTasks.put(getString(agent, "toolUseId"), nativeTask);
+            if ("codex".equals(provider)) {
+                agents = parseStatusRequests(agentArray);
+                for (JsonElement element : agentArray) {
+                    JsonObject agent = element.getAsJsonObject();
+                    String nativeTask = getString(agent, "nativeTaskId");
+                    if (nativeTask != null) {
+                        nativeTasks.put(getString(agent, "toolUseId"), nativeTask);
+                    }
+                    String previousTurn = getString(agent, "nativeTaskPreviousTurnId");
+                    if (previousTurn != null) {
+                        previousTurns.put(getString(agent, "toolUseId"), previousTurn);
+                    }
                 }
-                String previousTurn = getString(agent, "nativeTaskPreviousTurnId");
-                if (previousTurn != null) {
-                    previousTurns.put(getString(agent, "toolUseId"), previousTurn);
-                }
+            } else {
+                agents = List.of();
             }
         } catch (Exception e) {
             response.addProperty("success", false);
@@ -202,6 +251,56 @@ class SubagentHistoryService {
         }
 
         String responseSessionId = sessionId;
+        if ("gemini".equals(provider)) {
+            if (!this.inFlightGeminiStatusSessions.add(responseSessionId)) {
+                response.addProperty("success", false);
+                response.addProperty("error", "Gemini subagent status request already in progress");
+                sendStatusesResponse(response);
+                return;
+            }
+            List<GeminiSubagentHistoryLoader.StatusRequest> geminiRequests = new ArrayList<>();
+            for (JsonElement element : agentArray) {
+                if (element.isJsonObject()) {
+                    JsonObject agent = element.getAsJsonObject();
+                    geminiRequests.add(new GeminiSubagentHistoryLoader.StatusRequest(
+                            getString(agent, "toolUseId"),
+                            getString(agent, "agentId")
+                    ));
+                }
+            }
+            CompletableFuture.runAsync(() -> {
+                try {
+                    List<GeminiSubagentHistoryLoader.StatusResult> results = this.geminiLoader.loadStatuses(responseSessionId, geminiRequests);
+                    JsonArray statuses = new JsonArray();
+                    for (GeminiSubagentHistoryLoader.StatusResult res : results) {
+                        JsonObject st = new JsonObject();
+                        st.addProperty("toolUseId", res.toolUseId());
+                        st.addProperty("agentId", res.agentId());
+                        st.addProperty("success", res.success());
+                        st.addProperty("status", res.status());
+                        st.addProperty("completed", res.completed());
+                        if (res.resultText() != null) {
+                            st.addProperty("resultText", res.resultText());
+                        }
+                        if (res.error() != null) {
+                            st.addProperty("error", res.error());
+                        }
+                        statuses.add(st);
+                    }
+                    response.addProperty("success", true);
+                    response.add("statuses", statuses);
+                } catch (Exception e) {
+                    LOG.warn("[SubagentHistory] Failed to load Gemini subagent statuses: " + e.getMessage());
+                    response.addProperty("success", false);
+                    response.addProperty("error", e.getMessage() != null ? e.getMessage() : "Unknown error");
+                } finally {
+                    this.inFlightGeminiStatusSessions.remove(responseSessionId);
+                }
+                this.sendStatusesResponse(response);
+            }, AppExecutorUtil.getAppExecutorService());
+            return;
+        }
+
         if (!this.isCurrentCodexRoot(responseSessionId)) {
             return;
         }

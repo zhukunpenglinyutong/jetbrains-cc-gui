@@ -177,6 +177,7 @@ public class ClaudeStatusBarWidget implements CustomStatusBarWidget, StatusBarWi
                 case "acceptEdits" -> ClaudeCodeGuiBundle.message("status.mode.acceptEdits");
                 case "auto" -> ClaudeCodeGuiBundle.message("status.mode.auto");
                 case "bypassPermissions" -> ClaudeCodeGuiBundle.message("status.mode.bypassPermissions");
+                case "sandbox" -> ClaudeCodeGuiBundle.message("status.mode.sandbox");
                 default -> mode;
             };
             text.append(" {").append(modeLabel).append("}");

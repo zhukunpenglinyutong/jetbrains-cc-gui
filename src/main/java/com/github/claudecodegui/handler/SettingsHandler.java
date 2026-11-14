@@ -79,6 +79,8 @@ public class SettingsHandler extends BaseMessageHandler {
         "set_history_load_timeout",
         "get_permission_dialog_timeout",
         "set_permission_dialog_timeout",
+        "get_gemini_idle_reap_minutes",
+        "set_gemini_idle_reap_minutes",
         "get_commit_generation_enabled",
         "set_commit_generation_enabled",
         "get_session_git_repository_matching_enabled",
@@ -298,6 +300,12 @@ public class SettingsHandler extends BaseMessageHandler {
                 return true;
             case "set_permission_dialog_timeout":
                 projectConfigHandler.handleSetPermissionDialogTimeout(content);
+                return true;
+            case "get_gemini_idle_reap_minutes":
+                projectConfigHandler.handleGetGeminiIdleReapMinutes();
+                return true;
+            case "set_gemini_idle_reap_minutes":
+                projectConfigHandler.handleSetGeminiIdleReapMinutes(content);
                 return true;
             case "get_commit_generation_enabled":
                 projectConfigHandler.handleGetCommitGenerationEnabled();
