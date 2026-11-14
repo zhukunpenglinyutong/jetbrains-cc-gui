@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { runCliStreaming } from './cli-spawn.js';
+import { runCliStreaming, trimPartialUtf8Head } from './cli-spawn.js';
+import { decodeCliOutput } from './cli-path.js';
 
 test('a UTF-8 character split across stderr chunks survives decoding', async () => {
   // Review repro: decodeCliOutput used to run on each stderr chunk, so a
@@ -50,4 +51,14 @@ test('a healthy run resolves without an error message', async () => {
   assert.equal(result.code, 0);
   assert.equal(result.hadError, false);
   assert.equal(result.errorMessage, undefined);
+});
+
+test('a byte-capped stderr tail that starts mid-character still decodes as UTF-8 on win32', () => {
+  const text = '错误：找不到会话文件';
+  const cut = Buffer.from(text, 'utf8').subarray(1); // tail cap landed inside the first character
+  // Repro: the leading continuation bytes turn into U+FFFD and win32 re-decodes everything as GBK.
+  assert.notEqual(decodeCliOutput(cut, { forceWindows: true }), text.slice(1));
+  assert.equal(decodeCliOutput(trimPartialUtf8Head(cut), { forceWindows: true }), text.slice(1));
+  const whole = Buffer.from(text, 'utf8');
+  assert.equal(trimPartialUtf8Head(whole), whole);
 });

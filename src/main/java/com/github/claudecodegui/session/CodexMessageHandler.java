@@ -161,12 +161,12 @@ public class CodexMessageHandler implements MessageCallback {
                 // Handle session_id/thread_id (for session recovery)
                 handleSessionId(content);
             } else if ("usage".equals(type)) {
-                // OpenCode emits one [USAGE] marker per model step, which
-                // handleUsage sums into turnUsage (its latest step also feeds
+                // OpenCode and OMP emit one [USAGE] marker per model step, which
+                // handleUsage sums into turnUsage (the latest step also feeds
                 // the context ring). Every other CLI provider (kimi / minimax /
-                // pi / omp / dsh / ...) sends one usage snapshot per turn, which
+                // pi / dsh / ...) sends one usage snapshot per turn, which
                 // pushes the context ring directly.
-                if ("opencode".equals(state.getProvider())) {
+                if (STEP_USAGE_PROVIDERS.contains(state.getProvider())) {
                     handleUsage(content);
                 } else {
                     handleUsageMessage(content);
@@ -1317,7 +1317,9 @@ public class CodexMessageHandler implements MessageCallback {
         try {
             com.google.gson.Gson gson = new com.google.gson.Gson();
             com.google.gson.JsonObject usage = gson.fromJson(jsonContent, com.google.gson.JsonObject.class);
-            if (usage == null || !usage.isJsonObject()) {
+            // Raw shapes with no snake_case figures (Pi sends input/output/cacheRead)
+            // would push a 0 ring over the last real reading.
+            if (usage == null || !hasPositiveDisplayableFigure(usage)) {
                 return;
             }
 

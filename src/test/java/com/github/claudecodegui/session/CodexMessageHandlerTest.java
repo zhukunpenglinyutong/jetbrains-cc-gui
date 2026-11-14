@@ -866,6 +866,23 @@ public class CodexMessageHandlerTest {
         assertFalse(message.raw.has("usage"));
     }
 
+    @Test
+    public void rawUsageWithoutSnakeCaseFiguresDoesNotPushAZeroRing() {
+        SessionState state = new SessionState();
+        state.setProvider("pi");
+
+        CallbackHandler callbackHandler = new CallbackHandler();
+        RecordingCallback callback = new RecordingCallback();
+        callbackHandler.setCallback(callback);
+
+        CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
+        handler.onMessage("assistant", "{\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"done\"}]}}");
+        handler.onMessage("usage", "{\"input\":1200,\"output\":30,\"cacheRead\":800,\"totalTokens\":2030}");
+
+        assertEquals(0, callback.usageUpdateCount);
+        assertFalse(state.getMessages().get(0).raw.has("usage"));
+    }
+
     /** Native controls keep the failure in the transcript without requesting a second status toast. */
     @Test
     public void controlFailureKeepsItsErrorMessageButOmitsTheStatusError() {

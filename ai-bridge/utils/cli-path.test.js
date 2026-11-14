@@ -494,6 +494,18 @@ test('isDeadCmdShim cannot-verify cases stay alive', () => {
   assert.equal(isDeadCmdShim(dp0Dead, { forceWindows: true }), true);
 });
 
+test('isDeadCmdShim only judges quoted targets with a runnable extension', () => {
+  const root = mkdtempSync(join(tmpdir(), 'cc-gui-ext-shim-'));
+  // cmd.exe adds PATHEXT to an extensionless target at run time; existsSync cannot.
+  const noExt = join(root, 'noext.cmd');
+  writeFileSync(noExt, '@echo off\r\n"X:\\tools\\mcode" %*\r\n');
+  assert.equal(isDeadCmdShim(noExt, { forceWindows: true }), false);
+  // A data-dir argument after the program is not the target, even when it does not exist yet.
+  const argPath = join(root, 'argpath.cmd');
+  writeFileSync(argPath, '@echo off\r\nmcode.exe --data "X:\\Users\\me\\.mcode-new" %*\r\n');
+  assert.equal(isDeadCmdShim(argPath, { forceWindows: true }), false);
+});
+
 test('isDeadCmdShim honors %~dp0 targets that exist next to the shim', () => {
   if (process.platform !== 'win32') return;
   const root = mkdtempSync(join(tmpdir(), 'cc-gui-dp0-alive-'));

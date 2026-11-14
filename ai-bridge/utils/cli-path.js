@@ -51,7 +51,7 @@ export function isWindowsCmdShim(bin) {
  *
  * Only a confident answer counts as dead: when the script has exactly ONE
  * delegation line (a line that forwards `%*`) carrying a quoted absolute
- * path, that path is the delegation target — installers append the real
+ * path with a runnable extension, that path is the delegation target — installers append the real
  * invocation last. Restricting the scan to `%*` lines keeps a trailing REM
  * comment from making a working shim look dead, and requiring exactly one
  * such line keeps an `if exist "new" (...) else ("old" ...)` fallback chain
@@ -67,6 +67,8 @@ export function isWindowsCmdShim(bin) {
  * @returns {boolean} true only when the shim provably delegates to a
  *   missing file
  */
+const SHIM_TARGET_EXT = /\.(exe|cmd|bat|com|js|mjs|cjs|ps1)$/i;
+
 export function isDeadCmdShim(bin, { forceWindows = process.platform === 'win32' } = {}) {
   if (!forceWindows || typeof bin !== 'string') return false;
   const trimmed = stripOuterQuotes(bin).trim();
@@ -83,7 +85,11 @@ export function isDeadCmdShim(bin, { forceWindows = process.platform === 'win32'
   let delegationLines = 0;
   for (const line of content.split(/\r?\n/)) {
     if (!line.includes('%*')) continue;
-    const quoted = line.match(/"((?:[A-Za-z]:\\|%~dp0)[^"\r\n]+)"/g) || [];
+    // Only quoted paths with a runnable extension can be the target: an
+    // extensionless one gets PATHEXT at run time (existsSync does not), and a
+    // data-dir argument after the program may simply not exist yet.
+    const quoted = (line.match(/"((?:[A-Za-z]:\\|%~dp0)[^"\r\n]+)"/g) || [])
+      .filter((token) => SHIM_TARGET_EXT.test(token.slice(1, -1)));
     if (quoted.length === 0) continue;
     delegationLines += 1;
     if (delegationLines > 1) break; // conditional dispatch — unjudgeable

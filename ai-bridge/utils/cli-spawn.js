@@ -9,6 +9,20 @@ import { StringDecoder } from 'string_decoder';
 import { emitSendError, endStream } from './marker-protocol.js';
 import { resolveCliSpawn, decodeCliOutput, stripOuterQuotes } from './cli-path.js';
 
+/**
+ * Drop the UTF-8 continuation bytes (at most 3) a byte-capped tail can start
+ * with. Left in, they decode to U+FFFD, and on win32 that one replacement
+ * character sends the whole healthy UTF-8 tail through the GBK retry.
+ *
+ * @param {Buffer} buf
+ * @returns {Buffer}
+ */
+export function trimPartialUtf8Head(buf) {
+  let start = 0;
+  while (start < 3 && start < buf.length && (buf[start] & 0xC0) === 0x80) start += 1;
+  return start ? buf.subarray(start) : buf;
+}
+
 export function killChildTree(child, label) {
   if (!child || child.killed) return;
   try {
@@ -150,6 +164,7 @@ export function runCliStreaming({
     // once at close instead of each chunk as it arrives.
     const STDERR_TAIL_MAX_BYTES = 16384;
     let stderrTailBytes = Buffer.alloc(0);
+    let stderrTailTruncated = false;
     // Incremental UTF-8 decode for the live echo: buffers partial multi-byte
     // sequences so a character split across chunks survives.
     const stderrDecoder = new StringDecoder('utf8');
@@ -176,10 +191,10 @@ export function runCliStreaming({
 
     child.stderr.on('data', (chunk) => {
       const text = stderrDecoder.write(chunk);
-      const merged = stderrTailBytes.length + chunk.length > STDERR_TAIL_MAX_BYTES
-        ? Buffer.concat([stderrTailBytes, chunk]).subarray(-STDERR_TAIL_MAX_BYTES)
-        : Buffer.concat([stderrTailBytes, chunk]);
-      stderrTailBytes = merged;
+      const overCap = stderrTailBytes.length + chunk.length > STDERR_TAIL_MAX_BYTES;
+      const merged = Buffer.concat([stderrTailBytes, chunk]);
+      stderrTailBytes = overCap ? merged.subarray(-STDERR_TAIL_MAX_BYTES) : merged;
+      stderrTailTruncated = stderrTailTruncated || overCap;
       process.stderr.write(text);
     });
 
@@ -207,7 +222,8 @@ export function runCliStreaming({
         // Decode the complete tail once: UTF-8 first, GBK retry on win32 only
         // (cmd.exe emits localized messages in the OEM codepage — GBK on
         // Chinese Windows — which a forced UTF-8 read turns into U+FFFD).
-        const tail = decodeCliOutput(stderrTailBytes).trim().slice(-800);
+        const rawTail = stderrTailTruncated ? trimPartialUtf8Head(stderrTailBytes) : stderrTailBytes;
+        const tail = decodeCliOutput(rawTail).trim().slice(-800);
         reportError(
           `${label} CLI exited with code ${code}${signal ? ` (signal ${signal})` : ''}`
           + (tail ? `\n${tail}` : '')
