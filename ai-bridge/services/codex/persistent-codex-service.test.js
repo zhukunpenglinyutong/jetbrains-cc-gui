@@ -172,6 +172,30 @@ test('projects all session file changes without the visible history page limit',
   assert.equal(messages[0].codexThreadId, 'whole');
 });
 
+test('the current chat access scope reaches both native thread creation and turn settings', async () => {
+  const base = { permissionMode: 'bypassPermissions', approvalPreset: 'full-access', sandboxSelection: 'danger-full-access',
+    approvalsReviewer: 'user',
+    sandboxSource: 'default', cwd: testCwd, message: 'inspect access',
+    codexCommandPrefix: peerCommandPrefix('permission-settings') };
+  for (const [index, settings, sandbox, policy] of [
+    [0, {}, 'danger-full-access', 'never'],
+    [1, { approvalPreset: 'request', sandboxSource: 'user', sandboxSelection: 'read-only' }, 'read-only', 'on-request'],
+    [2, { approvalPreset: 'request', sandboxSource: 'native', sandboxSelection: 'workspace-write' },
+      'workspace-write', 'on-request'],
+  ]) {
+    const channelId = `permission-${index}`;
+    const result = await codexSendPersistent({ ...base, ...settings, channelId },
+      { titleDependencies: { enabled: async () => false } });
+    assert.equal(result.outcome, 'completed');
+    const item = codexEvents().find(event => event.channelId === channelId && event.kind === 'itemCompleted');
+    const actual = JSON.parse(item.payload.item.text);
+    assert.equal(actual.threadSandbox, sandbox);
+    assert.equal(actual.sandboxPolicy.type, { 'read-only': 'readOnly', 'workspace-write': 'workspaceWrite',
+      'danger-full-access': 'dangerFullAccess' }[sandbox]);
+    assert.equal(actual.approvalPolicy, policy);
+  }
+});
+
 test('the persistent channel clears Fast with explicit standard input and keeps the cleared tier on later sends', async () => {
   for (const cleared of ['', null]) {
     const channelId = cleared === '' ? 'tier-empty' : 'tier-null';

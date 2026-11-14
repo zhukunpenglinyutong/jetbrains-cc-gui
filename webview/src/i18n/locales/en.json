@@ -1779,7 +1779,8 @@
     "invalidJsonConfig": "Invalid JSON config format",
     "providerAdded": "Provider added",
     "providerUpdated": "Provider updated",
-    "providerDeleted": "Provider deleted"
+    "providerDeleted": "Provider deleted",
+    "codexSettingsDispatchFailed": "Cannot send Codex settings to the IDE. Reopen the chat and try again."
   },
   "config": {
     "clickToCopy": "Click to copy",

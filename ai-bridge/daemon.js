@@ -1022,8 +1022,8 @@ async function runDaemonMain() {
     // later FIFO operation and never mutate an active native turn in place.
     if (request.method === 'codex.updateSettings') {
       const controlId = request.id || '0';
-      Promise.resolve(codexUpdateSettingsPersistent(request.params || {}))
-        .then(() => writeRawLine({ id: controlId, done: true, success: true }))
+      Promise.resolve().then(() => codexUpdateSettingsPersistent(request.params || {}))
+        .then((result) => writeRawLine({ id: controlId, done: true, success: true, result }))
         .catch((error) => writeRawLine({
           id: controlId,
           done: true,

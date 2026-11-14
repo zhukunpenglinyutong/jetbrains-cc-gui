@@ -34,6 +34,39 @@ public class CodexProviderTransportIntegrationTest {
     public TemporaryFolder folder = new TemporaryFolder();
 
     @Test
+    public void malformedNativeConfigurationDoesNotBlockTheSettingsAcknowledgement() throws Exception {
+        try (Fixture fixture = fixture("early-notification")) {
+            JsonObject connected = fixture.bridge.preconnectCodex("fixture", fixture.cwd.toString(), null).get(15, TimeUnit.SECONDS);
+            assertFalse(connected.toString(), connected.has("error"));
+            Path config = Path.of(fixture.scope).resolve("config.toml");
+            Files.writeString(config, "model = [\n");
+            JsonObject result = fixture.bridge.updateCodexSettings("fixture", fixture.cwd.toString(), new JsonObject());
+            assertFalse(result.toString(), result.has("error"));
+            assertEquals(1, result.get("revision").getAsInt());
+            assertFalse(result.get("applied").getAsBoolean());
+            assertEquals("model = [\n", Files.readString(config));
+        }
+    }
+
+    @Test
+    public void providerPreparationFailureReturnsASafeSettingsErrorAndAllowsRetry() throws Exception {
+        FixtureSettings settings = new FixtureSettings("cli_login");
+        try (Fixture fixture = fixture("early-notification", settings)) {
+            JsonObject connected = fixture.bridge.preconnectCodex("fixture", fixture.cwd.toString(), null).get(15, TimeUnit.SECONDS);
+            assertFalse(connected.toString(), connected.has("error"));
+            settings.providerUnavailable = true;
+            JsonObject failed = fixture.bridge.updateCodexSettings("fixture", fixture.cwd.toString(), new JsonObject());
+            assertEquals("Codex provider configuration could not be captured", failed.get("error").getAsString());
+
+            settings.providerUnavailable = false;
+            JsonObject retried = fixture.bridge.updateCodexSettings("fixture", fixture.cwd.toString(), new JsonObject());
+            assertFalse(retried.toString(), retried.has("error"));
+            assertEquals(1, retried.get("revision").getAsInt());
+            assertFalse(retried.get("applied").getAsBoolean());
+        }
+    }
+
+    @Test
     public void nativeOperationMigratesPluginAliasesAndBacksUpTheOriginalBeforeDispatch() throws Exception {
         try (Fixture fixture = this.fixture("early-notification")) {
             Path home = Path.of(fixture.scope);
@@ -539,7 +572,7 @@ public class CodexProviderTransportIntegrationTest {
     }
 
     private Fixture fixture(String scenario, CodemossSettingsService settings) throws Exception {
-        Path root = this.folder.newFolder(scenario).toPath();
+        Path root = Files.createTempDirectory(this.folder.getRoot().toPath(), scenario + "-");
         Path cwd = Files.createDirectory(root.resolve("workspace"));
         Path trace = root.resolve("trace.ndjson");
         AtomicReference<Process> process = new AtomicReference<>();
@@ -554,6 +587,7 @@ public class CodexProviderTransportIntegrationTest {
 
     private static final class FixtureSettings extends CodemossSettingsService {
         private final String access;
+        private boolean providerUnavailable;
 
         private FixtureSettings(String access) { this.access = access; }
 
@@ -561,7 +595,12 @@ public class CodexProviderTransportIntegrationTest {
         public String getCodexRuntimeAccessMode() { return this.access; }
 
         @Override
-        public JsonObject getActiveCodexProvider() { return new JsonObject(); }
+        public JsonObject getActiveCodexProvider() {
+            if (this.providerUnavailable) {
+                throw new IllegalStateException("private provider contents");
+            }
+            return new JsonObject();
+        }
     }
 
     private static final class BoundSettings extends CodemossSettingsService {
