@@ -93,7 +93,8 @@ test('native supplier processes send, cold-resume and switch suppliers without g
         // On Windows, HOME/USERPROFILE alone may not isolate the native profile.
         // Verify the native home and loopback route before starting any thread.
         assert.ok(userLayer?.name?.file, 'The native CLI must report its fixture configuration layer');
-        assert.equal(realpathSync(userLayer.name.file), realpathSync(join(home, 'config.toml')),
+        // Native realpath also expands Windows 8.3 aliases used by hosted runners.
+        assert.equal(realpathSync.native(userLayer.name.file), realpathSync.native(join(home, 'config.toml')),
           'The native CLI must use the isolated fixture home');
         assert.equal(actual.config?.model_providers?.[modelProvider ?? 'OpenAI']?.base_url,
           `${endpoint}/${supplierId ?? 'global'}/v1`, 'Model requests must stay on the fixture server');
