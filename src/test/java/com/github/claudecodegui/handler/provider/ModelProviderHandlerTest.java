@@ -21,6 +21,22 @@ import static org.junit.Assert.assertTrue;
 public class ModelProviderHandlerTest {
 
     @Test
+    public void workflowSettingAcceptsExplicitFalseWithoutChangingEffort() {
+        HandlerContext context = createHandlerContext();
+        ClaudeSession session = new ClaudeSession(null, null, null, null);
+        context.setSession(session);
+        session.setReasoningEffort("high");
+        ModelProviderHandler handler = new ModelProviderHandler(context, null);
+        handler.handleSetClaudeUltracode("true");
+        assertTrue(session.isClaudeUltracode());
+        handler.handleSetClaudeUltracode("\"false\"");
+        assertTrue(session.isClaudeUltracode());
+        handler.handleSetClaudeUltracode("false");
+        assertFalse(session.isClaudeUltracode());
+        assertEquals("high", session.getReasoningEffort());
+    }
+
+    @Test
     public void shouldUseMainModelAsFallbackWhenFamilyMappingIsMissing() {
         JsonObject env = new JsonObject();
         env.addProperty("ANTHROPIC_MODEL", "glm-4.7");

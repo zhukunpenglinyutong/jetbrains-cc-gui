@@ -75,11 +75,18 @@ export function getAvailableReasoningLevels(
   currentProvider?: string,
   selectedModel?: string,
   ompCatalog?: OmpReasoningCatalog,
+  supportedReasoningEfforts?: readonly string[],
 ): ReasoningInfo[] {
   const ompLevelIds = currentProvider === 'omp' ? resolveOmpLevelIds(selectedModel, ompCatalog) : null;
   const { id: claudeModel, gateway } = resolveClaudeEffortModel(selectedModel);
   const configuredEffort = gateway || (currentProvider === 'claude' && hasConfiguredClaudeMapping(selectedModel));
   return REASONING_LEVELS.filter((level) => {
+    // Ultra is a native Codex delegation effort, never a Claude effort alias.
+    // The live model catalog is authoritative (even within a model family).
+    if (currentProvider === 'codex' && supportedReasoningEfforts) {
+      return supportedReasoningEfforts.includes(level.id);
+    }
+    if (level.id === 'ultra') return false;
     if (currentProvider === 'grok') {
       return level.id === 'low' || level.id === 'medium' || level.id === 'high' || level.id === 'xhigh';
     }
@@ -142,6 +149,8 @@ export function useReasoningEffortGuard(
   selectedModel?: string,
   currentProvider?: string,
   ompCatalog?: OmpReasoningCatalog,
+  supportedReasoningEfforts?: readonly string[],
+  reasoningCapabilitiesUnconfirmed = false,
 ): {
   isVisible: boolean;
   availableLevels: ReasoningInfo[];
@@ -150,24 +159,30 @@ export function useReasoningEffortGuard(
   const isVisible = isReasoningVisible(currentProvider, selectedModel);
   // Mapping changes can keep the same Sonnet/Opus alias. Re-evaluate on every
   // render so switching cc-switch modes does not retain an old filtered list.
-  const availableLevels = getAvailableReasoningLevels(currentProvider, selectedModel, ompCatalog);
+  const availableLevels = getAvailableReasoningLevels(currentProvider, selectedModel, ompCatalog, supportedReasoningEfforts);
   // The effort is one value shared by every provider. omp's levels differ per
   // model and omp resolves a missing one itself, so its selector shows the
   // outcome and leaves the stored effort alone: rewriting it would also change
   // the level of whatever provider the user switches to next.
   const isOmp = currentProvider === 'omp';
-  const currentLevel = isOmp
-    ? resolveOmpReasoningLevel(value, availableLevels)
-    : resolveCurrentReasoningLevel(value, availableLevels);
+  // Only a successful catalog can disprove a restored Ultra preference.
+  // Loading errors/timeouts keep intent intact without permitting an unverified send.
+  const awaitingUltraCapability = currentProvider === 'codex'
+    && value === 'ultra' && supportedReasoningEfforts === undefined && reasoningCapabilitiesUnconfirmed;
+  const currentLevel = awaitingUltraCapability
+    ? REASONING_LEVELS.find(level => level.id === value)
+    : isOmp
+      ? resolveOmpReasoningLevel(value, availableLevels)
+      : resolveCurrentReasoningLevel(value, availableLevels);
 
   useEffect(() => {
-    if (isOmp || !isVisible || availableLevels.some((level) => level.id === value)) {
+    if (awaitingUltraCapability || isOmp || !isVisible || availableLevels.some((level) => level.id === value)) {
       return;
     }
     if (currentLevel) {
       onChange(currentLevel.id);
     }
-  }, [availableLevels, currentLevel, isOmp, isVisible, onChange, value]);
+  }, [availableLevels, awaitingUltraCapability, currentLevel, isOmp, isVisible, onChange, value]);
 
   return { isVisible, availableLevels, currentLevel };
 }

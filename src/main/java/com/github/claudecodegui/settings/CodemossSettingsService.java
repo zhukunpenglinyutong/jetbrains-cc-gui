@@ -852,6 +852,10 @@ public class CodemossSettingsService {
         return withConfigTransaction(() -> providerManager.setAlwaysThinkingEnabledInActiveProvider(enabled));
     }
 
+    public boolean setAlwaysThinkingEnabledInProvider(String id, boolean enabled) throws IOException {
+        return withConfigTransaction(() -> providerManager.setAlwaysThinkingEnabledInProvider(id, enabled));
+    }
+
     /**
      * alwaysThinkingEnabled of the active provider profile, or {@code null} when unset.
      * Mirrors the webview toggle's read order: provider settingsConfig first,

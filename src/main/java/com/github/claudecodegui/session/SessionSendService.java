@@ -3,6 +3,7 @@ package com.github.claudecodegui.session;
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.settings.CodexSettingsManager;
+import com.github.claudecodegui.settings.SessionSupplierCatalog;
 import com.github.claudecodegui.notifications.ClaudeNotifier;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
@@ -218,7 +219,7 @@ public class SessionSendService {
     ) {
         return sendMessageToProvider(channelId, input, attachments, openedFilesJson, externalAgentPrompt, fileTagPaths,
                 requestedPermissionMode, requestedReasoningEffort, requestedCodexFastMode, requestedDshPreset,
-                null, clientMessageId, nativeCodexSettings, state.getTurnOwner());
+                null, clientMessageId, nativeCodexSettings, null, state.getTurnOwner());
     }
 
     public CompletableFuture<Void> sendMessageToProvider(
@@ -228,7 +229,7 @@ public class SessionSendService {
     ) {
         return sendMessageToProvider(channelId, input, attachments, openedFilesJson, externalAgentPrompt, fileTagPaths,
                 requestedPermissionMode, requestedReasoningEffort, requestedCodexFastMode, requestedDshPreset,
-                null, null, null, expectedTurnOwner);
+                null, null, null, null, expectedTurnOwner);
     }
 
     /**
@@ -241,6 +242,30 @@ public class SessionSendService {
             String requestedReasoningEffort, String requestedCodexFastMode, String requestedDshPreset,
             String requestedOmpApprovalMode, String clientMessageId, JsonObject nativeCodexSettings,
             Object expectedTurnOwner
+    ) {
+        return sendMessageToProvider(channelId, input, attachments, openedFilesJson, externalAgentPrompt, fileTagPaths,
+                requestedPermissionMode, requestedReasoningEffort, requestedCodexFastMode, requestedDshPreset,
+                requestedOmpApprovalMode, clientMessageId, nativeCodexSettings, null, expectedTurnOwner);
+    }
+
+    public CompletableFuture<Void> sendMessageToProvider(
+            String channelId, String input, List<ClaudeSession.Attachment> attachments, JsonObject openedFilesJson,
+            String externalAgentPrompt, List<String> fileTagPaths, String requestedPermissionMode,
+            String requestedReasoningEffort, String requestedCodexFastMode, String requestedDshPreset,
+            String clientMessageId, JsonObject nativeCodexSettings, Boolean requestedClaudeUltracode
+    ) {
+        return sendMessageToProvider(channelId, input, attachments, openedFilesJson, externalAgentPrompt, fileTagPaths,
+                requestedPermissionMode, requestedReasoningEffort, requestedCodexFastMode, requestedDshPreset,
+                null, clientMessageId, nativeCodexSettings, requestedClaudeUltracode, state.getTurnOwner());
+    }
+
+    /** Retains both the submitted workflow selection and its upstream execution owner. */
+    public CompletableFuture<Void> sendMessageToProvider(
+            String channelId, String input, List<ClaudeSession.Attachment> attachments, JsonObject openedFilesJson,
+            String externalAgentPrompt, List<String> fileTagPaths, String requestedPermissionMode,
+            String requestedReasoningEffort, String requestedCodexFastMode, String requestedDshPreset,
+            String requestedOmpApprovalMode, String clientMessageId, JsonObject nativeCodexSettings,
+            Boolean requestedClaudeUltracode, Object expectedTurnOwner
     ) {
         if (!state.isCurrentTurn(expectedTurnOwner)) {
             return CompletableFuture.completedFuture(null);
@@ -342,7 +367,9 @@ public class SessionSendService {
         }
 
         return sendToClaude(channelId, input, attachments, openedFilesJson, agentPrompt,
-                effectivePermissionMode, normalizedRequestedEffort, expectedTurnOwner);
+                effectivePermissionMode, normalizedRequestedEffort,
+                requestedClaudeUltracode != null ? requestedClaudeUltracode : state.isClaudeUltracode(),
+                expectedTurnOwner);
     }
 
     public static String normalizeRequestedReasoningEffort(String effort) {
@@ -358,6 +385,15 @@ public class SessionSendService {
         }
         LOG.warn("[ReasoningEffort][Backend] Invalid requested reasoningEffort ignored: " + effort);
         return null;
+    }
+
+    public static String resolveEffectiveReasoningEffort(String provider, String requested, String session) {
+        String effort = normalizeRequestedReasoningEffort(requested);
+        if (effort == null) {
+            effort = normalizeRequestedReasoningEffort(session);
+        }
+        // Native ultra is a Codex effort, while Claude uses its independent ultracode flag.
+        return "ultra".equals(effort) && !"codex".equals(provider) ? null : effort;
     }
 
     public static String normalizeRequestedPermissionMode(String mode) {
@@ -485,7 +521,7 @@ public class SessionSendService {
         }
 
         String accessError = getCodexRuntimeAccessError(accessMode);
-        if (accessError != null) {
+        if (accessError != null && !codexSDKBridge.hasSessionSupplier()) {
             handler.onError(accessError);
             return CompletableFuture.completedFuture(null);
         }
@@ -494,7 +530,9 @@ public class SessionSendService {
         turnSettings.add("additionalContext", this.contextService.buildCodexAdditionalContext(
                 openedFilesJson, fileTagPaths, this.codexSDKBridge::normalizePathForNode));
         String sessionInstructions = this.contextService.buildCodexSessionInstructions(agentPrompt, openedFilesJson);
-        String configuredModel = new CodexSettingsManager(this.gson).resolveModelAlias(this.state.getModel());
+        String supplier = this.state.getRuntimeSupplierId("codex");
+        String configuredModel = codexSDKBridge.hasSessionSupplier() && !SessionSupplierCatalog.isNativeMode(supplier) ? this.state.getModel()
+                : new CodexSettingsManager(this.gson).resolveModelAlias(this.state.getModel());
 
         return settleFromResult(expectedTurnOwner, codexSDKBridge.sendMessage(
                 channelId,
@@ -570,7 +608,7 @@ public class SessionSendService {
                 agentPrompt,
                 streaming,
                 false,
-                requestedReasoningEffort != null ? requestedReasoningEffort : state.getReasoningEffort(),
+                resolveEffectiveReasoningEffort("grok", requestedReasoningEffort, state.getReasoningEffort()),
                 handler
         ));
     }
@@ -623,7 +661,7 @@ public class SessionSendService {
                 agentPrompt,
                 streaming,
                 false,
-                requestedReasoningEffort != null ? requestedReasoningEffort : state.getReasoningEffort(),
+                resolveEffectiveReasoningEffort("zcode", requestedReasoningEffort, state.getReasoningEffort()),
                 handler
         ));
     }
@@ -812,6 +850,7 @@ public class SessionSendService {
             String agentPrompt,
             String effectivePermissionMode,
             String requestedReasoningEffort,
+            boolean claudeUltracode,
             Object expectedTurnOwner
     ) {
         ClaudeMessageHandler handler = new ClaudeMessageHandler(
@@ -846,7 +885,8 @@ public class SessionSendService {
                         agentPrompt,
                         streaming,
                         false,
-                        requestedReasoningEffort != null ? requestedReasoningEffort : state.getReasoningEffort(),
+                        resolveEffectiveReasoningEffort("claude", requestedReasoningEffort, state.getReasoningEffort()),
+                        claudeUltracode,
                         handler
                 ));
     }

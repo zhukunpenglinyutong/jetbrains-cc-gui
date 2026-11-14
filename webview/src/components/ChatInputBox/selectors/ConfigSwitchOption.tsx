@@ -16,6 +16,8 @@ interface ConfigSwitchOptionProps {
   label: string;
   value?: boolean;
   defaultChecked: boolean;
+  disabled?: boolean;
+  title?: string;
   onChange?: (enabled: boolean) => void;
   onMouseEnter: () => void;
 }
@@ -30,22 +32,26 @@ export const ConfigSwitchOption = ({
   label,
   value,
   defaultChecked,
+  disabled = false,
+  title,
   onChange,
   onMouseEnter,
 }: ConfigSwitchOptionProps) => (
   <div
-    className="selector-option"
+    className={`selector-option${disabled ? ' disabled' : ''}`}
+    aria-disabled={disabled}
+    title={title}
     role="button"
-    tabIndex={0}
+    tabIndex={disabled ? -1 : 0}
     onClick={(e) => {
       e.stopPropagation();
-      onChange?.(!value);
+      if (!disabled) onChange?.(!value);
     }}
     onKeyDown={(e) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
         e.stopPropagation();
-        onChange?.(!value);
+        if (!disabled) onChange?.(!value);
       }
     }}
     onMouseEnter={onMouseEnter}
@@ -57,10 +63,11 @@ export const ConfigSwitchOption = ({
     </div>
     <Switch
       size="small"
+      disabled={disabled}
       checked={value ?? defaultChecked}
       onClick={(checked, e) => {
         e.stopPropagation();
-        onChange?.(checked);
+        if (!disabled) onChange?.(checked);
       }}
     />
   </div>

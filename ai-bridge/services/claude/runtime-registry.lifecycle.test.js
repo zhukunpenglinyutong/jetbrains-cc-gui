@@ -157,3 +157,28 @@ test('cleanup keeps busy runtimes past the absolute lifetime that are silent for
 
   assert.deepEqual(disposed, []);
 });
+
+test('a leaked legacy task edge is reaped once stuck, while live snapshots and pending Stops are kept', async () => {
+  const createdAt = Date.now() - RUNTIME_MAX_ABSOLUTE_LIFETIME_MS - 1000;
+  const lastUsedAt = Date.now() - RUNTIME_STUCK_SILENCE_MS - 1000;
+  const legacy = staleRuntime({ createdAt, lastUsedAt, backgroundTaskIds: new Set(['lost-terminal-edge']) });
+  const streaming = staleRuntime({ createdAt, backgroundTaskIds: new Set(['still-writing']) });
+  const stopping = staleRuntime({ createdAt, lastUsedAt, abortPromise: new Promise(() => {}) });
+  const authoritative = staleRuntime({ createdAt });
+  updateBackgroundTaskState(authoritative, {
+    type: 'system', subtype: 'background_tasks_changed',
+    tasks: [{ task_id: 'long-workflow', task_type: 'local_workflow' }],
+  });
+  for (const [signature, runtime] of Object.entries({ legacy, streaming, stopping, authoritative })) {
+    rememberRuntime(runtime, { runtimeSignature: signature });
+  }
+  const disposed = [];
+  await cleanupStaleAnonymousRuntimes(async runtime => disposed.push(runtime));
+  assert.deepEqual(disposed, [legacy]);
+
+  // An authoritative empty snapshot releases the old runtime at the idle limit.
+  updateBackgroundTaskState(authoritative, { type: 'system', subtype: 'background_tasks_changed', tasks: [] });
+  legacy.closed = true;
+  await cleanupStaleAnonymousRuntimes(async runtime => disposed.push(runtime));
+  assert.deepEqual(disposed, [legacy, authoritative]);
+});

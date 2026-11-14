@@ -1607,6 +1607,8 @@ public class WebviewInitializer {
                 tabProvider,
                 tabModel,
                 SessionState.discoverUserDshPresetIds(),
+                session != null ? session.getReasoningEffort() : null,
+                session != null ? session.isClaudeUltracode() : null,
                 host.getDraftCacheKey());
     }
 

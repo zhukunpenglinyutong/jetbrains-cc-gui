@@ -374,6 +374,21 @@ public class ModelProviderHandler {
         }
     }
 
+    public void handleSetClaudeUltracode(String content) {
+        try {
+            var value = com.google.gson.JsonParser.parseString(content);
+            if (value.isJsonObject()) {
+                value = value.getAsJsonObject().get("claudeUltracode");
+            }
+            if (value != null && value.isJsonPrimitive() && value.getAsJsonPrimitive().isBoolean()
+                    && context.getSession() != null) {
+                context.getSession().setClaudeUltracode(value.getAsBoolean());
+            }
+        } catch (Exception e) {
+            LOG.warn("[ModelProviderHandler] Invalid Claude ultracode setting", e);
+        }
+    }
+
     public void handleSetCodexFastMode(String content) {
         try {
             String mode = content;
@@ -467,7 +482,8 @@ public class ModelProviderHandler {
             return baseModel;
         }
         try {
-            JsonObject claudeSettings = context.getSettingsService().readClaudeSettings();
+            String supplierId = context.getSession() == null ? null : context.getSession().getState().getRuntimeSupplierId("claude");
+            JsonObject claudeSettings = com.github.claudecodegui.settings.SessionSupplierCatalog.claudeSettings(context.getSettingsService(), supplierId);
             if (claudeSettings == null || !claudeSettings.has("env") || !claudeSettings.get("env").isJsonObject()) {
                 return baseModel;
             }
@@ -678,6 +694,21 @@ public class ModelProviderHandler {
         JsonObject env = ClaudeContextWindowOverrideProvider.getInstance().getUserSettingsEnv();
         String cliModel = env == null ? selectedModel : resolveConfiguredClaudeModel(selectedModel, env);
         return getClaudeContextLimit(cliModel, cwd);
+    }
+
+    public static int resolveContextLimit(String provider, String selectedModel, String cwd, String supplierId) {
+        if (!"claude".equalsIgnoreCase(provider) || supplierId == null
+                || com.github.claudecodegui.settings.SessionSupplierCatalog.isNativeMode(supplierId)) {
+            return resolveContextLimit(provider, selectedModel, cwd);
+        }
+        try {
+            JsonObject settings = com.github.claudecodegui.settings.SessionSupplierCatalog.claudeSettings(
+                    new com.github.claudecodegui.settings.CodemossSettingsService(), supplierId);
+            JsonObject env = settings.has("env") && settings.get("env").isJsonObject() ? settings.getAsJsonObject("env") : null;
+            return getClaudeContextLimit(resolveConfiguredClaudeModel(selectedModel, env), cwd);
+        } catch (Exception error) {
+            return getClaudeContextLimit(selectedModel, cwd);
+        }
     }
 
     /**

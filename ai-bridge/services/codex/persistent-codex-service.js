@@ -1,6 +1,7 @@
 import favoritesService from '../favorites-service.cjs';
 import { applyCodexFavorites, readFavoriteCodexThreads } from './codex-history-metadata.js';
 import { filterAvailableCodexThreads } from './codex-history-availability.js';
+import { buildSessionCodexConfig, resolveSessionCodexModel } from '../../config/session-supplier.js';
 /**
  * Persistent Codex runtime service (daemon mode).
  *
@@ -169,6 +170,10 @@ function ensureSessionService(stdinData, { nativeEnvironmentDependencies = {} } 
   // Controls and catalog reads carry only routing data. Preserve the launch
   // configuration captured by send until an explicit field replaces it.
   stdinData = { ...(existing?.launchData ?? {}), ...stdinData };
+  const supplier = buildSessionCodexConfig(stdinData.supplierId, { baseEnv: pristineBaseEnv ?? process.env });
+  if (supplier) {
+    stdinData = { ...stdinData, apiKey: null, baseUrl: null, providerLabel: null, httpHeaders: null, ...supplier };
+  }
 
   const authMode = stdinData?.apiKey || stdinData?.baseUrl ? 'managed' : (stdinData?.authMode ?? 'cli_login');
   const launchInputs = {
@@ -188,6 +193,8 @@ function ensureSessionService(stdinData, { nativeEnvironmentDependencies = {} } 
   const baseEnv = { ...(pristineBaseEnv ?? process.env) };
   const runtime = buildCodexNativeRuntime({
     ...launchInputs,
+    extraConfig: supplier?.extraConfig,
+    modelProvider: supplier?.modelProvider,
     projectDocFallbackFilenames: stdinData?.projectDocFallbackFilenames,
     baseEnv,
   });
@@ -195,7 +202,7 @@ function ensureSessionService(stdinData, { nativeEnvironmentDependencies = {} } 
     ...launchInputs,
     cwd: stdinData?.cwd,
     nativeConfig: runtime.config,
-    modelProvider: runtime.modelProvider,
+    modelProvider: supplier?.modelProvider ?? runtime.modelProvider,
   };
 
   const fingerprint = computeCodexRuntimeFingerprint(launchInputs);
@@ -210,17 +217,17 @@ function ensureSessionService(stdinData, { nativeEnvironmentDependencies = {} } 
     : existing.cliPlan;
   const commandPrefix = cliPlan.candidates[0].command;
   const launchData = Object.fromEntries([
-    'authMode', 'apiKey', 'baseUrl', 'providerLabel', 'httpHeaders', 'codexHome',
+    'supplierId', 'authMode', 'apiKey', 'baseUrl', 'providerLabel', 'httpHeaders', 'codexHome',
     'developerInstructions', 'providerRevision', 'projectDocFallbackFilenames', 'codexCliPath',
     'codexCommandPrefix', 'pluginVersion',
   ].filter((key) => Object.hasOwn(stdinData, key)).map((key) => [key, stdinData[key]]));
   let candidateIndex = 0;
-  const createClient = async () => {
+  const createClient = async ({ nativeConfig = runtime.config, modelProvider = runtime.modelProvider } = {}) => {
     const candidate = cliPlan.candidates[candidateIndex] ?? cliPlan.candidates[0];
     let sensitiveEnvNames = [];
     const env = await prepareCodexRuntimeEnvironment({ authMode, baseEnv, codexHome: launchInputs.codexHome,
       onCredentialNames: names => { sensitiveEnvNames = names; },
-      config: runtime.config, env: {
+      config: nativeConfig, env: {
         ...runtime.env,
         ...(launchInputs.codexHome || baseEnv.CODEX_HOME
           ? { CODEX_HOME: launchInputs.codexHome || baseEnv.CODEX_HOME } : {}),
@@ -232,6 +239,7 @@ function ensureSessionService(stdinData, { nativeEnvironmentDependencies = {} } 
       command: candidate.command,
       cwd: stdinData?.cwd || undefined,
       env, sensitiveEnvNames,
+      nativeConfig, modelProvider,
       clientInfo: {
         name: 'codemoss_intellij',
         title: 'CC GUI',
@@ -331,6 +339,8 @@ function getServiceOrNull(stdinData) {
  */
 export function buildTurnSettings(stdinData) {
   const settings = {};
+  const model = stdinData?.supplierId
+    ? resolveSessionCodexModel(stdinData.supplierId, stdinData.model) : stdinData?.model;
   const permissionMode = typeof stdinData?.permissionMode === 'string'
     ? stdinData.permissionMode.trim() : '';
   if (permissionMode) {
@@ -345,7 +355,7 @@ export function buildTurnSettings(stdinData) {
     settings.approvalsReviewer = permissionMode === 'auto' ? 'auto_review' : 'user';
   }
   if (stdinData?.model) {
-    settings.model = stdinData.model;
+    settings.model = model;
   }
   if (stdinData?.reasoningEffort) {
     settings.effort = stdinData.reasoningEffort;
@@ -387,11 +397,18 @@ export function buildTurnSettings(stdinData) {
   if (stdinData?.collaborationMode) {
     settings.collaborationMode = typeof stdinData.collaborationMode === 'string'
       ? { mode: stdinData.collaborationMode, settings: {
-        model: String(stdinData?.model || ''),
+        model: String(model || ''),
         reasoning_effort: stdinData?.reasoningEffort || null,
         developer_instructions: stdinData?.developerInstructions ?? null,
       } }
       : stdinData.collaborationMode;
+    if (stdinData.supplierId && typeof stdinData.collaborationMode === 'object'
+        && typeof stdinData.collaborationMode?.settings?.model === 'string') {
+      settings.collaborationMode = { ...stdinData.collaborationMode, settings: {
+        ...stdinData.collaborationMode.settings,
+        model: resolveSessionCodexModel(stdinData.supplierId, stdinData.collaborationMode.settings.model),
+      } };
+    }
   }
   if (stdinData?.developerInstructions !== undefined) {
     settings.developerInstructions = stdinData.developerInstructions;
@@ -405,7 +422,7 @@ export function buildTurnSettings(stdinData) {
     settings.collaborationMode = {
       mode: collaborationMode,
       settings: {
-        model: String(stdinData?.model || ''),
+        model: String(model || ''),
         reasoning_effort: stdinData?.reasoningEffort || null,
         developer_instructions: stdinData?.developerInstructions ?? null,
       },
@@ -471,11 +488,12 @@ export async function codexSendPersistent(stdinData, { titleDependencies = {}, n
   const clientMessageId = stdinData?.clientMessageId
     || stdinData?.messageId
     || `cm-${Date.now()}`;
+  const turnSettings = buildTurnSettings(stdinData);
   const operation = service.enqueueOperation({
     kind: 'send',
     threadId: stdinData?.threadId || null,
     clientMessageId,
-    settings: buildTurnSettings(stdinData) ?? undefined,
+    settings: turnSettings ?? undefined,
     markerPayload: { input: buildNativeInput(stdinData), additionalContext: stdinData?.additionalContext },
   });
   // Capture the marker emitter so legacy markers carry this operation's
@@ -501,7 +519,8 @@ export async function codexSendPersistent(stdinData, { titleDependencies = {}, n
         && service.state === 'ready' && service.client?.alive
         && entry.fingerprint === fingerprint && service.runtimeGeneration === generation && service.rootThreadId === threadId;
       await settleCodexSessionTitle({ service, threadId, userMessage: stdinData.message, canApply,
-        generateText: input => generateCodexText({ ...input, model: stdinData.model }, {
+        generateText: input => generateCodexText({ ...input,
+          model: turnSettings?.model ?? stdinData.model }, {
           runtimeState: () => ({ access: entry.launchOptions.authMode }),
           resolveCli: () => ({ status: 'resolved', command: entry.currentCliCommand?.() ?? entry.commandPrefix }),
           nativeRuntime: { ...entry.nativeRuntime, env: { ...entry.nativeRuntime.env,
@@ -521,6 +540,7 @@ export async function codexSendPersistent(stdinData, { titleDependencies = {}, n
 /** Execute one current native plan item as a fresh default-mode turn. */
 export async function codexExecutePlanPersistent(stdinData) {
   const { service } = ensureSessionService(stdinData);
+  const turnSettings = buildTurnSettings(stdinData);
   const threadId = stdinData?.threadId || service.rootThreadId;
   if (!threadId) {
     throw new Error('Start a Codex conversation before executing a plan');
@@ -554,9 +574,9 @@ export async function codexExecutePlanPersistent(stdinData) {
     clientMessageId: stdinData?.clientMessageId || `cm-plan-${Date.now()}`,
     settings: {
       ...(service.desiredSettings || {}),
-      ...(buildTurnSettings(stdinData) || {}),
+      ...(turnSettings || {}),
       collaborationMode: { mode: 'default', settings: {
-        model: String(stdinData?.model || service.effectiveSettings?.model || ''),
+        model: String(turnSettings?.model || service.desiredSettings?.model || service.effectiveSettings?.model || ''),
         reasoning_effort: stdinData?.reasoningEffort || null,
         developer_instructions: stdinData?.developerInstructions ?? null,
       } },
@@ -855,9 +875,16 @@ export async function codexAbortTurnPersistent(stdinData) {
 /** Control operation: record desired settings (effectiveness via notification). */
 export async function codexUpdateSettingsPersistent(stdinData) {
   const { service } = ensureSessionService(stdinData);
+  const overrides = stdinData?.settings && typeof stdinData.settings === 'object' ? structuredClone(stdinData.settings) : {};
+  if (stdinData?.supplierId) {
+    if (typeof overrides.model === 'string') overrides.model = resolveSessionCodexModel(stdinData.supplierId, overrides.model);
+    if (typeof overrides.collaborationMode?.settings?.model === 'string') {
+      overrides.collaborationMode.settings.model = resolveSessionCodexModel(stdinData.supplierId, overrides.collaborationMode.settings.model);
+    }
+  }
   const settings = {
     ...(buildTurnSettings(stdinData) || {}),
-    ...(stdinData?.settings && typeof stdinData.settings === 'object' ? stdinData.settings : {}),
+    ...overrides,
   };
   if (settings.approvalPreset) {
     const preset = settings.approvalPreset;
@@ -887,7 +914,7 @@ export async function codexUpdateSettingsPersistent(stdinData) {
     settings.collaborationMode = {
       mode: settings.collaborationMode,
       settings: {
-        model: String(stdinData?.model || ''),
+        model: String(settings.model || service.desiredSettings?.model || service.effectiveSettings?.model || ''),
         reasoning_effort: stdinData?.reasoningEffort || null,
         developer_instructions: stdinData?.developerInstructions ?? null,
       },

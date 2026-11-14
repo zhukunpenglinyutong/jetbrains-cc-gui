@@ -86,13 +86,14 @@ export function findRuntimeForRequest(requestContext) {
   }
   const exact = anonymousRuntimesBySignature.get(requestContext.runtimeSignature);
   if (exact) return exact;
-  // A bypass transition changes the spawn-time signature before the next
-  // request arrives. Only consider a pending runtime from the same anonymous
-  // session epoch; otherwise a request could dispose another session's runtime.
+  // Signature changes must not bypass a pending bypass transition or runtime
+  // retirement. Only match the same anonymous session epoch, so a request
+  // cannot dispose or overlap another session's runtime.
   if (!requestContext.runtimeSessionEpoch) return null;
   for (const runtime of anonymousRuntimes) {
-    if (runtime.runtimeSignature === '__rebuild-pending-bypass-change__'
-        && runtime.runtimeSessionEpoch === requestContext.runtimeSessionEpoch) {
+    if (runtime.runtimeSessionEpoch === requestContext.runtimeSessionEpoch
+        && (runtime.runtimeSignature === '__rebuild-pending-bypass-change__'
+          || runtime.abortPromise || runtime.disposePromise)) {
       return runtime;
     }
   }
@@ -125,8 +126,15 @@ function isRuntimeBusy(runtime) {
  */
 export function getRuntimeDisposalReason(runtime, now, maxIdleMs) {
   if (!runtime || runtime.closed) return null;
+  // Stop owns its interrupt-before-close ordering and bounded wait. The idle
+  // reaper must not start a competing close while that handshake is pending.
+  if (runtime.abortPromise || runtime.disposePromise) return null;
   const silentMs = now - runtime.lastUsedAt;
   if (isRuntimeBusy(runtime)) {
+    // Native snapshots carry the complete live task set, so a silent native
+    // workflow is still running; only leak-prone turn flags and legacy edges get the stuck backstop.
+    const onlyNativeTasks = !(runtime.activeTurnCount > 0) && !runtime.cliTurnInFlight && runtime.hasBackgroundTaskSnapshot;
+    if (onlyNativeTasks) return null;
     const pastLifetime = now - runtime.createdAt > RUNTIME_MAX_ABSOLUTE_LIFETIME_MS;
     return pastLifetime && silentMs > RUNTIME_STUCK_SILENCE_MS ? 'stuck' : null;
   }
@@ -146,35 +154,43 @@ function describeDisposal(reason, runtime, now) {
   return 'idle ' + silentSeconds + 's';
 }
 
-export async function cleanupStaleAnonymousRuntimes(disposeFn) {
+export async function cleanupStaleAnonymousRuntimes(disposeFn, { waitForDisposal = true } = {}) {
   const now = Date.now();
   const snapshot = [...anonymousRuntimes];
+  const disposals = [];
   for (const runtime of snapshot) {
     if (runtime.closed) {
-      anonymousRuntimes.delete(runtime);
+      // closed fences input immediately; it does not mean asynchronous SDK
+      // cleanup finished. Keep retiring runtimes discoverable by new sends.
+      if (!runtime.disposePromise || runtime.disposeSettled) removeRuntime(runtime);
       continue;
     }
     const reason = getRuntimeDisposalReason(runtime, now, ANONYMOUS_RUNTIME_MAX_IDLE_MS);
     if (reason) {
       console.log(`[DAEMON] Disposing stale anonymous runtime (${describeDisposal(reason, runtime, now)})`);
-      await disposeFn(runtime);
+      disposals.push(Promise.resolve(disposeFn(runtime)));
     }
   }
+  if (waitForDisposal) await Promise.all(disposals);
+  else for (const disposal of disposals) disposal.catch(error => console.error('[DAEMON] Anonymous runtime cleanup failed:', error));
 }
 
-export async function cleanupStaleSessionRuntimes(disposeFn) {
+export async function cleanupStaleSessionRuntimes(disposeFn, { waitForDisposal = true } = {}) {
   const now = Date.now();
+  const disposals = [];
   for (const [sessionId, runtime] of runtimesBySessionId.entries()) {
     if (runtime.closed) {
-      runtimesBySessionId.delete(sessionId);
+      if (!runtime.disposePromise || runtime.disposeSettled) removeRuntime(runtime);
       continue;
     }
     const reason = getRuntimeDisposalReason(runtime, now, SESSION_RUNTIME_MAX_IDLE_MS);
     if (reason) {
       console.log(`[DAEMON] Disposing stale session runtime ${sessionId} (${describeDisposal(reason, runtime, now)})`);
-      await disposeFn(runtime);
+      disposals.push(Promise.resolve(disposeFn(runtime)));
     }
   }
+  if (waitForDisposal) await Promise.all(disposals);
+  else for (const disposal of disposals) disposal.catch(error => console.error('[DAEMON] Session runtime cleanup failed:', error));
 }
 
 export function setActiveTurnRuntime(runtime) {

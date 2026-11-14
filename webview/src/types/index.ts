@@ -107,6 +107,7 @@ export interface ClaudeMessage {
 }
 
 export interface CodexHistoryPageInfo {
+  transitionToken?: string;
   pageId: string;
   sessionId: string;
   mode: 'replace' | 'prepend';

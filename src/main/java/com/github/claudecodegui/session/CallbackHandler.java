@@ -51,6 +51,12 @@ public class CallbackHandler {
         }
     }
 
+    public void notifySessionIdReceived(String sessionId, String transitionToken) {
+        if (callback != null) {
+            callback.onSessionIdReceived(sessionId, transitionToken);
+        }
+    }
+
     /**
      * Notify of a permission request.
      */

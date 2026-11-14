@@ -26,6 +26,8 @@ export function ChatInputBoxFooter({
   currentProvider,
   codexNativeAutoReviewAvailable = true,
   reasoningEffort,
+  claudeUltracode,
+  onClaudeUltracodeChange,
   codexFastMode,
   dshPreset,
   ompApprovalMode,
@@ -69,6 +71,8 @@ export function ChatInputBoxFooter({
   currentProvider: string;
   codexNativeAutoReviewAvailable?: boolean;
   reasoningEffort: ReasoningEffort;
+  claudeUltracode?: boolean;
+  onClaudeUltracodeChange?: (enabled: boolean) => void;
   codexFastMode?: CodexFastMode;
   dshPreset?: string;
   ompApprovalMode?: OmpApprovalMode;
@@ -130,6 +134,8 @@ export function ChatInputBoxFooter({
         currentProvider={currentProvider}
         codexNativeAutoReviewAvailable={codexNativeAutoReviewAvailable}
         reasoningEffort={reasoningEffort}
+        claudeUltracode={claudeUltracode}
+        onClaudeUltracodeChange={onClaudeUltracodeChange}
         codexFastMode={codexFastMode}
         dshPreset={dshPreset}
         ompApprovalMode={ompApprovalMode}

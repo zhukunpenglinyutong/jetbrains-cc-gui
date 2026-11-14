@@ -144,7 +144,8 @@ public class CustomModelPricingHandler extends BaseMessageHandler {
             return;
         }
         int maxTokens = ModelProviderHandler.resolveContextLimit(
-                provider, context.getCurrentModel(), ModelProviderHandler.sessionCwd(context));
+                provider, context.getCurrentModel(), ModelProviderHandler.sessionCwd(context), context.getSession() == null ? null
+                        : context.getSession().getState().getRuntimeSupplierId(provider));
         usagePushService.pushUsageUpdateAfterModelChange(maxTokens);
     }
 

@@ -77,6 +77,28 @@ class ClaudeProcessInvoker {
             String reasoningEffort,
             MessageCallback callback
     ) {
+        return sendMessage(channelId, message, sessionId, runtimeSessionEpoch, cwd,
+                attachments, permissionMode, model, openedFiles, agentPrompt, streaming,
+                disableThinking, reasoningEffort, false, callback);
+    }
+
+    CompletableFuture<SDKResult> sendMessage(
+            String channelId,
+            String message,
+            String sessionId,
+            String runtimeSessionEpoch,
+            String cwd,
+            List<ClaudeSession.Attachment> attachments,
+            String permissionMode,
+            String model,
+            JsonObject openedFiles,
+            String agentPrompt,
+            Boolean streaming,
+            Boolean disableThinking,
+            String reasoningEffort,
+            boolean ultracode,
+            MessageCallback callback
+    ) {
         AtomicBoolean errorAlreadyReported = new AtomicBoolean(false);
         return CompletableFuture.supplyAsync(() -> {
             SDKResult result = new SDKResult();
@@ -113,7 +135,8 @@ class ClaudeProcessInvoker {
                         agentPrompt,
                         streaming,
                         disableThinking,
-                        reasoningEffort
+                        reasoningEffort,
+                        ultracode
                 );
                 stdinInput.addProperty("executionScope", callback.executionScope());
                 String stdinJson = gson.toJson(stdinInput);
@@ -208,7 +231,7 @@ class ClaudeProcessInvoker {
                 callback.onError(e.getMessage());
                 return result;
             }
-        }).exceptionally(ex -> {
+        }, ClaudeSDKBridge.claudeExecutor()).exceptionally(ex -> {
             if (errorAlreadyReported.get()) {
                 log.debug("[ProcessInvoker] Skipping duplicate onError in exceptionally (already reported by catch)");
                 return new SDKResult();
