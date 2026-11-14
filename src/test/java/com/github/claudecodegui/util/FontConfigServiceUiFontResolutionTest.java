@@ -1,10 +1,12 @@
 package com.github.claudecodegui.util;
 
+import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import org.junit.Test;
 
 import java.io.InputStream;
+import java.io.IOException;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -17,6 +19,69 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class FontConfigServiceUiFontResolutionTest {
+
+    /** Verifies that the existing startup font payload carries the persisted global scale. */
+    @Test
+    public void shouldIncludeFontSizeLevelInStartupUiFontConfig() {
+        CodemossSettingsService settings = new CodemossSettingsService() {
+            /** Supplies the persisted UI typography without touching user configuration. */
+            @Override
+            public JsonObject getUiFontConfig() {
+                return new JsonObject();
+            }
+
+            /** Supplies the persisted scale without touching user configuration. */
+            @Override
+            public Integer getFontSizeLevel() {
+                return 6;
+            }
+        };
+        assertEquals(6, FontConfigService.getResolvedUiFontConfig(settings).get("fontSizeLevel").getAsInt());
+    }
+
+    /** Preserves a valid scale when the separate font-family setting cannot be read. */
+    @Test
+    public void shouldRestoreFontSizeWhenUiFontReadFails() {
+        CodemossSettingsService settings = new CodemossSettingsService() {
+            /** Simulates an unavailable font-family preference. */
+            @Override
+            public JsonObject getUiFontConfig() throws IOException {
+                throw new IOException("UI typography is unavailable");
+            }
+
+            /** Supplies a scale that remains independently readable. */
+            @Override
+            public Integer getFontSizeLevel() {
+                return 5;
+            }
+        };
+        assertEquals(5, FontConfigService.getResolvedUiFontConfig(settings).get("fontSizeLevel").getAsInt());
+    }
+
+    /** Keeps the chosen font family when scale recovery fails and avoids treating failure as an unset preference. */
+    @Test
+    public void shouldPreserveUiFontWhenFontSizeReadFails() {
+        CodemossSettingsService settings = new CodemossSettingsService() {
+            /** Supplies a custom font choice that must survive the unrelated scale failure. */
+            @Override
+            public JsonObject getUiFontConfig() {
+                JsonObject config = new JsonObject();
+                config.addProperty("mode", "customFile");
+                config.addProperty("customFontPath", "/tmp/cc-gui-unavailable-custom-font.ttf");
+                return config;
+            }
+
+            /** Simulates a failed scale read independently of font-family resolution. */
+            @Override
+            public Integer getFontSizeLevel() throws IOException {
+                throw new IOException("Scale is unavailable");
+            }
+        };
+        JsonObject resolved = FontConfigService.getResolvedUiFontConfig(settings);
+        assertEquals("customFile", resolved.get("mode").getAsString());
+        assertEquals("/tmp/cc-gui-unavailable-custom-font.ttf", resolved.get("customFontPath").getAsString());
+        assertFalse(resolved.has("fontSizeLevel"));
+    }
 
     @Test
     public void shouldResolveCodeFollowEditorModeUsingEditorTypography() throws Exception {
@@ -210,7 +275,7 @@ public class FontConfigServiceUiFontResolutionTest {
 
     private Path createLargeFontLikeFile() throws Exception {
         Path fontFile = Files.createTempFile("large-ui-font", ".ttf");
-        try (InputStream inputStream = getClass().getResourceAsStream("/libs/codicon.ttf")) {
+        try (InputStream inputStream = getClass().getResourceAsStream("/fonts/codicon.ttf")) {
             assertNotNull("Test font resource should exist", inputStream);
             Files.write(fontFile, inputStream.readAllBytes());
         }

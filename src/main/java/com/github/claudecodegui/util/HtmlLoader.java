@@ -4,14 +4,13 @@ import com.intellij.openapi.diagnostic.Logger;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * HTML loader.
- * Handles HTML file loading and local library injection.
+ * Handles HTML file loading and IDE theme injection.
  */
 public class HtmlLoader {
 
@@ -52,12 +51,6 @@ public class HtmlLoader {
                 if (is != null) {
                     String html = new String(is.readAllBytes(), StandardCharsets.UTF_8);
 
-                    if (html.contains("<!-- LOCAL_LIBRARY_INJECTION_POINT -->")) {
-                        html = injectLocalLibraries(html);
-                    } else {
-                        LOG.info("Detected bundled modern frontend assets; no additional library injection needed");
-                    }
-
                     // Prepare the complete static page once per theme. Per-tab state is added
                     // later, after this shared result is returned.
                     html = injectIdeTheme(html, theme, bgColor);
@@ -80,7 +73,7 @@ public class HtmlLoader {
      *
      * @param html the static HTML document.
      * @param theme the IDE theme name.
-     * @param bgColor the background color to apply.
+     * @param bgColor the startup background color, used as the CSS variable fallback.
      * @return the HTML with the initial theme bootstrap.
      */
     static String injectIdeTheme(String html, String theme, String bgColor) {
@@ -90,7 +83,11 @@ public class HtmlLoader {
         int bodyTagEnd = findLastOpeningTagEnd(
                 html, "<body", htmlClosingTagStart >= 0 ? htmlClosingTagStart : html.length());
 
-        String styleAttribute = " style=\"background-color:" + bgColor + ";\"";
+        // Reference the chat background variable with the startup color as its fallback. An
+        // inline background-color outranks the stylesheet, so a plain color would pin the page
+        // root (and the area around the status panel) to the startup theme after the user picks
+        // a custom chat background.
+        String styleAttribute = " style=\"background-color:var(--bg-chat," + bgColor + ");\"";
         String scriptInjection = "\n    <script>window.__INITIAL_IDE_THEME__ = '"
                 + theme + "';</script>";
         StringBuilder result = new StringBuilder(html.length() + styleAttribute.length() * 2
@@ -171,6 +168,24 @@ public class HtmlLoader {
             String model,
             List<String> presetIds
     ) {
+        return injectInitialPageState(html, provider, model, presetIds, null);
+    }
+
+    /**
+     * Same as {@link #injectInitialPageState(String, String, String, List)}, plus the chat
+     * window's draft cache key. The key survives renderer/browser recreation and keeps each
+     * tab's unsent draft isolated; {@code null} leaves draft persistence disabled.
+     *
+     * @param draftCacheKey the stable chat-window draft key, or {@code null}.
+     * @return the HTML with all page-start state injected.
+     */
+    public String injectInitialPageState(
+            String html,
+            String provider,
+            String model,
+            List<String> presetIds,
+            String draftCacheKey
+    ) {
         try {
             String safeProvider = escapeForSingleQuotedJs(provider == null ? "" : provider);
             String safeModel = escapeForSingleQuotedJs(model == null ? "" : model);
@@ -205,6 +220,10 @@ public class HtmlLoader {
                     + "window.__INITIAL_TAB_PROVIDER__ = '" + safeProvider + "';"
                     + "window.__INITIAL_TAB_MODEL__ = '" + safeModel + "';"
                     + "</script>";
+            if (draftCacheKey != null && !draftCacheKey.isBlank()) {
+                scriptInjection += "\n    <script>window.__CCGUI_DRAFT_CACHE_KEY__ = '"
+                        + escapeForSingleQuotedJs(draftCacheKey) + "';</script>";
+            }
             int headIndex = html.indexOf("<head>");
             if (headIndex != -1) {
                 int insertPos = headIndex + "<head>".length();
@@ -256,64 +275,5 @@ public class HtmlLoader {
             "</div>" +
             "</body>" +
             "</html>";
-    }
-
-    /**
-     * Inject local library file contents into the HTML.
-     */
-    private String injectLocalLibraries(String html) {
-        try {
-            String reactJs = loadResourceAsString("/libs/react.production.min.js");
-            String reactDomJs = loadResourceAsString("/libs/react-dom.production.min.js");
-            String babelJs = loadResourceAsString("/libs/babel.min.js");
-            String markedJs = loadResourceAsString("/libs/marked.min.js");
-            String codiconCss = loadResourceAsString("/libs/codicon.css");
-
-            String fontBase64 = loadResourceAsBase64("/libs/codicon.ttf");
-            codiconCss = codiconCss.replaceAll(
-                "url\\(\"\\./codicon\\.ttf\\?[^\"]*\"\\)",
-                "url(\"data:font/truetype;base64," + fontBase64 + "\")"
-            );
-
-            StringBuilder injectedLibs = new StringBuilder();
-            injectedLibs.append("\n    <!-- React and related libraries (local versions) -->\n");
-            injectedLibs.append("    <script>/* React 18 */\n").append(reactJs).append("\n    </script>\n");
-            injectedLibs.append("    <script>/* ReactDOM 18 */\n").append(reactDomJs).append("\n    </script>\n");
-            injectedLibs.append("    <script>/* Babel Standalone */\n").append(babelJs).append("\n    </script>\n");
-            injectedLibs.append("    <script>/* Marked */\n").append(markedJs).append("\n    </script>\n");
-            injectedLibs.append("    <style>/* VS Code Codicons (with embedded font) */\n").append(codiconCss).append("\n    </style>");
-
-            html = html.replace("<!-- LOCAL_LIBRARY_INJECTION_POINT -->", injectedLibs.toString());
-
-            LOG.info("Successfully injected local libraries (React + ReactDOM + Babel + Codicons)");
-        } catch (Exception e) {
-            LOG.error("Failed to inject local libraries: " + e.getMessage());
-        }
-
-        return html;
-    }
-
-    /**
-     * Load a resource file as a string.
-     */
-    private String loadResourceAsString(String resourcePath) throws Exception {
-        try (InputStream is = resourceClass.getResourceAsStream(resourcePath)) {
-            if (is == null) {
-                throw new Exception("Resource not found: " + resourcePath);
-            }
-            return new String(is.readAllBytes(), StandardCharsets.UTF_8);
-        }
-    }
-
-    /**
-     * Load a resource file as a Base64-encoded string.
-     */
-    private String loadResourceAsBase64(String resourcePath) throws Exception {
-        try (InputStream is = resourceClass.getResourceAsStream(resourcePath)) {
-            if (is == null) {
-                throw new Exception("Resource not found: " + resourcePath);
-            }
-            return Base64.getEncoder().encodeToString(is.readAllBytes());
-        }
     }
 }

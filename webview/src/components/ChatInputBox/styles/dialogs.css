@@ -78,9 +78,15 @@
 }
 
 .file-tag-text {
+  min-width: 0;
   max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-tag-lines {
+  flex-shrink: 0;
   white-space: nowrap;
 }
 

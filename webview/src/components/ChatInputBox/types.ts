@@ -372,6 +372,16 @@ const LEGACY_CLAUDE_MODEL_ID_ALIASES: Record<string, string> = {
 };
 
 /**
+ * Ids dropped from CLAUDE_MODELS that the API still serves -> the built-in entry
+ * that replaces them. A saved built-in selection is migrated (otherwise it fails
+ * validation and resets to the Sonnet fallback), but unlike the retired table a
+ * custom model with one of these ids is not labelled "Retired".
+ */
+const DELISTED_CLAUDE_MODEL_ID_ALIASES: Record<string, string> = {
+  'claude-fable-5': 'claude-fable-5-2',
+};
+
+/**
  * Map a saved/restored Claude model id to the id that should be used now.
  *
  * Retired ids are migrated to their live replacement. Ids listed in
@@ -393,7 +403,9 @@ export function normalizeClaudeModelId(
   if (customModelIds?.has(stripped)) {
     return stripped;
   }
-  return LEGACY_CLAUDE_MODEL_ID_ALIASES[stripped] ?? stripped;
+  return LEGACY_CLAUDE_MODEL_ID_ALIASES[stripped]
+    ?? DELISTED_CLAUDE_MODEL_ID_ALIASES[stripped]
+    ?? stripped;
 }
 
 /**
@@ -413,14 +425,14 @@ export function isRetiredClaudeModelId(modelId: string | undefined | null): bool
  */
 export const CLAUDE_MODELS: ModelInfo[] = [
   {
-    id: 'claude-fable-5-1',
-    label: 'Fable 5.1',
-    description: 'Fable 5.1 · Most powerful · Mythos-class',
+    id: 'claude-fable-5-2',
+    label: 'Fable 5.2',
+    description: 'Fable 5.2 · Most powerful · Mythos-class',
   },
   {
-    id: 'claude-fable-5',
-    label: 'Fable 5',
-    description: 'Fable 5 · Previous Fable generation',
+    id: 'claude-fable-5-1',
+    label: 'Fable 5.1',
+    description: 'Fable 5.1 · Previous Fable generation',
   },
   {
     id: 'claude-opus-5-5',
@@ -662,6 +674,58 @@ export const isValidDshPreset = (value: unknown): value is DshPreset =>
   && (DSH_PRESETS.some((preset) => preset.id === value)
     || getUserDshPresetOptions().some((preset) => preset.id === value));
 
+/** OMP approval mode: `default` defers to OMP's own `tools.approvalMode` setting. */
+export type OmpApprovalMode = 'default' | 'always-ask' | 'write' | 'yolo';
+
+export const OMP_APPROVAL_DEFAULT: OmpApprovalMode = 'default';
+
+export interface OmpApprovalOption {
+  id: OmpApprovalMode;
+  labelKey: string;
+  descriptionKey: string;
+  label: string;
+  description: string;
+  icon: string;
+}
+
+export const OMP_APPROVAL_OPTIONS: OmpApprovalOption[] = [
+  {
+    id: 'default',
+    labelKey: 'ompApprovals.default.label',
+    descriptionKey: 'ompApprovals.default.description',
+    label: 'Default',
+    description: "Full auto unless OMP's tools.approvalMode is set",
+    icon: 'codicon-circle-outline',
+  },
+  {
+    id: 'always-ask',
+    labelKey: 'ompApprovals.alwaysAsk.label',
+    descriptionKey: 'ompApprovals.alwaysAsk.description',
+    label: 'Ask',
+    description: 'Asks before edits and commands',
+    icon: 'codicon-shield',
+  },
+  {
+    id: 'write',
+    labelKey: 'ompApprovals.write.label',
+    descriptionKey: 'ompApprovals.write.description',
+    label: 'Auto-approve edits',
+    description: 'Asks only before commands',
+    icon: 'codicon-edit',
+  },
+  {
+    id: 'yolo',
+    labelKey: 'ompApprovals.yolo.label',
+    descriptionKey: 'ompApprovals.yolo.description',
+    label: 'Full auto',
+    description: 'Never asks',
+    icon: 'codicon-rocket',
+  },
+];
+
+export const isValidOmpApprovalMode = (value: unknown): value is OmpApprovalMode =>
+  OMP_APPROVAL_OPTIONS.some((option) => option.id === value);
+
 /** MiniMax Code default: omit `--model` so the CLI resolves its own default. */
 export const MINIMAX_DEFAULT_MODEL_ID = 'auto';
 
@@ -722,8 +786,6 @@ export interface ProviderInfo {
   label: string;
   icon: string;
   enabled: boolean;
-  /** When true, show a Beta badge and first-click notice dialog. */
-  beta?: boolean;
 }
 
 /**
@@ -732,14 +794,14 @@ export interface ProviderInfo {
 export const AVAILABLE_PROVIDERS: ProviderInfo[] = [
   { id: 'claude', label: 'Claude Code', icon: 'codicon-terminal', enabled: true },
   { id: 'codex', label: 'Codex', icon: 'codicon-terminal', enabled: true },
-  { id: 'grok', label: 'Grok CLI', icon: 'codicon-terminal', enabled: true, beta: true },
-  { id: 'kimi', label: 'Kimi CLI', icon: 'codicon-terminal', enabled: true, beta: true },
-  { id: 'opencode', label: 'OpenCode', icon: 'codicon-terminal', enabled: true, beta: true },
-  { id: 'pi', label: 'PI CLI', icon: 'codicon-terminal', enabled: true, beta: true },
-  { id: 'omp', label: 'OMP CLI', icon: 'codicon-terminal', enabled: true, beta: true },
-  { id: 'dsh', label: 'DeepSeek Harness', icon: 'codicon-terminal', enabled: true, beta: true },
-  { id: 'minimax', label: 'MiniMax Code', icon: 'codicon-terminal', enabled: true, beta: true },
-  { id: 'zcode', label: 'ZCode', icon: 'codicon-terminal', enabled: true, beta: true },
+  { id: 'grok', label: 'Grok CLI', icon: 'codicon-terminal', enabled: true },
+  { id: 'kimi', label: 'Kimi CLI', icon: 'codicon-terminal', enabled: true },
+  { id: 'opencode', label: 'OpenCode', icon: 'codicon-terminal', enabled: true },
+  { id: 'pi', label: 'PI CLI', icon: 'codicon-terminal', enabled: true },
+  { id: 'omp', label: 'OMP CLI', icon: 'codicon-terminal', enabled: true },
+  { id: 'dsh', label: 'DeepSeek Harness', icon: 'codicon-terminal', enabled: true },
+  { id: 'minimax', label: 'MiniMax Code', icon: 'codicon-terminal', enabled: true },
+  { id: 'zcode', label: 'ZCode', icon: 'codicon-terminal', enabled: true },
 ];
 
 /**
@@ -747,6 +809,7 @@ export const AVAILABLE_PROVIDERS: ProviderInfo[] = [
  * Based on: https://code.claude.com/docs/en/model-config#adjust-effort-level
  */
 export const EFFORT_SUPPORTED_CLAUDE_MODELS = new Set([
+  'claude-fable-5-2',
   'claude-fable-5-1',
   'claude-fable-5',
   'claude-opus-5-5',
@@ -764,6 +827,7 @@ export const EFFORT_SUPPORTED_CLAUDE_MODELS = new Set([
  * Claude models that additionally support the 'xhigh' effort level.
  */
 export const XHIGH_EFFORT_CLAUDE_MODELS = new Set([
+  'claude-fable-5-2',
   'claude-fable-5-1',
   'claude-fable-5',
   'claude-opus-5-5',
@@ -775,6 +839,7 @@ export const XHIGH_EFFORT_CLAUDE_MODELS = new Set([
  * Claude models that support the 'max' effort level.
  */
 export const MAX_EFFORT_CLAUDE_MODELS = new Set([
+  'claude-fable-5-2',
   'claude-fable-5-1',
   'claude-fable-5',
   'claude-opus-5-5',
@@ -893,6 +958,24 @@ export interface ChatInputBoxHandle {
   hasContent: () => boolean;
   /** Get file tags from input (for Codex context injection) */
   getFileTags: () => FileTagInfo[];
+  /** Get the draft attachments currently staged on the input */
+  getAttachments: () => Attachment[];
+  /**
+   * Replace the draft attachments (used to restore a queued message for
+   * editing). Returns false when attachments are externally controlled, so the
+   * caller can tell the user that nothing was restored.
+   */
+  setAttachments: (attachments: Attachment[]) => boolean;
+  /**
+   * Whether `setAttachments` can take attachments at all — false when the
+   * parent owns them. Lets a caller vet a restore before it removes anything.
+   */
+  canApplyAttachments: () => boolean;
+  /**
+   * Whether a pasted image is still on its way into the draft. `setValue`
+   * cancels such a paste, so a caller that merges into the draft waits first.
+   */
+  hasPendingImagePastes: () => boolean;
 }
 
 // ============================================================
@@ -971,6 +1054,10 @@ export interface ChatInputBoxProps {
   onCodexFastModeChange?: (mode: CodexFastMode) => void;
   /** Switch DSH agent preset callback */
   onDshPresetChange?: (preset: string) => void;
+  /** OMP approval mode */
+  ompApprovalMode?: OmpApprovalMode;
+  /** Switch OMP approval mode callback */
+  onOmpApprovalModeChange?: (mode: OmpApprovalMode) => void;
   /** Toggle thinking mode */
   onToggleThinking?: (enabled: boolean) => void;
   /** Whether streaming is enabled */
@@ -1023,6 +1110,11 @@ export interface ChatInputBoxProps {
   messageQueue?: QueuedMessage[];
   /** Remove message from queue callback */
   onRemoveFromQueue?: (id: string) => void;
+  /**
+   * Edit queued message callback: removes the message from the queue and
+   * restores its content and attachments into the input draft.
+   */
+  onEditFromQueue?: (id: string) => void;
   /** Reorder message queue callback (orderedIds[0] executes first) */
   onReorderQueue?: (orderedIds: string[]) => void;
 
@@ -1062,6 +1154,8 @@ export interface ButtonAreaProps {
   codexFastMode?: CodexFastMode;
   /** DSH agent preset */
   dshPreset?: string;
+  /** OMP approval mode */
+  ompApprovalMode?: OmpApprovalMode;
 
   // Event callbacks
   onSubmit?: () => void;
@@ -1075,6 +1169,8 @@ export interface ButtonAreaProps {
   onCodexFastModeChange?: (mode: CodexFastMode) => void;
   /** Switch DSH agent preset callback */
   onDshPresetChange?: (preset: string) => void;
+  /** Switch OMP approval mode callback */
+  onOmpApprovalModeChange?: (mode: OmpApprovalMode) => void;
   /** Enhance prompt callback */
   onEnhancePrompt?: () => void;
   /** Whether always thinking enabled */

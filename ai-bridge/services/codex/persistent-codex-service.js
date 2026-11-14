@@ -1,3 +1,6 @@
+import favoritesService from '../favorites-service.cjs';
+import { applyCodexFavorites, readFavoriteCodexThreads } from './codex-history-metadata.js';
+import { filterAvailableCodexThreads } from './codex-history-availability.js';
 /**
  * Persistent Codex runtime service (daemon mode).
  *
@@ -33,10 +36,11 @@ import { join } from 'node:path';
 import { CodexPrivacyIndex } from './codex-privacy-index.js';
 import { readNativeHistoryPage } from './codex-native-history.js';
 import { createNativeHistoryCounter } from './codex-history-message-count.js';
+import { readCodexSessionEdits } from './codex-session-edits.js';
 import { readNativeSubagent } from './codex-native-subagents.js';
 import { projectCodexItemMessages } from './codex-item-projection.js';
 import { isGuardianReviewThread } from './codex-thread-visibility.js';
-import { settleCodexSessionTitle } from './codex-session-title.js';
+import { settleCodexSessionTitle, readCodexCustomTitles, applyCodexCustomTitles } from './codex-session-title.js';
 import { generateCodexText } from './codex-text-service.js';
 import { prepareCodexRuntimeEnvironment } from './codex-native-runtime-env.js';
 
@@ -317,7 +321,15 @@ function getServiceOrNull(stdinData) {
 // Operation settings assembly
 // =============================================================================
 
-function buildTurnSettings(stdinData) {
+/**
+ * Translate one turn's stdin payload into native app-server settings.
+ *
+ * Exported because this mapping is the contract the webview mirrors when it
+ * derives an access scope from the permission mode: Full Auto means
+ * danger-full-access + `never` on every platform. Divergence here is what made
+ * a Full Auto session run sandboxed, so the mapping is pinned by tests.
+ */
+export function buildTurnSettings(stdinData) {
   const settings = {};
   const permissionMode = typeof stdinData?.permissionMode === 'string'
     ? stdinData.permissionMode.trim() : '';
@@ -464,7 +476,7 @@ export async function codexSendPersistent(stdinData, { titleDependencies = {}, n
     threadId: stdinData?.threadId || null,
     clientMessageId,
     settings: buildTurnSettings(stdinData) ?? undefined,
-    markerPayload: { input: buildNativeInput(stdinData) },
+    markerPayload: { input: buildNativeInput(stdinData), additionalContext: stdinData?.additionalContext },
   });
   // Capture the marker emitter so legacy markers carry this operation's
   // identity even while background events flow through the process channel.
@@ -620,7 +632,7 @@ async function codexReadOnlyPersistent(method, stdinData = {}) {
   return await service.readOnly(method, params);
 }
 
-export async function codexListThreadsPersistent(stdinData) {
+export async function codexListThreadsPersistent(stdinData, { loadFavorites = favoritesService.loadFavorites } = {}) {
   const projectPath = stdinData?.params?.projectPath ?? stdinData?.cwd;
   const params = {
     cwd: null,
@@ -630,8 +642,31 @@ export async function codexListThreadsPersistent(stdinData) {
     ...stdinData?.params,
   };
   delete params.projectPath;
-  const result = await codexReadOnlyPersistent('thread/list', { ...stdinData, params });
-  return { ...result, data: filterCodexProjectThreads(result.data, projectPath) };
+  const requestedCursor = params.cursor ?? stdinData.cursor;
+  let result;
+  let threads;
+  const visited = new Set();
+  do {
+    result = await codexReadOnlyPersistent('thread/list', { ...stdinData, params });
+    threads = await filterAvailableCodexThreads(result.data ?? []);
+    if (threads.length > 0 || result.nextCursor == null || visited.has(result.nextCursor)) break;
+    visited.add(result.nextCursor);
+    params.cursor = result.nextCursor;
+  } while (true);
+  const favorites = loadFavorites();
+  const { service } = ensureSessionService(stdinData);
+  const saved = requestedCursor == null ? await readFavoriteCodexThreads({
+    owner: service,
+    scope: JSON.stringify({ projectPath, generation: service.runtimeGeneration, params: { ...params, cursor: undefined } }),
+    firstPage: { ...result, data: threads }, favorites,
+    matchProject: rows => filterCodexProjectThreads(rows, projectPath),
+    readPage: cursor => codexReadOnlyPersistent('thread/list', { ...stdinData, params: { ...params, cursor } }),
+  }) : [];
+  // A favorite catalog can outlive its rollout; recheck cached rows as well.
+  const merged = [...new Map([...saved, ...threads].map(thread => [thread.id, thread])).values()];
+  const available = await filterAvailableCodexThreads(merged);
+  return { ...result, data: applyCodexCustomTitles(applyCodexFavorites(
+    filterCodexProjectThreads(available, projectPath), favorites), await readCodexCustomTitles()) };
 }
 
 /** Counts history independently so listing metadata never waits for full transcripts. */
@@ -704,19 +739,39 @@ export async function codexReadSubagentPersistent(stdinData) {
 
 export async function codexReadThreadPersistent(stdinData) {
   const { fileChangesOnly, ...params } = stdinData?.params ?? {};
+  if (fileChangesOnly === true) {
+    const { service } = ensureSessionService(stdinData);
+    let generation = null;
+    let client = null;
+    const assertOwner = () => {
+      if (retiredSessionServices.has(service) || generation !== null && (service.runtimeGeneration !== generation
+          || service.client !== client || ['failed', 'stopped', 'draining'].includes(service.state))) {
+        throw new Error('Native session-edits runtime changed; retry the read');
+      }
+    };
+    return await readCodexSessionEdits(async (method, nativeParams) => {
+      assertOwner();
+      await service.ensureRuntime();
+      if (generation === null) { generation = service.runtimeGeneration; client = service.client; }
+      assertOwner();
+      const response = await service.readOnly(method, nativeParams);
+      assertOwner();
+      return response;
+    }, { threadId: stdinData.threadId ?? params.threadId });
+  }
   const result = await codexReadOnlyPersistent('thread/read', { ...stdinData, params });
   if (params.includeTurns !== true || !result?.thread) return result;
   const fileChangeMessages = projectThreadFileChanges(result.thread);
-  // Avoid copying the command transcript merely to populate the file list.
-  return fileChangesOnly ? { thread: { id: result.thread?.id,
-    ...(result.thread?.name ? { name: result.thread.name } : {}) }, fileChangeMessages } : { ...result, fileChangeMessages };
+  return { ...result, fileChangeMessages };
 }
 
 /** Keeps the edit ledger independent of the visible conversation's pagination. */
 export function projectThreadFileChanges(thread) {
   return (thread?.turns ?? []).flatMap(turn => (turn.items ?? [])
     .filter(item => item.type === 'fileChange' || item.type === 'file_change')
-    .flatMap(item => projectCodexItemMessages(item, { threadId: thread.id, turnId: turn.id, authoritative: true })));
+    .flatMap(item => projectCodexItemMessages(item, { threadId: thread.id, turnId: turn.id, authoritative: true }))
+    // This endpoint is a snapshot ledger, while chat/history also need the paired tool receipts.
+    .filter(message => message.type === 'assistant'));
 }
 
 export async function codexListModelsPersistent(stdinData) {
@@ -735,29 +790,46 @@ export async function codexReloadMcpPersistent(stdinData) {
   return await codexReadOnlyPersistent('config/mcpServer/reload', stdinData);
 }
 
-/** Control operation (bypasses queue): reply to a native interaction. */
-export async function codexRespondInteractionPersistent(stdinData) {
+/**
+ * A reply that can never be delivered: the request was already answered, the
+ * thread released it, or its runtime is gone. Hosts must not ask the user to
+ * answer again — the code tells them apart from a correctable rejection.
+ */
+function interactionNotPending(message) {
+  const error = new Error(message);
+  error.code = 'INTERACTION_NOT_PENDING';
+  return error;
+}
+
+/** The runtime that still waits for {@code stdinData.rpcId}, or a not-pending error. */
+function serviceAwaitingReply(stdinData) {
   const service = getServiceOrNull(stdinData);
   if (!service) {
-    throw new Error('codex runtime is not connected for this session');
+    throw interactionNotPending('codex runtime is not connected for this session');
   }
-  const replied = service.respondInteraction(stdinData.rpcId, stdinData.result ?? {});
+  if (!service.hasPendingInteraction(stdinData.rpcId)) {
+    throw interactionNotPending('Codex is no longer waiting for this answer');
+  }
+  return service;
+}
+
+/** Control operation (bypasses queue): reply to a native interaction. */
+export async function codexRespondInteractionPersistent(stdinData) {
+  const service = serviceAwaitingReply(stdinData);
+  const replied = await service.respondInteraction(stdinData.rpcId, stdinData.result ?? {});
   if (!replied) {
     const error = new Error('invalid native Codex interaction result');
     error.code = 'INVALID_INTERACTION_RESULT';
     throw error;
   }
-  return { replied: true };
+  return typeof replied === 'object' ? replied : { replied: true };
 }
 
 /** Control operation (bypasses queue): typed error reply. */
 export async function codexRespondInteractionErrorPersistent(stdinData) {
-  const service = getServiceOrNull(stdinData);
-  if (!service) {
-    throw new Error('codex runtime is not connected for this session');
-  }
+  const service = serviceAwaitingReply(stdinData);
   if (!service.respondInteractionError(stdinData.rpcId, stdinData.code, stdinData.message)) {
-    throw new Error('Unknown or stale Codex interaction');
+    throw interactionNotPending('Unknown or stale Codex interaction');
   }
   return { replied: true };
 }
@@ -833,6 +905,11 @@ export async function codexReleaseThreadPersistent(stdinData) {
     return { released: null };
   }
   const entry = sessionServices.get(sessionKeyOf(stdinData));
+  const onlyIfIdle = stdinData?.onlyIfIdle === true;
+  // Reject before changing registry/count/title ownership. A busy channel must
+  // remain available to its active turn and to a later, non-destructive retry.
+  if (onlyIfIdle) service.assertIdleForRelease();
+  const releasing = service.releaseThread(stdinData?.threadId || null, { onlyIfIdle });
   entry?.titleAbort?.abort();
   // An in-flight count must not keep paging (or cold-start) a runtime this
   // release is retiring; release does not bump the runtime generation, so the
@@ -840,7 +917,7 @@ export async function codexReleaseThreadPersistent(stdinData) {
   nativeHistoryCounters.delete(service);
   retiredSessionServices.add(service);
   try {
-    return await service.releaseThread(stdinData?.threadId || null);
+    return await releasing;
   } finally {
     await entry?.titleTask;
     if (sessionServices.get(sessionKeyOf(stdinData))?.service === service) sessionServices.delete(sessionKeyOf(stdinData));

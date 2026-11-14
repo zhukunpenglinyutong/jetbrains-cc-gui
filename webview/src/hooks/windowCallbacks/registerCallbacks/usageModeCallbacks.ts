@@ -166,6 +166,7 @@ export function registerUsageModeCallbacks(options: UseWindowCallbacksOptions): 
     window.applyBackendTabState(pending);
   }
 
+  const providerEventDispatcher = window.updateActiveProvider;
   window.updateActiveProvider = (jsonStr: string) => {
     try {
       const provider = JSON.parse(jsonStr);
@@ -174,6 +175,17 @@ export function registerUsageModeCallbacks(options: UseWindowCallbacksOptions): 
       setActiveProviderConfig(provider);
     } catch (error) {
       console.error('[Frontend] Failed to parse active provider in App:', error);
+    }
+    // Forward to the runtime-provider dispatcher installed at bootstrap so
+    // subscribeActiveProvider listeners (RuntimeProviderSelect,
+    // useClaudePlanUsage, …) keep receiving updates — replacing it here would
+    // silence the whole subscriber registry.
+    if (providerEventDispatcher) {
+      try {
+        providerEventDispatcher(jsonStr);
+      } catch (error) {
+        console.error('[Frontend] Active provider dispatcher failed:', error);
+      }
     }
   };
 

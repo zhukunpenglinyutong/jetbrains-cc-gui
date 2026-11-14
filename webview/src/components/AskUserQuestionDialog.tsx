@@ -15,6 +15,8 @@ import './AskUserQuestionDialog.css';
 export interface QuestionOption {
   label: string;
   description: string;
+  /** Checked when the dialog opens, like a form's preselected checkbox. */
+  selected?: boolean;
 }
 
 /** Presentation intent a capable UI may recognise (DSH `plan-review` today). */
@@ -33,6 +35,8 @@ export interface Question {
   /** Optional MCP form fields may be left blank. */
   required?: boolean;
   isSecret?: boolean;
+  /** Only the listed options are valid answers: no "Other" row and no free text. */
+  choiceOnly?: boolean;
   /**
    * Supporting detail rendered with the question but kept out of the option
    * labels — DSH carries the plan under review here, so dropping it left the
@@ -46,7 +50,7 @@ export interface AskUserQuestionRequest {
   requestId: string;
   toolName: string;
   questions: Question[];
-  provider?: 'claude' | 'codex' | 'dsh' | 'grok';
+  provider?: 'claude' | 'codex' | 'dsh' | 'grok' | 'omp';
   /** Native Codex request may be visible without blocking the active turn. */
   isBlocking?: boolean;
   deadlineMs?: number;
@@ -82,6 +86,7 @@ const AskUserQuestionDialog = ({
 }: AskUserQuestionDialogProps) => {
   const { t } = useTranslation();
   const customInputRef = useRef<HTMLTextAreaElement>(null);
+  const timeoutEnabled = request?.isBlocking !== false;
 
   const handleTimeout = useCallback(() => {
     if (request) {
@@ -95,6 +100,7 @@ const AskUserQuestionDialog = ({
     requestKey: request?.dialogToken ?? request?.requestId,
     timeoutSeconds,
     deadlineMs: request?.deadlineMs,
+    timeoutEnabled,
     onTimeout: handleTimeout,
   });
 
@@ -102,13 +108,16 @@ const AskUserQuestionDialog = ({
   const isCodexRequest = request?.provider === 'codex' || request?.toolName === 'request_user_input';
   const isDshRequest = request?.provider === 'dsh';
   const isGrokRequest = request?.provider === 'grok';
+  const isOmpRequest = request?.provider === 'omp';
   const dialogTitle = isGrokRequest
     ? t('askUserQuestion.grokTitle', 'Grok has some questions for you')
-    : isDshRequest
-      ? t('askUserQuestion.dshTitle', 'DeepSeek Harness 有一些问题想问你')
-      : isCodexRequest
-        ? t('askUserQuestion.codexTitle', 'Codex 有一些问题想问你')
-        : t('askUserQuestion.title', 'Claude 有一些问题想问你');
+    : isOmpRequest
+      ? t('askUserQuestion.ompTitle', 'OMP has some questions for you')
+      : isDshRequest
+        ? t('askUserQuestion.dshTitle', 'DeepSeek Harness 有一些问题想问你')
+        : isCodexRequest
+          ? t('askUserQuestion.codexTitle', 'Codex 有一些问题想问你')
+          : t('askUserQuestion.title', 'Claude 有一些问题想问你');
 
   const handleCancel = useCallback(() => {
     if (request && markSubmitted()) {
@@ -197,6 +206,7 @@ const AskUserQuestionDialog = ({
             remainingSeconds={remainingSeconds}
             isTimeWarning={isTimeWarning}
             question={currentQuestion}
+            showCountdown={timeoutEnabled}
             selectedLabels={currentAnswerSet}
             customInput={currentCustomInput}
             customInputRef={customInputRef}

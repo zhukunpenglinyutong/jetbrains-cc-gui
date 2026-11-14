@@ -33,6 +33,7 @@ interface SdkCardProps {
   onInstall: () => void;
   onUpdate: () => void;
   onUninstall: () => void;
+  onRetryVersions: () => void;
 }
 
 const SdkCard = ({
@@ -50,9 +51,15 @@ const SdkCard = ({
   onInstall,
   onUpdate,
   onUninstall,
+  onRetryVersions,
 }: SdkCardProps) => {
   const { t } = useTranslation();
   const installed = info?.status === 'installed';
+  const queryError = versionInfo?.error ?? '';
+  const versionErrorKey = /: (EPERM|EACCES)$/.test(queryError) ? 'versionCacheAccessError'
+    : queryError === 'NPM_QUERY_TIMEOUT' ? 'versionQueryTimeout'
+    : /: (ENOTFOUND|EAI_AGAIN|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EHOSTUNREACH|ENETUNREACH)$/.test(queryError) ? 'versionQueryNetworkError'
+    : 'versionQueryFailed';
   const versionOptions = buildVersionOptions({
     availableVersions: versionInfo?.versions,
     fallbackVersions: versionInfo?.fallbackVersions,
@@ -119,13 +126,17 @@ const SdkCard = ({
               {info?.installedVersion && (
                 <span>{t('settings.dependency.installedVersion', { version: `v${info.installedVersion}` })}</span>
               )}
-              {versionInfo?.latestVersion && (
+              {versionInfo?.source === 'remote' && versionInfo.latestVersion && (
                 <span>{t('settings.dependency.latestStableVersion', { version: `v${versionInfo.latestVersion}` })}</span>
               )}
             </div>
             {versionInfo?.source === 'fallback' && (
               <div className={styles.versionHint}>
-                {t('settings.dependency.versionSourceFallback')}
+                <div>{t('settings.dependency.versionSourceFallback')}</div>
+                <div>{t(`settings.dependency.${versionErrorKey}`)}</div>
+                <button type="button" className={styles.retryButton} onClick={onRetryVersions} disabled={isVersionLoading || isAnyOperationInProgress}>
+                  {t('settings.cli.retry')}
+                </button>
               </div>
             )}
             {installed && action === 'rollback' && (

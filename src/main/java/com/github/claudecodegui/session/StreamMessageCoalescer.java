@@ -809,9 +809,8 @@ public class StreamMessageCoalescer {
                 || previous.type == current.type
                 && previous.timestamp == current.timestamp
                 && Objects.equals(previous.content, current.content)
-                && Objects.equals(
-                        computeMessageStructuralSignature(previous.raw),
-                        computeMessageStructuralSignature(current.raw));
+                // Scheduling may ignore text deltas, but suffix transport must include every raw correction.
+                && Objects.equals(previous.raw, current.raw);
     }
 
     /**

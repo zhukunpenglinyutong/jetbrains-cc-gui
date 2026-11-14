@@ -77,6 +77,32 @@ describe('useSettingsBasicActions', () => {
     expect(localStorage.getItem(EDIT_GROUP_COLLAPSED_KEY)).toBeNull();
   });
 
+  it('updates the startup history loading preference and sends it to Java', () => {
+    const { result } = renderHook(() => useSettingsBasicActions({}));
+
+    act(() => {
+      result.current.handleLoadHistoryOnStartupChange(true);
+    });
+
+    expect(result.current.loadHistoryOnStartup).toBe(true);
+    expect(window.sendToJava).toHaveBeenCalledWith(
+      `set_load_history_on_startup:${JSON.stringify({ loadHistoryOnStartup: true })}`
+    );
+  });
+
+  it('clamps and sends the startup history timeout', () => {
+    const { result } = renderHook(() => useSettingsBasicActions({}));
+
+    act(() => {
+      result.current.handleHistoryLoadTimeoutChange(999);
+    });
+
+    expect(result.current.historyLoadTimeoutSeconds).toBe(120);
+    expect(window.sendToJava).toHaveBeenCalledWith(
+      `set_history_load_timeout:${JSON.stringify({ historyLoadTimeoutSeconds: 120 })}`
+    );
+  });
+
   it('updates commit AI provider without mutating prompt enhancer state', () => {
     const { result } = renderHook(() => useSettingsBasicActions({}));
 
@@ -331,4 +357,19 @@ describe('useSettingsBasicActions', () => {
 
     expect(window.sendToJava).not.toHaveBeenCalled();
   });
+});
+
+
+it('persists the opt-in Git repository history preference through the Java bridge', () => {
+  const previousBridge = window.sendToJava;
+  window.sendToJava = vi.fn();
+  const hook = renderHook(() => useSettingsBasicActions({}));
+  expect(hook.result.current.sessionGitRepositoryMatchingEnabled).toBe(false);
+  act(() => hook.result.current.handleSessionGitRepositoryMatchingEnabledChange(true));
+  expect(hook.result.current.sessionGitRepositoryMatchingEnabled).toBe(true);
+  expect(window.sendToJava).toHaveBeenLastCalledWith(
+    'set_session_git_repository_matching_enabled:{"sessionGitRepositoryMatchingEnabled":true}',
+  );
+  hook.unmount();
+  window.sendToJava = previousBridge;
 });

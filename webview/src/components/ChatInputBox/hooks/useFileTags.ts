@@ -351,7 +351,10 @@ export function useFileTags({
 
       // Get display filename (with line number, for display)
       const displayFileName = filePath.split(/[/\\]/).pop() || filePath;
-      const escapedDisplayFileName = escapeHtmlText(displayFileName);
+      const lineSuffix = filePath.match(/#L\d+(?:-\d+)?$/)?.[0] || '';
+      const escapedDisplayFileName = escapeHtmlText(
+        lineSuffix ? displayFileName.slice(0, -lineSuffix.length) : displayFileName
+      );
 
       /**
        * Protocol type detection for special references.
@@ -398,12 +401,16 @@ export function useFileTags({
         pathMappingRef.current.get(pureFileName) ||
         filePath;
       const escapedFullPath = escapeHtmlAttr(fullPath);
+      const tooltipPath = lineSuffix && !fullPath.endsWith(lineSuffix)
+        ? fullPath + lineSuffix
+        : fullPath;
 
       // Create file tag HTML - use array push instead of string concatenation
       htmlParts.push(
-        `<span class="file-tag has-tooltip" contenteditable="false" data-file-path="${escapedPath}" data-tooltip="${escapedFullPath}">`,
+        `<span class="file-tag has-tooltip" contenteditable="false" data-file-path="${escapedPath}" data-absolute-path="${escapedFullPath}" data-tooltip="${escapeHtmlAttr(tooltipPath)}">`,
         `<span class="file-tag-icon">${iconSvg}</span>`,
         `<span class="file-tag-text">${escapedDisplayFileName}</span>`,
+        lineSuffix ? `<span class="file-tag-lines">${escapeHtmlText(lineSuffix)}</span>` : '',
         `<span class="file-tag-close">&times;</span>`,
         `</span>`,
         ' '
@@ -508,7 +515,8 @@ export function useFileTags({
       .map((element) => {
         const displayPath = element.getAttribute('data-file-path') || '';
         if (!displayPath) return null;
-        const absolutePath = element.getAttribute('data-tooltip') || displayPath;
+        const absolutePath = element.getAttribute('data-absolute-path')
+          || element.getAttribute('data-tooltip') || displayPath;
         return { displayPath, absolutePath } satisfies FileTagInfo;
       })
       .filter((tag): tag is FileTagInfo => tag !== null);

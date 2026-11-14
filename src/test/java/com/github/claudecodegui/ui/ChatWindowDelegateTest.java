@@ -4,9 +4,11 @@ import com.github.claudecodegui.bridge.EnvironmentConfigurator;
 import com.github.claudecodegui.handler.PermissionHandler;
 import com.github.claudecodegui.handler.SettingsHandler;
 import com.github.claudecodegui.handler.core.HandlerContext;
+import com.github.claudecodegui.provider.ClaudeContextWindowOverrideProvider;
 import com.github.claudecodegui.provider.common.BaseSDKBridge;
 import com.github.claudecodegui.provider.grok.GrokSDKBridge;
 import com.github.claudecodegui.session.ClaudeSession;
+import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.session.SessionLifecycleManager;
 import com.github.claudecodegui.session.StreamMessageCoalescer;
 import com.google.gson.JsonObject;
@@ -14,9 +16,12 @@ import com.google.gson.JsonParser;
 import org.junit.Test;
 
 import javax.swing.JPanel;
+import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -33,6 +38,74 @@ import static org.junit.Assert.assertTrue;
  * and frontend-ready state ownership in {@link ChatWindowDelegate}.
  */
 public class ChatWindowDelegateTest {
+
+    /** Unsupported provider locking must not abort the tool-window startup repair. */
+    @Test
+    public void startupContinuesWhenProviderRepairCannotLockTheFilesystem() {
+        java.util.concurrent.atomic.AtomicBoolean attempted = new java.util.concurrent.atomic.AtomicBoolean();
+        CodemossSettingsService settings = new CodemossSettingsService() {
+            @Override
+            public boolean repairActiveProviderToClaudeSettings() throws IOException {
+                attempted.set(true);
+                throw new IOException("The filesystem provider does not support file locking; no changes were written",
+                        new kotlin.NotImplementedError("Not yet implemented"));
+            }
+        };
+        ChatWindowDelegate.DelegateHost host = (ChatWindowDelegate.DelegateHost) Proxy.newProxyInstance(
+                ChatWindowDelegate.DelegateHost.class.getClassLoader(),
+                new Class<?>[]{ChatWindowDelegate.DelegateHost.class},
+                (proxy, method, args) -> {
+                    if ("getSettingsService".equals(method.getName())) {
+                        return settings;
+                    }
+                    throw new AssertionError("Unexpected startup interaction: " + method.getName());
+                });
+        new ChatWindowDelegate(host).syncActiveProvider();
+        assertTrue("Startup must attempt repair and handle the lock failure", attempted.get());
+    }
+
+    /** Reconnect must repair a missed terminal without replacing the user's input document. */
+    @Test
+    public void remoteResumeReplaysStateAndFinishesAnAlreadyCompletedTurn() {
+        List<String> calls = new ArrayList<>();
+        ChatWindowDelegate delegate = createFrontendReadyDelegate(false, true, calls);
+
+        delegate.handleRemoteTransportResumed();
+
+        assertBackendTabStateAppliedOnceBeforeReplay(calls);
+        assertTrue(calls.contains("onStreamEnd"));
+        assertTrue(calls.indexOf("onStreamEnd") < calls.indexOf("showLoading"));
+        assertTrue(calls.contains("window.onTabActivated"));
+        assertFalse(calls.contains("setFrontendReady"));
+    }
+
+    /** Reconciliation must preserve a turn that is still streaming on the backend. */
+    @Test
+    public void remoteResumeRestoresAnActiveStreamWithoutEndingIt() {
+        List<String> calls = new ArrayList<>();
+        ChatWindowDelegate delegate = createFrontendReadyDelegate(false, true, calls, true, true);
+
+        delegate.handleRemoteTransportResumed();
+
+        assertTrue(calls.contains("onStreamStart"));
+        assertFalse(calls.contains("onStreamEnd"));
+    }
+
+    /** A pending SDK start is loading even before the first streaming event arrives. */
+    @Test
+    public void remoteResumeDoesNotEndATurnWaitingForItsFirstToken() {
+        List<String> calls = new ArrayList<>();
+        createFrontendReadyDelegate(false, true, calls, false, true).handleRemoteTransportResumed();
+        assertFalse(calls.contains("onStreamEnd"));
+    }
+
+    /** An unready page is restored by frontend_ready, not by an old transport heartbeat. */
+    @Test
+    public void remoteResumeDoesNotPublishIntoAnUnreadyPage() {
+        List<String> calls = new ArrayList<>();
+        createFrontendReadyDelegate(false, false, calls).handleRemoteTransportResumed();
+        assertTrue(calls.isEmpty());
+    }
 
     /** Verifies that recovery serializes the complete authoritative Session selection state. */
     @Test
@@ -59,10 +132,43 @@ public class ChatWindowDelegateTest {
         int limit = ChatWindowDelegate.resolveModelContextLimitForRecovery(
                 "codex",
                 "gpt-5.6-sol",
+                null,
                 null
         );
 
         assertEquals(SettingsHandler.getModelContextLimit("codex", "gpt-5.6-sol"), limit);
+    }
+
+    /**
+     * CLAUDE_CODE_MAX_CONTEXT_TOKENS is a Claude-only override. Recovery for other
+     * providers (here Grok) must keep the static model table.
+     */
+    @Test
+    public void nonClaudeRecoveryLimitIgnoresClaudeContextOverride() throws Exception {
+        Path settings = Files.createTempFile("claude-settings", ".json");
+        Files.writeString(settings, """
+                {
+                  "env": {
+                    "CLAUDE_CODE_MAX_CONTEXT_TOKENS": "128000"
+                  }
+                }
+                """);
+        ClaudeContextWindowOverrideProvider.setInstanceForTests(
+                ClaudeContextWindowOverrideProvider.createForTests(settings)
+        );
+
+        try {
+            int limit = ChatWindowDelegate.resolveModelContextLimitForRecovery(
+                    "grok",
+                    "grok-build",
+                    null,
+                    null
+            );
+
+            assertEquals(500_000, limit);
+        } finally {
+            ClaudeContextWindowOverrideProvider.setInstanceForTests(null);
+        }
     }
 
     /**
@@ -72,7 +178,7 @@ public class ChatWindowDelegateTest {
     @Test
     public void frontendReadyDoesNotApplyBackendTabStateOutsideRuntimeRecovery() {
         List<String> javaScriptCalls = new ArrayList<>();
-        ChatWindowDelegate delegate = createFrontendReadyDelegate(false, javaScriptCalls);
+        ChatWindowDelegate delegate = createFrontendReadyDelegate(false, false, javaScriptCalls);
 
         delegate.handleFrontendReady();
 
@@ -87,10 +193,30 @@ public class ChatWindowDelegateTest {
     @Test
     public void frontendReadyAppliesBackendTabStateOnlyDuringRuntimeRecovery() {
         List<String> javaScriptCalls = new ArrayList<>();
-        ChatWindowDelegate delegate = createFrontendReadyDelegate(true, javaScriptCalls);
+        ChatWindowDelegate delegate = createFrontendReadyDelegate(true, false, javaScriptCalls);
 
         delegate.handleFrontendReady();
 
+        assertBackendTabStateAppliedOnceBeforeReplay(javaScriptCalls);
+    }
+
+    /**
+     * Verifies that a frontend_ready arriving while Java still holds the ready flag is treated as
+     * runtime recovery. The webview sends the signal once per document, so a repeat means remote
+     * JCEF replaced the page without a load Java observed, and the replacement booted from the
+     * tab's original HTML snapshot rather than the current Session selection.
+     */
+    @Test
+    public void frontendReadyFromReplacedPageAppliesBackendTabState() {
+        List<String> javaScriptCalls = new ArrayList<>();
+        ChatWindowDelegate delegate = createFrontendReadyDelegate(false, true, javaScriptCalls);
+
+        delegate.handleFrontendReady();
+
+        assertBackendTabStateAppliedOnceBeforeReplay(javaScriptCalls);
+    }
+
+    private static void assertBackendTabStateAppliedOnceBeforeReplay(List<String> javaScriptCalls) {
         int snapshotIndex = javaScriptCalls.indexOf("window.applyBackendTabState");
         int replayIndex = javaScriptCalls.indexOf("showLoading");
         assertEquals(1, Collections.frequency(javaScriptCalls, "window.applyBackendTabState"));
@@ -132,11 +258,23 @@ public class ChatWindowDelegateTest {
      */
     private static ChatWindowDelegate createFrontendReadyDelegate(
             boolean runtimeRecovery,
+            boolean frontendAlreadyReady,
             List<String> javaScriptCalls
+    ) {
+        return createFrontendReadyDelegate(runtimeRecovery, frontendAlreadyReady, javaScriptCalls, false, false);
+    }
+
+    private static ChatWindowDelegate createFrontendReadyDelegate(
+            boolean runtimeRecovery,
+            boolean frontendAlreadyReady,
+            List<String> javaScriptCalls,
+            boolean streaming,
+            boolean loading
     ) {
         ClaudeSession session = new ClaudeSession(null, null, null, null);
         session.setProvider("codex");
         session.setModel("gpt-5.6-sol");
+        session.getState().setLoading(loading);
 
         WebviewWatchdog watchdog = new WebviewWatchdog(
                 new JPanel(),
@@ -152,6 +290,11 @@ public class ChatWindowDelegateTest {
             public void sendCurrentPermissionMode() {
                 // Permission-mode delivery is independent of the recovery snapshot gate.
             }
+
+            @Override
+            public void sendCurrentOmpApprovalMode() {
+                // Delivered like the permission mode, outside the recovery snapshot gate.
+            }
         };
         StreamMessageCoalescer.JsCallbackTarget coalescerTarget =
                 (StreamMessageCoalescer.JsCallbackTarget) Proxy.newProxyInstance(
@@ -166,6 +309,9 @@ public class ChatWindowDelegateTest {
                         }
                 );
         StreamMessageCoalescer coalescer = new StreamMessageCoalescer(coalescerTarget);
+        if (streaming) {
+            coalescer.onStreamStart();
+        }
         // handleFrontendReady replays pending dialogs through the host's permission
         // handler, so the double needs a real (empty) one rather than a null.
         PermissionHandler permissionHandler = new PermissionHandler(new HandlerContext(
@@ -198,6 +344,11 @@ public class ChatWindowDelegateTest {
                                     return permissionHandler;
                                 case "isRuntimeRecoveryPage":
                                     return runtimeRecovery;
+                                case "isFrontendReady":
+                                    return frontendAlreadyReady;
+                                case "setFrontendReady":
+                                    javaScriptCalls.add("setFrontendReady");
+                                    return null;
                                 case "callJavaScript":
                                     javaScriptCalls.add((String) args[0]);
                                     return null;

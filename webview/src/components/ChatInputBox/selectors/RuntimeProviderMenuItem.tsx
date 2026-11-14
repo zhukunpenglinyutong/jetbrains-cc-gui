@@ -11,7 +11,7 @@ import {
 /**
  * Runtime provider switching is only implemented for the Claude and Codex
  * harnesses (see RuntimeProviderSelect's providerKind). Hide the menu entry
- * for the beta CLI providers (grok/kimi/opencode/pi/omp/dsh).
+ * for the other CLI providers (grok/kimi/opencode/pi/omp/dsh).
  */
 const RUNTIME_PROVIDER_SUPPORTED: Record<string, true> = { claude: true, codex: true };
 

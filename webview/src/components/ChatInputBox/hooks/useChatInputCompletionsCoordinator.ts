@@ -13,6 +13,7 @@ import {
   dollarCommandToDropdownItem,
   fileReferenceProvider,
   fileToDropdownItem,
+  ompCommandProvider,
   promptProvider,
   promptToDropdownItem,
   slashCommandProvider,
@@ -82,10 +83,19 @@ export function useChatInputCompletionsCoordinator({
     // hasPendingRequests covers the activation commit where `loading` still
     // holds the stale render value while refresh() is already in flight.
     if (isCodexProvider && !nativeSkills.loading && !nativeSkills.hasPendingRequests()) {
-      publishNativeCodexSkills(nativeSkills.error ? [] : nativeSkills.skills);
+      // A partial catalog error (one unreadable SKILL.md, a stale skill under
+      // another cwd) must not wipe the whole `$` inventory, so publish whatever
+      // the runtime did return. A failed read that produced no rows proves
+      // nothing: publishing it would both erase every skill and mark the native
+      // catalog authoritative, which permanently discards the backend-scanned
+      // list. Keep that fallback until the runtime answers with real data.
+      if (!nativeSkills.error || nativeSkills.skills.length > 0) {
+        publishNativeCodexSkills(nativeSkills.skills);
+      }
     }
   }, [isCodexProvider, nativeSkills.error, nativeSkills.loading, nativeSkills.skills, nativeSkills.hasPendingRequests]);
-  const commandProvider = isCodexProvider ? codexCommandProvider : slashCommandProvider;
+  const defaultCommandProvider = currentProvider === 'omp' ? ompCommandProvider : slashCommandProvider;
+  const commandProvider = isCodexProvider ? codexCommandProvider : defaultCommandProvider;
   const commandItemConverter = isCodexProvider ? codexCommandToDropdownItem : commandToDropdownItem;
   const dollarProvider = isCodexProvider ? codexCommandProvider : dollarCommandProvider;
   const dollarItemConverter = isCodexProvider ? codexCommandToDropdownItem : dollarCommandToDropdownItem;

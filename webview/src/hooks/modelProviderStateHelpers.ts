@@ -66,9 +66,16 @@ const CODEX_SANDBOX_SELECTIONS: readonly CodexSandboxSelection[] = [
 ];
 
 /**
- * Migrate one persisted Codex snapshot without widening access implicitly.
- * Legacy bypass/yolo values only become full-access when an explicit marker
- * proves the user selected that scope; otherwise they remain sandboxed-auto.
+ * Migrate one persisted Codex snapshot without inventing a scope the user never
+ * asked for.
+ *
+ * A persisted sandbox selection is the strongest evidence we have, so it is
+ * honoured as-is. Only a snapshot with NO sandbox field at all falls back to the
+ * mode: `bypassPermissions` there means the user picked Full Auto, and the
+ * runtime maps Full Auto to danger-full-access + `never` on every platform
+ * (buildTurnSettings in persistent-codex-service.js). Deriving anything safer
+ * would silently break Full Auto on upgrade — the reported symptom: the
+ * selector still reads Full Auto while writes outside the project are denied.
  */
 export function migrateCodexSettingsSnapshot(raw: Record<string, unknown> | null | undefined): CodexSettingsSnapshot {
   const value = raw ?? {};
@@ -76,21 +83,28 @@ export function migrateCodexSettingsSnapshot(raw: Record<string, unknown> | null
   const collaborationMode: CodexCollaborationMode = value.codexCollaborationMode === 'plan'
     || legacyMode === 'plan' ? 'plan' : 'default';
 
+  const storedSandboxSelection = CODEX_SANDBOX_SELECTIONS.includes(
+    value.codexSandboxSelection as CodexSandboxSelection,
+  )
+    ? value.codexSandboxSelection as CodexSandboxSelection
+    : null;
+  // Only a persisted sandbox selection is evidence of an explicit choice: no
+  // released build ever wrote the old `codexFullAccessExplicit` marker.
   const approvalPreset = CODEX_APPROVAL_PRESETS.includes(value.codexApprovalPreset as CodexApprovalPreset)
     ? value.codexApprovalPreset as CodexApprovalPreset
     : legacyMode === 'auto'
       ? 'auto'
       : legacyMode === 'bypassPermissions' || legacyMode === 'yolo'
-        ? (value.codexFullAccessExplicit === true ? 'full-access' : 'sandboxed-auto')
+        ? (storedSandboxSelection === null || storedSandboxSelection === 'danger-full-access'
+          ? 'full-access'
+          : 'sandboxed-auto')
         : 'request';
 
-  const sandboxSelection = CODEX_SANDBOX_SELECTIONS.includes(
-    value.codexSandboxSelection as CodexSandboxSelection,
-  )
-    ? value.codexSandboxSelection as CodexSandboxSelection
+  const sandboxSelection = storedSandboxSelection !== null
+    ? storedSandboxSelection
     : legacyMode === 'readOnly'
       ? 'read-only'
-      : approvalPreset === 'full-access' && value.codexFullAccessExplicit === true
+      : approvalPreset === 'full-access'
         ? 'danger-full-access'
         : 'workspace-write';
 
@@ -99,7 +113,7 @@ export function migrateCodexSettingsSnapshot(raw: Record<string, unknown> | null
     || value.codexSandboxSource === 'user'
     || value.codexSandboxSource === 'default'
     ? value.codexSandboxSource
-    : value.codexSandboxSelection ? 'migrated' : 'default';
+    : storedSandboxSelection !== null ? 'migrated' : 'default';
 
   return {
     collaborationMode,
@@ -110,6 +124,59 @@ export function migrateCodexSettingsSnapshot(raw: Record<string, unknown> | null
       && Number.isFinite(value.codexSettingsMigrationVersion)
       ? Math.max(1, Math.floor(value.codexSettingsMigrationVersion)) : 1,
   };
+}
+
+/**
+ * Access scope implied by a permission mode, or null when the mode owns none.
+ *
+ * Only two modes carry a scope of their own:
+ *  - Full Auto (`bypassPermissions`/`yolo`) → unrestricted sandbox, no approvals;
+ *  - Auto review (`auto`) → guarded workspace-write, because the native reviewer
+ *    rejects a full-access sandbox (see the send-time guard in useMessageSender).
+ * Default/acceptEdits leave the sandbox where the user put it, and plan keeps the
+ * sandbox and the approval policy independent on purpose.
+ */
+export function deriveCodexAccessScopeFromMode(
+  mode: unknown,
+): { approvalPreset: CodexApprovalPreset; sandboxSelection: CodexSandboxSelection } | null {
+  if (mode === 'bypassPermissions' || mode === 'yolo') {
+    return { approvalPreset: 'full-access', sandboxSelection: 'danger-full-access' };
+  }
+  if (mode === 'auto') {
+    return { approvalPreset: 'auto', sandboxSelection: 'workspace-write' };
+  }
+  return null;
+}
+
+/** Wire-format `sandboxPolicy.type` values mapped back to the compact modes. */
+const SANDBOX_POLICY_MODES: Record<string, CodexSandboxSelection> = {
+  readOnly: 'read-only',
+  'read-only': 'read-only',
+  workspaceWrite: 'workspace-write',
+  'workspace-write': 'workspace-write',
+  dangerFullAccess: 'danger-full-access',
+  'danger-full-access': 'danger-full-access',
+};
+
+/**
+ * Effective sandbox from a `thread/settings/updated` payload, or null when the
+ * runtime has not confirmed anything yet. Null must be rendered as unknown —
+ * never replaced by the requested value.
+ */
+export function effectiveCodexSandboxFromSettings(
+  settings: Record<string, unknown> | null | undefined,
+): CodexSandboxSelection | null {
+  if (!settings || typeof settings !== 'object') {
+    return null;
+  }
+  const policy = settings.sandboxPolicy as unknown;
+  const rawType = typeof policy === 'string'
+    ? policy
+    : (policy as { type?: unknown } | null | undefined)?.type;
+  if (typeof rawType !== 'string') {
+    return null;
+  }
+  return SANDBOX_POLICY_MODES[rawType] ?? null;
 }
 
 /** Model shown for the active provider; unknown ids fall back to Claude. */

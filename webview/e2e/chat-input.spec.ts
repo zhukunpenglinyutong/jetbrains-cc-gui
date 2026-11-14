@@ -119,6 +119,13 @@ test.beforeEach(async ({ page }) => {
   await page.addStyleTag({ content: '#__vconsole { display: none !important; }' });
 });
 
+/** The batch command card shows its title and count in separate nodes. */
+async function expectCommandBatch(page: Page, count: number) {
+  const header = page.locator('.bash-group-header').filter({ hasText: 'Batch Run Commands' });
+  await expect(header).toBeVisible();
+  await expect(header.locator('.bash-group-count')).toHaveText(String(count));
+}
+
 async function switchToCodex(page: Page) {
   const providerButton = page.locator('.button-area-left .selector-button').nth(1);
   await providerButton.click();
@@ -141,6 +148,21 @@ async function submitCodexCompact(page: Page) {
   await expect(page.locator('.completion-dropdown')).toHaveCount(0);
   await editable.press('Enter');
 }
+
+test('opening a chat never auto-opens release notes and the version tag still opens them', async ({ page }, testInfo) => {
+  await page.addInitScript(() => localStorage.setItem('lastSeenChangelogVersion', '0.0.1'));
+  await page.reload();
+  await expect(page.locator('.input-editable')).toBeVisible();
+  await expect(page.locator('.changelog-overlay')).toHaveCount(0);
+  await page.locator('.version-tag').click();
+  await expect(page.locator('.changelog-dialog')).toBeVisible();
+  await page.locator('.changelog-close-btn').click();
+  await expect(page.locator('.changelog-overlay')).toHaveCount(0);
+  await page.reload();
+  await expect(page.locator('.input-editable')).toBeVisible();
+  await expect(page.locator('.changelog-overlay')).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath('chat-without-release-notes.png') });
+});
 
 test('Enter sends once and a held key cannot submit the next draft', async ({ page }) => {
   const editable = page.locator('.input-editable');
@@ -221,6 +243,168 @@ test('leaving the chat before debounce preserves the latest draft', async ({ pag
 
   await expect(page.locator('.input-editable')).toHaveText('draft saved while leaving');
   expect(await sentMessages(page)).toEqual([]);
+});
+
+test('client drafts survive offline edits, reload, and a replacement page without leaking across tabs', async ({ page, context }, testInfo) => {
+  await page.addInitScript(() => {
+    window.__CCGUI_DRAFT_CACHE_KEY__ = new URL(location.href).searchParams.get('draftWindow') ?? 'draft-a';
+  });
+  await page.goto('/?draftWindow=draft-a');
+  const input = page.locator('.input-editable');
+  await expect(input).toBeVisible();
+  await input.fill('中文草稿 and English');
+  await context.setOffline(true);
+  await input.press('End');
+  await page.keyboard.insertText(' 离线编辑');
+  await expect.poll(() => page.evaluate(async () => {
+    const cache = await caches.open('ccgui-drafts-v1');
+    const response = await cache.match('https://cc-gui-webview.local/drafts/draft-a');
+    return response ? (await response.json()).text : '';
+  })).toBe('中文草稿 and English 离线编辑');
+  await context.setOffline(false);
+  await page.reload();
+  await expect(input).toHaveText('中文草稿 and English 离线编辑');
+  await page.screenshot({ path: testInfo.outputPath('client-draft-restored.png') });
+
+  await page.goto('/?draftWindow=draft-b');
+  await expect(input).toBeEmpty();
+  await input.fill('independent tab');
+  await page.goto('/?draftWindow=draft-a');
+  await expect(input).toHaveText('中文草稿 and English 离线编辑');
+
+  // A newly created browser document still resolves the Java window's stable draft key.
+  const replacement = await context.newPage();
+  await replacement.addInitScript(() => {
+    window.__CCGUI_DRAFT_CACHE_KEY__ = 'draft-a';
+    window.sendToJava = () => {};
+  });
+  await replacement.goto('/?draftWindow=draft-a');
+  await expect(replacement.locator('.input-editable')).toHaveText('中文草稿 and English 离线编辑');
+  await replacement.close();
+
+  await input.fill('');
+  await expect.poll(() => page.evaluate(async () => Boolean(await (await caches.open('ccgui-drafts-v1'))
+    .match('https://cc-gui-webview.local/drafts/draft-a')))).toBe(false);
+  await page.reload();
+  await expect(input).toBeEmpty();
+});
+
+test('denied client draft storage does not prevent typing or sending', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__CCGUI_DRAFT_CACHE_KEY__ = 'storage-denied';
+    const open = caches.open.bind(caches);
+    caches.open = (name) => name === 'ccgui-drafts-v1'
+      ? Promise.reject(new DOMException('Storage denied', 'SecurityError')) : open(name);
+  });
+  await page.reload();
+  const input = page.locator('.input-editable');
+  await input.fill('still editable');
+  await input.press('Enter');
+  await expect.poll(() => sentMessages(page)).toEqual(['still editable']);
+  await expect(input).toBeEmpty();
+});
+
+test('a reload right after typing keeps the latest draft and a cleared draft stays cleared', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__CCGUI_DRAFT_CACHE_KEY__ = 'fast-reload';
+  });
+  await page.reload();
+  const input = page.locator('.input-editable');
+  await input.fill('typed just before reload');
+  // No wait: the debounced Cache Storage write cannot finish before the document unloads.
+  await page.reload();
+  await expect(input).toHaveText('typed just before reload');
+
+  await input.fill('');
+  await page.reload();
+  await expect(input).toBeEmpty();
+});
+
+test('a stalled draft store does not keep the chat blank', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__CCGUI_DRAFT_CACHE_KEY__ = 'storage-stalled';
+    const open = caches.open.bind(caches);
+    caches.open = (name) => name === 'ccgui-drafts-v1' ? new Promise(() => {}) : open(name);
+  });
+  await page.reload();
+  const input = page.locator('.input-editable');
+  await input.fill('typed after the restore timeout');
+  await input.press('Enter');
+  await expect.poll(() => sentMessages(page)).toEqual(['typed after the restore timeout']);
+});
+
+test('remote tab repaint preserves input selection and IME composition without changing zoom', async ({ page }) => {
+  const input = page.locator('.input-editable');
+  await input.fill('中文 English');
+  const initial = await input.evaluate((element) => {
+    element.focus();
+    const selection = getSelection()!;
+    const range = document.createRange();
+    range.setStart(element.firstChild!, 2);
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    element.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+    const app = document.getElementById('app')!;
+    const snapshot = { text: element.textContent, zoom: app.style.zoom, offset: selection.anchorOffset };
+    for (let count = 0; count < 5; count++) window.onTabActivated?.(true);
+    return snapshot;
+  });
+  await expect(page.locator('#ccgui-remote-repaint')).toHaveCount(0);
+  expect(await input.evaluate((element) => ({
+    text: element.textContent,
+    zoom: document.getElementById('app')!.style.zoom,
+    offset: getSelection()!.anchorOffset,
+  }))).toEqual(initial);
+  await expect(input).toBeFocused();
+  await input.dispatchEvent('compositionend', { data: '中文' });
+  await page.keyboard.insertText('测试');
+  await expect(input).toHaveText('中文测试 English');
+  expect(await sentMessages(page)).toEqual([]);
+});
+
+test('remote session reconciliation repairs a missed terminal while keeping the input document', async ({ page, context }, testInfo) => {
+  await page.evaluate(() => {
+    window.setSessionId?.('remote-reconnect-fixture');
+    window.showLoading?.('true');
+    window.onStreamStart?.();
+    window.updateMessages?.(JSON.stringify([
+      { type: 'assistant', content: 'before disconnect', raw: { uuid: 'remote-answer' } },
+    ]), 100);
+  });
+  await expect(page.locator('.stop-button')).toBeVisible();
+  const input = page.locator('.input-editable');
+  await input.fill('中文草稿 keep editing');
+  const originalInput = await input.elementHandle();
+  await input.evaluate((element) => {
+    element.focus();
+    const range = document.createRange();
+    range.setStart(element.firstChild!, 2);
+    range.collapse(true);
+    getSelection()!.removeAllRanges();
+    getSelection()!.addRange(range);
+  });
+  await context.setOffline(true);
+  // The backend finishes while its callbacks cannot reach the client. On resume Java
+  // replays this authoritative snapshot into the same page, rather than reloading it.
+  await context.setOffline(false);
+  await page.evaluate(() => {
+    window.onStreamEnd?.();
+    window.showLoading?.('false');
+    window.updateMessages?.(JSON.stringify([
+      { type: 'assistant', content: 'completed while disconnected', raw: { uuid: 'remote-answer' } },
+    ]), 101);
+    window.onTabActivated?.(true);
+  });
+  await expect(page.locator('.messages-container')).toContainText('completed while disconnected');
+  await expect(page.locator('.stop-button')).toHaveCount(0);
+  await expect(input).toHaveText('中文草稿 keep editing');
+  await expect(input).toBeFocused();
+  expect(await originalInput!.evaluate((element) => element === document.querySelector('.input-editable'))).toBe(true);
+  expect(await input.evaluate(() => getSelection()!.anchorOffset)).toBe(2);
+  await expect.poll(() => page.evaluate(() => (window as InputTestWindow).__bridgeMessages
+    .filter((message) => message.startsWith('frontend_ready:')).length)).toBe(1);
+  await page.screenshot({ path: testInfo.outputPath('remote-state-reconciled.png') });
 });
 
 test('Codex compact waits like a message and releases queued input only at its terminal', async ({ page }) => {
@@ -320,7 +504,7 @@ test('Codex reported round26 wrappers render evaluated edits and MCP receipts wi
   await expect(page.locator('.messages-container')).toContainText('Open In Codex');
   await expect(page.locator('.messages-container')).toContainText('Batch Run Commands');
   await expect(page.locator('.tool-title-text').filter({ hasText: /^exec$/ })).toHaveCount(0);
-  await expect(page.locator('.bash-timeline-item')).toHaveCount(3);
+  await expect(page.locator('.bash-group-item')).toHaveCount(3);
   await page.evaluate((messages) => {
     window.beginCodexHistoryPage?.(JSON.stringify({ pageId: 'round26', sessionId: 'round26-receipts', mode: 'replace' }));
     window.appendCodexHistoryPageBatch?.('round26', JSON.stringify(messages));
@@ -430,19 +614,19 @@ for (const source of ['public', 'reported'] as const) {
     }, { messages: fixture.preview, threadId });
     const batch = page.locator('.bash-group-container');
     await expect(batch).toHaveCount(1);
-    await expect(batch.locator('.bash-timeline-item')).toHaveCount(2);
+    await expect(batch.locator('.bash-group-item')).toHaveCount(2);
     await page.evaluate(messages => window.updateMessages?.(JSON.stringify(messages)), fixture.complete);
     const checkComplete = async () => {
       await expect(batch).toHaveCount(1);
-      await expect(batch.locator('.bash-timeline-item')).toHaveCount(2);
-      await expect(batch.locator('.tool-status-indicator.pending')).toHaveCount(0);
-      await expect(batch.locator('.tool-status-indicator.completed')).toHaveCount(source === 'public' ? 1 : 2);
-      await expect(batch.locator('.tool-status-indicator.error')).toHaveCount(source === 'public' ? 1 : 0);
+      await expect(batch.locator('.bash-group-item')).toHaveCount(2);
+      await expect(batch.locator('.bash-group-row-status.pending')).toHaveCount(0);
+      await expect(batch.locator('.bash-group-row-status.completed')).toHaveCount(source === 'public' ? 1 : 2);
+      await expect(batch.locator('.bash-group-row-status.error')).toHaveCount(source === 'public' ? 1 : 0);
       await expect(page.locator('.tool-title-text').filter({ hasText: /^exec$/ })).toHaveCount(0);
-      await expect(batch.locator('.bash-timeline-description').first()).not.toContainText('pwsh');
-      await batch.locator('.bash-timeline-content').first().click();
-      await expect(batch.locator('.bash-output-text').first()).not.toHaveText('');
-      await batch.locator('.bash-timeline-content').first().click();
+      await expect(batch.locator('.bash-group-row-main').first()).not.toContainText('pwsh');
+      await batch.locator('.bash-group-row-toggle').first().click();
+      await expect(batch.locator('.bash-group-detail-output').first()).not.toHaveText('');
+      await batch.locator('.bash-group-row-toggle').first().click();
     };
     await checkComplete();
     await page.reload();
@@ -972,8 +1156,8 @@ test('Codex reported empty reasoning leaves no cards or batch gaps in full and p
   const assertVisibleControls = async () => {
     await expect(page.locator('.thinking-block')).toHaveCount(0);
     await expect(page.locator('.message.assistant')).toHaveCount(1);
-    await expect(page.getByText('Batch Run Commands (2)', { exact: true })).toBeVisible();
-    await expect(page.locator('.bash-timeline-item')).toHaveCount(2);
+    await expectCommandBatch(page, 2);
+    await expect(page.locator('.bash-group-item')).toHaveCount(2);
     await expect(page.getByText('Readable replies remain visible.', { exact: true })).toBeVisible();
     await expect(page.locator('.messages-container')).not.toContainText('No thinking content');
   };
@@ -1005,11 +1189,43 @@ for (const fixtureName of ['codex-reloaded-tool-batch', 'codex-interrupted-comma
       expectedToolCount: number;
       expectedFailedCount?: number;
       finalText?: string;
-      messages: Array<{ type: string; content: string; raw: { codexThreadId: string } }>;
+      messages: Array<{
+        type: string;
+        content: string;
+        raw: {
+          codexThreadId: string;
+          content?: Array<{ type: string; name?: string; input?: { command?: string; cmd?: string; code?: string } }>;
+        };
+      }>;
     };
     const { messages, expectedToolCount } = fixture;
+    const localId = 'local-tool-discovery';
+    const localMessages = [
+      { ...messages[1], raw: { ...messages[1].raw, uuid: localId, codexItemId: localId,
+        content: [{ type: 'tool_use', id: localId, name: 'Promise.resolve',
+          input: { code: 'Promise.resolve(ALL_TOOLS.filter(tool => /jetbrains/i.test(tool.name)))' } }] } },
+      { ...messages[2], raw: { ...messages[2].raw, uuid: `${localId}:result`, codexItemId: `${localId}:result`,
+        content: [{ type: 'tool_result', tool_use_id: localId, content: '[]', is_error: false }] } },
+    ];
+    messages.splice(3, 0, ...localMessages);
     const sessionId = messages[0].raw.codexThreadId;
+    const commands = messages.flatMap(message => message.raw.content ?? [])
+      .filter(block => block.type === 'tool_use' && block.name === 'bash')
+      .map(block => block.input?.command ?? block.input?.cmd ?? '');
     await switchToCodex(page);
+    const liveMessages = commands.flatMap((command, index) => projectCodexItemMessages({
+      id: `live-command-${index}`, type: 'commandExecution', command, status: 'completed', exitCode: 0,
+    }, { threadId: sessionId, turnId: 'live-command-labels' }).map(raw => ({ type: raw.type, content: '', raw })));
+    await page.evaluate(({ sessionId, liveMessages }) => {
+      window.setSessionId?.(sessionId);
+      window.onStreamStart?.();
+      window.updateMessages?.(JSON.stringify(liveMessages));
+    }, { sessionId, liveMessages });
+    await expect(page.locator('.bash-group-row-command-text')).toHaveText(commands);
+    await page.evaluate(() => {
+      window.onStreamEnd?.();
+      window.clearMessages?.();
+    });
     await page.evaluate(({ sessionId, messages }) => {
       window.setSessionId?.(sessionId);
       window.updateMessages?.(JSON.stringify(messages));
@@ -1017,11 +1233,14 @@ for (const fixtureName of ['codex-reloaded-tool-batch', 'codex-interrupted-comma
     const assertContinuousBatch = async () => {
       await expect(page.locator('.message.assistant')).toHaveCount(1);
       await expect(page.locator('.thinking-block')).toHaveCount(0);
-      await expect(page.getByText(`Batch Run Commands (${expectedToolCount})`, { exact: true })).toBeVisible();
-      await expect(page.locator('.bash-timeline-item')).toHaveCount(expectedToolCount);
+      await expectCommandBatch(page, expectedToolCount);
+      await expect(page.locator('.bash-group-item')).toHaveCount(expectedToolCount);
+      await expect(page.locator('.bash-group-row-command-text')).toHaveText(commands);
       await expect(page.locator('.tool-status-indicator.pending')).toHaveCount(0);
-      await expect(page.locator('.tool-status-indicator.error')).toHaveCount(fixture.expectedFailedCount ?? 0);
+      await expect(page.locator('.bash-group-row-status.error')).toHaveCount(fixture.expectedFailedCount ?? 0);
       await expect(page.getByText('exec', { exact: true })).toHaveCount(0);
+      await expect(page.locator('.messages-container')).not.toContainText('Promise.resolve');
+      await expect(page.locator('.messages-container')).not.toContainText('ALL_TOOLS');
       await expect(page.getByText(fixture.finalText ?? 'Verified history grouping.', { exact: true })).toBeVisible();
     };
     await assertContinuousBatch();
@@ -1041,7 +1260,7 @@ for (const fixtureName of ['codex-reloaded-tool-batch', 'codex-interrupted-comma
       window.completeCodexHistoryPage?.(JSON.stringify({ pageId: 'legacy-batch-tail', sessionId, mode: 'replace',
         source: 'legacy', fromTurn: 1, toTurn: 1, totalTurns: 1, hasMore: true, loadedMessageCount: 1 }));
     }, { sessionId, messages });
-    await expect(page.locator('.bash-timeline-item')).toHaveCount(0);
+    await expect(page.locator('.bash-group-item')).toHaveCount(0);
     await page.evaluate(({ sessionId, messages }) => {
       window.beginCodexHistoryPage?.(JSON.stringify({ pageId: 'legacy-batch-older', sessionId, mode: 'prepend' }));
       window.appendCodexHistoryPageBatch?.('legacy-batch-older', JSON.stringify(messages));
@@ -1593,14 +1812,14 @@ test('Codex mixed wrappers share edit and command batches without exec or pollin
   const verifyCards = async () => {
     await expect(page.getByText('Batch Edit Files', { exact: true })).toBeVisible();
     await expect(page.locator('.file-list-item')).toHaveCount(4);
-    await expect(page.getByText('Batch Run Commands (4)')).toBeVisible();
+    await expectCommandBatch(page, 4);
     await expect(page.locator('.message.assistant')).toHaveCount(1);
     await expect(page.locator('.task-container')).toHaveCount(2);
-    await expect(page.locator('.bash-timeline-item')).toHaveCount(4);
+    await expect(page.locator('.bash-group-item')).toHaveCount(4);
     await expect(page.locator('.tool-status-indicator.pending')).toHaveCount(0);
     await expect(page.locator('.messages-container')).not.toContainText('tools.apply_patch');
     await expect(page.locator('.messages-container')).not.toContainText('tools.write_stdin');
-    for (const row of await page.locator('.bash-timeline-description').all()) await expect(row).not.toContainText('pwsh');
+    for (const row of await page.locator('.bash-group-row-main').all()) await expect(row).not.toContainText('pwsh');
   };
   await verifyCards();
   await page.evaluate(({ messages, threadId }) => {
@@ -1635,7 +1854,7 @@ test('Codex native commands share one batch and one message surface live and aft
     window.updateMessages?.(JSON.stringify(messages));
     return messages;
   });
-  await expect(page.getByText('Batch Run Commands (3)')).toBeVisible();
+  await expectCommandBatch(page, 3);
   await expect(page.locator('.message.assistant')).toHaveCount(1);
   await expect(page.locator('.bash-tool-header')).toHaveCount(0);
   await expect(page.locator('.messages-container')).toContainText('Inspecting the workspace');
@@ -1648,10 +1867,10 @@ test('Codex native commands share one batch and one message surface live and aft
     window.completeCodexHistoryPage?.(JSON.stringify({ pageId: 'commands', sessionId: 'command-thread', mode: 'replace', source: 'native',
       cursor: null, hasMore: false, fromTurn: 0, toTurn: 1, totalTurns: 1, loadedMessageCount: messages.length }));
   }, messages);
-  await expect(page.getByText('Batch Run Commands (3)')).toBeVisible();
+  await expectCommandBatch(page, 3);
   await expect(page.locator('.message.assistant')).toHaveCount(1);
-  await expect(page.locator('.bash-timeline-item')).toHaveCount(3);
-  for (const row of await page.locator('.bash-timeline-description').all()) await expect(row).not.toContainText('pwsh');
+  await expect(page.locator('.bash-group-item')).toHaveCount(3);
+  for (const row of await page.locator('.bash-group-row-main').all()) await expect(row).not.toContainText('pwsh');
   await page.screenshot({ path: `../.workflow/codex-command-batch-${testInfo.project.name}.png` });
 });
 
@@ -1824,6 +2043,45 @@ test('Codex history renders file edits, command reasons, image attachments and c
   expect(refreshedPaths).toEqual(expect.arrayContaining(['src/added.ts', 'src/moved.ts', 'src/gone.ts']));
   expect(refreshedPaths).not.toContain('src/failed.ts');
   expect(refreshedPaths).not.toContain('src/mixed.ts');
+});
+
+test('image drafts stay in their webview when another tab opens or remounts its input', async ({ page, context }) => {
+  test.setTimeout(60_000);
+  const otherPage = await context.newPage();
+  await otherPage.goto('/', { waitUntil: 'domcontentloaded' });
+  await expect(otherPage.locator('.input-editable')).toBeVisible();
+  await otherPage.locator('.header .codicon-settings-gear').locator('..').click();
+  await expect(otherPage.locator('.input-editable')).toHaveCount(0);
+
+  await page.locator('.input-editable').evaluate((editable) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 2;
+    const base64 = canvas.toDataURL('image/png').split(',')[1];
+    const clipboard = new DataTransfer();
+    clipboard.items.add(new File([Uint8Array.from(atob(base64), byte => byte.charCodeAt(0))], 'shot.png', { type: 'image/png' }));
+    editable.dispatchEvent(new ClipboardEvent('paste', { clipboardData: clipboard, bubbles: true, cancelable: true }));
+  });
+  await expect(page.locator('.attachment-item')).toHaveCount(1);
+
+  const newPage = await context.newPage();
+  await newPage.goto('/', { waitUntil: 'domcontentloaded' });
+  await expect(newPage.locator('.input-editable')).toBeVisible();
+  await expect(newPage.locator('.attachment-item')).toHaveCount(0);
+
+  await otherPage.locator('button:has(.codicon-arrow-left)').click();
+  await expect(otherPage.locator('.input-editable')).toBeVisible();
+  await expect(otherPage.locator('.attachment-item')).toHaveCount(0);
+
+  await page.locator('.header .codicon-settings-gear').locator('..').click();
+  await expect(page.locator('.input-editable')).toHaveCount(0);
+  await page.locator('button:has(.codicon-arrow-left)').click();
+  await expect(page.locator('.attachment-item')).toHaveCount(1);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect(page.locator('.attachment-item')).toHaveCount(1);
+  await page.locator('.attachment-remove').click();
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect(page.locator('.input-editable')).toBeVisible();
+  await expect(page.locator('.attachment-item')).toHaveCount(0);
 });
 
 test('native image preparation preserves the draft until the owned reply arrives', async ({ page }) => {

@@ -65,6 +65,41 @@ describe('useControlledValueSync', () => {
     expect(adjustHeight).toHaveBeenCalled();
   });
 
+  it('renders the rich references after replacing the draft externally', () => {
+    const editable = createEditable();
+    const renderTags = vi.fn();
+
+    const selection = {
+      removeAllRanges: vi.fn(),
+      addRange: vi.fn(),
+    };
+    vi.spyOn(window, 'getSelection').mockReturnValue(selection as unknown as Selection);
+
+    const { rerender } = renderHook(
+      ({ value }: { value: string | undefined }) => {
+        useControlledValueSync({
+          value,
+          editableRef: { current: editable },
+          isComposingRef: { current: false },
+          getTextContent: () => editable.innerText,
+          setHasContent: vi.fn(),
+          adjustHeight: vi.fn(),
+          invalidateCache: vi.fn(),
+          cancelPendingInput: vi.fn(),
+          renderTags,
+        });
+      },
+      { initialProps: { value: undefined as string | undefined } }
+    );
+
+    rerender({ value: '@D:/demo.ts#L3 what is this' });
+
+    // The external value is written as plain text, so the chip rendering has to
+    // run afterwards or the draft keeps showing the raw @path.
+    expect(editable.innerText).toBe('@D:/demo.ts#L3 what is this');
+    expect(renderTags).toHaveBeenCalledOnce();
+  });
+
   it('does not sync while composing', () => {
     const editable = createEditable();
     editable.innerText = 'old';

@@ -158,19 +158,28 @@ public class FontConfigService {
     }
 
     /**
-     * Resolve the effective UI font config using persisted settings and live editor typography.
+     * Resolve UI typography and the global scale independently so one invalid preference cannot hide the other.
      *
      * @param settingsService settings facade
      * @return effective UI font payload
      */
     public static JsonObject getResolvedUiFontConfig(CodemossSettingsService settingsService) {
+        JsonObject resolved;
         try {
             JsonObject persistedConfig = settingsService.getUiFontConfig();
-            return resolveUiFontConfig(persistedConfig, getUiSourceFontConfig());
+            resolved = resolveUiFontConfig(persistedConfig, getUiSourceFontConfig());
         } catch (Exception e) {
-            LOG.error("[FontConfig] Failed to resolve UI font config: " + e.getMessage(), e);
-            return resolveUiFontConfig(null, getUiSourceFontConfig());
+            LOG.warn("[FontConfig] Failed to resolve UI font config, using defaults", e);
+            resolved = resolveUiFontConfig(null, getUiSourceFontConfig());
         }
+        try {
+            // The startup font payload also restores scale when JCEF starts with fresh storage.
+            resolved.addProperty("fontSizeLevel", settingsService.getFontSizeLevel());
+        } catch (Exception e) {
+            // Omitting the level preserves the browser cache without migrating a failed read.
+            LOG.warn("[FontConfig] Failed to read font size level, preserving the current scale", e);
+        }
+        return resolved;
     }
 
     /**

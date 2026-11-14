@@ -43,6 +43,12 @@ interface SettingsViewProps {
   // Permission dialog timeout configuration (passed from App.tsx for state sync)
   permissionDialogTimeoutSeconds?: number;
   onPermissionDialogTimeoutChange?: (seconds: number) => void;
+  // Codex access scope owned by the chat state (passed from App.tsx so the
+  // permissions panel shows what the next turn will actually send)
+  codexSandboxSelection?: 'read-only' | 'workspace-write' | 'danger-full-access';
+  codexSandboxSource?: string;
+  codexSandboxEffective?: 'read-only' | 'workspace-write' | 'danger-full-access' | null;
+  onCodexSandboxSelectionChange?: (mode: 'read-only' | 'workspace-write' | 'danger-full-access') => void;
 }
 
 const SettingsView = ({
@@ -58,6 +64,10 @@ const SettingsView = ({
   onAutoOpenFileEnabledChange: onAutoOpenFileEnabledChangeProp,
   permissionDialogTimeoutSeconds: permissionDialogTimeoutSecondsProp,
   onPermissionDialogTimeoutChange: onPermissionDialogTimeoutChangeProp,
+  codexSandboxSelection: codexSandboxSelectionProp,
+  codexSandboxSource: codexSandboxSourceProp,
+  codexSandboxEffective: codexSandboxEffectiveProp,
+  onCodexSandboxSelectionChange: onCodexSandboxSelectionChangeProp,
 }: SettingsViewProps) => {
   const { t } = useTranslation();
   const isCodexMode = currentProvider === 'codex';
@@ -84,6 +94,10 @@ const SettingsView = ({
     onAutoOpenFileEnabledChangeProp,
     permissionDialogTimeoutSecondsProp,
     onPermissionDialogTimeoutChangeProp,
+    codexSandboxSelectionProp,
+    codexSandboxSourceProp,
+    codexSandboxEffectiveProp,
+    onCodexSandboxSelectionChangeProp,
     currentProvider,
   });
 

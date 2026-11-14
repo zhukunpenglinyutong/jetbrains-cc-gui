@@ -202,8 +202,7 @@
             "name": "bash",
             "input": {
               "cmd": "npx playwright install chromium",
-              "command": "npx playwright install chromium",
-              "description": "Run npx"
+              "command": "npx playwright install chromium"
             }
           }
         ]
@@ -246,8 +245,7 @@
             "name": "bash",
             "input": {
               "cmd": "cat > /tmp/review-playwright.config.ts <<'TS'\nexport default { use: { headless: true } };\nTS\nnpx playwright test --config=/tmp/review-playwright.config.ts",
-              "command": "cat > /tmp/review-playwright.config.ts <<'TS'\nexport default { use: { headless: true } };\nTS\nnpx playwright test --config=/tmp/review-playwright.config.ts",
-              "description": "Run cat"
+              "command": "cat > /tmp/review-playwright.config.ts <<'TS'\nexport default { use: { headless: true } };\nTS\nnpx playwright test --config=/tmp/review-playwright.config.ts"
             }
           }
         ]
@@ -270,8 +268,7 @@
             "name": "bash",
             "input": {
               "cmd": "java JUnitCore",
-              "command": "java JUnitCore",
-              "description": "java JUnitCore"
+              "command": "java JUnitCore"
             }
           }
         ]

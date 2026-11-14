@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { REASONING_LEVELS, type ReasoningEffort } from '../types';
-import { useReasoningEffortGuard } from '../reasoningUtils';
+import { useReasoningEffortGuard, type OmpReasoningCatalog } from '../reasoningUtils';
 import { useDropdownPosition } from '../../../hooks/useDropdownPosition';
 
 const RELATIVE_INLINE_BLOCK_STYLE: React.CSSProperties = { position: 'relative', display: 'inline-block' };
@@ -23,6 +23,7 @@ interface ReasoningSelectProps {
   onChange: (effort: ReasoningEffort) => void;
   disabled?: boolean;
   selectedModel?: string;
+  ompCatalog?: OmpReasoningCatalog;
   currentProvider?: string;
   embedded?: boolean;
   triggerRef?: React.RefObject<HTMLElement | null>;
@@ -44,6 +45,7 @@ export const ReasoningSelect = ({
   onChange,
   disabled,
   selectedModel,
+  ompCatalog,
   currentProvider,
   embedded = false,
   triggerRef,
@@ -61,6 +63,8 @@ export const ReasoningSelect = ({
     minWidth: embedded ? 180 : 200,
     maxWidth: 280,
     submenuMaxHeight: SUBMENU_MAX_HEIGHT_PX,
+    // No footer sits below this fly-out; the default clearance would lift it off its own row.
+    submenuBottomClearance: 0,
   });
 
   const { isVisible, availableLevels, currentLevel } = useReasoningEffortGuard(
@@ -68,6 +72,7 @@ export const ReasoningSelect = ({
     onChange,
     selectedModel,
     currentProvider,
+    ompCatalog,
   );
 
   /**
@@ -129,10 +134,20 @@ export const ReasoningSelect = ({
   }, [embedded, isOpen]);
 
   useLayoutEffect(() => {
-    if (embedded || isOpen) {
-      recalculate();
-    }
-  }, [embedded, isOpen, recalculate]);
+    if (!embedded && !isOpen) return;
+    recalculate();
+    window.addEventListener('resize', recalculate);
+    // Wrapping and parent-menu resizing can change the measured bounds after opening.
+    const observer = new ResizeObserver(recalculate);
+    if (dropdownRef.current) observer.observe(dropdownRef.current);
+    const anchor = embedded ? triggerRef?.current : buttonRef.current;
+    if (anchor) observer.observe(anchor);
+    if (embedded && anchor?.parentElement) observer.observe(anchor.parentElement);
+    return () => {
+      window.removeEventListener('resize', recalculate);
+      observer.disconnect();
+    };
+  }, [embedded, isOpen, recalculate, triggerRef]);
 
   if (!isVisible) return null;
   if (!currentLevel) return null;
@@ -141,6 +156,7 @@ export const ReasoningSelect = ({
     ? {
         minWidth: 0,
         maxWidth: maxWidth ?? 280,
+        boxSizing: 'border-box',
         ...(maxHeight != null
           ? { maxHeight: `${maxHeight}px`, overflowY: 'auto' as const }
           : { overflowY: 'visible' as const }),

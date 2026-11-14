@@ -11,10 +11,14 @@ import { startTransition } from 'react';
 import type { UseWindowCallbacksOptions } from '../../useWindowCallbacks';
 import type { ClaudeMessage, ClaudeRawMessage } from '../../../types';
 import { sendBridgeEvent } from '../../../utils/bridge';
-import { clearPendingStreamStart, isPendingStreamStartActive } from '../../../utils/streamLifecycle';
+import {
+  clearPendingStreamStart,
+  isPendingStreamStartActive,
+  scheduleLoadingResyncAfterImmunity,
+} from '../../../utils/streamLifecycle';
 import { THROTTLE_INTERVAL } from '../../useStreamingMessages';
 import { parseSequence } from '../parseSequence';
-import { getStreamEndHandlingMode, getRawUuid, isCodexMessageSnapshot, mergeRawBlocksForFinalization } from '../messageSync';
+import { chooseEndedStreamingContent, ensureRawTextCovers, getStreamEndHandlingMode, getRawUuid, isCodexMessageSnapshot, mergeRawBlocksForFinalization } from '../messageSync';
 
 /**
  * Pour every tool_use_id carried by tool_result blocks inside one message's raw
@@ -79,8 +83,9 @@ export function collectUnresolvedToolUseIds(
         const rawObj = typeof msg.raw === 'string' ? JSON.parse(msg.raw) : msg.raw;
         const content = rawObj?.content ?? rawObj?.message?.content;
         if (!Array.isArray(content)) continue;
-        for (const block of content as Array<{ type?: string; id?: string }>) {
+        for (const block of content as Array<{ type?: string; id?: string; name?: string }>) {
           if (block?.type === 'tool_use' && block.id
+              && block.name !== 'codex_user_input'
               && !resolvedIds.has(block.id)
               && !window.__deniedToolIds?.has(block.id)) {
             idsToAdd.push(block.id);
@@ -120,7 +125,7 @@ export function collectUnresolvedToolUseIds(
       }
 
       for (const tu of toolUses) {
-        if (!existingResultIds.has(tu.id) && !window.__deniedToolIds?.has(tu.id)) {
+        if (tu.name !== 'codex_user_input' && !existingResultIds.has(tu.id) && !window.__deniedToolIds?.has(tu.id)) {
           idsToAdd.push(tu.id);
         }
       }
@@ -268,8 +273,11 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     window.__lastStreamEndedAt = undefined;
     // Clear idempotency guard for the new turn
     window.__streamEndProcessedTurnId = undefined;
-    // Record turn start time for duration calculation in onStreamEnd
-    window.__turnStartedAt = Date.now();
+    // Record turn start time for duration calculation in onStreamEnd. A replay into a page that is
+    // still streaming (remote reconnect) continues the same turn, so keep its original start.
+    if (!(isReplayStart && isStreamingRef.current && window.__turnStartedAt)) {
+      window.__turnStartedAt = Date.now();
+    }
     window.__streamingDeltaRenderDeferred = false;
     streamingContentRef.current = '';
     streamingThinkingRef.current = '';
@@ -504,6 +512,7 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     // Finalize the old turn's bubble below, but keep the marker and the
     // loading state; the dispatched turn's own stream end will reset both.
     const suppressLoadingReset = isPendingStreamStartActive();
+    if (suppressLoadingReset) scheduleLoadingResyncAfterImmunity();
 
     clearStallWatchdog();
     const nativeProvider = options.currentProviderRef.current === 'codex';
@@ -626,10 +635,13 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     if (!window.__deniedToolIds) {
       window.__deniedToolIds = new Set<string>();
     }
-    // FIX: Prioritize streaming content over backend snapshot to prevent digit loss
-    // Streaming content has all the latest deltas (including the final one just flushed).
-    // Backend snapshot might be from an earlier coalescer push and may be incomplete.
-    const endedStreamingContent = streamingContentRef.current || backendSnapshotContent || '';
+    // The delta buffer wins when it is ahead of, or unrelated to, the snapshot:
+    // a stale coalescer push must not chop a newer suffix. When the snapshot
+    // is that same buffer plus a tail the webview never applied, keep the tail.
+    const endedStreamingContent = chooseEndedStreamingContent(
+      streamingContentRef.current,
+      backendSnapshotContent,
+    );
     const endedBackendRaw = backendSnapshotRaw;
 
     // FIX: Clear streaming refs BEFORE setMessages updater to prevent race conditions.
@@ -772,6 +784,11 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
         let finalRaw = newMessages[idx].raw;
         if (!nativeTarget && endedBackendRaw != null) {
           finalRaw = mergeRawBlocksForFinalization(finalRaw, endedBackendRaw) as ClaudeMessage['raw'];
+        }
+        // The bubble renders from raw text blocks. A recovered tail that lives
+        // only on the content string would stay invisible.
+        if (!nativeTarget && finalContent) {
+          finalRaw = ensureRawTextCovers(finalRaw, finalContent) as ClaudeMessage['raw'];
         }
         newMessages[idx] = {
           ...newMessages[idx],

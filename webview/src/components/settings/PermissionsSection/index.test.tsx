@@ -21,6 +21,7 @@ describe('PermissionsSection', () => {
       <PermissionsSection
         codexSandboxMode="read-only"
         codexSandboxSource="user"
+        codexSandboxEffective="read-only"
         onCodexSandboxModeChange={onChange}
       />,
     );
@@ -29,6 +30,18 @@ describe('PermissionsSection', () => {
     expect(screen.getByText('Desired: read-only · Effective: read-only')).toBeTruthy();
     fireEvent.click(screen.getByDisplayValue('danger-full-access'));
     expect(onChange).toHaveBeenCalledWith('danger-full-access');
+  });
+
+  it('never presents the requested range as the effective one', () => {
+    render(
+      <PermissionsSection
+        codexSandboxMode="danger-full-access"
+        codexSandboxSource="default"
+        onCodexSandboxModeChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Desired: danger-full-access · Effective: not confirmed yet')).toBeTruthy();
   });
 
   it('surfaces a native desired/effective conflict without changing the selected range', () => {

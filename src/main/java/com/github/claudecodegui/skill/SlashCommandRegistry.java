@@ -166,6 +166,12 @@ public final class SlashCommandRegistry {
      * Gets the merged slash command list for a given provider and working directory.
      */
     public static List<SlashCommand> getCommands(String provider, String cwd, String currentFilePath) {
+        if (OmpSlashCommandService.isOmp(provider)) {
+            // OMP does not understand Claude's built-ins or .claude/ scans: its own
+            // catalog (cached, never blocking) is the whole list.
+            return OmpSlashCommandService.getCached(cwd);
+        }
+
         boolean isCodex = "codex".equalsIgnoreCase(provider);
 
         List<SlashCommand> builtins = isCodex ? CODEX_BUILTIN : CLAUDE_BUILTIN;
@@ -371,19 +377,36 @@ public final class SlashCommandRegistry {
             return List.of();
         }
 
+        // A plugin manifest may declare each skill directory individually, e.g.
+        //   "skills": ["./skills/engineering/ask-matt", "./skills/engineering/tdd"]
+        // instead of one parent "skills" directory. In that case dirPath *is* a skill
+        // directory; listing its entries only yields SKILL.md and asset folders, so
+        // nothing parses as a skill and the whole array silently yields zero commands.
+        // Detect that shape and treat dirPath itself as a skill to scan. Child
+        // directories are still scanned as well: asset folders contain no SKILL.md
+        // and are skipped by parse, while a genuinely mixed directory (root SKILL.md
+        // plus child skills) yields both instead of silently dropping the children.
+        List<File> skillDirs = new ArrayList<>();
+        SkillFrontmatterParser.SkillMetadata selfMeta = SkillFrontmatterParser.parse(dir.toPath());
+        if (selfMeta != null) {
+            skillDirs.add(dir);
+        }
         File[] entries = dir.listFiles();
-        if (entries == null) {
+        if (entries != null) {
+            for (File entry : entries) {
+                if (entry.isDirectory() && !entry.getName().startsWith(".")) {
+                    skillDirs.add(entry);
+                }
+            }
+        }
+        if (skillDirs.isEmpty()) {
             return List.of();
         }
 
         List<SlashCommand> commands = new ArrayList<>();
-        for (File entry : entries) {
-            if (!entry.isDirectory() || entry.getName().startsWith(".")) {
-                continue;
-            }
-
+        for (File entry : skillDirs) {
             SkillFrontmatterParser.SkillMetadata metadata =
-                    SkillFrontmatterParser.parse(entry.toPath());
+                    entry.equals(dir) ? selfMeta : SkillFrontmatterParser.parse(entry.toPath());
             if (metadata == null) {
                 LOG.debug("Skipping skill directory with invalid metadata: " + entry.getName());
                 continue;

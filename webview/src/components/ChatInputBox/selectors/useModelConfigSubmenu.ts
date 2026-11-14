@@ -13,7 +13,7 @@ export const SUBMENU_HOVER_DELAY_MS = 200;
  */
 export const SUBMENU_TRIGGER_DELAY_MS = 500;
 
-export type ActiveSubmenu = 'none' | 'effort' | 'speed' | 'preset';
+export type ActiveSubmenu = 'none' | 'effort' | 'speed' | 'preset' | 'approval';
 
 /**
  * Hover state machine behind the model-config fly-out submenus: which
@@ -31,6 +31,7 @@ export const useModelConfigSubmenu = () => {
   const effortTriggerRef = useRef<HTMLDivElement>(null);
   const speedTriggerRef = useRef<HTMLDivElement>(null);
   const presetTriggerRef = useRef<HTMLDivElement>(null);
+  const approvalTriggerRef = useRef<HTMLDivElement>(null);
 
   const clearHoverTimer = useCallback(() => {
     if (hoverTimerRef.current !== undefined) {
@@ -63,6 +64,7 @@ export const useModelConfigSubmenu = () => {
 
   const triggerRefFor = (submenu: ActiveSubmenu) => {
     if (submenu === 'preset') return presetTriggerRef.current;
+    if (submenu === 'approval') return approvalTriggerRef.current;
     if (submenu === 'effort') return effortTriggerRef.current;
     if (submenu === 'speed') return speedTriggerRef.current;
     return null;
@@ -94,6 +96,7 @@ export const useModelConfigSubmenu = () => {
     effortTriggerRef,
     speedTriggerRef,
     presetTriggerRef,
+    approvalTriggerRef,
     openSubmenu,
     scheduleSubmenu,
     retainActiveSubmenu,

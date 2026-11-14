@@ -1,6 +1,8 @@
 package com.github.claudecodegui.handler.history;
 
 import com.github.claudecodegui.bridge.NodeDetector;
+import com.github.claudecodegui.provider.codex.CodexSDKBridge;
+import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.handler.NodeJsServiceCaller;
 import com.github.claudecodegui.handler.core.HandlerContext;
 
@@ -8,6 +10,7 @@ import com.github.claudecodegui.cache.SessionIndexCache;
 import com.github.claudecodegui.cache.SessionIndexManager;
 import com.github.claudecodegui.provider.claude.ClaudeHistoryReader;
 import com.github.claudecodegui.provider.codex.CodexHistoryReader;
+import com.github.claudecodegui.provider.common.GitRepositorySessionMatcher;
 import com.github.claudecodegui.provider.dsh.DshHistoryReader;
 import com.github.claudecodegui.provider.grok.GrokHistoryReader;
 import com.github.claudecodegui.provider.kimi.KimiHistoryReader;
@@ -55,6 +58,11 @@ class HistoryLoadService {
             try {
                 String historyJson;
 
+                GitRepositorySessionMatcher repositoryMatcher = new GitRepositorySessionMatcher(
+                        ("claude".equals(provider) || "codex".equals(provider))
+                                && GitRepositorySessionMatcher.isEnabled(context.getSettingsService())
+                                ? context.getProject().getBasePath() : null);
+                java.util.function.Predicate<String> additionalMatch = repositoryMatcher.hasRepository() ? repositoryMatcher : null;
                 // Get current project path
                 String rawPath = context.resolveEffectiveWorkingDirectory();
                 String nodePath = NodeDetector.getInstance().getCachedNodePath();
@@ -69,7 +77,7 @@ class HistoryLoadService {
                     // Use CodexHistoryReader to read Codex sessions (filtered by project)
                     LOG.info("[HistoryHandler] 使用 CodexHistoryReader 读取 Codex 会话 (项目: " + projectPath + ")");
                     CodexHistoryReader codexReader = new CodexHistoryReader();
-                    historyJson = codexReader.getSessionsForProjectAsJson(projectPath);
+                    historyJson = codexReader.getSessionsForProjectAsJson(projectPath, additionalMatch);
                     LOG.info("[HistoryHandler] CodexHistoryReader 返回的 JSON 长度: " + historyJson.length());
                 } else if ("grok".equals(provider)) {
                     LOG.info("[HistoryHandler] 使用 GrokHistoryReader 读取 Grok 会话 (项目: " + projectPath + ")");
@@ -115,11 +123,12 @@ class HistoryLoadService {
                     // Default: use ClaudeHistoryReader to read Claude sessions
                     LOG.info("[HistoryHandler] 使用 ClaudeHistoryReader 读取 Claude 会话");
                     ClaudeHistoryReader historyReader = new ClaudeHistoryReader();
-                    historyJson = historyReader.getProjectDataAsJson(projectPath);
+                    historyJson = historyReader.getProjectDataAsJson(projectPath, additionalMatch);
                 }
 
                 // Load favorite data and merge into history data
-                String enhancedJson = enhanceHistoryWithFavorites(historyJson, provider);
+                String activityJson = enhanceHistoryWithActivity(historyJson, provider, context.getSession(), context.getCodexSDKBridge());
+                String enhancedJson = enhanceHistoryWithFavorites(activityJson, provider);
                 LOG.info("[HistoryHandler] enhanceHistoryWithFavorites 完成，JSON 长度: " + enhancedJson.length());
 
                 // Load custom titles and merge into history data
@@ -127,7 +136,9 @@ class HistoryLoadService {
                 LOG.info("[HistoryHandler] enhanceHistoryWithTitles 完成，JSON 长度: " + finalJson.length());
 
                 // Use Base64 encoding to avoid JavaScript string escaping issues
-                String base64Json = Base64.getEncoder().encodeToString(finalJson.getBytes(StandardCharsets.UTF_8));
+                JsonObject historyPayload = new Gson().fromJson(finalJson, JsonObject.class);
+                historyPayload.addProperty("provider", provider);
+                String base64Json = Base64.getEncoder().encodeToString(historyPayload.toString().getBytes(StandardCharsets.UTF_8));
                 LOG.info("[HistoryHandler] Base64 编码完成，长度: " + base64Json.length());
 
                 ApplicationManager.getApplication().invokeLater(() -> {
@@ -213,8 +224,28 @@ class HistoryLoadService {
     }
 
     /**
-     * Enhance history data: add favorite info to each session.
+     * Mark live turns and foreign native writers before optional metadata enrichment.
      */
+    static String enhanceHistoryWithActivity(String historyJson, String provider, ClaudeSession active, CodexSDKBridge bridge) {
+        if (!"codex".equals(provider)) {
+            return historyJson;
+        }
+        try {
+            JsonObject history = new Gson().fromJson(historyJson, JsonObject.class);
+            if (history == null) {
+                return historyJson;
+            }
+            if (history.has("sessions") && history.get("sessions").isJsonArray()) {
+                CodexHistoryActivity.markRows(history.getAsJsonArray("sessions"), "sessionId", active, bridge);
+            }
+            return new Gson().toJson(history);
+        } catch (Exception e) {
+            // Activity is only a UI hint; the deletion guard still refuses protected rows.
+            LOG.warn("[HistoryHandler] Failed to mark Codex history activity: " + e.getMessage());
+            return historyJson;
+        }
+    }
+
     private String enhanceHistoryWithFavorites(String historyJson, String currentProvider) {
         try {
             // Load favorite data

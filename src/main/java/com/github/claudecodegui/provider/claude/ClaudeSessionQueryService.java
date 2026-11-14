@@ -2,10 +2,10 @@ package com.github.claudecodegui.provider.claude;
 
 import com.github.claudecodegui.bridge.EnvironmentConfigurator;
 import com.github.claudecodegui.bridge.NodeDetector;
+import com.github.claudecodegui.bridge.NodeProcessRunner;
 import com.github.claudecodegui.bridge.ProcessManager;
 import com.github.claudecodegui.provider.common.SessionHistoryIncompleteException;
 import com.github.claudecodegui.provider.common.SessionHistoryNotFoundException;
-import com.github.claudecodegui.util.PlatformUtils;
 import com.github.claudecodegui.util.UserMessageSanitizer;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -13,16 +13,14 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
 
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.CancellationException;
+import java.util.function.BooleanSupplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.function.Supplier;
@@ -46,6 +44,7 @@ class ClaudeSessionQueryService {
     private final ProcessManager processManager;
     private final EnvironmentConfigurator envConfigurator;
     private final ClaudeJsonOutputExtractor outputExtractor;
+    private final int processTimeoutSeconds;
 
     ClaudeSessionQueryService(
             Logger log,
@@ -56,6 +55,20 @@ class ClaudeSessionQueryService {
             EnvironmentConfigurator envConfigurator,
             ClaudeJsonOutputExtractor outputExtractor
     ) {
+        this(log, gson, nodeDetector, sdkDirSupplier, processManager, envConfigurator, outputExtractor,
+                PROCESS_TIMEOUT_SECONDS);
+    }
+
+    ClaudeSessionQueryService(
+            Logger log,
+            Gson gson,
+            NodeDetector nodeDetector,
+            Supplier<File> sdkDirSupplier,
+            ProcessManager processManager,
+            EnvironmentConfigurator envConfigurator,
+            ClaudeJsonOutputExtractor outputExtractor,
+            int processTimeoutSeconds
+    ) {
         this.log = log;
         this.gson = gson;
         this.nodeDetector = nodeDetector;
@@ -63,11 +76,17 @@ class ClaudeSessionQueryService {
         this.processManager = processManager;
         this.envConfigurator = envConfigurator;
         this.outputExtractor = outputExtractor;
+        this.processTimeoutSeconds = processTimeoutSeconds;
     }
 
     List<JsonObject> getSessionMessages(String sessionId, String cwd) {
+        return getSessionMessages(sessionId, cwd, () -> false);
+    }
+
+    List<JsonObject> getSessionMessages(String sessionId, String cwd, BooleanSupplier cancellation) {
         try {
-            JsonObject jsonResult = runSessionQuery("getSession", sessionId, cwd, "getSessionMessages");
+            JsonObject jsonResult = runSessionQuery(
+                    "getSession", sessionId, cwd, "getSessionMessages", cancellation);
 
             if (jsonResult.has("missing") && jsonResult.get("missing").getAsBoolean()) {
                 throw new SessionHistoryNotFoundException(sessionId, cwd);
@@ -78,6 +97,7 @@ class ClaudeSessionQueryService {
                 if (jsonResult.has("messages")) {
                     JsonArray messagesArray = jsonResult.getAsJsonArray("messages");
                     for (var msg : messagesArray) {
+                        checkCancellation(cancellation);
                         messages.add(normalizeClaudeHistoryMessage(msg.getAsJsonObject()));
                     }
                 }
@@ -118,9 +138,14 @@ class ClaudeSessionQueryService {
      * @throws SessionHistoryNotFoundException when the transcript is missing
      */
     JsonObject getSessionMessagesPage(String sessionId, String cwd, Integer beforeTurn, int limit) {
+        return getSessionMessagesPage(sessionId, cwd, beforeTurn, limit, () -> false);
+    }
+
+    JsonObject getSessionMessagesPage(String sessionId, String cwd, Integer beforeTurn, int limit,
+                                      BooleanSupplier cancellation) {
         try {
             JsonObject jsonResult = runSessionQuery("getSessionPage", sessionId, cwd, "getSessionMessagesPage",
-                    beforeTurn == null ? "" : String.valueOf(beforeTurn), String.valueOf(limit));
+                    cancellation, beforeTurn == null ? "" : String.valueOf(beforeTurn), String.valueOf(limit));
 
             // Missing history must clear the stale ID without another bridge read.
             if (jsonResult.has("missing") && jsonResult.get("missing").getAsBoolean()) {
@@ -132,6 +157,7 @@ class ClaudeSessionQueryService {
                 if (jsonResult.has("messages")) {
                     JsonArray messagesArray = jsonResult.getAsJsonArray("messages");
                     for (int i = 0; i < messagesArray.size(); i++) {
+                        checkCancellation(cancellation);
                         messagesArray.set(i, normalizeClaudeHistoryMessage(messagesArray.get(i).getAsJsonObject()));
                     }
                 }
@@ -143,7 +169,7 @@ class ClaudeSessionQueryService {
                     : "Unknown error";
             log.warn("[getSessionMessagesPage] Page query failed: " + errorMsg);
             return null;
-        } catch (SessionHistoryNotFoundException e) {
+        } catch (CancellationException | SessionHistoryNotFoundException e) {
             throw e;
         } catch (Exception e) {
             log.warn("[getSessionMessagesPage] Page query error: " + e.getMessage(), e);
@@ -174,10 +200,31 @@ class ClaudeSessionQueryService {
     }
 
     private JsonObject runSessionQuery(String commandName, String sessionId, String cwd, String logPrefix) throws Exception {
-        return runSessionQuery(commandName, sessionId, cwd, logPrefix, new String[0]);
+        return runSessionQuery(commandName, sessionId, cwd, logPrefix, () -> false, new String[0]);
     }
 
     private JsonObject runSessionQuery(String commandName, String sessionId, String cwd, String logPrefix, String... extraArgs) throws Exception {
+        return runSessionQuery(commandName, sessionId, cwd, logPrefix, () -> false, extraArgs);
+    }
+
+    private JsonObject runSessionQuery(
+            String commandName,
+            String sessionId,
+            String cwd,
+            String logPrefix,
+            BooleanSupplier cancellation
+    ) throws Exception {
+        return runSessionQuery(commandName, sessionId, cwd, logPrefix, cancellation, new String[0]);
+    }
+
+    private JsonObject runSessionQuery(
+            String commandName,
+            String sessionId,
+            String cwd,
+            String logPrefix,
+            BooleanSupplier cancellation,
+            String... extraArgs
+    ) throws Exception {
         if (sessionId == null || !VALID_SESSION_ID.matcher(sessionId).matches()) {
             throw new IllegalArgumentException("Invalid sessionId: " + sessionId);
         }
@@ -211,36 +258,10 @@ class ClaudeSessionQueryService {
         envConfigurator.updateProcessEnvironment(pb, node);
 
         // L5 fix: register with ProcessManager so cleanupAllProcesses sees this child.
-        String channelId = ProcessManager.newChannelId("claude-session-query");
-        Process process = null;
-        StringBuilder output = new StringBuilder();
-        try {
-            process = pb.start();
-            processManager.registerProcess(channelId, process);
+        NodeProcessRunner.Result result = NodeProcessRunner.run(
+                prepareProcessBuilder(pb), processManager, "claude-session-query", null, processTimeoutSeconds, cancellation);
 
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    output.append(line).append("\n");
-                }
-            }
-
-            boolean finished = process.waitFor(PROCESS_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-            if (!finished) {
-                PlatformUtils.terminateProcess(process);
-                throw new RuntimeException("Node.js process timed out after " + PROCESS_TIMEOUT_SECONDS + " seconds");
-            }
-        } finally {
-            if (process != null) {
-                if (process.isAlive()) {
-                    PlatformUtils.terminateProcess(process);
-                }
-                processManager.unregisterProcess(channelId, process);
-            }
-        }
-
-        String outputStr = output.toString().trim();
+        String outputStr = result.output().trim();
         log.debug("[" + logPrefix + "] Raw output length: " + outputStr.length());
         if (log.isDebugEnabled()) {
             log.debug("[" + logPrefix + "] Raw output (first 300 chars): "
@@ -272,6 +293,16 @@ class ClaudeSessionQueryService {
         log.debug("[" + logPrefix + "] JSON parsed successfully, success="
                 + (jsonResult.has("success") ? jsonResult.get("success").getAsBoolean() : "null"));
         return jsonResult;
+    }
+
+    ProcessBuilder prepareProcessBuilder(ProcessBuilder configured) {
+        return configured;
+    }
+
+    private void checkCancellation(BooleanSupplier cancellation) {
+        if (cancellation != null && cancellation.getAsBoolean()) {
+            throw new CancellationException("Claude session query was cancelled");
+        }
     }
 
     static JsonObject normalizeClaudeHistoryMessage(JsonObject originalMessage) {

@@ -18,6 +18,12 @@ const providerListListeners = new Set<ProviderListListener>();
 const activeProviderListeners = new Set<ActiveProviderListener>();
 const codexProviderListListeners = new Set<ProviderListListener>();
 const activeCodexProviderListeners = new Set<ActiveProviderListener>();
+// Last active-provider push, so a late subscriber can tell a real switch from a re-push.
+let lastActiveProviderJson: string | null = null;
+
+export function getLastActiveProviderJson(): string | null {
+  return lastActiveProviderJson;
+}
 
 function emit<T>(listeners: Set<(value: T) => void>, value: T): void {
   // Snapshot to avoid mutation during iteration.
@@ -36,11 +42,13 @@ function emit<T>(listeners: Set<(value: T) => void>, value: T): void {
  * re-attaches the dispatcher.
  */
 export function installRuntimeProviderDispatchers(): void {
+  lastActiveProviderJson = null;
   window.updateProviders = (json: string) => {
     emit(providerListListeners, json);
   };
 
   window.updateActiveProvider = (json: string) => {
+    lastActiveProviderJson = json;
     emit(activeProviderListeners, json);
   };
 

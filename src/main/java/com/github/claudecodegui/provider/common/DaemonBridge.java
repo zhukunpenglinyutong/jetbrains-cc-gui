@@ -75,6 +75,7 @@ public class DaemonBridge {
 
     // Lifecycle listener
     private volatile DaemonLifecycleListener lifecycleListener;
+    private volatile String launchedNodePath;
 
     // Event listeners for custom daemon events. CopyOnWriteArrayList allows safe
     // iteration during dispatch while listeners may be added/removed concurrently.
@@ -337,6 +338,17 @@ public class DaemonBridge {
         }
     }
 
+    /** Node executable of the latest launch; a running daemon keeps it even after the setting changes. */
+    public String getLaunchedNodePath() {
+        return this.launchedNodePath;
+    }
+
+    /** WSL distro this daemon generation reported at startup, or null outside WSL. */
+    public String getWslDistro() {
+        DaemonGenerationContext context = this.daemonContext;
+        return context == null ? null : context.wslDistro;
+    }
+
     private Process launchConfiguredDaemon() throws IOException {
         File bridgeDir = directoryResolver.findSdkDir();
         if (bridgeDir == null) {
@@ -352,6 +364,7 @@ public class DaemonBridge {
         if (nodePath == null) {
             throw new IOException("Node.js not found");
         }
+        this.launchedNodePath = nodePath;
 
         List<String> daemonCmd = NodeDetector.buildNodeScriptCommand(
                 nodePath, daemonScript.getAbsolutePath());
@@ -858,6 +871,7 @@ public class DaemonBridge {
             case "ready":
                 boolean preloaded = obj.has("sdkPreloaded")
                         && obj.get("sdkPreloaded").getAsBoolean();
+                context.wslDistro = obj.has("wslDistro") ? obj.get("wslDistro").getAsString() : null;
                 if (context.signalReady(preloaded) && lifecycleListener != null) {
                     lifecycleListener.onDaemonReady();
                 }
@@ -1464,6 +1478,7 @@ public class DaemonBridge {
         private final Deque<String> recentStderrLines = new ArrayDeque<>();
         private final HeartbeatTimestamps heartbeatTimestamps;
         private volatile DaemonGenerationState state = DaemonGenerationState.ACTIVE;
+        private volatile String wslDistro;
         private volatile boolean startupPublished;
         private volatile Thread readerThread;
         private volatile Thread heartbeatThread;

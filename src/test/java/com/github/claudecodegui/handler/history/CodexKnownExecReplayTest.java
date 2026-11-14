@@ -18,6 +18,320 @@ import static org.junit.Assert.assertTrue;
 public class CodexKnownExecReplayTest {
     private static final String PATCH = "*** Begin Patch\n*** Add File: a.ts\n+created\n*** End Patch";
 
+    @Test
+    public void lifecycleTurnOwnsMcpReceiptsWhenModelMetadataUsesAnotherTurnId() {
+        JsonArray records = new JsonArray();
+        records.add(JsonParser.parseString("{\"type\":\"session_meta\",\"payload\":{\"id\":\"root\"}}"));
+        records.add(JsonParser.parseString("{\"type\":\"turn_context\",\"payload\":{\"turn_id\":\"native-turn\"}}"));
+        JsonObject wrapper = call("mcp-wrapper", "text(await tools.mcp__web_fetch__web_get_metadata({url:'https://example.com'}));");
+        wrapper.getAsJsonObject("payload").add("internal_chat_message_metadata_passthrough",
+                JsonParser.parseString("{\"turn_id\":\"model-turn\"}"));
+        records.add(wrapper);
+        records.add(JsonParser.parseString("""
+                {"type":"event_msg","payload":{"type":"item_completed","thread_id":"root","turn_id":"native-turn",
+                "item":{"type":"McpToolCall","id":"native-mcp","server":"web-fetch","tool":"web_get_metadata",
+                "arguments":{"url":"https://example.com"},"status":"completed",
+                "result":{"content":[{"type":"text","text":"Example Domain"}]}}}}
+                """));
+        records.add(output("mcp-wrapper", "Script completed"));
+        List<JsonObject> projected = blocks(records);
+        assertEquals(List.of("web_get_metadata"), toolNames(projected));
+        assertEquals("Example Domain", projected.get(1).getAsJsonArray("content").get(0).getAsJsonObject().get("text").getAsString());
+        assertFalse(projected.get(1).get("is_error").getAsBoolean());
+        assertFalse(toolNames(projected).contains("exec"));
+    }
+
+    /** Labelled map batches retain source order while native receipts prove each command's outcome. */
+    @Test
+    public void restoresLabelledMappedCommandsWithLiteralOverrides() {
+        String script = "// @exec: {\"max_output_tokens\":18500}\n"
+                + "const jobs=[['proposal A',{cmd:'sed -n 1,195p plan.md',workdir:'/old',max_output_tokens:7000}],"
+                + "['proposal B',{cmd:'sed -n 196,390p plan.md'}],"
+                + "['validation',{cmd:\"node <<'NODE'\\nconsole.log('checked')\\nNODE\"}]];"
+                + "const rs=await Promise.allSettled(jobs.map(async ([label,args])=>"
+                + "({label,...await tools.exec_command({...args,workdir:'/project',max_output_tokens:2000})})));"
+                + "for(const r of rs)text(r.status==='fulfilled'?r.value:r.reason);";
+        JsonArray records = new JsonArray();
+        records.add(call("mapped", script));
+        List<String> commands = List.of("sed -n 1,195p plan.md", "sed -n 196,390p plan.md", "node <<'NODE'\nconsole.log('checked')\nNODE");
+        for (int index : List.of(2, 0, 1)) {
+            JsonObject receipt = nativeCommand("mapped-" + index, index == 2 ? "failed" : "completed", index == 2 ? 1 : 0);
+            JsonObject item = receipt.getAsJsonObject("payload").getAsJsonObject("item");
+            item.addProperty("command", commands.get(index));
+            item.addProperty("cwd", "/project");
+            records.add(receipt);
+        }
+        records.add(output("mapped", "Script completed\nOutput:\n", "{\"label\":\"proposal A\",\"exit_code\":0}",
+                "{\"label\":\"proposal B\",\"exit_code\":0}", "{\"label\":\"validation\",\"exit_code\":1}"));
+
+        List<JsonObject> projected = blocks(records);
+        assertEquals(List.of("bash", "bash", "bash"), toolNames(projected));
+        assertEquals(List.of("mapped-0 output", "mapped-1 output", "mapped-2 output"), results(projected));
+        List<JsonObject> tools = projected.stream().filter(block -> "tool_use".equals(string(block, "type"))).toList();
+        for (int index = 0; index < tools.size(); index++) {
+            JsonObject input = tools.get(index).getAsJsonObject("input");
+            assertEquals(commands.get(index), string(input, "command"));
+            assertEquals("/project", string(input, "workdir"));
+            assertEquals(2000, input.get("max_output_tokens").getAsInt());
+            assertFalse("a wrapper label is not a recorded execution reason", input.has("description"));
+        }
+        assertTrue(projected.stream().anyMatch(block -> "mapped-2".equals(string(block, "tool_use_id")) && block.get("is_error").getAsBoolean()));
+    }
+
+    /** A mapped command batch must not leave its neighbouring patch or MCP call inside an exec card. */
+    @Test
+    public void restoresMappedCommandsBesidePatchesAndMcpCalls() {
+        JsonArray records = new JsonArray();
+        records.add(call("mapped-mixed", "text(await tools.apply_patch(" + new Gson().toJson(PATCH) + "));"
+                + "const jobs=[['date examples',{cmd:'node dates.js'}],['module status',{cmd:'git status --short'}]];"
+                + "const rs=await Promise.allSettled(jobs.map(async ([label,args])=>"
+                + "({label,...await tools.exec_command({...args,workdir:'/project'})})));"
+                + "for(const r of rs){if(r.status==='fulfilled'){text(r.value.label);text(r.value.output);text({exit_code:r.value.exit_code});}else text(r.reason);}"
+                + "text(await tools.mcp__dbx__inspect({database:'fixture'}));"));
+        JsonObject patch = nativePatch();
+        patch.getAsJsonObject("payload").addProperty("turn_id", "own");
+        records.add(patch);
+        for (String command : List.of("git status --short", "node dates.js")) {
+            JsonObject receipt = nativeCommand(command, "completed", 0);
+            receipt.getAsJsonObject("payload").getAsJsonObject("item").addProperty("command", command);
+            records.add(receipt);
+        }
+        records.add(JsonParser.parseString("""
+                {"type":"event_msg","payload":{"type":"item_completed","thread_id":"root","turn_id":"own",
+                "item":{"type":"McpToolCall","id":"database","server":"dbx","tool":"inspect","status":"completed",
+                "arguments":{"database":"fixture"},"result":{"content":[{"type":"text","text":"query result"}]}}}}
+                """));
+        records.add(output("mapped-mixed", "{}", "date examples", "date output", "{\"exit_code\":0}",
+                "module status", "status output", "{\"exit_code\":0}", "query result"));
+
+        List<JsonObject> projected = blocks(records);
+        assertEquals(List.of("file_change", "bash", "bash", "inspect"), toolNames(projected));
+        assertTrue(results(projected).containsAll(List.of("node dates.js output", "git status --short output")));
+        assertEquals(1, projected.stream().filter(block -> "native-patch".equals(string(block, "id"))).count());
+    }
+
+    /** Dynamic jobs, mutations, unknown outcomes and ambiguous commands must remain reviewable. */
+    @Test
+    public void keepsUnprovenMappedBatchesInsideTheirWrapper() {
+        String declaration = "const jobs=[['first',{cmd:'npm test'}],['second',{cmd:'gradle test'}]];";
+        String mapping = "const rs=await Promise.allSettled(jobs.map(async ([label,args])=>"
+                + "({label,...await tools.exec_command({...args,workdir:'/project'})})));";
+        for (String script : List.of(declaration + mapping,
+                declaration + "jobs.reverse();" + mapping,
+                declaration + "const alias=jobs;" + mapping,
+                declaration.replace("'npm test'", "computedCommand") + mapping,
+                declaration + mapping.replace("'/project'", "cwd"),
+                declaration + mapping.replace("...args,workdir", "...args,...options,workdir"),
+                declaration + mapping.replace("...await tools", "...await maybeTools"))) {
+            JsonArray records = new JsonArray();
+            records.add(call("unproven-mapped", script));
+            records.add(output("unproven-mapped", "shared output"));
+            assertTrue(script, toolNames(blocks(records)).contains("exec"));
+        }
+        JsonArray ambiguous = new JsonArray();
+        ambiguous.add(call("same-mapped", declaration.replace("gradle test", "npm test") + mapping));
+        ambiguous.add(nativeCommand("first", "completed", 0));
+        ambiguous.add(nativeCommand("second", "failed", 1));
+        ambiguous.add(output("same-mapped", "unindexed output"));
+        assertTrue(toolNames(blocks(ambiguous)).contains("exec"));
+    }
+
+    /** History commands retain native actions so the shared renderer can match live row labels. */
+    @Test
+    public void preservesNativeCommandActionsAcrossWrappersAndDetachedReceipts() {
+        List<String> commands = List.of("tail -n 20 /tmp/build.log", "ls -la src", "node scripts/verify-command-output.mjs");
+        List<String> types = List.of("read", "list_files", "unknown");
+        for (boolean wrapped : List.of(false, true)) {
+            JsonArray records = new JsonArray();
+            if (wrapped) {
+                records.add(call("command-labels", String.join("", commands.stream()
+                        .map(command -> "text(await tools.exec_command({cmd:" + new Gson().toJson(command) + "}));").toList())));
+            }
+            for (int index = 0; index < commands.size(); index++) {
+                JsonObject receipt = nativeCommand("command-" + index, "completed", 0);
+                JsonObject item = receipt.getAsJsonObject("payload").getAsJsonObject("item");
+                item.addProperty("command", commands.get(index));
+                JsonObject action = new JsonObject();
+                action.addProperty("type", types.get(index));
+                action.addProperty("cmd", commands.get(index));
+                if (index < 2) {
+                    action.addProperty("path", index == 0 ? "/tmp/build.log" : "src");
+                }
+                JsonArray actions = new JsonArray();
+                actions.add(action);
+                item.add("parsed_cmd", actions);
+                if (index == 2) {
+                    item.addProperty("summary", "Verify command output");
+                    item.addProperty("approvalReason", "Inspect generated output");
+                }
+                records.add(receipt);
+            }
+            if (wrapped) {
+                records.add(output("command-labels", "{\"exit_code\":0}", "{\"exit_code\":0}", "{\"exit_code\":0}"));
+            }
+
+            List<JsonObject> tools = blocks(records).stream().filter(block -> "tool_use".equals(string(block, "type"))).toList();
+            assertEquals(3, tools.size());
+            for (int index = 0; index < tools.size(); index++) {
+                JsonObject input = tools.get(index).getAsJsonObject("input");
+                if (index == 2) {
+                    assertEquals("Verify command output", string(input, "description"));
+                    assertEquals("Inspect generated output", string(input, "approvalReason"));
+                } else {
+                    assertFalse("only recorded summaries belong in descriptions", input.has("description"));
+                }
+                assertEquals(commands.get(index), string(input, "command"));
+                assertEquals(types.get(index), string(input.getAsJsonArray("commandActions").get(0).getAsJsonObject(), "type"));
+            }
+            assertEquals("/tmp/build.log", string(tools.get(0).getAsJsonObject("input").getAsJsonArray("commandActions").get(0).getAsJsonObject(), "path"));
+        }
+    }
+
+    /** Explicit directories disambiguate same-text commands whose completed results omit session ids. */
+    @Test
+    public void restoresFourCommandBatchWithSameCommandInDifferentDirectories() {
+        JsonArray records = new JsonArray();
+        records.add(call("project-checks", "const results = await Promise.allSettled(["
+                + "tools.exec_command({cmd:'rg --files src docs',max_output_tokens:6500}),"
+                + "tools.exec_command({cmd:'git status --short',workdir:'/project/webapp',max_output_tokens:1200}),"
+                + "tools.exec_command({cmd:'git status --short',workdir:'/project/vue',max_output_tokens:1200}),"
+                + "tools.exec_command({cmd:'rg -n annual src/router',workdir:'/project/vue',max_output_tokens:6500})]);"
+                + "for (let i=0;i<results.length;i++) text({index:i,...results[i]});"));
+        for (int index : List.of(2, 0, 3, 1)) {
+            JsonObject receipt = nativeCommand("native-" + index, index == 3 ? "failed" : "completed", index == 3 ? 2 : 0);
+            JsonObject item = receipt.getAsJsonObject("payload").getAsJsonObject("item");
+            item.addProperty("command", index == 0 ? "rg --files src docs" : index == 3 ? "rg -n annual src/router" : "git status --short");
+            item.addProperty("process_id", String.valueOf(100 + index));
+            item.addProperty("cwd", "file:///project/" + (index == 1 ? "webapp" : index == 0 ? "" : "vue"));
+            records.add(receipt);
+        }
+        records.add(output("project-checks", "Script completed\nOutput:\n",
+                "{\"index\":0,\"status\":\"fulfilled\",\"value\":{\"exit_code\":0,\"output\":\"files\"}}",
+                "{\"index\":1,\"status\":\"fulfilled\",\"value\":{\"exit_code\":0,\"output\":\"webapp status\"}}",
+                "{\"index\":2,\"status\":\"fulfilled\",\"value\":{\"exit_code\":0,\"output\":\"vue status\"}}",
+                "{\"index\":3,\"status\":\"fulfilled\",\"value\":{\"exit_code\":2,\"output\":\"missing router\"}}"));
+
+        List<JsonObject> projected = blocks(records);
+        List<JsonObject> tools = projected.stream().filter(block -> "tool_use".equals(string(block, "type"))).toList();
+        assertEquals(List.of("bash", "bash", "bash", "bash"), toolNames(projected));
+        assertEquals(List.of("native-0", "native-1", "native-2", "native-3"), tools.stream().map(tool -> string(tool, "id")).toList());
+        assertEquals("/project/webapp", string(tools.get(1).getAsJsonObject("input"), "workdir"));
+        assertEquals("/project/vue", string(tools.get(2).getAsJsonObject("input"), "workdir"));
+        assertEquals(List.of("native-0 output", "native-1 output", "native-2 output", "native-3 output"), results(projected));
+    }
+
+    /** Directory evidence must preserve an edit between two otherwise identical commands. */
+    @Test
+    public void keepsPatchAndDirectoryOwnedCommandsAsMixedToolCards() {
+        JsonArray records = new JsonArray();
+        records.add(call("mixed-directories", "const results=await Promise.allSettled(["
+                + "tools.exec_command({cmd:'npm test',workdir:'/project/webapp'}),"
+                + "tools.apply_patch(" + new Gson().toJson(PATCH) + "),"
+                + "tools.exec_command({cmd:'npm test',workdir:'/project/vue'})]);"
+                + "for(let i=0;i<results.length;i++)text({index:i,...results[i]});"));
+        records.add(nativePatch());
+        for (int index : List.of(2, 0)) {
+            JsonObject receipt = nativeCommand("command-" + index, "completed", 0);
+            JsonObject payload = receipt.getAsJsonObject("payload");
+            payload.addProperty("turn_id", "turn");
+            payload.getAsJsonObject("item").addProperty("cwd", "/project/" + (index == 0 ? "webapp" : "vue"));
+            records.add(receipt);
+        }
+        records.add(output("mixed-directories", indexed(0, "{\"exit_code\":0,\"output\":\"webapp\"}"),
+                indexed(1, "{}"), indexed(2, "{\"exit_code\":0,\"output\":\"vue\"}")));
+        List<JsonObject> projected = blocks(records);
+        assertEquals(List.of("bash", "file_change", "bash"), toolNames(projected));
+        assertEquals(List.of("command-0 output", "saved", "command-2 output"), results(projected));
+    }
+
+    /** POSIX backslashes remain filename characters when directory evidence owns a command receipt. */
+    @Test
+    public void distinguishesPosixBackslashesFromDirectorySeparators() {
+        JsonArray records = new JsonArray();
+        records.add(call("posix-directories", "const results=await Promise.allSettled(["
+                + "tools.exec_command({cmd:'npm test',workdir:" + new Gson().toJson("/project/a\\b") + "}),"
+                + "tools.exec_command({cmd:'npm test',workdir:'/project/a/b'})]);"
+                + "results.forEach((r,i)=>text({index:i,...r}));"));
+        JsonObject second = nativeCommand("nested-directory", "failed", 2);
+        second.getAsJsonObject("payload").getAsJsonObject("item").addProperty("cwd", "file:///project/a/b");
+        records.add(second);
+        JsonObject first = nativeCommand("literal-backslash", "completed", 0);
+        first.getAsJsonObject("payload").getAsJsonObject("item").addProperty("cwd", "file:///project/a%5Cb");
+        records.add(first);
+        records.add(output("posix-directories", indexed(0, "{\"exit_code\":0,\"output\":\"first passed\"}"),
+                indexed(1, "{\"exit_code\":2,\"output\":\"second failed\"}")));
+
+        List<JsonObject> projected = blocks(records);
+        assertEquals(List.of("bash", "bash"), toolNames(projected));
+        assertEquals(List.of("literal-backslash", "nested-directory"), projected.stream()
+                .filter(block -> "tool_use".equals(string(block, "type"))).map(block -> string(block, "id")).toList());
+        assertEquals(List.of("literal-backslash output", "nested-directory output"), results(projected));
+    }
+
+    /** Windows separators and URI-encoded spaces identify the same recorded working directory. */
+    @Test
+    public void pairsWindowsDirectoriesWithTheirFileUris() {
+        JsonArray records = new JsonArray();
+        records.add(call("windows-directories", "const results=await Promise.allSettled(["
+                + "tools.exec_command({cmd:'npm test',workdir:" + new Gson().toJson("C:\\Project One\\webapp\\") + "}),"
+                + "tools.exec_command({cmd:'npm test',workdir:'C:/Project One/vue'})]);"
+                + "results.forEach((r,i)=>text({index:i,...r}));"));
+        for (String directory : List.of("vue", "webapp")) {
+            JsonObject receipt = nativeCommand(directory, "completed", 0);
+            receipt.getAsJsonObject("payload").getAsJsonObject("item").addProperty("cwd", "file:///C:/Project%20One/" + directory);
+            records.add(receipt);
+        }
+        records.add(output("windows-directories", indexed(0, "{\"exit_code\":0}"), indexed(1, "{\"exit_code\":0}")));
+
+        List<JsonObject> projected = blocks(records);
+        assertEquals(List.of("bash", "bash"), toolNames(projected));
+        assertEquals(List.of("webapp output", "vue output"), results(projected));
+    }
+
+    /** Completion-order output cannot lend a sibling's process id to a different source slot. */
+    @Test
+    public void pairsUnindexedBatchCommandsByIndependentDirectoryReceipts() {
+        JsonArray records = new JsonArray();
+        records.add(call("completion-order", "await Promise.allSettled(["
+                + "tools.exec_command({cmd:'npm test',workdir:'/first'}).then(text),"
+                + "tools.exec_command({cmd:'npm test',workdir:'/second'}).then(text)]);"));
+        for (String directory : List.of("second", "first")) {
+            JsonObject receipt = nativeCommand(directory, "completed", 0);
+            JsonObject item = receipt.getAsJsonObject("payload").getAsJsonObject("item");
+            item.addProperty("cwd", "/" + directory);
+            item.addProperty("process_id", directory.equals("first") ? "11" : "22");
+            records.add(receipt);
+        }
+        records.add(output("completion-order", "{\"session_id\":22,\"output\":\"second running\"}",
+                "{\"session_id\":11,\"output\":\"first running\"}"));
+
+        List<JsonObject> projected = blocks(records);
+        assertEquals(List.of("bash", "bash"), toolNames(projected));
+        assertEquals(List.of("first", "second"), projected.stream()
+                .filter(block -> "tool_use".equals(string(block, "type"))).map(block -> string(block, "id")).toList());
+        assertEquals(List.of("first output", "second output"), results(projected));
+    }
+
+    /** A matching receipt directory is insufficient when another call may share that directory. */
+    @Test
+    public void keepsSharedOrUnknownDirectoryOwnersOpaque() {
+        for (String siblingDirectory : List.of("/first", "", "../second")) {
+            CodexKnownExecReplay replay = CodexKnownExecReplay.begin(call("uncertain-directories", "const results=await Promise.allSettled(["
+                    + "tools.exec_command({cmd:'npm test',workdir:'/first'}),"
+                    + "tools.exec_command({cmd:'npm test',workdir:" + new Gson().toJson(siblingDirectory) + "})]);"
+                    + "results.forEach((r,i)=>text({index:i,...r}));"), null);
+            for (String directory : List.of("first", "second")) {
+                JsonObject receipt = nativeCommand(directory, "completed", 0);
+                receipt.getAsJsonObject("payload").getAsJsonObject("item").addProperty("cwd", "/" + directory);
+                replay.rememberNative(receipt);
+            }
+
+            assertNull(siblingDirectory, replay.project(output("uncertain-directories", indexed(0, "{\"exit_code\":0}"),
+                    indexed(1, "{\"exit_code\":0}")), new java.util.LinkedHashMap<>()));
+            assertTrue(siblingDirectory, replay.keepsOriginalWrapper());
+        }
+    }
+
     /** Identical commands in separate directories keep their process-owned results despite receipt reordering. */
     @Test
     public void pairsIdenticalBatchCommandsByTheirReturnedProcessIds() {
@@ -640,6 +954,97 @@ public class CodexKnownExecReplayTest {
         assertTrue(projected.stream().anyMatch(block -> "previous:command:0".equals(string(block, "tool_use_id"))));
     }
 
+    /** Loop labels keep polling attached to its original command in either Promise array position. */
+    @Test
+    public void restoresLoopLabeledCommandAndPollReceiptsInEitherOrder() {
+        for (boolean pollFirst : List.of(false, true)) {
+            for (boolean terminal : List.of(false, true)) {
+                JsonArray records = new JsonArray();
+                records.add(call("previous", "text(await tools.exec_command({cmd:'gradle test'}));"));
+                records.add(output("previous", "{\"session_id\":21009,\"output\":\"building\"}"));
+                String poll = "tools.write_stdin({session_id:21009,chars:\"\",max_output_tokens:1000,yield_time_ms:1000})";
+                String command = "tools.exec_command({cmd:\"git diff HEAD --check && rg -n 'reject\\\\(' src\","
+                        + "workdir:'/project/webapp',max_output_tokens:4500})";
+                records.add(call("loop-labeled", "const results=await Promise.allSettled(["
+                        + (pollFirst ? poll + "," + command : command + "," + poll)
+                        + "]);for(let i=0;i<results.length;i++){text(\"Result \"+i);const r=results[i];"
+                        + "text(r.status===\"fulfilled\"?r.value:r.reason);}"));
+                String pollResult = terminal ? "{\"exit_code\":0,\"output\":\"build passed\"}"
+                        : "{\"session_id\":21009,\"output\":\"still building\"}";
+                String commandResult = "{\"exit_code\":2,\"output\":\"check failed\"}";
+                records.add(output("loop-labeled", "Script completed\nOutput:\n", "Result 0", pollFirst ? pollResult : commandResult,
+                        "Result 1", pollFirst ? commandResult : pollResult));
+                List<JsonObject> projected = blocks(records);
+                assertEquals(List.of("bash", "bash"), toolNames(projected));
+                assertEquals(pollFirst && terminal ? List.of("build passed", "check failed")
+                        : terminal ? List.of("check failed", "build passed") : List.of("check failed"), results(projected));
+                assertEquals(terminal ? 1 : 0, projected.stream()
+                        .filter(block -> "previous:command:0".equals(string(block, "tool_use_id")) && !block.get("is_error").getAsBoolean()).count());
+                if (!terminal) {
+                    records.add(call("finish", "text(await tools.write_stdin({session_id:21009,chars:''}));"));
+                    records.add(output("finish", "{\"exit_code\":0,\"output\":\"build passed\"}"));
+                    projected = blocks(records);
+                    assertEquals(List.of("bash", "bash"), toolNames(projected));
+                    assertEquals(List.of("check failed", "build passed"), results(projected));
+                }
+                assertEquals(1, projected.stream().filter(block -> block.has("is_error") && block.get("is_error").getAsBoolean()).count());
+            }
+        }
+    }
+
+    /** Explicit loop labels preserve command slots even without native receipts or distinct command text. */
+    @Test
+    public void restoresLoopLabeledCommandsAcrossSupportedLabelSyntax() {
+        for (String label : List.of("'Result '+slot", "\"Result \"+slot", "`Result ${slot}`")) {
+            JsonArray records = new JsonArray();
+            records.add(call("loop-slots", "let batch = await Promise.allSettled(["
+                    + "tools.exec_command({cmd:'git status --short',workdir:'/project/webapp'}),"
+                    + "tools.exec_command({cmd:'git status --short',workdir:'/project/vue'})]);"
+                    + "for (let slot = 0; slot < batch.length; ++slot) { text(" + label + ");"
+                    + "const receipt = batch[slot]; text(receipt.status === 'fulfilled' ? receipt.value : receipt.reason); }"));
+            records.add(output("loop-slots", "Result 1", "{\"exit_code\":1,\"output\":\"vue failed\"}",
+                    "Result 0", "{\"exit_code\":0,\"output\":\"webapp clean\"}"));
+            List<JsonObject> projected = blocks(records);
+            assertEquals(List.of("bash", "bash"), toolNames(projected));
+            assertEquals(List.of("webapp clean", "vue failed"), results(projected));
+            assertEquals(List.of(false, true), projected.stream().filter(block -> block.has("is_error"))
+                    .map(block -> block.get("is_error").getAsBoolean()).toList());
+        }
+    }
+
+    /** Whole settled receipts printed by a loop keep rejection independent from sibling command success. */
+    @Test
+    public void restoresLoopLabeledWholeSettledReceipts() {
+        JsonArray records = new JsonArray();
+        records.add(call("whole-loop", "const results=await Promise.allSettled([tools.exec_command({cmd:'npm test'}),"
+                + "tools.exec_command({cmd:'git status'})]);"
+                + "for(let i=0;i<results.length;i++){text('Result '+i);const r=results[i];text(r);}"));
+        records.add(output("whole-loop", "Result 0", "{\"status\":\"fulfilled\",\"value\":{\"exit_code\":0,\"output\":\"passed\"}}",
+                "Result 1", "{\"status\":\"rejected\",\"reason\":\"command unavailable\"}"));
+        List<JsonObject> projected = blocks(records);
+        assertEquals(List.of("bash", "bash"), toolNames(projected));
+        assertEquals(List.of("passed", "command unavailable"), results(projected));
+        assertFalse(projected.get(1).get("is_error").getAsBoolean());
+        assertTrue(projected.get(3).get("is_error").getAsBoolean());
+    }
+
+    /** A label cannot lend its index to an unrelated result variable or a different array slot. */
+    @Test
+    public void keepsUnprovenLoopResultOwnershipInTheWrapper() {
+        for (String printer : List.of(
+                "for(let i=0;i<results.length;i++){text('Result '+i);const r=results[0];text(r.value);}",
+                "for(let i=0;i<results.length;i++){text('Result '+i);const r=other[i];text(r.value);}",
+                "for(let i=0;i<results.length;i++){text('Result '+i);const r=results[i];text(other.value);}",
+                "for(let i=0;i<results.length;i++){const note=\"text('Result '+i);const r=results[i];text(r.value);\";text(other.value);}")) {
+            JsonArray records = new JsonArray();
+            records.add(call("unproven-loop", "const results=await Promise.allSettled(["
+                    + "tools.write_stdin({session_id:21009,chars:''}),tools.exec_command({cmd:'npm test'})]);" + printer));
+            records.add(output("unproven-loop", "Result 0", "{\"exit_code\":0,\"output\":\"poll passed\"}",
+                    "Result 1", "{\"exit_code\":0,\"output\":\"tests passed\"}"));
+            assertTrue(toolNames(blocks(records)).contains("exec"));
+        }
+    }
+
     /** Whole settled receipts keep fulfilled output and rejected work in their own labeled slots. */
     @Test
     public void restoresLabeledWholeSettledReceiptsWithIndependentRejection() {
@@ -675,7 +1080,7 @@ public class CodexKnownExecReplayTest {
         assertTrue(toolNames(blocks(quoted)).contains("exec"));
     }
 
-    /** Image receipts and unindexed text results can share an allSettled wrapper. */
+    /** Detached native commands retain arguments and both output streams without a generated summary. */
     @Test
     public void detachedNativeCommandsKeepBothStreamsAndTheActualExecutable() {
         JsonArray records = new JsonArray();
@@ -688,7 +1093,7 @@ public class CodexKnownExecReplayTest {
         records.add(nativeRecord);
         List<JsonObject> projected = blocks(records);
         assertEquals(List.of("bash"), toolNames(projected));
-        assertEquals("Run node", string(projected.get(0).getAsJsonObject("input"), "description"));
+        assertFalse(projected.get(0).getAsJsonObject("input").has("description"));
         assertTrue(string(projected.get(0).getAsJsonObject("input"), "command").startsWith("& node "));
         assertEquals(List.of("testing\nfailed to load test"), results(projected));
         assertTrue(projected.get(1).get("is_error").getAsBoolean());
@@ -952,6 +1357,399 @@ public class CodexKnownExecReplayTest {
         }
     }
 
+    /** Code Mode catalog lookups keep the two real MCP cards instead of duplicating their exec wrappers. */
+    @Test
+    public void catalogSelectedMcpWrappersReplayEachNativeResultOnce() {
+        JsonArray records = catalogMcpScope();
+        List<String> names = List.of("ccqa_get_success", "ccqa_get_expected_error");
+        for (int index = 0; index < names.size(); index++) {
+            String name = names.get(index);
+            String callId = "catalog-" + index;
+            records.add(call(callId, catalogMcpScript(name)));
+            records.add(nativeCatalogMcp("native-" + index, name, index == 0 ? "completed" : "failed"));
+            records.add(output(callId, "Script completed"));
+        }
+        List<JsonObject> projected = blocks(records);
+        assertEquals(names, toolNames(projected));
+        List<JsonObject> tools = projected.stream().filter(block -> "tool_use".equals(string(block, "type"))).toList();
+        List<JsonObject> results = projected.stream().filter(block -> "tool_result".equals(string(block, "type"))).toList();
+        assertEquals(List.of("native-0", "native-1"), tools.stream().map(tool -> string(tool, "id")).toList());
+        assertEquals(List.of("native-0", "native-1"), results.stream().map(result -> string(result, "tool_use_id")).toList());
+        assertEquals(List.of(false, true), results.stream().map(result -> result.get("is_error").getAsBoolean()).toList());
+        assertEquals("CCQA_MCP_SUCCESS", results.get(0).getAsJsonArray("content").get(0).getAsJsonObject().get("text").getAsString());
+        assertEquals("CCQA_MCP_EXPECTED_ERROR", results.get(1).getAsJsonArray("content").get(0).getAsJsonObject().get("text").getAsString());
+    }
+
+    /** Renamed bindings and nonempty literal arguments still require an exact native MCP match. */
+    @Test
+    public void catalogSelectedMcpWrappersPreserveLiteralArguments() {
+        JsonArray records = catalogMcpScope();
+        records.add(call("literal-catalog", "\nconst selected = ALL_TOOLS.find(candidate => /(?:^|__)inspect$/.test(candidate.name)"
+                + " && candidate.name.includes('test_server'));\nconst reply = await tools[selected.name]("
+                + "{path:'example.txt',nested:{enabled:true},entries:[1,'two']});\ntext(reply)\n"));
+        JsonObject event = nativeCatalogMcp("native-literal", "inspect", "completed");
+        JsonObject item = event.getAsJsonObject("payload").getAsJsonObject("item");
+        item.addProperty("server", "test_server");
+        JsonObject arguments = JsonParser.parseString("{\"path\":\"example.txt\",\"nested\":{\"enabled\":true},\"entries\":[1,\"two\"]}").getAsJsonObject();
+        item.add("arguments", arguments);
+        records.add(event);
+        records.add(output("literal-catalog", "Script completed"));
+        List<JsonObject> projected = blocks(records);
+        assertEquals(List.of("inspect"), toolNames(projected));
+        assertEquals("test_server", string(projected.get(0).getAsJsonObject("input"), "server"));
+        assertEquals(arguments, projected.get(0).getAsJsonObject("input").getAsJsonObject("arguments"));
+        assertEquals("native-literal", string(projected.get(1), "tool_use_id"));
+    }
+
+    /** The fresh owned rollout selects by endsWith and prints only text content blocks. */
+    @Test
+    public void catalogSelectedMcpWrappersReplayTextContentLoopsOnce() {
+        JsonArray records = catalogMcpScope();
+        List<String> names = List.of("ccqa_get_success", "ccqa_get_expected_error");
+        for (int index = 0; index < names.size(); index++) {
+            String name = names.get(index);
+            String callId = "content-catalog-" + index;
+            records.add(call(callId, catalogMcpTextContentScript(name)));
+            records.add(nativeCatalogMcp("native-content-" + index, name, index == 0 ? "completed" : "failed"));
+            records.add(output(callId, "Script completed"));
+        }
+        List<JsonObject> projected = blocks(records);
+        assertEquals(names, toolNames(projected));
+        List<JsonObject> tools = projected.stream().filter(block -> "tool_use".equals(string(block, "type"))).toList();
+        List<JsonObject> results = projected.stream().filter(block -> "tool_result".equals(string(block, "type"))).toList();
+        assertEquals(List.of("native-content-0", "native-content-1"), tools.stream().map(tool -> string(tool, "id")).toList());
+        assertEquals(List.of("native-content-0", "native-content-1"), results.stream().map(result -> string(result, "tool_use_id")).toList());
+        assertEquals(List.of(false, true), results.stream().map(result -> result.get("is_error").getAsBoolean()).toList());
+    }
+
+    /** Both exact selectors permit the formatter, including safe block-local binding reuse. */
+    @Test
+    public void catalogSelectedMcpWrappersAcceptEquivalentTextFormatters() {
+        String script = catalogMcpTextContentScript("ccqa_get_success");
+        String loop = "for (const c of r.content ?? []) { if (c.type === \"text\") text(c.text); }";
+        List<String> scripts = new ArrayList<>(List.of(script.replace(loop, "text(r);"),
+                catalogMcpScript("ccqa_get_success").replace("text(r);", loop),
+                script.replace("const t =", "const selected =").replace("tools[t.name]", "tools[selected.name]")
+                        .replace("const r =", "const reply =").replace("r.content", "reply.content").replace('"', '\'')));
+        for (String binding : List.of("t", "tools", "ALL_TOOLS")) {
+            scripts.add(script.replace("const c of", "const " + binding + " of")
+                    .replace("c.type", binding + ".type").replace("c.text", binding + ".text"));
+        }
+        for (String valid : scripts) {
+            JsonArray records = catalogMcpScope();
+            records.add(call("content-formatter", valid));
+            records.add(nativeCatalogMcp("native-content", "ccqa_get_success", "completed"));
+            records.add(output("content-formatter", "Script completed", "CCQA_MCP_SUCCESS"));
+            assertEquals(valid, List.of("ccqa_get_success"), toolNames(blocks(records)));
+        }
+    }
+
+    /** Complete matching excludes changed predicates, dynamic inputs, extra work and unsafe loop bindings. */
+    @Test
+    public void catalogSelectedMcpWrappersRejectChangedTextFormatters() {
+        String script = catalogMcpTextContentScript("ccqa_get_success");
+        List<String> invalid = new ArrayList<>(List.of(script + "text('extra');", "text('extra');" + script,
+                script.replace(".endsWith(", ".includes("), script.replace("x.name.includes", "other.name.includes"),
+                script.replace("({})", "({value: getValue()})"), script.replace("r.content", "other.content"),
+                script.replace("c.type ===", "c.type !=="), script.replace("text(c.text)", "text(c.other)"),
+                script.replace("text(c.text)", "text(other.text)"), script.replace("text(c.text)", "text(c.text); doWork()")));
+        for (String binding : List.of("text", "r")) {
+            invalid.add(script.replace("const c of", "const " + binding + " of")
+                    .replace("c.type", binding + ".type").replace("c.text", binding + ".text"));
+        }
+        for (String unknown : invalid) {
+            assertFalse(unknown, CodexKnownExecReplay.begin(call("invalid-content", unknown), "root", "native-turn").hasStaticActions());
+            JsonArray records = catalogMcpScope();
+            records.add(call("invalid-content", unknown));
+            records.add(nativeCatalogMcp("native-content", "ccqa_get_success", "completed"));
+            records.add(output("invalid-content", "Script completed", "original output"));
+            assertTrue(unknown, toolNames(blocks(records)).contains("exec"));
+            assertTrue(unknown, results(blocks(records)).stream().anyMatch(result -> result != null && result.contains("original output")));
+        }
+    }
+
+    /** Neither native status nor isError can explain a later wrapper TypeError. */
+    @Test
+    public void catalogSelectedMcpWrappersRetainExplicitOuterFailures() {
+        for (String script : List.of(catalogMcpScript("ccqa_get_success"), catalogMcpTextContentScript("ccqa_get_success"),
+                "text(await tools.mcp__ccqa_acceptance__ccqa_get_success({}));")) {
+            for (String status : List.of("completed", "failed")) {
+                for (boolean isError : List.of(false, true)) {
+                    for (String header : List.of("Script failed", "Script error: TypeError")) {
+                        JsonArray records = catalogMcpScope();
+                        records.add(call("outer-failure", script));
+                        JsonObject nativeCall = nativeCatalogMcp("native-outcome", "ccqa_get_success", status);
+                        nativeCall.getAsJsonObject("payload").getAsJsonObject("item").getAsJsonObject("result").addProperty("isError", isError);
+                        records.add(nativeCall);
+                        records.add(output("outer-failure", "  " + header + "\nOutput:\nTypeError: content is not iterable"));
+                        List<JsonObject> projected = blocks(records);
+                        assertEquals(List.of("exec", "ccqa_get_success"), toolNames(projected));
+                        JsonObject exec = projected.stream().filter(block -> "tool_use".equals(string(block, "type"))
+                                && "exec".equals(string(block, "name"))).findFirst().orElseThrow();
+                        JsonObject result = projected.stream().filter(block -> "tool_result".equals(string(block, "type"))
+                                && string(exec, "id").equals(string(block, "tool_use_id"))).findFirst().orElseThrow();
+                        assertTrue(result.get("is_error").getAsBoolean());
+                        assertTrue(string(result, "content").contains("TypeError: content is not iterable"));
+                    }
+                }
+            }
+        }
+    }
+
+    /** Completed outer headers ignore native status, nested isError and error-like MCP body text. */
+    @Test
+    public void catalogSelectedMcpWrappersKeepNativeAndOuterOutcomesSeparate() {
+        for (String status : List.of("completed", "failed")) {
+            JsonArray records = catalogMcpScope();
+            records.add(call("native-error", catalogMcpTextContentScript("ccqa_get_expected_error")));
+            JsonObject nativeCall = nativeCatalogMcp("native-error", "ccqa_get_expected_error", status);
+            nativeCall.getAsJsonObject("payload").getAsJsonObject("item").getAsJsonObject("result").addProperty("isError", true);
+            records.add(nativeCall);
+            records.add(output("native-error", "Script completed\nOutput:\nScript failed", "{\"isError\":true,\"content\":\"Script failed\"}"));
+            List<JsonObject> projected = blocks(records);
+            assertEquals(List.of("ccqa_get_expected_error"), toolNames(projected));
+            assertTrue(projected.get(1).get("is_error").getAsBoolean());
+        }
+    }
+
+    /** The PyCharm owned rollout contains two sequential literal MCP calls in the same exec. */
+    @Test
+    public void sequentialLiteralMcpWrappersReplayEachNativeResultOnce() {
+        JsonArray records = catalogMcpScope();
+        JsonObject wrapper = call("literal-sequence", "text(await tools.mcp__ccqa_acceptance__ccqa_get_success({}));\n"
+                + "text(await tools.mcp__ccqa_acceptance__ccqa_get_expected_error({}));\n");
+        wrapper.getAsJsonObject("payload").add("internal_chat_message_metadata_passthrough", JsonParser.parseString("{\"turn_id\":\"model-turn\"}"));
+        records.add(wrapper);
+        records.add(nativeCatalogMcp("native-literal-success", "ccqa_get_success", "completed"));
+        records.add(JsonParser.parseString("{\"type\":\"token_usage_record\",\"payload\":{\"turn_id\":\"native-turn\"}}"));
+        records.add(nativeCatalogMcp("native-literal-error", "ccqa_get_expected_error", "failed"));
+        records.add(output("literal-sequence", "Script completed", "{\"content\":[{\"type\":\"text\",\"text\":\"CCQA_MCP_SUCCESS\"}],\"isError\":false}",
+                "{\"content\":[{\"type\":\"text\",\"text\":\"CCQA_MCP_EXPECTED_ERROR\"}],\"isError\":true}"));
+        List<JsonObject> projected = blocks(records);
+        assertEquals(List.of("ccqa_get_success", "ccqa_get_expected_error"), toolNames(projected));
+        List<JsonObject> tools = projected.stream().filter(block -> "tool_use".equals(string(block, "type"))).toList();
+        List<JsonObject> results = projected.stream().filter(block -> "tool_result".equals(string(block, "type"))).toList();
+        assertEquals(List.of("native-literal-success", "native-literal-error"), tools.stream().map(tool -> string(tool, "id")).toList());
+        assertEquals(List.of("native-literal-success", "native-literal-error"), results.stream().map(result -> string(result, "tool_use_id")).toList());
+        assertEquals(List.of(false, true), results.stream().map(result -> result.get("is_error").getAsBoolean()).toList());
+    }
+
+    /** Completed native MCP receipts cannot hide a TypeError thrown after several calls in one wrapper. */
+    @Test
+    public void sequentialLiteralMcpWrappersRetainOuterFailures() {
+        String script = "const a = await tools.mcp__ccqa_acceptance__ccqa_get_success({});\n"
+                + "const b = await tools.mcp__ccqa_acceptance__ccqa_get_expected_error({});\ntext(a.content.missing.field);\n";
+        for (String header : List.of("Script failed", "Script error: TypeError")) {
+            JsonArray records = catalogMcpScope();
+            JsonObject wrapper = call("outer-sequence", script);
+            wrapper.getAsJsonObject("payload").add("internal_chat_message_metadata_passthrough", JsonParser.parseString("{\"turn_id\":\"model-turn\"}"));
+            records.add(wrapper);
+            records.add(nativeCatalogMcp("native-sequence-success", "ccqa_get_success", "completed"));
+            records.add(nativeCatalogMcp("native-sequence-error", "ccqa_get_expected_error", "completed"));
+            records.add(output("outer-sequence", header + "\nOutput:\nTypeError: Cannot read properties of undefined"));
+            List<JsonObject> projected = blocks(records);
+            assertEquals(header, List.of("exec", "ccqa_get_success", "ccqa_get_expected_error"), toolNames(projected));
+            JsonObject result = projected.stream().filter(block -> "tool_result".equals(string(block, "type"))
+                    && "outer-sequence".equals(string(block, "tool_use_id"))).findFirst().orElseThrow();
+            assertTrue(header, result.get("is_error").getAsBoolean());
+            assertTrue(header, string(result, "content").contains("TypeError: Cannot read properties of undefined"));
+        }
+    }
+
+    /** Settled rejections describe their own calls, not the TypeError the wrapper throws afterwards. */
+    @Test
+    public void settledMcpRejectionsRetainOuterFailures() {
+        JsonArray records = catalogMcpScope();
+        records.add(call("settled-failure", "const rs = await Promise.allSettled([tools.mcp__ccqa_acceptance__ccqa_get_success({}),"
+                + "tools.mcp__ccqa_acceptance__ccqa_get_expected_error({})]);"
+                + "for (let i=0;i<rs.length;i++) text({index:i,...rs[i]});\ntext(rs[0].value.content);\n"));
+        records.add(output("settled-failure", "Script failed\nOutput:\nTypeError: Cannot read properties of undefined",
+                "{\"index\":0,\"status\":\"rejected\",\"reason\":\"first rejected\"}",
+                "{\"index\":1,\"status\":\"rejected\",\"reason\":\"second rejected\"}"));
+        List<JsonObject> projected = blocks(records);
+        assertEquals(List.of("exec"), toolNames(projected));
+        JsonObject result = projected.stream().filter(block -> "tool_result".equals(string(block, "type"))).findFirst().orElseThrow();
+        assertTrue(result.get("is_error").getAsBoolean());
+        assertTrue(string(result, "content").contains("TypeError: Cannot read properties of undefined"));
+    }
+
+    /** Fallback wrapper cards keep the turn that opened them after a later turn has started. */
+    @Test
+    public void wrapperFallbackKeepsItsOwnTurnAfterTheNextTurnStarts() {
+        String script = "text(await tools.mcp__ccqa_acceptance__ccqa_get_success({}));";
+        JsonArray nextTurn = new JsonArray();
+        nextTurn.add(JsonParser.parseString("{\"type\":\"event_msg\",\"payload\":{\"type\":\"task_started\",\"turn_id\":\"next-turn\"}}"));
+        nextTurn.add(JsonParser.parseString("{\"type\":\"turn_context\",\"payload\":{\"turn_id\":\"next-turn\"}}"));
+        JsonObject question = JsonParser.parseString("{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"user\","
+                + "\"content\":[{\"type\":\"input_text\",\"text\":\"next question\"}]}}").getAsJsonObject();
+
+        JsonArray unanswered = catalogMcpScope();
+        unanswered.add(call("unanswered", script));
+        unanswered.addAll(nextTurn.deepCopy());
+        unanswered.add(question.deepCopy());
+        List<JsonObject> legacy = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(unanswered);
+        assertEquals("native-turn", turnOf(legacy, "tool_use", "unanswered"));
+        assertEquals("next-turn", string(legacy.get(legacy.size() - 1).getAsJsonObject("raw"), "codexTurnId"));
+
+        JsonArray failed = catalogMcpScope();
+        failed.add(call("late-failure", script));
+        failed.add(nativeCatalogMcp("native-late", "ccqa_get_success", "completed"));
+        failed.addAll(nextTurn.deepCopy());
+        failed.add(output("late-failure", "Script failed\nOutput:\nTypeError: late"));
+        List<JsonObject> opaque = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(failed);
+        assertEquals("native-turn", turnOf(opaque, "tool_use", "late-failure"));
+        assertEquals("native-turn", turnOf(opaque, "tool_result", "late-failure"));
+    }
+
+    private static String turnOf(List<JsonObject> messages, String type, String toolId) {
+        return messages.stream().map(message -> message.getAsJsonObject("raw")).filter(raw -> {
+            JsonObject block = raw.getAsJsonArray("content").get(0).getAsJsonObject();
+            return type.equals(string(block, "type")) && toolId.equals(string(block, "tool_use".equals(type) ? "id" : "tool_use_id"));
+        }).map(raw -> string(raw, "codexTurnId")).findFirst().orElseThrow();
+    }
+
+    /** The owned PyCharm history also contains an independent catalog-discovery exec that must remain visible. */
+    @Test
+    public void catalogDiscoveryRemainsDistinctFromSequentialMcpWrapper() {
+        JsonArray records = catalogMcpScope();
+        String discovery = "const matches = ALL_TOOLS.filter(x => /ccqa.*(get_success|get_expected_error)/.test(x.name)); "
+                + "for (const t of matches) text(t);\n";
+        assertFalse(CodexKnownExecReplay.begin(call("catalog-discovery", discovery), "root", "native-turn").hasStaticActions());
+        records.add(call("catalog-discovery", discovery));
+        records.add(output("catalog-discovery", "Script completed", "{\"name\":\"ccqa_get_success\"}", "{\"name\":\"ccqa_get_expected_error\"}"));
+        records.add(call("literal-sequence", "text(await tools.mcp__ccqa_acceptance__ccqa_get_success({}));\n"
+                + "text(await tools.mcp__ccqa_acceptance__ccqa_get_expected_error({}));\n"));
+        records.add(nativeCatalogMcp("native-success", "ccqa_get_success", "completed"));
+        records.add(nativeCatalogMcp("native-error", "ccqa_get_expected_error", "failed"));
+        records.add(output("literal-sequence", "Script completed", "{\"isError\":false}", "{\"isError\":true}"));
+        List<JsonObject> projected = blocks(records);
+        assertEquals(List.of("exec", "ccqa_get_success", "ccqa_get_expected_error"), toolNames(projected));
+        List<JsonObject> tools = projected.stream().filter(block -> "tool_use".equals(string(block, "type"))).toList();
+        List<JsonObject> results = projected.stream().filter(block -> "tool_result".equals(string(block, "type"))).toList();
+        assertEquals(List.of("catalog-discovery", "native-success", "native-error"), tools.stream().map(tool -> string(tool, "id")).toList());
+        assertEquals(List.of("catalog-discovery", "native-success", "native-error"), results.stream().map(result -> string(result, "tool_use_id")).toList());
+        assertEquals(List.of(false, false, true), results.stream().map(result -> result.get("is_error").getAsBoolean()).toList());
+    }
+
+    /** A completed MCP call cannot hide a later TypeError from a shadowed output function. */
+    @Test
+    public void catalogSelectedMcpWrappersRetainShadowedOutputFailures() {
+        String script = catalogMcpScript("ccqa_get_success");
+        List<String> shadowed = List.of(
+                script.replace("const t =", "const text =").replace("tools[t.name]", "tools[text.name]"),
+                script.replace("const r =", "const text =").replace("text(r)", "text(text)"));
+        for (String invalid : shadowed) {
+            JsonObject wrapper = call("catalog-shadow", invalid);
+            assertFalse(invalid, CodexKnownExecReplay.begin(wrapper, "root", "native-turn").hasStaticActions());
+            JsonArray records = catalogMcpScope();
+            records.add(wrapper);
+            records.add(nativeCatalogMcp("native-success", "ccqa_get_success", "completed"));
+            records.add(output("catalog-shadow", "Script failed\nOutput:\nTypeError: text is not a function"));
+            List<JsonObject> projected = blocks(records);
+            assertEquals(List.of("exec", "ccqa_get_success"), toolNames(projected));
+            JsonObject exec = projected.stream().filter(block -> "tool_use".equals(string(block, "type"))
+                    && "exec".equals(string(block, "name"))).findFirst().orElseThrow();
+            JsonObject execResult = projected.stream().filter(block -> "tool_result".equals(string(block, "type"))
+                    && string(exec, "id").equals(string(block, "tool_use_id"))).findFirst().orElseThrow();
+            assertTrue(execResult.get("is_error").getAsBoolean());
+            assertTrue(string(execResult, "content").contains("TypeError: text is not a function"));
+        }
+    }
+
+    /** Only the outer bindings can shadow the wrapper globals or collide with each other. */
+    @Test
+    public void catalogSelectedMcpWrappersRejectConflictingOuterBindings() {
+        String script = catalogMcpScript("ccqa_get_success");
+        for (String reserved : List.of("tools", "ALL_TOOLS", "text")) {
+            String selected = script.replace("const t =", "const " + reserved + " =")
+                    .replace("tools[t.name]", "tools[" + reserved + ".name]");
+            String result = script.replace("const r =", "const " + reserved + " =").replace("text(r)", "text(" + reserved + ")");
+            assertFalse(selected, CodexKnownExecReplay.begin(call("selected-binding", selected), "root", "native-turn").hasStaticActions());
+            assertFalse(result, CodexKnownExecReplay.begin(call("result-binding", result), "root", "native-turn").hasStaticActions());
+        }
+        String duplicate = script.replace("const r =", "const t =").replace("text(r)", "text(t)");
+        assertFalse(CodexKnownExecReplay.begin(call("duplicate-binding", duplicate), "root", "native-turn").hasStaticActions());
+    }
+
+    /** Dynamic arguments and work beyond the single catalog-selected call must remain reviewable as exec. */
+    @Test
+    public void catalogSelectedMcpWrappersRequireCompleteLiteralScripts() {
+        String script = catalogMcpScript("ccqa_get_success");
+        for (String unknown : List.of("text('extra');" + script, script + "text('extra');",
+                script.replace("({})", "(getArguments())"), script.replace("({})", "({value: getValue()})"),
+                script.replace(".test(t.name)", ".test(other.name)"), script.replace("tools[t.name]", "tools[other.name]"),
+                script.replace("text(r)", "text(other)"), script.replace("ccqa_get_success$", "ccqa_get_.*$"),
+                script.replace("ALL_TOOLS.find", "getTools().find"), "text(await tools[selected.name]({}));",
+                "text('" + script.replace("'", "\\'").replace("\n", "\\n") + "');")) {
+            JsonArray records = catalogMcpScope();
+            records.add(call("unknown-catalog", unknown));
+            records.add(nativeCatalogMcp("native", "ccqa_get_success", "completed"));
+            records.add(output("unknown-catalog", "Script completed"));
+            assertTrue(unknown, toolNames(blocks(records)).contains("exec"));
+        }
+    }
+
+    /** A selector does not own missing, ambiguous or unrelated native receipts. */
+    @Test
+    public void catalogSelectedMcpWrappersRequireUniqueMatchingNativeReceipts() {
+        for (String mismatch : List.of("missing", "arguments", "tool", "server", "duplicate", "thread", "turn")) {
+            JsonArray records = catalogMcpScope();
+            records.add(call("catalog-mismatch", catalogMcpScript("ccqa_get_success")));
+            JsonObject event = nativeCatalogMcp("native", "ccqa_get_success", "completed");
+            JsonObject payload = event.getAsJsonObject("payload");
+            JsonObject item = payload.getAsJsonObject("item");
+            switch (mismatch) {
+                case "arguments" -> item.add("arguments", JsonParser.parseString("{\"different\":true}"));
+                case "tool" -> item.addProperty("tool", "another_tool");
+                case "server" -> item.addProperty("server", "prefix_ccqa_acceptance");
+                case "thread" -> payload.addProperty("thread_id", "another-root");
+                case "turn" -> payload.addProperty("turn_id", "another-turn");
+                default -> { }
+            }
+            if (!mismatch.equals("missing")) {
+                records.add(event);
+            }
+            if (mismatch.equals("duplicate")) {
+                records.add(nativeCatalogMcp("another-native", "ccqa_get_success", "completed"));
+            }
+            records.add(output("catalog-mismatch", "Script completed"));
+            assertTrue(mismatch, toolNames(blocks(records)).contains("exec"));
+        }
+    }
+
+    private static JsonArray catalogMcpScope() {
+        JsonArray records = new JsonArray();
+        records.add(JsonParser.parseString("{\"type\":\"session_meta\",\"payload\":{\"id\":\"root\"}}"));
+        records.add(JsonParser.parseString("{\"type\":\"turn_context\",\"payload\":{\"turn_id\":\"native-turn\"}}"));
+        return records;
+    }
+
+    private static String catalogMcpScript(String tool) {
+        return "const t = ALL_TOOLS.find(t => /(?:^|__)" + tool
+                + "$/.test(t.name) && t.name.includes(\"ccqa_acceptance\")); const r = await tools[t.name]({}); text(r);\n";
+    }
+
+    private static String catalogMcpTextContentScript(String tool) {
+        return "const t = ALL_TOOLS.find(x => x.name.endsWith(\"" + tool
+                + "\") && x.name.includes(\"ccqa_acceptance\")); const r = await tools[t.name]({}); "
+                + "for (const c of r.content ?? []) { if (c.type === \"text\") text(c.text); }\n";
+    }
+
+    private static JsonObject nativeCatalogMcp(String id, String tool, String status) {
+        JsonObject event = JsonParser.parseString("""
+                {"type":"event_msg","payload":{"type":"item_completed","thread_id":"root","turn_id":"native-turn",
+                "item":{"type":"McpToolCall","server":"ccqa_acceptance","arguments":{},
+                "result":{"content":[{"type":"text"}]}}}}
+                """).getAsJsonObject();
+        JsonObject item = event.getAsJsonObject("payload").getAsJsonObject("item");
+        item.addProperty("id", id);
+        item.addProperty("tool", tool);
+        item.addProperty("status", status);
+        item.getAsJsonObject("result").getAsJsonArray("content").get(0).getAsJsonObject()
+                .addProperty("text", status.equals("completed") ? "CCQA_MCP_SUCCESS" : "CCQA_MCP_EXPECTED_ERROR");
+        return event;
+    }
+
     /** Conflicting native thread identities cannot make unrelated work look like one batch. */
     @Test
     public void refusesToBorrowAmbiguousNativeScopes() {
@@ -1019,7 +1817,7 @@ public class CodexKnownExecReplayTest {
                 .map(block -> string(block, "tool_use_id")).toList());
     }
 
-    /** A background command from another turn cannot replace this wrapper's work. */
+    /** Foreign native outcomes remain visible without replacing the wrapper's own work. */
     @Test
     public void preservesUnrecognizedWorkAndRejectsForeignNativeOutcomes() {
         for (String script : List.of(
@@ -1042,7 +1840,11 @@ public class CodexKnownExecReplayTest {
                 "item":{"type":"FileChange","id":"foreign-edit","status":"completed","changes":[]}}}
                 """));
         records.add(output("foreign", "combined output"));
-        assertFalse(blocks(records).stream().anyMatch(block -> "foreign-edit".equals(string(block, "id"))));
+        assertTrue(toolNames(blocks(records)).contains("exec"));
+        assertTrue(blocks(records).stream().anyMatch(block -> "foreign-edit".equals(string(block, "id"))));
+        assertTrue(HistoryMessageInjector.convertCodexMessagesToFrontendBatch(records).stream()
+                .anyMatch(message -> message.toString().contains("foreign-edit")
+                        && "other-turn".equals(string(message.getAsJsonObject("raw"), "codexTurnId"))));
     }
 
     /** Native completions take precedence over a conflicting outer JSON result and deduplicate repeated items. */
@@ -1136,7 +1938,7 @@ public class CodexKnownExecReplayTest {
         assertEquals(List.of("bash"), toolNames(blocks(records)));
         assertEquals(List.of("correct slot"), results(blocks(records)));
         for (String script : List.of(
-                "await Promise.allSettled([Promise.resolve('other work'),tools.exec_command({cmd:'npm test'})]);",
+                "await Promise.allSettled([computedEntry,tools.exec_command({cmd:'npm test'})]);",
                 "await Promise.allSettled([tools.exec_command({cmd:'npm test'}),...extra]);",
                 "await tools.exec_command({cmd:true});await tools.write_stdin({session_id:1,chars:''});",
                 "await tools.exec_command({cmd:'npm test'});await tools.future_tool({});")) {
@@ -1147,7 +1949,228 @@ public class CodexKnownExecReplayTest {
         }
     }
 
-    /** Thread and turn boundaries exclude unrelated receipts while repeated identical commands keep separate identities. */
+    /** A local Promise result keeps its own slot without hiding the command beside it. */
+    @Test
+    public void replaysCommandsBesideLocalPromiseResultsInEitherOrder() {
+        String expression = "Promise.resolve(ALL_TOOLS.filter(x => (x.name+\" \"+x.description).includes('jetbrains'))"
+                + ".map(x=>({name:x.name, description:x.description.slice(0,240)})))";
+        String command = "tools.exec_command({cmd:\"pwd && rg --files -g 'AGENTS.md' -g 'CLAUDE.md' -g '!node_modules'\","
+                + "workdir:'/project',max_output_tokens:7000})";
+        for (boolean localFirst : List.of(false, true)) {
+            for (boolean nativeReceipt : List.of(false, true)) {
+                JsonArray records = new JsonArray();
+                records.add(call("local-and-command", "const results=await Promise.allSettled(["
+                        + (localFirst ? expression + "," + command : command + "," + expression)
+                        + "]);results.forEach((r,i)=>text({i,...r}));"));
+                List<JsonObject> preview = blocks(records);
+                assertEquals(localFirst ? List.of("Promise.resolve", "bash") : List.of("bash", "Promise.resolve"), toolNames(preview));
+                String localId = string(preview.get(localFirst ? 0 : 1), "id");
+                if (nativeReceipt) {
+                    JsonObject nativeRecord = nativeCommand("native-command", "completed", 0);
+                    nativeRecord.getAsJsonObject("payload").getAsJsonObject("item")
+                            .addProperty("command", "pwd && rg --files -g 'AGENTS.md' -g 'CLAUDE.md' -g '!node_modules'");
+                    records.add(nativeRecord);
+                }
+                records.add(output("local-and-command", "Script completed\nOutput:\n", indexed(localFirst ? 0 : 1, "[]"),
+                        indexed(localFirst ? 1 : 0, "{\"exit_code\":0,\"output\":\"project\\nAGENTS.md\"}")));
+                List<JsonObject> projected = blocks(records);
+                assertEquals(toolNames(preview), toolNames(projected));
+                String commandOutput = nativeReceipt ? "native-command output" : "project\nAGENTS.md";
+                assertEquals(localFirst ? List.of("[]", commandOutput) : List.of(commandOutput, "[]"), results(projected));
+                JsonObject local = projected.get(localFirst ? 0 : 2);
+                assertEquals(localId, string(local, "id"));
+                assertEquals(expression, string(local.getAsJsonObject("input"), "code"));
+                assertFalse(projected.stream().anyMatch(block -> block.has("is_error") && block.get("is_error").getAsBoolean()));
+                JsonArray conversation = new JsonArray();
+                conversation.add(JsonParser.parseString("""
+                        {"type":"response_item","payload":{"type":"message","role":"user",
+                        "content":[{"type":"input_text","text":"Find project instructions and IDE tools."}]}}
+                        """));
+                records.forEach(conversation::add);
+                assertEquals(HistoryMessageInjector.convertCodexMessagesToFrontendBatch(conversation),
+                        HistoryMessageInjector.paginateCodexMessages(conversation, null, 30).messages);
+            }
+        }
+    }
+
+    /** Local values remain data even when their fields resemble a failed command result. */
+    @Test
+    public void keepsLocalPromiseValuesSeparateFromCommandStatus() {
+        for (List<String> value : List.of(List.of("null", "null"), List.of("false", "false"), List.of("42", "42"),
+                List.of("\"failed is only text\"", "failed is only text"),
+                List.of("{\"exit_code\":9,\"output\":\"local data\"}", "{\"exit_code\":9,\"output\":\"local data\"}"))) {
+            JsonArray records = new JsonArray();
+            records.add(call("local-data", "await Promise.allSettled([tools.exec_command({cmd:'npm test'}),Promise.resolve(value)]);"));
+            records.add(output("local-data", indexed(0, "{\"exit_code\":0,\"output\":\"passed\"}"), indexed(1, value.get(0))));
+            List<JsonObject> projected = blocks(records);
+            assertEquals(List.of("bash", "Promise.resolve"), toolNames(projected));
+            assertEquals(List.of("passed", value.get(1)), results(projected));
+            assertFalse(projected.stream().anyMatch(block -> block.has("is_error") && block.get("is_error").getAsBoolean()));
+        }
+    }
+
+    /** Promise.all returns plain values, so a local status field cannot become a settled receipt. */
+    @Test
+    public void keepsPromiseAllLocalStatusObjectsAsData() {
+        for (String value : List.of("{\"status\":\"fulfilled\",\"value\":[\"inspect\"]}",
+                "{\"status\":\"rejected\",\"reason\":\"local status\"}")) {
+            JsonArray records = new JsonArray();
+            records.add(call("plain-status", "const results=await Promise.all([tools.exec_command({cmd:'npm test'}),"
+                    + "Promise.resolve(" + value + ")]);results.forEach((result,i)=>text({i,result}));"));
+            records.add(output("plain-status", "{\"i\":0,\"result\":{\"exit_code\":0,\"output\":\"passed\"}}",
+                    "{\"i\":1,\"result\":" + value + "}"));
+
+            List<JsonObject> projected = blocks(records);
+            assertEquals(List.of("bash", "Promise.resolve"), toolNames(projected));
+            assertEquals(List.of("passed", value), results(projected));
+            assertFalse(projected.get(3).get("is_error").getAsBoolean());
+        }
+    }
+
+    /** Flattened Promise.all values cannot prove which fields belong to an outcome envelope. */
+    @Test
+    public void keepsFlattenedLocalPromiseAllValuesReviewable() {
+        for (String fields : List.of("\"status\":\"fulfilled\",\"value\":[\"inspect\"]",
+                "\"status\":\"rejected\",\"reason\":\"local status\"", "\"error\":\"local data\",\"details\":[1,2]")) {
+            JsonArray records = new JsonArray();
+            records.add(call("flat-local", "const results=await Promise.all([tools.exec_command({cmd:'npm test'}),"
+                    + "Promise.resolve({" + fields + "})]);results.forEach((r,i)=>{"
+                    + "if(i===0){text({i,result:r});}else{text({i,...r});}});"));
+            String localOutput = "{\"i\":1," + fields + "}";
+            records.add(output("flat-local", "{\"i\":0,\"result\":{\"exit_code\":0,\"output\":\"passed\"}}", localOutput));
+
+            List<JsonObject> projected = blocks(records);
+            assertTrue("unproven local fields must stay in the original wrapper", toolNames(projected).contains("exec"));
+            assertTrue(results(projected).stream().anyMatch(result -> result.contains(localOutput)));
+        }
+    }
+
+    /** Condensed allSettled output has already unwrapped the promise, so local status fields remain data. */
+    @Test
+    public void keepsCondensedSettledLocalStatusObjectsAsData() {
+        for (String value : List.of("{\"status\":\"fulfilled\",\"value\":[\"inspect\"]}",
+                "{\"status\":\"rejected\",\"reason\":\"local status\"}")) {
+            JsonArray records = new JsonArray();
+            records.add(call("condensed-status", "const results=await Promise.allSettled([tools.exec_command({cmd:'npm test'}),"
+                    + "Promise.resolve(" + value + ")]);results.forEach((r,i)=>text({i,result:r.value}));"));
+            records.add(output("condensed-status", "{\"i\":0,\"result\":{\"exit_code\":0,\"output\":\"passed\"}}",
+                    "{\"i\":1,\"result\":" + value + "}"));
+
+            List<JsonObject> projected = blocks(records);
+            assertEquals(List.of("bash", "Promise.resolve"), toolNames(projected));
+            assertEquals(List.of("passed", value), results(projected));
+            assertFalse(projected.get(3).get("is_error").getAsBoolean());
+        }
+    }
+
+    /** Whole settled receipts still carry explicit local failures without unwrapping a fulfilled value twice. */
+    @Test
+    public void restoresWholeNestedLocalReceiptsAcrossBatchPrinters() {
+        String value = "{\"status\":\"rejected\",\"reason\":\"local status\"}";
+        for (String printer : List.of("results.forEach((r,i)=>text({i,result:r}));",
+                "results.forEach((r,i)=>{text({i,result:r});});",
+                "results.forEach((result,index)=>text({result,index}));",
+                "for(let i=0;i<results.length;i++){const r=results[i];text({i,result:r});}")) {
+            for (boolean rejected : List.of(false, true)) {
+                JsonArray records = new JsonArray();
+                String expression = rejected ? "Promise.reject('local computation failed')" : value;
+                records.add(call("whole-local", "const results=await Promise.allSettled([tools.exec_command({cmd:'npm test'}),"
+                        + "Promise.resolve(" + expression + ")]);" + printer));
+                String key = printer.contains("result,index") ? "index" : "i";
+                String outcome = rejected ? "{\"status\":\"rejected\",\"reason\":\"local computation failed\"}"
+                        : "{\"status\":\"fulfilled\",\"value\":" + value + "}";
+                records.add(output("whole-local", "{\"" + key + "\":0,\"result\":{\"status\":\"fulfilled\","
+                        + "\"value\":{\"exit_code\":0,\"output\":\"passed\"}}}", "{\"" + key + "\":1,\"result\":" + outcome + "}"));
+
+                List<JsonObject> projected = blocks(records);
+                assertEquals(List.of("bash", "Promise.resolve"), toolNames(projected));
+                assertEquals(List.of("passed", rejected ? "local computation failed" : value), results(projected));
+                assertEquals(rejected, projected.get(3).get("is_error").getAsBoolean());
+            }
+        }
+    }
+
+    /** A whole receipt printed for one slot cannot change the meaning of a sibling's plain local value. */
+    @Test
+    public void keepsBranchSpecificLocalValuesSeparateFromWholeReceipts() {
+        String value = "{\"status\":\"rejected\",\"reason\":\"local status\"}";
+        JsonArray records = new JsonArray();
+        records.add(call("mixed-printers", "const results=await Promise.allSettled([tools.exec_command({cmd:'npm test'}),"
+                + "Promise.resolve(" + value + ")]);results.forEach((r,i)=>{"
+                + "if(i===0){text({i,result:r});}else{text({i,result:r.value});}});"));
+        records.add(output("mixed-printers", "{\"i\":0,\"result\":{\"status\":\"fulfilled\","
+                + "\"value\":{\"exit_code\":0,\"output\":\"passed\"}}}", "{\"i\":1,\"result\":" + value + "}"));
+
+        List<JsonObject> projected = blocks(records);
+        assertEquals(List.of("bash", "Promise.resolve"), toolNames(projected));
+        assertEquals(List.of("passed", value), results(projected));
+        assertFalse(projected.get(3).get("is_error").getAsBoolean());
+    }
+
+    /** Local values keep their fields even when they resemble replay outcome metadata. */
+    @Test
+    public void keepsRejectionLikeLocalFieldsInsideTheirValue() {
+        String value = "{\"codexExecRejected\":true,\"is_error\":true,\"output\":\"local data\"}";
+        JsonArray records = new JsonArray();
+        records.add(call("local-fields", "const results=await Promise.allSettled([tools.exec_command({cmd:'npm test'}),"
+                + "Promise.resolve(" + value + ")]);results.forEach((r,i)=>text({i,...r}));"));
+        records.add(output("local-fields", indexed(0, "{\"exit_code\":0,\"output\":\"passed\"}"), indexed(1, value)));
+
+        List<JsonObject> projected = blocks(records);
+        assertEquals(List.of("bash", "Promise.resolve"), toolNames(projected));
+        assertEquals(List.of("passed", value), results(projected));
+        assertFalse(projected.get(3).get("is_error").getAsBoolean());
+    }
+
+    /** Printed index labels own local arrays and primitive values just as they own command receipts. */
+    @Test
+    public void restoresLabeledLocalValuesAlongsideCommands() {
+        for (String printer : List.of(
+                "results.forEach((r,i)=>{text('Result '+i);text(r.value);});",
+                "for(let i=0;i<results.length;i++){text('Result '+i);const r=results[i];text(r.status==='fulfilled'?r.value:r.reason);}")) {
+            for (String value : List.of("[]", "[{\"name\":\"inspect\",\"description\":\"IDE navigation\"}]", "null", "false", "42", "tool descriptions", "  inspect  ", "Result 0", "")) {
+                JsonArray records = new JsonArray();
+                records.add(call("labeled-local", "const results=await Promise.allSettled([tools.exec_command({cmd:'npm test'}),"
+                        + "Promise.resolve(value)]);" + printer));
+                records.add(output("labeled-local", "Result 0", "{\"exit_code\":0,\"output\":\"passed\"}", "Result 1", value));
+
+                List<JsonObject> projected = blocks(records);
+                assertEquals(value, List.of("bash", "Promise.resolve"), toolNames(projected));
+                assertEquals(List.of("passed", value), results(projected));
+                assertFalse(projected.get(3).get("is_error").getAsBoolean());
+            }
+        }
+    }
+
+    /** Settled local rejections do not fail a command whose independent receipt succeeded. */
+    @Test
+    public void preservesLocalPromiseRejectionWithoutFailingItsSiblingCommand() {
+        JsonArray records = new JsonArray();
+        records.add(call("local-rejection", "await Promise.allSettled([tools.exec_command({cmd:'npm test'}),Promise.resolve(value)]);"));
+        records.add(output("local-rejection", indexed(0, "{\"exit_code\":0,\"output\":\"passed\"}"),
+                "{\"i\":1,\"status\":\"rejected\",\"reason\":\"local computation failed\"}"));
+        List<JsonObject> projected = blocks(records);
+        assertEquals(List.of("bash", "Promise.resolve"), toolNames(projected));
+        assertEquals(List.of("passed", "local computation failed"), results(projected));
+        assertFalse(projected.get(1).get("is_error").getAsBoolean());
+        assertTrue(projected.get(3).get("is_error").getAsBoolean());
+    }
+
+    /** A missing or unindexed local receipt keeps the wrapper inspectable instead of discarding that work. */
+    @Test
+    public void keepsUnpairedLocalPromiseOutputInTheWrapper() {
+        for (boolean indexed : List.of(false, true)) {
+            JsonArray records = new JsonArray();
+            records.add(call("missing-local", "await Promise.allSettled([tools.exec_command({cmd:'npm test'}),Promise.resolve(value)]);"));
+            records.add(output("missing-local", indexed ? indexed(0, "{\"exit_code\":0,\"output\":\"passed\"}")
+                    : "{\"exit_code\":0,\"output\":\"passed\"}", "local output without an index"));
+            List<JsonObject> projected = blocks(records);
+            assertTrue(toolNames(projected).contains("exec"));
+            assertTrue(results(projected).get(0).contains("local output without an index"));
+        }
+    }
+
+    /** Thread and turn boundaries exclude foreign attribution while retaining every independent native outcome. */
     @Test
     public void scopesNativeReceiptsAndAcceptsArgumentEnvelopes() {
         JsonArray records = new JsonArray();
@@ -1169,12 +2192,15 @@ public class CodexKnownExecReplayTest {
         records.add(nativeCommand("second", "completed", 0));
         records.add(output("arguments", "shared output is not an independent result"));
         List<JsonObject> blocks = blocks(records);
-        assertEquals(List.of("bash", "bash"), toolNames(blocks));
+        assertTrue(toolNames(blocks).contains("exec"));
+        assertEquals(2, blocks.stream().filter(block -> "foreign".equals(string(block, "id"))).count());
         assertEquals(List.of("first", "second"), blocks.stream().filter(block -> "tool_use".equals(string(block, "type")))
+                .filter(block -> List.of("first", "second").contains(string(block, "id")))
                 .map(block -> string(block, "id")).toList());
-        assertEquals(List.of("first output", "second output"), results(blocks));
         assertEquals(List.of(true, false), blocks.stream().filter(block -> "tool_result".equals(string(block, "type")))
+                .filter(block -> List.of("first", "second").contains(string(block, "tool_use_id")))
                 .map(block -> block.get("is_error").getAsBoolean()).toList());
+        assertTrue(results(blocks).containsAll(List.of("first output", "second output", "shared output is not an independent result")));
     }
 
     /** EOF previews retain all visible literal inputs without turning empty polling into another card. */

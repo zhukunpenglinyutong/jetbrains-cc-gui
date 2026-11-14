@@ -1,4 +1,18 @@
 {
+  "startupHistory": {
+    "unloaded": "復元したセッションの履歴はまだ読み込まれていません。",
+    "loading": "セッション履歴を読み込み中…",
+    "loaded_one": "履歴を {{count}} 件読み込みました。",
+    "loaded_other": "履歴を {{count}} 件読み込みました。",
+    "missing": "保存された履歴は見つかりません。新しいセッションを開始できます。",
+    "timeout": "履歴の読み込みがタイムアウトしました。「再試行」を選択してください。",
+    "cancelled": "履歴の読み込みをキャンセルしました。「再試行」で再読み込みできます。",
+    "failed": "履歴の読み込みに失敗しました。「再試行」を選択してください。",
+    "superseded": "新しい操作により履歴の読み込みが中断されました。「再試行」で読み込めます。",
+    "load": "履歴を読み込む",
+    "retry": "再試行",
+    "cancel": "キャンセル"
+  },
   "common": {
     "ready": "準備完了",
     "loading": "読み込み中",
@@ -44,6 +58,17 @@
     "currentMode": "現在のモード: {{mode}}",
     "currentModel": "現在のモデル: {{model}}",
     "removeAttachment": "添付ファイルを削除",
+    "queue": {
+      "edit": "キューのメッセージを編集",
+      "remove": "キューから削除",
+      "editLabel": "キューのメッセージ {{position}} を編集",
+      "removeLabel": "キューのメッセージ {{position}} を削除",
+      "reorderLabel": "メッセージ {{position}} を並べ替え",
+      "reorderHint": "ドラッグで並べ替え、フォーカス後に矢印キーで調整",
+      "mergedIntoDraft": "キューのメッセージを現在の下書きに統合しました",
+      "attachmentsNotRestored": "キューに入れたメッセージの添付ファイルを復元できませんでした",
+      "editBlockedAttachments": "このメッセージの添付ファイルは復元できないため、キューに残したままにします"
+    },
     "closePreview": "プレビューを閉じる",
     "loadingDropdown": "読み込み中...",
     "modelsLoadFailed": "モデルの読み込みに失敗しました。クリックして再試行",
@@ -116,8 +141,7 @@
       "matchCase": "大文字と小文字を区別 (Alt+C)",
       "wholeWord": "単語単位で検索 (Alt+W)",
       "regex": "正規表現 (Alt+R)",
-      "invalidRegex": "無効な正規表現",
-      "openTooltip": "会話内を検索 (Cmd/Ctrl+F)"
+      "invalidRegex": "無効な正規表現"
     },
     "compactSummary": {
       "receivedTime": "記録時刻",
@@ -144,6 +168,7 @@
     "codexReviewStarted": "Codex is reviewing the workspace",
     "codexDiffUsage": "Use /diff without arguments",
     "codexApprovalsUsage": "Use /approvals without arguments",
+    "codexCliOutdated": "Codex CLI {{version}} は古いバージョンです。一部のモデルや権限モードが正しく動作しない場合があります。{{minimumVersion}} 以降に更新してください。",
     "codexSandboxConflict": "Codex automatic review cannot use danger-full-access. Choose workspace-write or request approval.",
     "continueRefiningPlan": "このプランの改善を続ける："
   },
@@ -242,6 +267,17 @@
         "enabled": "有効",
         "disabled": "無効",
         "hint": "有効にすると、プロジェクトツリーでファイルを選択した際に自動的にファイルパスを AI に送信します（注意：ファイルパスのみ送信され、ファイル内容は送信されません）。無効時は手動操作が必要です。"
+      },
+      "loadHistoryOnStartup": {
+        "label": "起動時にセッション履歴を読み込む",
+        "enabled": "有効",
+        "disabled": "無効",
+        "hint": "復元したセッションの履歴を自動で読み込みます。失敗またはタイムアウト後は手動で再試行してください。"
+      },
+      "historyLoadTimeout": {
+        "label": "履歴読み込みのタイムアウト",
+        "unit": "秒",
+        "hint": "自動復元と手動読み込みに共通の制限時間です（5～120 秒）。会話内で再試行できます。"
       },
       "promptEnhancer": {
         "label": "Prompt Enhancer",
@@ -507,16 +543,6 @@
           "importanceHint": "重要度が高いほど、自動補完で優先されます"
         },
         "timeAgo": {
-          "yearsAgo_one": "{{count}} year ago",
-          "yearsAgo_other": "{{count}} years ago",
-          "monthsAgo_one": "{{count}} month ago",
-          "monthsAgo_other": "{{count}} months ago",
-          "daysAgo_one": "{{count}} day ago",
-          "daysAgo_other": "{{count}} days ago",
-          "hoursAgo_one": "{{count}} hour ago",
-          "hoursAgo_other": "{{count}} hours ago",
-          "minutesAgo_one": "{{count}} minute ago",
-          "minutesAgo_other": "{{count}} minutes ago",
           "justNow": "たった今",
           "yearsAgo": "{{count}}年前",
           "monthsAgo": "{{count}}ヶ月前",
@@ -559,6 +585,38 @@
     "wechatPay": "WeChat Pay",
     "paypal": "PayPal",
     "provider": {
+      "backup": {
+        "exportInvalidConfig": "エクスポート失敗：保存済みプロバイダー設定の検証に失敗しました。バックアップファイルは作成されていません。",
+        "errorProvider": "保存済みプロバイダーの {{index}} 件目を確認してください（ローカル設定と CLI ログイン項目を除く）。",
+        "errorField": "フィールド：{{field}}。",
+        "import": "インポート",
+        "export": "エクスポート",
+        "importFile": "CC GUI バックアップからインポート",
+        "importTitle": "{{engine}} プロバイダーをインポート",
+        "exportTitle": "{{engine}} プロバイダーをエクスポート",
+        "scope": "このタブに保存されたプロバイダー設定（キーを含む）のみを転送します。ローカル CLI のログイン状態や有効化状態は含みません。",
+        "mergeHint": "信頼できるファイルのみインポートしてください。同じ設定はスキップし、異なる設定は追加します。上書きや自動有効化はしません。名前、メモ、ID、作成日時は重複判定に使用しません。",
+        "selectFile": "設定ファイルを選択",
+        "passwordOptional": "エクスポート用パスワード（任意）",
+        "passwordRequired": "ファイルのパスワードを入力",
+        "confirmPassword": "パスワードを再入力",
+        "plaintextWarning": "確認：パスワードなしでは API キーが平文で出力されます。ファイルを安全に保管してください。",
+        "passwordHint": "8 文字以上の長く固有のパスワードを推奨します。紛失したパスワードは復元できません。",
+        "passwordShort": "パスワードは 8 文字以上必要です。",
+        "passwordMismatch": "パスワードが一致しません。",
+        "working": "処理中です。お待ちください…",
+        "importSuccess": "インポート完了：{{imported}} 件追加、重複 {{skipped}} 件をスキップしました。",
+        "exportSuccess": "設定をエクスポートしました。",
+        "exportPartial": "{{exported}} 件のプロバイダーをエクスポートしました。検証に失敗した保存済みプロバイダー {{skipped}} 件をスキップしました：{{positions}}（番号はローカル設定と CLI ログイン項目を除く）。",
+        "invalidFile": "ファイル形式、バージョンまたは設定が無効です。インポートしていません。",
+        "wrongEngine": "ファイルとタブの種類が異なります。対応する Claude Code / Codex タブを選択してください。",
+        "tooLarge": "ファイルまたは設定が大きすぎます（最大 8 MiB、2000 プロバイダー）。",
+        "empty": "処理できるプロバイダー設定がありません。",
+        "wrongPassword": "パスワードが違うか、暗号化ファイルが破損しています。インポートしていません。",
+        "failed": "操作に失敗しました。ファイルの権限と設定を確認して再試行してください。",
+        "busy": "別のインポート／エクスポートを実行中です。後で再試行してください。",
+        "timeout": "結果の待機がタイムアウトしました。処理中の可能性があります。再試行前に一覧または出力ファイルを確認してください。"
+      },
       "currentConfig": "現在のClaudeCode設定",
       "loading": "読み込み中...",
       "noConfig": "設定なし",
@@ -1023,7 +1081,9 @@
       "claude-vscode": "このセッションはVS Code拡張機能によって作成されており、CLIではデフォルトで表示されません。ターミナルCLIの/resumeリストに表示するには「CLIに変換」をクリックしてください",
       "remote": "このセッションはリモートのClaude Codeインスタンスによって作成されました"
     },
-    "loadMore": "Load more"
+    "loadMore": "Load more",
+    "sessionInUse": "使用中のセッションは削除できません。",
+    "deleteFailed": "セッションを削除できませんでした。もう一度お試しください。"
   },
   "permission": {
     "dialogTitle": "権限リクエスト",
@@ -1050,9 +1110,16 @@
     "previewUnavailable": "Native file preview is unavailable. You can deny or cancel this request.",
     "requestedPermissions": "Requested native permissions",
     "allowWithRule": "Allow with this command rule",
-    "allowWithNetworkRule": "Allow with this network rule"
+    "allowWithNetworkRule": "Allow with this network rule",
+    "codexDeliveryRetry": "Codex があなたの選択を受け取れませんでした（{{error}}）。もう一度選択してください。",
+    "codexDeliveryFailed": "Codex があなたの選択を受け取れませんでした（{{error}}）。会話が進まない場合は、停止してからもう一度送信してください。",
+    "codexDeliveryUnconfirmed": "Codex はまだあなたの選択の受け取りを確認していません（{{error}}）。選択はまだ反映される可能性があるため、もう一度回答しないでください。会話が進まない場合は、停止してからもう一度送信してください。"
+  },
+  "modelConfig": {
+    "approvals": "承認"
   },
   "askUserQuestion": {
+    "ompTitle": "OMP からいくつか質問があります",
     "title": "Claudeからの質問があります",
     "progress": "質問 {{current}} / {{total}}",
     "multiSelectHint": "複数のオプションを選択できます",
@@ -1066,7 +1133,11 @@
     "timeoutWarning": "お早めにご回答ください。ダイアログは {{seconds}} 秒後に自動的に閉じます",
     "expand": "展開",
     "collapse": "折りたたむ",
-    "clickToAnswer": "クリックして回答"
+    "clickToAnswer": "クリックして回答",
+    "recordTitle": "Codex からの質問",
+    "recordAnswer": "あなたの回答",
+    "recordSkipped": "スキップ（回答せずに閉じました）",
+    "answerNotSent": "別のチャットが開かれているため、Codex の質問への回答は送信されませんでした。元のチャットに戻って、もう一度回答を送信してください。"
   },
   "planApproval": {
     "title": "Plan Ready for Approval",
@@ -1439,6 +1510,12 @@
     "bashGroupCompleted": "completed",
     "bashGroupAllCompleted": "All Completed",
     "bashGroupFailed": "failed",
+    "bashGroupCopyCommand": "コマンドをコピー",
+    "bashGroupCopyOutput": "出力をコピー",
+    "bashGroupOutput": "出力",
+    "bashGroupOutputFailed": "失敗",
+    "bashGroupRunning": "実行中…",
+    "bashGroupNoOutput": "（出力なし）",
     "reportFindings": {
       "title": "レビュー指摘",
       "findingsCount_one": "{{count}} 件の指摘",
@@ -1708,13 +1785,13 @@
         "label": "Haiku 4.5",
         "description": "Haiku 4.5 · 迅速な回答に最速"
       },
+      "fable52": {
+        "label": "Fable 5.2",
+        "description": "Fable 5.2 · 最も強力 · Mythosクラス"
+      },
       "fable51": {
         "label": "Fable 5.1",
-        "description": "Fable 5.1 · 最も強力 · Mythosクラス"
-      },
-      "fable5": {
-        "label": "Fable 5",
-        "description": "Fable 5 · 前世代の Fable モデル"
+        "description": "Fable 5.1 · 前世代の Fable モデル"
       }
     },
     "codex": {
@@ -1823,6 +1900,25 @@
       "label": "Full Auto",
       "tooltip": "Codex approval_policy=never – runs commands and writes files without prompting (workspace sandbox still enforced).",
       "description": "Hands-off mode. Codex executes edits and shell commands immediately."
+    }
+  },
+  "ompApprovals": {
+    "title": "OMP の承認モードを選択",
+    "default": {
+      "label": "デフォルト",
+      "description": "未設定ならフルオート（OMP の tools.approvalMode）"
+    },
+    "alwaysAsk": {
+      "label": "確認する",
+      "description": "編集とコマンドの実行前に確認します"
+    },
+    "write": {
+      "label": "編集を自動承認",
+      "description": "コマンドの実行前のみ確認します"
+    },
+    "yolo": {
+      "label": "フルオート",
+      "description": "確認しません"
     }
   },
   "ompModes": {
@@ -2009,15 +2105,94 @@
     "copied": "コピー済み",
     "openDependencySettings": "依存関係管理を開く",
     "recommended": "推奨",
+    "updateClaudeSdk": "SDK を更新",
+    "updatingClaudeSdk": "更新中...",
+    "updateClaudeSdkSuccess": "{{version}} に更新しました。メッセージをもう一度送信してください。",
+    "updateClaudeSdkFailed": "更新に失敗しました：{{error}}",
+    "updateClaudeSdkFailedUnknown": "更新に失敗しました。詳細は依存関係管理で確認してください。",
+    "updateClaudeSdkTimedOut": "15 分経っても結果がありません。依存関係管理で更新状況を確認してください。",
+    "updateClaudeSdkCustomCli": "SDK を {{version}} に更新しましたが、プラグインは独自に指定した Claude CLI（{{path}}）を実行しています。方法 2 でそちらを更新してください。",
+    "updateClaudeSdkAlreadyLatest": "{{version}} はこのプラグインが対応する最新の SDK ですが、このモデルにはさらに新しい Claude Code が必要です。プラグインの新しいリリースが出たら更新するか、別のモデルを選んでください。",
     "codexWriterConflict": {
-      "title": "Codex スレッドが使用中",
-      "intro": "別の Codex ターンまたはクライアントがこの会話に書き込んでいるため、今回の送信を開始できませんでした。",
-      "reason": "この会話を使用しているクライアントでターンを停止し、終了を確認してから再送してください。"
+      "title": "Codex の会話は使用中です",
+      "intro": "別の Codex クライアントまたはチャットウィンドウが、この会話の書き込み権を保持しています。",
+      "reason": "会話の期限切れを意味するものではありません。プラグインはロックの削除や他のクライアントの停止を自動では行いません。",
+      "solutions": {
+        "releaseWriter": {
+          "title": "使用中のクライアントで会話を解放する",
+          "step0": "この会話を使用している Codex クライアントまたはチャットウィンドウでタスクを停止し、会話を閉じるか解放してください。",
+          "step1": "解放を確認してから、ここで再送してください。ロックファイルを削除して強制的に復元しないでください。"
+        }
+      }
+    },
+    "codexThreadClosing": {
+      "title": "Codex の会話を終了しています",
+      "intro": "Codex がこの会話の終了処理を完了していないため、まだ復元できません。",
+      "reason": "この明示的な終了状態の場合のみ、タスク開始前に短時間再試行します。解消しない場合は元のエラーを表示します。",
+      "solutions": {
+        "waitForClose": {
+          "title": "前の会話の終了を待つ",
+          "step0": "元の Codex クライアントまたはチャットウィンドウが会話を解放してから、再試行してください。",
+          "step1": "繰り返す場合は、元のクライアントで解放後、履歴から会話を開き直してください。"
+        }
+      }
+    },
+    "codexThreadHistoryMissing": {
+      "title": "Codex の履歴が見つかりません",
+      "intro": "現在の Codex 実行環境では、この会話のネイティブ履歴が見つかりません。",
+      "reason": "履歴ディレクトリの変更や初回の初期化未完了でも発生します。履歴が削除されたとは限りません。",
+      "solutions": {
+        "checkStorage": {
+          "title": "元の履歴の保存先を確認する",
+          "step0": "元の CODEX_HOME とホスト環境を使用しているか確認してください。特にローカル環境と WSL の違いに注意してください。",
+          "step1": "元の履歴ディレクトリまたはバックアップを復元してから、履歴から会話を開き直してください。"
+        },
+        "startNewIfMissing": {
+          "title": "履歴を復元できない場合のみ新しく開始する",
+          "step0": "元の履歴を復元できないと確認した場合のみ、新しい会話を作成し、必要なコンテキストを再度提供してください。ここに表示されるメッセージだけでは Codex のネイティブコンテキストは復元されません。"
+        }
+      }
+    },
+    "codexThreadArchived": {
+      "title": "Codex の会話はアーカイブ済みです",
+      "intro": "Codex は、この会話がアーカイブ済みで直接再開できないと報告しています。",
+      "reason": "アーカイブはスレッドの期限切れではありません。復元のために新しい会話を作成する必要はありません。",
+      "solutions": {
+        "unarchive": {
+          "title": "元の会話のアーカイブを解除する",
+          "step0": "元の Codex クライアントでアーカイブを解除するか、元のエラーに表示された解除コマンドに従ってください。",
+          "step1": "プラグインの履歴一覧を更新し、この会話を開き直してから再送してください。"
+        }
+      }
+    },
+    "codexThreadResumeConfiguration": {
+      "title": "Codex の設定により復元できません",
+      "intro": "Codex が設定を読み込めないか、必須 MCP サーバーの初期化に失敗しました。",
+      "reason": "新しい会話を作成しても同じ設定の問題は解決しません。プラグインは必須サービスを自動で無効にしません。",
+      "solutions": {
+        "repairConfiguration": {
+          "title": "Codex が報告した設定を修正する",
+          "step0": "元のエラーで、失敗した設定項目または必須 MCP サーバーを確認してください。",
+          "step1": "Codex、プロバイダー、または MCP の設定で該当する設定、認証情報、接続を修正し、会話を開き直して再試行してください。"
+        }
+      }
     },
     "codexThreadResume": {
-      "title": "セッションスレッドが無効です",
-      "intro": "新しいセッションを作成することでこの問題を解決できます。現在のセッションのスレッド ID は Codex サーバーに存在しなくなりました。",
-      "reason": "Codex は一定時間後に古いスレッドを削除するため、前のセッションを再開しようとするとこのエラーが発生することがあります。"
+      "title": "Codex の会話を復元できません",
+      "intro": "Codex がこの会話の復元に失敗しました。具体的な原因はまだ特定されていません。",
+      "reason": "復元の失敗だけでは期限切れとは判断できません。プラグインは元の会話を保持し、空の会話へ自動的に置き換えません。",
+      "solutions": {
+        "inspectCause": {
+          "title": "再試行の前に元のエラーを確認する",
+          "step0": "元のエラーと、この会話で使用していたプロバイダー、Codex 実行環境、履歴ディレクトリを確認してください。",
+          "step1": "応答やツールの実行がすでに表示されている場合は、再送前に結果を確認し、タスクの重複実行を防いでください。"
+        },
+        "checkCli": {
+          "title": "Codex CLI の互換性を確認する",
+          "step0": "ターミナルのバージョンをプラグインの CLI ページと比較してください。カスタムパスの場合は、その実行ファイルに --version を指定してください。",
+          "step1": "元のエラーが未対応の CLI やプロトコルのバージョンを示す場合は、公式手順で Codex を更新し、CLI の検出を更新してください。"
+        }
+      }
     },
     "sdkNativeBinaryMissing": {
       "title": "SDK のインストールが不完全 — ネイティブバイナリが見つかりません",
@@ -2036,6 +2211,40 @@
         }
       }
     },
+    "claudeCodeVersionTooOld": {
+      "title": "Claude Code SDK がこのモデルには古すぎます",
+      "intro": "プラグインはターミナルの claude コマンドではなく、独自の SDK に同梱された Claude Code を実行します。その同梱バージョンが、このモデルに必要なバージョンより古くなっています。",
+      "reason": "SDK はプラグインとは別にインストールされるため、プラグインやターミナルの claude コマンドを更新しても SDK は更新されません。",
+      "solutions": {
+        "updateSdk": {
+          "title": "方法 1：Claude Code SDK を更新する",
+          "step0": "サポートされている最新の SDK をインストールします。その後プラグインが Claude プロセスを再起動するので、すぐにメッセージを再送信できます。"
+        },
+        "updateCustomCli": {
+          "title": "方法 2：独自に指定した Claude CLI を更新する",
+          "step0": "「Claude CLI パス（オーバーライド）」を設定している場合、プラグインは SDK の代わりにそのバイナリを実行します。ターミナルで更新してください："
+        }
+      }
+    },
+    "claudeCodeWindowsTooOld": {
+      "title": "このバージョンの Windows では Claude Code を起動できません",
+      "intro": "必要なシステム関数が見つからなかったため、Windows が Claude Code の起動を停止しました（エラー 0xC0000139）。通常は Windows が古いことが原因です。Claude Code 2.1.118 以降は ClosePseudoConsole を使用しており、Windows 10 バージョン 1809 または Windows Server 2019 が必要です。",
+      "reason": "Windows はプログラムの読み込み時、つまり Claude Code が動き出す前に拒否するため、モデル、プロバイダー、権限の設定を変更しても解決しません。",
+      "solutions": {
+        "updateWindows": {
+          "title": "方法 1：Windows を更新する",
+          "step0": "Windows 10 バージョン 1809 以降、または Windows Server 2019 以降に更新してください。これらのバージョンには不足している関数が含まれています。"
+        },
+        "useOlderSdk": {
+          "title": "方法 2：古い SDK に切り替える",
+          "step0": "「依存関係管理」で SDK バージョンを v0.2.112 以前に切り替えてください。新しいモデルはこのバージョンを受け付けない場合があります。モデルから新しい Claude Code を求められた場合は、別のモデルを選ぶか Windows を更新してください。SDK を更新すると、このエラーが再び発生します。"
+        },
+        "checkCustomCli": {
+          "title": "方法 3：独自に指定した Claude CLI を確認する",
+          "step0": "「Claude CLI パス（オーバーライド）」を設定している場合、プラグインは SDK の代わりにそのバイナリを実行するため、SDK を切り替えても効果はありません。パスを消去するか、古い Claude Code を指定してください。Windows がすでに最新の場合は、まずここを確認してください。"
+        }
+      }
+    },
     "spawnEbusy": {
       "title": "spawn EBUSY — 子プロセスの起動に失敗",
       "intro": "このエラーは通常、Node.js のバージョン不一致または SDK のインストール不完全が原因です。以下の 2 つの方法を順に試してください：",
@@ -2049,6 +2258,22 @@
           "title": "方法 2：npm 公式レジストリから最新の SDK を再インストール",
           "step0": "1. npm 公式レジストリに切り替える（Taobao ミラーは最新版に同期されていない可能性があります、使用しないでください）：",
           "step1": "2. 「依存関係管理」を開いて最新の SDK を再インストール："
+        }
+      }
+    },
+    "codexCliVersionTooOld": {
+      "title": "Codex CLI が古いため、この権限モードを使用できません",
+      "intro": "完全自動と自動承認モードは自動審査設定を使用します。この Codex CLI はその設定を認識できずリクエストを拒否したため、メッセージは処理されませんでした。",
+      "reason": "プラグインはマシン上で検出した Codex CLI を実行するため、プラグインを更新しても CLI は更新されません。更新後もエラーが続く場合は、より古い codex が PATH の先頭にある可能性があります。",
+      "solutions": {
+        "updateCodexCli": {
+          "title": "方法 1：公式の手順に従って CLI をインストールまたは更新",
+          "step0": "1. 公式の手順を開き、実行環境に合わせてスタンドアロンインストーラー、npm、Homebrew のいずれかを選択します。更新は元のインストール経路で行い、スタンドアロン版に対して npm uninstall を実行しないでください：",
+          "step1": "2. 新しいターミナルでバージョンが更新されたことを確認し、IDE を再起動して新しい CLI を読み込みます："
+        },
+        "useDefaultMode": {
+          "title": "方法 2：権限モードを一時的に切り替える",
+          "step0": "デフォルトモードに切り替えます。このモードは自動審査を使用しないため、CLI を更新するまで作業を続けられます。それでもエラーが続く場合は、方法 1 で CLI を更新してください。"
         }
       }
     },

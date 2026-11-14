@@ -32,6 +32,7 @@ import { buildCliSpawnEnv, resolveCliSpawn } from '../../utils/cli-path.js';
 import { createInterface } from 'node:readline';
 import { EventEmitter } from 'node:events';
 import { redactCodexDiagnostic } from './codex-diagnostics.js';
+import { sniffForContextSupport } from './codex-ide-context.js';
 
 export const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 export const DEFAULT_EXIT_DRAIN_TIMEOUT_MS = 5_000;
@@ -82,12 +83,15 @@ export class CodexAppServerClient extends EventEmitter {
     stderrTailLines = DEFAULT_STDERR_TAIL_LINES,
     onServerRequest = null,
     spawnFn = null,
+    contextSupportProbe = sniffForContextSupport,
   } = {}) {
     super();
     if (!Array.isArray(command) || command.length === 0) {
       throw new Error('CodexAppServerClient requires a command argv prefix');
     }
     this.command = command;
+    this.contextSupportProbe = contextSupportProbe;
+    this.contextSupportPromise = null;
     this.cwd = cwd;
     this.env = env;
     this.sensitiveEnvNames = new Set(sensitiveEnvNames.map(name => process.platform === 'win32' ? name.toUpperCase() : name));
@@ -110,6 +114,7 @@ export class CodexAppServerClient extends EventEmitter {
     this.pendingRequests = new Map();   // our numeric ids -> entry
     this.serverRequests = new Map();    // server request ids -> {method, params}
     this.initializePromise = null;
+    this.userAgent = null;
     this.exitError = null;
     this.processExited = false;
     this.exitSettled = false;
@@ -123,6 +128,12 @@ export class CodexAppServerClient extends EventEmitter {
     return !this.processExited && (this.state === 'ready'
       || this.state === 'initializing'
       || this.state === 'starting');
+  }
+
+  /** Cache protocol discovery per selected runtime, including conservative probe failures. */
+  supportsAdditionalContext() {
+    this.contextSupportPromise ??= Promise.resolve().then(() => this.contextSupportProbe(this)).catch(() => false);
+    return this.contextSupportPromise;
   }
 
   /** Wait for process exit and drained stdio, including a close already in progress. */
@@ -275,6 +286,7 @@ export class CodexAppServerClient extends EventEmitter {
         writeState: 'notWritten',
         resolve: (result) => {
           clearTimeout(timer);
+          this.userAgent = result?.userAgent ?? null;
           // Send the initialized notification only after the response arrived.
           try {
             this.#writeLine({ method: 'initialized', params: {} });

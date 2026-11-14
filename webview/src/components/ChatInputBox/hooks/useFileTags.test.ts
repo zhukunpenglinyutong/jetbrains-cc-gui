@@ -28,6 +28,26 @@ function setupHook(editable: HTMLDivElement) {
 }
 
 describe('useFileTags', () => {
+  it.each(['#L73-76', '#L74'])('keeps %s separate from a long filename and includes it in the tooltip', (lines) => {
+    const path = 'E:/project/PhysicalTestDataServiceImpl.java';
+    const editable = createEditable();
+    editable.textContent = `@${path}${lines} `;
+    mockSelection();
+    const { result } = setupHook(editable);
+    result.current.pathMappingRef.current.set(path, path);
+    result.current.pathMappingRef.current.set(path + lines, path);
+    result.current.renderFileTags();
+
+    const tag = editable.querySelector('.file-tag')!;
+    expect(tag.querySelector('.file-tag-text')?.textContent).toBe('PhysicalTestDataServiceImpl.java');
+    expect(tag.querySelector('.file-tag-lines')?.textContent).toBe(lines);
+    expect(tag.getAttribute('data-tooltip')).toBe(path + lines);
+    expect(tag.getAttribute('data-file-path')).toBe(path + lines);
+    expect(result.current.extractFileTags()).toEqual([
+      { displayPath: path + lines, absolutePath: path },
+    ]);
+  });
+
   it('renders file tags for valid references', () => {
     const editable = createEditable();
     editable.textContent = '@src/a.ts ';

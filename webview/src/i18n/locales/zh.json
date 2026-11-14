@@ -1,4 +1,18 @@
 {
+  "startupHistory": {
+    "unloaded": "该恢复会话的历史消息尚未加载。",
+    "loading": "正在加载会话历史…",
+    "loaded_one": "已加载 {{count}} 条历史消息。",
+    "loaded_other": "已加载 {{count}} 条历史消息。",
+    "missing": "历史记录已不存在，已准备好新会话。",
+    "timeout": "会话历史加载超时，点击“重试”可重新加载。",
+    "cancelled": "已取消历史加载，点击“重试”可重新加载。",
+    "failed": "会话历史加载失败，点击“重试”可重新加载。",
+    "superseded": "新的操作打断了历史加载，点击“重试”可重新加载。",
+    "load": "加载历史",
+    "retry": "重试",
+    "cancel": "取消"
+  },
   "codexPet": {
     "title": "Codex 宠物",
     "close": "隐藏宠物",
@@ -61,6 +75,17 @@
     "currentMode": "当前模式: {{mode}}",
     "currentModel": "当前模型: {{model}}",
     "removeAttachment": "移除附件",
+    "queue": {
+      "edit": "编辑排队消息",
+      "remove": "从队列移除",
+      "editLabel": "编辑排队消息 {{position}}",
+      "removeLabel": "从队列移除消息 {{position}}",
+      "reorderLabel": "重新排序消息 {{position}}",
+      "reorderHint": "拖动可排序，聚焦后可用方向键调整",
+      "mergedIntoDraft": "排队消息已合并到当前草稿",
+      "attachmentsNotRestored": "排队消息的附件未能回填到草稿",
+      "editBlockedAttachments": "该消息的附件无法回填，已保留在队列中"
+    },
     "closePreview": "关闭预览",
     "loadingDropdown": "加载中...",
     "modelsLoadFailed": "模型列表加载失败，点击重试",
@@ -75,6 +100,11 @@
     "usagePercentage": "上下文: {{percentage}}",
     "planUsage": {
       "title": "Claude 额度详情",
+      "balanceLabel": "余额：",
+      "balanceRemaining": "余额：{{value}}",
+      "balanceDetail": "总额 {{total}} · 已用 {{used}}",
+      "grokTitle": "Grok 额度详情",
+      "staleIdle": "这是上次读取的额度，下次使用 Grok 时会自动刷新",
       "loading": "正在获取额度…",
       "unavailable": "额度暂不可用",
       "dash": "额度 —",
@@ -82,7 +112,12 @@
       "tooltipReset": "重置时间：{{value}}（本地时间）",
       "clickToSwitch": "点击周期标签切换额度窗口",
       "worstHint": "圆点表示消耗节奏最紧张的窗口（{{color}}）",
-      "paceColors": { "green": "绿色", "yellow": "黄色", "red": "红色", "neutral": "未知" },
+      "paceColors": {
+        "green": "绿色",
+        "yellow": "黄色",
+        "red": "红色",
+        "neutral": "未知"
+      },
       "stale": "刷新失败，当前展示的额度可能已过期"
     },
     "noMatchingFiles": "无匹配文件",
@@ -147,8 +182,7 @@
       "matchCase": "区分大小写 (Alt+C)",
       "wholeWord": "全词匹配 (Alt+W)",
       "regex": "正则表达式 (Alt+R)",
-      "invalidRegex": "正则无效",
-      "openTooltip": "在对话中搜索 (Cmd/Ctrl+F)"
+      "invalidRegex": "正则无效"
     },
     "compactSummary": {
       "receivedTime": "记录时间",
@@ -175,6 +209,7 @@
     "codexReviewStarted": "Codex 正在审查工作区改动",
     "codexDiffUsage": "请直接使用 /diff，无需参数",
     "codexApprovalsUsage": "请直接使用 /approvals，无需参数",
+    "codexCliOutdated": "Codex CLI {{version}} 版本较旧，部分模型和权限模式可能无法正常使用，请升级到 {{minimumVersion}} 或更高版本。",
     "codexSandboxConflict": "Codex 自动审查不能使用 danger-full-access 沙箱，请改用 workspace-write 或请求批准模式。",
     "continueRefiningPlan": "继续完善此计划："
   },
@@ -498,6 +533,17 @@
         "disabled": "已关闭",
         "hint": "开启后，在项目树选择文件时会自动将文件路径告诉 AI（注意：只传递文件路径，不传文件内容）。关闭后需要手动操作。"
       },
+      "loadHistoryOnStartup": {
+        "label": "启动时加载会话历史",
+        "enabled": "已开启",
+        "disabled": "已关闭",
+        "hint": "开启后，恢复的会话会在 Webview 启动后自动加载消息历史。如果历史加载拖慢或阻塞启动，可关闭此项。"
+      },
+      "historyLoadTimeout": {
+        "label": "会话历史加载超时",
+        "unit": "秒",
+        "hint": "自动恢复和手动加载共用此超时设置（5-120 秒），超时后可在会话中重试。"
+      },
       "promptEnhancer": {
         "label": "增强提示词",
         "modelLabel": "增强模型",
@@ -547,6 +593,12 @@
         "enabled": "已开启",
         "disabled": "已关闭",
         "hint": "开启后，在提交对话框中显示「AI 生成提交信息」按钮。关闭后隐藏该按钮。"
+      },
+      "sessionGitRepositoryMatching": {
+        "label": "按 Git 远端仓库匹配历史会话",
+        "enabled": "启用",
+        "disabled": "禁用",
+        "hint": "显示远端主机、所有者及仓库都相同的 Codex 和 Claude Code 会话。无法读取 Git 信息时按工作目录匹配。"
       },
       "statusBarWidget": {
         "label": "状态栏信息展示",
@@ -820,7 +872,11 @@
       "installedVersion": "当前版本 {{version}}",
       "latestStableVersion": "最新稳定版 {{version}}",
       "targetVersionValue": "目标版本 {{version}}",
-      "versionSourceFallback": "远程版本列表获取失败，当前展示内置推荐版本。你仍然可以手动输入版本号。",
+      "versionSourceFallback": "远程版本列表获取失败，当前展示内置推荐版本。",
+      "versionCacheAccessError": "npm 文件访问被拒绝，独立缓存重试也未成功。请检查缓存目录权限或安全软件拦截。",
+      "versionQueryTimeout": "npm 版本查询超时，请检查网络或代理后重试。",
+      "versionQueryNetworkError": "无法连接 npm 仓库，请检查网络、代理或仓库地址后重试。",
+      "versionQueryFailed": "npm 版本查询未成功，请检查 Node.js 和 npm 配置后重试。",
       "rollbackWarning": "这是回退操作，建议在切换后重新验证相关 AI 功能是否正常。",
       "nodeNotConfigured": "Node.js 未配置，请先在基础配置中设置 Node.js 路径。",
       "installSuccess": "{{name}} 安装成功",
@@ -918,16 +974,6 @@
           "importanceHint": "重要度越高，自动补全时越靠前"
         },
         "timeAgo": {
-          "yearsAgo_one": "{{count}} year ago",
-          "yearsAgo_other": "{{count}} years ago",
-          "monthsAgo_one": "{{count}} month ago",
-          "monthsAgo_other": "{{count}} months ago",
-          "daysAgo_one": "{{count}} day ago",
-          "daysAgo_other": "{{count}} days ago",
-          "hoursAgo_one": "{{count}} hour ago",
-          "hoursAgo_other": "{{count}} hours ago",
-          "minutesAgo_one": "{{count}} minute ago",
-          "minutesAgo_other": "{{count}} minutes ago",
           "justNow": "刚刚",
           "yearsAgo": "{{count}}年前",
           "monthsAgo": "{{count}}个月前",
@@ -972,6 +1018,38 @@
     "wechatPay": "微信",
     "paypal": "PayPal",
     "provider": {
+      "backup": {
+        "exportInvalidConfig": "导出失败：已保存的供应商配置未通过校验，未生成备份文件。",
+        "errorProvider": "请检查第 {{index}} 条已保存的供应商（不计本地配置或 CLI 登录项）。",
+        "errorField": "字段：{{field}}。",
+        "import": "导入",
+        "export": "导出",
+        "importFile": "从 CC GUI 配置文件导入",
+        "importTitle": "导入 {{engine}} 供应商",
+        "exportTitle": "导出 {{engine}} 供应商",
+        "scope": "仅处理当前页签中已保存的供应商配置（含密钥），不包含本机 CLI 登录态或启用状态。",
+        "mergeHint": "仅导入可信文件。配置相同则跳过，有差异则新增；不覆盖、不自动启用。名称、备注、ID 和创建时间不参与去重。",
+        "selectFile": "选择配置文件",
+        "passwordOptional": "导出密码（可选）",
+        "passwordRequired": "请输入文件密码",
+        "confirmPassword": "再次输入密码",
+        "plaintextWarning": "我了解：不设置密码将明文导出 API 密钥，请妥善保管文件。",
+        "passwordHint": "设置密码时至少 8 位，建议使用长且独特的密码。密码丢失无法恢复。",
+        "passwordShort": "密码至少需要 8 位。",
+        "passwordMismatch": "两次输入的密码不一致。",
+        "working": "正在处理，请稍候…",
+        "importSuccess": "导入完成：新增 {{imported}} 条，跳过 {{skipped}} 条重复配置。",
+        "exportSuccess": "配置已导出。",
+        "exportPartial": "已导出 {{exported}} 条供应商。跳过 {{skipped}} 条未通过校验的已保存供应商：{{positions}}（编号不计本地配置和 CLI 登录项）。",
+        "invalidFile": "文件格式无效、版本不受支持或包含无效配置，未导入。",
+        "wrongEngine": "文件所属类型与当前页签不一致，请切换到对应的 Claude Code / Codex 页签。",
+        "tooLarge": "文件或配置过大（文件上限 8 MiB，最多 2000 条供应商）。",
+        "empty": "没有可处理的供应商配置。",
+        "wrongPassword": "密码错误或加密文件已损坏，未导入。",
+        "failed": "操作失败，请检查文件权限与配置文件后重试。",
+        "busy": "另一个导入/导出操作正在进行，请稍后重试。",
+        "timeout": "等待结果超时。操作可能仍在进行，请先检查列表或导出文件，再重试。"
+      },
       "currentConfig": "当前ClaudeCode配置",
       "loading": "加载中...",
       "noConfig": "未发现可用的本地配置",
@@ -1385,6 +1463,9 @@
     }
   },
   "history": {
+    "confirmDirectoryTitle": "在另一个目录中打开会话？",
+    "confirmDirectoryMessage": "命令和文件修改将在下方目录中执行。",
+    "executionDirectory": "运行目录",
     "title": "历史会话",
     "sessionDeleted": "会话已删除",
     "confirmDelete": "确认删除",
@@ -1461,7 +1542,9 @@
       "minutesAgo": "分钟前",
       "secondsAgo": "秒前"
     },
-    "loadMore": "加载更多"
+    "loadMore": "加载更多",
+    "sessionInUse": "会话正在使用中，无法删除。",
+    "deleteFailed": "删除会话失败，请重试。"
   },
   "permission": {
     "dialogTitle": "权限请求",
@@ -1488,9 +1571,18 @@
     "previewUnavailable": "原生文件预览不可用。你可以拒绝或取消该请求。",
     "requestedPermissions": "请求的原生权限",
     "allowWithRule": "允许并添加此命令规则",
-    "allowWithNetworkRule": "允许并添加此网络规则"
+    "allowWithNetworkRule": "允许并添加此网络规则",
+    "codexDeliveryRetry": "Codex 没有收到你的选择（{{error}}），请重新选择。",
+    "codexDeliveryFailed": "Codex 没有收到你的选择（{{error}}）。如果对话没有继续，请点击停止后重新发送。",
+    "codexDeliveryUnconfirmed": "Codex 还没有确认收到你的选择（{{error}}）。它可能仍会生效，请不要重复作答；如果对话没有继续，请点击停止后重新发送。"
   },
   "askUserQuestion": {
+    "ompTitle": "OMP 有一些问题想问你",
+    "configWarning": "Codex 部分配置可能未生效，请查看兼容提示详情。",
+    "configWarningTitle": "Codex 配置兼容提示",
+    "apiDeprecationWarning": "Codex 返回接口兼容提示，可查看详情。",
+    "apiDeprecationTitle": "Codex 接口兼容提示",
+    "warningDetails": "查看详情",
     "title": "Claude 有一些问题想问你",
     "progress": "问题 {{current}} / {{total}}",
     "multiSelectHint": "可以选择多个选项",
@@ -1504,7 +1596,11 @@
     "timeoutWarning": "请尽快回答，对话框将在 {{seconds}} 秒后自动关闭",
     "expand": "展开",
     "collapse": "收起",
-    "clickToAnswer": "点击回答"
+    "clickToAnswer": "点击回答",
+    "recordTitle": "Codex 提问",
+    "recordAnswer": "你的回答",
+    "recordSkipped": "已跳过（未作答就关闭了）",
+    "answerNotSent": "你对 Codex 提问的回答没有发出，因为当前打开的是另一个对话。请回到原来的对话，把回答重新发送一次。"
   },
   "planApproval": {
     "title": "计划已准备就绪",
@@ -1636,6 +1732,9 @@
     "errorRetry": "重试"
   },
   "mcp": {
+    "nativeToolCount": "{{count}} 个工具",
+    "nativeRuntime": {"notStarted": "尚未启动", "starting": "连接中", "connected": "已连接", "authenticationRequired": "需要认证", "failed": "连接失败", "cancelled": "已取消", "disabled": "已禁用", "unknown": "连接状态未知"},
+    "nativeAuth": {"unsupported": "OAuth 不适用", "notLoggedIn": "OAuth 尚未登录", "bearerToken": "令牌认证", "oAuth": "OAuth 已登录", "unknown": "认证状态未知"},
     "title": "MCP 服务器",
     "whatIsMcp": "什么是 MCP?",
     "refreshStatus": "刷新服务器状态",
@@ -1884,6 +1983,12 @@
     "bashGroupCompleted": "完成",
     "bashGroupAllCompleted": "全部完成",
     "bashGroupFailed": "失败",
+    "bashGroupCopyCommand": "复制命令",
+    "bashGroupCopyOutput": "复制输出",
+    "bashGroupOutput": "输出",
+    "bashGroupOutputFailed": "执行失败",
+    "bashGroupRunning": "运行中…",
+    "bashGroupNoOutput": "（无输出）",
     "updatePlan": "更新计划",
     "applyPatch": "应用补丁",
     "reportFindings": {
@@ -2178,13 +2283,13 @@
         "label": "Haiku 4.5",
         "description": "Haiku 速度最快，适合快速答复"
       },
+      "fable52": {
+        "label": "Fable 5.2",
+        "description": "Fable 5.2 · 最强大 · Mythos 级"
+      },
       "fable51": {
         "label": "Fable 5.1",
-        "description": "Fable 5.1 · 最强大 · Mythos 级"
-      },
-      "fable5": {
-        "label": "Fable 5",
-        "description": "Fable 5 · 保留的前代 Fable 模型"
+        "description": "Fable 5.1 · 保留的前代 Fable 模型"
       }
     },
     "codex": {
@@ -2239,6 +2344,7 @@
     "effort": "思考强度",
     "speed": "速度",
     "preset": "预设",
+    "approvals": "审批",
     "model": "模型"
   },
   "modes": {
@@ -2367,11 +2473,6 @@
     },
     "omp": {
       "label": "OMP CLI"
-    },
-    "beta": {
-      "badge": "Beta",
-      "title": "Beta 功能",
-      "message": "此功能仍处于 Beta 阶段。如果遇到使用 Bug，请及时反馈给作者。"
     },
     "dsh": {
       "label": "DeepSeek Harness"
@@ -2553,6 +2654,25 @@
       "description": "Codex快速响应模式（会产生额外消耗）"
     }
   },
+  "ompApprovals": {
+    "title": "选择 OMP 审批模式",
+    "default": {
+      "label": "默认",
+      "description": "未设置时完全自动（OMP 的 tools.approvalMode）"
+    },
+    "alwaysAsk": {
+      "label": "询问",
+      "description": "编辑和命令执行前都会询问"
+    },
+    "write": {
+      "label": "自动批准编辑",
+      "description": "仅在执行命令前询问"
+    },
+    "yolo": {
+      "label": "完全自动",
+      "description": "从不询问"
+    }
+  },
   "dshPresets": {
     "title": "选择 DeepSeek Harness Agent 预设",
     "none": {
@@ -2589,15 +2709,94 @@
     "copied": "已复制",
     "openDependencySettings": "打开依赖管理",
     "recommended": "推荐",
+    "updateClaudeSdk": "更新 SDK",
+    "updatingClaudeSdk": "更新中...",
+    "updateClaudeSdkSuccess": "已更新到 {{version}}，请重新发送消息。",
+    "updateClaudeSdkFailed": "更新失败：{{error}}",
+    "updateClaudeSdkFailedUnknown": "更新失败。请打开依赖管理查看详情。",
+    "updateClaudeSdkTimedOut": "15 分钟内没有收到结果。请到依赖管理查看更新状态。",
+    "updateClaudeSdkCustomCli": "SDK 已更新到 {{version}}，但插件运行的是自定义的 Claude CLI（{{path}}）。请按方案二更新它。",
+    "updateClaudeSdkAlreadyLatest": "{{version}} 已是本插件支持的最新 SDK，而此模型需要更新的 Claude Code。请在插件发布新版本后更新插件，或换用其他模型。",
     "codexWriterConflict": {
-      "title": "Codex 线程被占用",
-      "intro": "该会话正由另一个 Codex 回合或客户端写入，本次发送未能启动。",
-      "reason": "请在正在使用该会话的客户端停止回合，确认结束后再发送。"
+      "title": "Codex 会话被占用",
+      "intro": "另一个 Codex 客户端或聊天窗口仍持有此会话的写入权。",
+      "reason": "这不表示会话已过期。插件不会自动删除写锁或停止其他客户端。",
+      "solutions": {
+        "releaseWriter": {
+          "title": "在占用会话的客户端释放它",
+          "step0": "在正在使用此会话的 Codex 客户端或聊天窗口停止任务，并关闭或释放该会话。",
+          "step1": "确认该客户端释放会话后，回到这里重新发送。不要通过删除写锁文件强行恢复。"
+        }
+      }
+    },
+    "codexThreadClosing": {
+      "title": "Codex 会话仍在关闭",
+      "intro": "Codex 尚未完成此会话的关闭流程，暂时无法恢复。",
+      "reason": "插件会在任务启动前对这一明确的关闭状态短暂重试；若仍未恢复，将保留原始错误。",
+      "solutions": {
+        "waitForClose": {
+          "title": "等待上一个会话完成关闭",
+          "step0": "等待原 Codex 客户端或聊天窗口释放此会话后，再次尝试。",
+          "step1": "若反复出现，请在原客户端释放会话后，从历史列表重新打开此会话。"
+        }
+      }
+    },
+    "codexThreadHistoryMissing": {
+      "title": "找不到 Codex 历史记录",
+      "intro": "当前 Codex 运行环境找不到此会话的原生历史记录。",
+      "reason": "历史目录变化或首次初始化未完成都可能导致此错误，不能据此判定记录已被删除。",
+      "solutions": {
+        "checkStorage": {
+          "title": "检查原历史记录所在位置",
+          "step0": "确认 Codex 使用原来的 CODEX_HOME 和宿主环境，尤其注意本机与 WSL 的区别。",
+          "step1": "恢复原历史目录或备份后，从历史列表重新打开此会话。"
+        },
+        "startNewIfMissing": {
+          "title": "仅在历史无法找回时重新开始",
+          "step0": "只有确认原始历史无法恢复时，才新建会话并重新提供必要上下文。这里显示的聊天消息不会自动恢复 Codex 的原生上下文。"
+        }
+      }
+    },
+    "codexThreadArchived": {
+      "title": "Codex 会话已归档",
+      "intro": "Codex 报告此会话已归档，无法直接继续。",
+      "reason": "归档不表示线程过期，恢复此会话不需要另建会话。",
+      "solutions": {
+        "unarchive": {
+          "title": "取消原会话的归档",
+          "step0": "在原 Codex 客户端取消归档，或按原始错误中给出的取消归档命令操作。",
+          "step1": "刷新插件的历史列表，重新打开此会话后再发送。"
+        }
+      }
+    },
+    "codexThreadResumeConfiguration": {
+      "title": "Codex 配置阻止了会话恢复",
+      "intro": "Codex 无法加载配置，或某个必需的 MCP 服务初始化失败。",
+      "reason": "新建会话无法修复同一份配置，插件也不会自动禁用必需的服务。",
+      "solutions": {
+        "repairConfiguration": {
+          "title": "修复 Codex 指出的配置问题",
+          "step0": "查看原始错误，确认失败的配置项或必需的 MCP 服务。",
+          "step1": "在 Codex、提供商或 MCP 设置中修复对应配置、凭证或连接，再重新打开会话并重试。"
+        }
+      }
     },
     "codexThreadResume": {
-      "title": "会话线程已失效",
-      "intro": "新建会话即可解决此问题。当前会话的线程 ID 在 Codex 服务端已不存在。",
-      "reason": "Codex 服务端会在一段时间后清除旧线程，继续上一次会话时可能触发此错误。"
+      "title": "无法恢复 Codex 会话",
+      "intro": "Codex 恢复此会话失败，目前尚未确认具体原因。",
+      "reason": "恢复失败不代表会话已过期。插件会保留原会话身份，不会静默替换成空白会话。",
+      "solutions": {
+        "inspectCause": {
+          "title": "先查看原始错误再重试",
+          "step0": "查看原始错误，并核对此会话使用的提供商、Codex 运行环境和历史目录。",
+          "step1": "如果已经出现回复或工具执行，请先核实结果再重新发送，避免重复执行任务。"
+        },
+        "checkCli": {
+          "title": "检查 Codex CLI 兼容性",
+          "step0": "将终端中的版本与插件 CLI 页面比较；若配置了自定义 CLI 路径，请对该程序执行 --version。",
+          "step1": "若原始错误指出 CLI 或协议版本不受支持，请按官方说明更新 Codex，然后刷新 CLI 检测。"
+        }
+      }
     },
     "sdkNativeBinaryMissing": {
       "title": "SDK 安装不完整 — 缺少 native 二进制文件",
@@ -2616,6 +2815,40 @@
         }
       }
     },
+    "claudeCodeVersionTooOld": {
+      "title": "Claude Code SDK 版本过低，无法使用此模型",
+      "intro": "插件运行的是自身 SDK 内置的 Claude Code，而不是终端里的 claude 命令。该内置版本低于此模型要求的版本。",
+      "reason": "SDK 与插件分开安装，因此更新插件或终端里的 claude 命令都不会更新 SDK。",
+      "solutions": {
+        "updateSdk": {
+          "title": "方案一：更新 Claude Code SDK",
+          "step0": "安装支持范围内的最新 SDK。之后插件会重启 Claude 进程，可以直接重新发送消息。"
+        },
+        "updateCustomCli": {
+          "title": "方案二：更新自定义的 Claude CLI",
+          "step0": "如果设置了「Claude CLI 路径（覆盖）」，插件会运行该程序而不是 SDK。请在终端中更新："
+        }
+      }
+    },
+    "claudeCodeWindowsTooOld": {
+      "title": "当前 Windows 版本无法启动 Claude Code",
+      "intro": "Windows 阻止了 Claude Code 启动，因为找不到它需要的系统函数（错误 0xC0000139）。这通常说明 Windows 版本过旧：Claude Code 2.1.118 及更高版本使用 ClosePseudoConsole，需要 Windows 10 1809 或 Windows Server 2019。",
+      "reason": "Windows 在加载程序时就拒绝了它，此时 Claude Code 还没有运行，所以更换模型、供应商或权限设置都没有帮助。",
+      "solutions": {
+        "updateWindows": {
+          "title": "方案一：升级 Windows",
+          "step0": "升级到 Windows 10 1809 或更高版本，或 Windows Server 2019 或更高版本。这些版本包含缺失的函数。"
+        },
+        "useOlderSdk": {
+          "title": "方案二：切换到旧版 SDK",
+          "step0": "在「依赖管理」中将 SDK 版本切换到 v0.2.112 或更早版本。较新的模型可能不接受这个旧版本。如果模型要求更新的 Claude Code，请换用其他模型或升级 Windows，因为更新 SDK 会让这个错误再次出现。"
+        },
+        "checkCustomCli": {
+          "title": "方案三：检查自定义的 Claude CLI",
+          "step0": "如果设置了「Claude CLI 路径（覆盖）」，插件会运行该程序而不是 SDK，切换 SDK 不会有任何效果。请清空该路径，或改为指向旧版 Claude Code。如果 Windows 已是最新版本，请先检查这一项。"
+        }
+      }
+    },
     "spawnEbusy": {
       "title": "spawn EBUSY — 子进程启动失败",
       "intro": "该错误通常由 Node.js 版本不兼容或 SDK 安装不完整引起，按以下两个方向排查通常可解决：",
@@ -2629,6 +2862,22 @@
           "title": "方案二：用 npm 官方源重装最新版 SDK",
           "step0": "1. 切换到 npm 官方源（淘宝源可能未同步最新版本，请勿使用淘宝源安装）：",
           "step1": "2. 打开「依赖管理」重装最新版 SDK："
+        }
+      }
+    },
+    "codexCliVersionTooOld": {
+      "title": "Codex CLI 版本过低，不支持当前权限模式",
+      "intro": "全自动和自动审批模式会用到自动审查器设置。当前的 Codex CLI 不认识这个设置并拒绝了请求，所以这条消息没有被处理。",
+      "reason": "插件使用本机识别到的 Codex CLI，更新插件不会同时更新 CLI。如果更新后仍然报错，可能是 PATH 上还有一个更旧的 codex 排在前面。",
+      "solutions": {
+        "updateCodexCli": {
+          "title": "方案一：按官方说明安装或更新 CLI",
+          "step0": "1. 打开官方说明，选择适合当前运行环境的独立安装器、npm 或 Homebrew。更新时沿用原安装渠道，不要直接对独立安装版执行 npm 卸载：",
+          "step1": "2. 在新终端中确认版本已经更新，然后重启 IDE，让插件换用新的 CLI："
+        },
+        "useDefaultMode": {
+          "title": "方案二：暂时切换权限模式",
+          "step0": "切换到默认模式。这个模式不使用自动审查器，可以在更新 CLI 之前继续工作。如果仍然报错，请按方案一更新 CLI。"
         }
       }
     },

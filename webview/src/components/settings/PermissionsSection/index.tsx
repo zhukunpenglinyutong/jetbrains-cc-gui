@@ -5,7 +5,8 @@ interface PermissionsSectionProps {
   codexSandboxMode: 'read-only' | 'workspace-write' | 'danger-full-access';
   codexSandboxSource?: string;
   codexSandboxDesired?: 'read-only' | 'workspace-write' | 'danger-full-access';
-  codexSandboxEffective?: 'read-only' | 'workspace-write' | 'danger-full-access';
+  /** Sandbox the runtime confirmed; null renders as "not confirmed yet". */
+  codexSandboxEffective?: 'read-only' | 'workspace-write' | 'danger-full-access' | null;
   codexSandboxConflict?: boolean;
   onCodexSandboxModeChange: (mode: 'read-only' | 'workspace-write' | 'danger-full-access') => void;
 }
@@ -14,7 +15,7 @@ const PermissionsSection = ({
   codexSandboxMode,
   codexSandboxSource = 'default',
   codexSandboxDesired = codexSandboxMode,
-  codexSandboxEffective = codexSandboxMode,
+  codexSandboxEffective = null,
   codexSandboxConflict = false,
   onCodexSandboxModeChange,
 }: PermissionsSectionProps) => {
@@ -37,7 +38,9 @@ const PermissionsSection = ({
         <small className={styles.hint}>
           {t('settings.permissionsPanel.desired', { defaultValue: 'Desired: {{mode}}', mode: codexSandboxDesired })}
           {' · '}
-          {t('settings.permissionsPanel.effective', { defaultValue: 'Effective: {{mode}}', mode: codexSandboxEffective })}
+          {codexSandboxEffective === null
+            ? t('settings.permissionsPanel.effectiveUnknown', { defaultValue: 'Effective: not confirmed yet' })
+            : t('settings.permissionsPanel.effective', { defaultValue: 'Effective: {{mode}}', mode: codexSandboxEffective })}
         </small>
         {codexSandboxConflict && (
           <small className={styles.hint} role="alert">

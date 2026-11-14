@@ -67,11 +67,11 @@ This architecture embodies three core principles:
 │  └─────────────────────┘   └────────────────────┘   └───────────┘ │
 │                                                                      │
 │  ┌───────────────────────────────────────────────────────────────┐│
-│  │                  utils/permission-mapper.js                    ││
-│  │   Unified Permission → Provider-Specific Permission            ││
-│  │   - DEFAULT → Claude: 'default' / Codex: workspace-write       ││
-│  │   - SANDBOX → Claude: 'sandbox'  / Codex: read-only            ││
-│  │   - YOLO    → Claude: 'yolo'     / Codex: danger-full-access   ││
+│  │        Permission mapping lives in the runtime, not here       ││
+│  │   services/codex/persistent-codex-service.js#buildTurnSettings ││
+│  │   - mode → approvalPolicy / approvalsReviewer / sandbox        ││
+│  │   - the live per-turn scope is owned by the webview and sent   ││
+│  │     as `codexSettings.sandboxSelection` with every message     ││
 │  └───────────────────────────────────────────────────────────────┘│
 └────────────────────────────────────────────────────────────────────┘
 ```
@@ -145,7 +145,6 @@ ai-bridge/├── channel-manager.js          # Router: dispatches to provider
 │       └── message-service.js   # Codex SDK integration
 │
 ├── utils/
-│   ├── permission-mapper.js     # Unified ↔ Provider permission translation
 │   └── stdin-utils.js           # JSON stdin/stdout utilities
 │
 └── config/
@@ -166,9 +165,9 @@ ai-bridge/├── channel-manager.js          # Router: dispatches to provider
 3. channel-manager.js receives stdin
    - Routes by provider: "claude" | "codex"
    ↓
-4. Provider service (e.g., codex/message-service.js)
-   - Maps permissions via PermissionMapper
-   - Calls SDK (e.g., Codex.startThread())
+4. Provider service (e.g., codex/persistent-codex-service.js)
+   - Applies the per-turn settings (mode → approval policy + sandbox)
+   - Drives the native runtime (Codex app-server JSON-RPC)
    - Streams events back to Java via console.log
    ↓
 5. Java layer reads stdout line by line
@@ -192,13 +191,12 @@ touch ai-bridge/services/gemini/message-service.js
 ```javascript
 // ai-bridge/services/gemini/message-service.js
 import { GeminiClient } from '@google/generative-ai';
-import { GeminiPermissionMapper } from '../../utils/permission-mapper.js';
 
 export async function sendMessage(message, sessionId, cwd, permissionMode, model) {
   console.log('[MESSAGE_START]');
 
-  // Map permissions
-  const config = GeminiPermissionMapper.toProvider(permissionMode);
+  // Map permissions in the service that owns the runtime
+  const config = mapGeminiPermission(permissionMode);
 
   // Call Gemini SDK
   const client = new GeminiClient(config);
@@ -211,22 +209,23 @@ export async function sendMessage(message, sessionId, cwd, permissionMode, model
 }
 ```
 
-### Step 3: Add Permission Mapper
+### Step 3: Add the permission mapping
+
+The shared `utils/permission-mapper.js` was removed: each provider now maps the
+unified mode inside the service that owns its runtime, next to the transport it
+controls. Follow the Codex example in
+`services/codex/persistent-codex-service.js#buildTurnSettings`.
 
 ```javascript
-// ai-bridge/utils/permission-mapper.js
-export class GeminiPermissionMapper {
-  static toProvider(unifiedMode) {
-    switch (unifiedMode) {
-      case UnifiedPermissionMode.DEFAULT:
-        return {safetySettings: 'BLOCK_MEDIUM_AND_ABOVE'};
-      case UnifiedPermissionMode.SANDBOX:
-        return {safetySettings: 'BLOCK_ONLY_HIGH'};
-      case UnifiedPermissionMode.YOLO:
-        return {safetySettings: 'BLOCK_NONE'};
-      default:
-        return {safetySettings: 'BLOCK_MEDIUM_AND_ABOVE'};
-    }
+// ai-bridge/services/gemini/message-service.js (same file as above)
+function mapGeminiPermission(unifiedMode) {
+  switch (unifiedMode) {
+    case 'sandbox':
+      return {safetySettings: 'BLOCK_ONLY_HIGH'};
+    case 'yolo':
+      return {safetySettings: 'BLOCK_NONE'};
+    default:
+      return {safetySettings: 'BLOCK_MEDIUM_AND_ABOVE'};
   }
 }
 ```
@@ -269,11 +268,17 @@ public class GeminiSDKBridge {
 
 ### Permission Modes
 
-| Unified Mode | Claude           | Codex                        | Gemini (Example)          |
-|-------------|------------------|------------------------------|---------------------------|
-| `DEFAULT`   | `'default'`      | `workspace-write`            | `BLOCK_MEDIUM_AND_ABOVE`  |
-| `SANDBOX`   | `'sandbox'`      | `read-only`                  | `BLOCK_ONLY_HIGH`         |
-| `YOLO`      | `'yolo'`         | `danger-full-access`         | `BLOCK_NONE`              |
+| Unified Mode | Claude           | Codex                                | Gemini (Example)          |
+|-------------|------------------|--------------------------------------|---------------------------|
+| `default`   | `'default'`      | `workspace-write` + `on-request`     | `BLOCK_MEDIUM_AND_ABOVE`  |
+| `plan`      | `'plan'`         | `workspace-write` + plan collaboration | `BLOCK_ONLY_HIGH`       |
+| `auto`      | `'auto'`         | `workspace-write` + `auto_review`    | `BLOCK_ONLY_HIGH`         |
+| `acceptEdits` | `'acceptEdits'` | `workspace-write` + `on-request`     | `BLOCK_MEDIUM_AND_ABOVE`  |
+| `bypassPermissions` | `'bypassPermissions'` | `danger-full-access` + `never` | `BLOCK_NONE`         |
+
+Codex values come from `services/codex/persistent-codex-service.js#buildTurnSettings`;
+the per-turn sandbox can also be pinned by the webview through
+`codexSettings.sandboxSelection`.
 
 ### API Configuration
 
@@ -310,12 +315,11 @@ npm run test:codex
 ### Manual Testing
 
 ```bash
-# Test permission mapping
+# Inspect the settings Codex receives for a turn
 node -e "
-import {PermissionMapperFactory} from './utils/permission-mapper.js';
-const config = PermissionMapperFactory.toProvider('codex', 'yolo');
-console.log(config);
-// → {skipGitRepoCheck: true, sandbox: 'danger-full-access'}
+import { buildTurnSettings } from './services/codex/persistent-codex-service.js';
+console.log(buildTurnSettings({ permissionMode: 'bypassPermissions' }));
+// → { approvalPolicy: 'never', sandbox: 'danger-full-access', … }
 "
 ```
 

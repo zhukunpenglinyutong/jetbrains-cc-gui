@@ -1,5 +1,8 @@
-import test from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 import { createPreToolUseHook } from './permission-mode.js';
 import { validateHookOutput, assertSdkAcceptsHookOutput } from './permission-mode-schema.js';
@@ -17,8 +20,26 @@ function makeHook(mode = 'default', cwd = '/tmp/test-cwd') {
   };
 }
 
-test('default mode: Bash returns "ask" so settings.json allow-rules cannot silently approve commands', async () => {
-  const hook = makeHook('default');
+const projects = [];
+
+function makeProject(files = {}) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-permission-mode-'));
+  projects.push(dir);
+  for (const [name, content] of Object.entries(files)) {
+    fs.mkdirSync(path.join(dir, '.claude'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.claude', name), JSON.stringify(content));
+  }
+  return dir;
+}
+
+after(() => {
+  for (const dir of projects) fs.rmSync(dir, { recursive: true, force: true });
+});
+
+const PROJECT_WITH_ALLOW_RULE = { 'settings.json': { permissions: { allow: ['Bash(rm:*)'] } } };
+
+test('default mode: Bash returns "ask" when the project defines allow rules, so a repo cannot silently approve commands', async () => {
+  const hook = makeHook('default', makeProject(PROJECT_WITH_ALLOW_RULE));
   const result = await hook({
     tool_name: 'Bash',
     tool_input: { command: 'rm something.txt' },
@@ -32,13 +53,128 @@ test('default mode: Bash returns "ask" so settings.json allow-rules cannot silen
   assert.equal(result?.hookSpecificOutput?.permissionDecision, 'ask');
 });
 
-test('default mode: Write returns "ask" so unmatched writes reach canUseTool / Java permissions', async () => {
-  const hook = makeHook('default');
+test('default mode: a local allow rule also keeps Bash on "ask"', async () => {
+  const hook = makeHook('default', makeProject({ 'settings.local.json': { permissions: { allow: ['Bash(rm:*)'] } } }));
+  const result = await hook({ tool_name: 'Bash', tool_input: { command: 'rm something.txt' } });
+  assert.equal(result?.hookSpecificOutput?.permissionDecision, 'ask');
+});
+
+test('default mode: Write returns "ask" when the project defines allow rules', async () => {
+  const hook = makeHook('default', makeProject(PROJECT_WITH_ALLOW_RULE));
   const result = await hook({
     tool_name: 'Write',
     tool_input: { file_path: '/tmp/test-cwd/out.txt', content: 'hello' },
   });
   assert.equal(result?.hookSpecificOutput?.permissionDecision, 'ask');
+});
+
+test('default mode: without project allow rules, side-effect tools yield so the user settings.json rules apply', async () => {
+  const hook = makeHook('default', makeProject());
+  for (const [tool_name, tool_input] of [
+    ['Bash', { command: 'find . -name "*.js"' }],
+    ['Write', { file_path: '/tmp/test-cwd/out.txt', content: 'hello' }],
+    ['Edit', { file_path: '/tmp/test-cwd/out.txt', old_string: 'a', new_string: 'b' }],
+    ['Agent', { prompt: 'look around' }],
+    ['mcp__some-server__search_docs', {}],
+  ]) {
+    const result = await hook({ tool_name, tool_input });
+    assert.equal(result?.continue, true, `expected ${tool_name} to yield to the SDK`);
+  }
+});
+
+test('default mode: a project sandbox, skill or agent that can approve tools keeps the hook on "ask"', async () => {
+  for (const [files, tool_name, tool_input] of [
+    [{ 'settings.json': { sandbox: { enabled: true } } }, 'Bash', { command: 'rm -rf src' }],
+    [{ 'skills/cleanup/SKILL.md': '---\nallowed-tools: Bash\n---\n' }, 'Bash', { command: 'rm -rf src' }],
+    [{ 'commands/deploy.md': '---\nallowed-tools: Bash\n---\n' }, 'Bash', { command: 'git push' }],
+    [{ 'agents/worker.md': '---\npermissionMode: acceptEdits\n---\n' }, 'Agent', { prompt: 'edit package.json' }],
+  ]) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-permission-mode-'));
+    projects.push(dir);
+    for (const [name, content] of Object.entries(files)) {
+      const target = path.join(dir, '.claude', name);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, typeof content === 'string' ? content : JSON.stringify(content));
+    }
+    const result = await makeHook('default', dir)({ tool_name, tool_input });
+    assert.equal(result?.hookSpecificOutput?.permissionDecision, 'ask', `${Object.keys(files)[0]} -> ${tool_name}`);
+  }
+});
+
+function makeDefinitions(files) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-permission-mode-'));
+  projects.push(dir);
+  for (const [name, content] of Object.entries(files)) {
+    const target = path.join(dir, ...name.split('/'));
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, content);
+  }
+  return dir;
+}
+
+const GRANTING_SKILL = '---\nname: evil\nallowed-tools: Bash\n---\nRun it.\n';
+const HARMLESS_SKILL = '---\nname: tidy\ndescription: tidy up\n---\nTidy.\n';
+
+test('default mode: a granting skill in a parent of the working directory keeps Bash on "ask"', async () => {
+  const dir = makeDefinitions({ '.claude/skills/evil/SKILL.md': GRANTING_SKILL, 'backend/a.txt': '' });
+  const hook = makeHook('default', path.join(dir, 'backend'));
+  const result = await hook({ tool_name: 'Bash', tool_input: { command: 'touch PWNED' }, session_id: 'parent-skill' });
+  assert.equal(result?.hookSpecificOutput?.permissionDecision, 'ask');
+});
+
+test('default mode: after a Skill call the hook cannot vouch for, side-effect tools ask for the rest of the session', async () => {
+  const dir = makeDefinitions({ 'sub/a.txt': '', 'sub/.claude/skills/evil/SKILL.md': GRANTING_SKILL });
+  const hook = makeHook('default', dir);
+  const session = 'unvetted-skill';
+  assert.equal((await hook({ tool_name: 'Read', tool_input: { file_path: path.join(dir, 'sub', 'a.txt') }, session_id: session }))?.continue, true);
+  assert.equal((await hook({ tool_name: 'Bash', tool_input: { command: 'ls' }, session_id: session }))?.continue, true);
+
+  const skill = await hook({ tool_name: 'Skill', tool_input: { skill: 'evil' }, session_id: session });
+  assert.equal(skill?.hookSpecificOutput?.permissionDecision, 'ask');
+  for (const [tool_name, tool_input] of [['Bash', { command: 'touch PWNED' }], ['Write', { file_path: 'x', content: '' }], ['Agent', { prompt: 'go' }]]) {
+    const result = await hook({ tool_name, tool_input, session_id: session });
+    assert.equal(result?.hookSpecificOutput?.permissionDecision, 'ask', tool_name);
+  }
+  assert.equal((await hook({ tool_name: 'Read', tool_input: { file_path: 'x' }, session_id: session }))?.continue, true);
+});
+
+test('default mode: the Skill latch also holds for a qualified subdirectory name and for SlashCommand', async () => {
+  const dir = makeDefinitions({ 'sub/.claude/skills/evil/SKILL.md': GRANTING_SKILL });
+  for (const [tool_name, tool_input] of [['Skill', { skill: 'sub:evil' }], ['SlashCommand', { command: '/evil now' }]]) {
+    const hook = makeHook('default', dir);
+    const session = `latch-${tool_name}`;
+    await hook({ tool_name, tool_input, session_id: session });
+    const result = await hook({ tool_name: 'Bash', tool_input: { command: 'touch PWNED' }, session_id: session });
+    assert.equal(result?.hookSpecificOutput?.permissionDecision, 'ask', tool_name);
+  }
+});
+
+test('default mode: a startup skill from the scanned project does not stop the yield', async () => {
+  const dir = makeDefinitions({ '.claude/skills/tidy/SKILL.md': HARMLESS_SKILL, '.claude/commands/ops/deploy.md': '---\ndescription: deploy\n---\n' });
+  const hook = makeHook('default', dir);
+  const session = 'startup-skill';
+  assert.equal((await hook({ tool_name: 'Skill', tool_input: { skill: 'tidy' }, session_id: session }))?.continue, true);
+  assert.equal((await hook({ tool_name: 'SlashCommand', tool_input: { command: '/ops:deploy prod' }, session_id: session }))?.continue, true);
+  assert.equal((await hook({ tool_name: 'Bash', tool_input: { command: 'ls' }, session_id: session }))?.continue, true);
+});
+
+test('default mode: the Skill latch outlives the hook of one query and stays within its session', async () => {
+  const dir = makeDefinitions({ 'sub/.claude/skills/evil/SKILL.md': GRANTING_SKILL });
+  await makeHook('default', dir)({ tool_name: 'Skill', tool_input: { skill: 'evil' }, session_id: 'latched-session' });
+
+  const nextQuery = makeHook('default', dir);
+  const same = await nextQuery({ tool_name: 'Bash', tool_input: { command: 'touch PWNED' }, session_id: 'latched-session' });
+  assert.equal(same?.hookSpecificOutput?.permissionDecision, 'ask');
+  const other = await nextQuery({ tool_name: 'Bash', tool_input: { command: 'ls' }, session_id: 'other-session' });
+  assert.equal(other?.continue, true);
+});
+
+test('default mode: project settings that only deny or ask do not stop the yield', async () => {
+  const hook = makeHook('default', makeProject({
+    'settings.json': { permissions: { deny: ['Read(./.env)'], ask: ['Bash(git push:*)'] } },
+  }));
+  const result = await hook({ tool_name: 'Bash', tool_input: { command: 'ls' } });
+  assert.equal(result?.continue, true);
 });
 
 test('default mode: Read yields "continue" so deny rules like Read(./.env) can fire', async () => {
@@ -77,6 +213,111 @@ test('native auto mode: Bash yields "continue" so the SDK classifier reviews it'
     tool_input: { command: 'date' },
   });
   assert.equal(result?.continue, true);
+});
+
+test('subagents in native auto mode yield to the classifier even when the parent is default or plan', async () => {
+  for (const parentMode of ['default', 'plan', 'acceptEdits', 'auto']) {
+    const hook = makeHook(parentMode);
+    for (const toolName of ['Bash', 'Write', 'mcp__server__execute']) {
+      const result = await hook({
+        agent_id: 'worker-1',
+        permission_mode: 'auto',
+        tool_name: toolName,
+        tool_input: { command: 'date' },
+      });
+      assert.deepEqual(result, { continue: true });
+    }
+  }
+});
+
+test('a worker with a stricter mode does not inherit the parent auto approval policy', async () => {
+  const project = makeProject(PROJECT_WITH_ALLOW_RULE);
+  for (const mode of ['default', 'acceptEdits']) {
+    const result = await makeHook('auto', project)({
+      agent_id: 'worker-1', permission_mode: mode,
+      tool_name: 'Bash', tool_input: { command: 'date' },
+    });
+    assert.equal(result?.hookSpecificOutput?.permissionDecision, 'ask');
+  }
+});
+
+test('a default-mode worker in a project without allow rules yields instead of inheriting the parent auto approval', async () => {
+  const result = await makeHook('auto', makeProject())({
+    agent_id: 'worker-1', permission_mode: 'default',
+    tool_name: 'Bash', tool_input: { command: 'date' },
+  });
+  assert.equal(result?.continue, true);
+  assert.equal(result?.hookSpecificOutput?.permissionDecision, undefined);
+});
+
+test('worker planning tools never change parent SDK mode or open a parent plan approval', async () => {
+  const state = { value: 'auto' };
+  const transitions = [];
+  const hook = createPreToolUseHook(state, '/tmp/test-cwd', async mode => transitions.push(mode));
+  for (const toolName of ['EnterPlanMode', 'ExitPlanMode']) {
+    const result = await hook({
+      agent_id: 'worker-1', permission_mode: 'plan',
+      tool_name: toolName, tool_input: {},
+    });
+    assertSdkAcceptsHookOutput(result);
+    assert.deepEqual(result, { continue: true });
+    assert.equal(state.value, 'auto');
+  }
+  assert.deepEqual(transitions, []);
+  assert.deepEqual(await hook({ tool_name: 'Bash', tool_input: { command: 'date' } }), { continue: true });
+});
+
+test('main-thread agent_type and unknown worker modes do not override the parent policy', async () => {
+  for (const identity of [
+    { agent_type: 'custom', permission_mode: 'auto' },
+    { agent_id: 'worker-1', permission_mode: 'unknown' },
+    { agent_id: 'worker-1' },
+  ]) {
+    const result = await makeHook('default', makeProject(PROJECT_WITH_ALLOW_RULE))({
+      ...identity, tool_name: 'Bash', tool_input: { command: 'date' },
+    });
+    assert.equal(result?.hookSpecificOutput?.permissionDecision, 'ask');
+  }
+});
+
+test('SDK-only worker modes retain their native permission flow instead of inheriting parent plan approvals', async () => {
+  for (const permissionMode of ['dontAsk', 'bubble']) {
+    const state = { value: 'plan' };
+    const hook = createPreToolUseHook(state, '/tmp/test-cwd');
+    for (const [toolName, toolInput] of [
+      ['Write', { file_path: '/tmp/test-cwd/PLAN.md', content: 'worker plan' }],
+      ['Agent', { prompt: 'inspect the project' }],
+    ]) {
+      const result = await hook({
+        agent_id: 'worker-1', permission_mode: permissionMode,
+        tool_name: toolName, tool_input: toolInput,
+      });
+      assertSdkAcceptsHookOutput(result);
+      assert.deepEqual(result, { continue: true });
+      assert.equal(state.value, 'plan');
+    }
+  }
+});
+
+test('worker plan mode leaves tool restrictions and plan-file ownership to the SDK', async () => {
+  for (const parentMode of ['default', 'plan', 'auto', 'bypassPermissions']) {
+    const state = { value: parentMode };
+    const hook = createPreToolUseHook(state, '/tmp/test-cwd');
+    for (const [toolName, toolInput] of [
+      ['Write', { file_path: '/tmp/test-cwd/PLAN.md', content: 'worker plan' }],
+      ['Agent', { prompt: 'inspect the project' }],
+      ['Task', { prompt: 'inspect the project' }],
+      ['Bash', { command: 'date' }],
+    ]) {
+      const result = await hook({
+        agent_id: 'worker-1', permission_mode: 'plan',
+        tool_name: toolName, tool_input: toolInput,
+      });
+      assertSdkAcceptsHookOutput(result);
+      assert.deepEqual(result, { continue: true });
+      assert.equal(state.value, parentMode);
+    }
+  }
 });
 
 test('bypassPermissions mode: Bash yields "continue" (SDK mode-check auto-allows)', async () => {
@@ -130,8 +371,8 @@ test('default mode: known read-only MCP tools yield "continue"', async () => {
   }
 });
 
-test('default mode: unknown or compound MCP tools return "ask"', async () => {
-  const hook = makeHook('default');
+test('default mode: unknown or compound MCP tools return "ask" when the project defines allow rules', async () => {
+  const hook = makeHook('default', makeProject({ 'settings.json': { permissions: { allow: ['mcp__evil__read_and_delete'] } } }));
   for (const toolName of [
     'mcp__some-server__search_docs',
     'mcp__evil__read_and_delete',

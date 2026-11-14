@@ -1,5 +1,23 @@
 import { canUseTool, requestPlanApproval, SAFE_ALWAYS_ALLOW_TOOLS, EDIT_TOOLS, EXECUTION_TOOLS } from '../../permission-handler.js';
 import { debugLog } from '../../permission-ipc.js';
+import { isKnownStaticSkill, projectHasAutoApproveRules } from './project-permission-rules.js';
+
+/**
+ * Sessions that invoked a skill the hook cannot vouch for (see isKnownStaticSkill). The
+ * CLI discovers skills in subdirectories while it works, and an invoked skill can approve
+ * tools by itself (allowed-tools, its own hooks), so from then on side-effect tools ask
+ * again for the rest of the session. Kept per session id, because a hook is created per
+ * query while the CLI session, and the skills it invoked, can span several queries.
+ */
+const sessionsWithUnvettedSkills = new Set();
+
+function invokedSkillName(toolName, toolInput) {
+  if (toolName === 'Skill') return toolInput?.skill;
+  if (toolName === 'SlashCommand' && typeof toolInput?.command === 'string') {
+    return toolInput.command.trim().split(/\s/, 1)[0];
+  }
+  return undefined;
+}
 
 /**
  * Plan mode allowed tools.
@@ -132,11 +150,43 @@ export function createPreToolUseHook(permissionModeState, cwd = null, onModeChan
     return normalized;
   };
 
+  let invokedUnvettedSkill = false;
+  const sessionId = (input) => (typeof input?.session_id === 'string' && input.session_id ? input.session_id : null);
+  const hasInvokedUnvettedSkill = (input) => invokedUnvettedSkill || sessionsWithUnvettedSkills.has(sessionId(input));
+
   return async (input) => {
-    let currentPermissionMode = readPermissionMode();
+    const isSubagent = typeof input?.agent_id === 'string' && input.agent_id.length > 0;
+    // Workers can retain a different mode while the parent changes modes. Using
+    // the parent's state here would force 'ask' ahead of a worker's auto reviewer.
+    let currentPermissionMode = isSubagent && VALID_PERMISSION_MODES.has(input?.permission_mode)
+      ? input.permission_mode
+      : readPermissionMode();
     const toolName = input?.tool_name;
 
-    debugLog('PERMISSION_HOOK', `Called for tool: ${toolName}, mode: ${currentPermissionMode}`);
+    debugLog('PERMISSION_HOOK', `Called for tool: ${toolName}, mode: ${currentPermissionMode}, subagent: ${isSubagent}`);
+
+    if (toolName === 'Skill' || toolName === 'SlashCommand') {
+      const skillName = invokedSkillName(toolName, input?.tool_input);
+      if (!isKnownStaticSkill(workingDirectory, skillName)) {
+        invokedUnvettedSkill = true;
+        const id = sessionId(input);
+        if (id) sessionsWithUnvettedSkills.add(id);
+        debugLog('PERMISSION_HOOK', `Skill ${skillName} is not a startup skill; side-effect tools ask for the rest of the session`);
+      }
+    }
+
+    // Native planning tools own worker-local transitions (and reject unsupported
+    // ones). A worker must never call setPermissionMode on the parent Query.
+    if (isSubagent && (toolName === 'EnterPlanMode' || toolName === 'ExitPlanMode')) {
+      return YIELD_TO_SDK;
+    }
+
+    // Worker plans belong to the SDK, including their plan-file paths and deny
+    // rules. Parent plan approvals must not preempt native worker restrictions.
+    if (isSubagent && (currentPermissionMode === 'plan' ||
+        input.permission_mode === 'dontAsk' || input.permission_mode === 'bubble')) {
+      return YIELD_TO_SDK;
+    }
 
     // ======== HANDLE EnterPlanMode - update permissionModeState ========
     // When EnterPlanMode is called, we need to switch to plan mode for subsequent tools
@@ -319,27 +369,32 @@ export function createPreToolUseHook(permissionModeState, cwd = null, onModeChan
     // Safe/read-only tools yield to the SDK so deny rules (for example Read(./.env))
     // still apply; an allow-rule for a read-only tool is harmless.
     //
-    // Tools with side effects return 'ask'. A no-opinion yield WOULD fall through to
-    // canUseTool for unmatched tools, but it would also let a settings.json allow-rule
-    // auto-approve them first — and settingSources includes 'project' and 'local', whose
+    // A yield lets the SDK apply the user's own ~/.claude/settings.json rules (allow, deny,
+    // ask) and send everything unmatched to canUseTool. It would also let an allow-rule
+    // from the project or local settings auto-approve a tool first, and those files come
+    // with the repository: settingSources includes 'project' and 'local', whose
     // .claude/settings.json is attacker-controllable when a user opens a malicious repo.
-    // Hook 'ask' takes precedence over allow-rules, closing that silent-auto-approve path.
-    // Trade-offs, accepted deliberately: a legitimate user-configured allow-rule for e.g.
-    // Bash is also not honored (the user confirms once per tool per conversation instead,
-    // via the Java-side tool-level "Always allow" memory), and every side-effect call pays
-    // one file-IPC round trip even on a memory hit.
+    // So side-effect tools yield only while the project defines no auto-approve rules and
+    // the session has not invoked a skill the hook cannot vouch for; otherwise the hook
+    // returns 'ask', which takes precedence over allow-rules and confirms once per tool per
+    // conversation via the Java-side "Always allow" memory.
     if (currentPermissionMode === 'default') {
       // Read-only detection is a positive allowlist (isReadOnlyMcpTool) — a destructive MCP tool
-      // whose name lacks 'Write'/'Edit' must NOT be yielded, or a project/local settings.json
-      // allow-rule could silently auto-approve it. Anything else routes through 'ask'.
+      // whose name lacks 'Write'/'Edit' must NOT be yielded to a project that has allow-rules.
       if (SAFE_ALWAYS_ALLOW_TOOLS.has(toolName) || isReadOnlyMcpTool(toolName)) {
+        return YIELD_TO_SDK;
+      }
+      const unvettedSkill = hasInvokedUnvettedSkill(input);
+      if (!unvettedSkill && !projectHasAutoApproveRules(workingDirectory)) {
         return YIELD_TO_SDK;
       }
       return {
         hookSpecificOutput: {
           hookEventName: 'PreToolUse',
           permissionDecision: 'ask',
-          permissionDecisionReason: 'Default mode: settings.json allow-rules are not honored for tools with side effects; explicit confirmation required.'
+          permissionDecisionReason: unvettedSkill
+            ? 'Default mode: this session invoked a skill that was not scanned and could approve tools without asking; explicit confirmation required.'
+            : 'Default mode: this project ships settings, agents, skills or commands that could approve tools without asking; explicit confirmation required.'
         }
       };
     }

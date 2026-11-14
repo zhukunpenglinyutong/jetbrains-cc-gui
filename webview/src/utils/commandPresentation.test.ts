@@ -31,6 +31,12 @@ describe('command descriptions', () => {
     expect(bare.description).toBe('opaque --flag');
     expect(bare.justification).toBe('');
   });
+  it('uses the same localized action label for recorded and live directory commands', () => {
+    const live = presentCommand({ command: 'ls -la src', commandActions: [{ type: 'listFiles', path: 'src' }] }, t);
+    const history = presentCommand({ command: 'ls -la src', commandActions: [{ type: 'list_files', path: 'src' }] }, t);
+    expect(history.description).toBe('tools.commandList: src');
+    expect(history).toEqual(live);
+  });
   it('presents quoted paths, native actions and shell flags without changing user arguments', () => {
     expect(presentCommand({ command: '  pwsh -Command \'Get-Content "my file.md"\'  ' }, t).description).toBe('Get-Content "my file.md"');
     expect(presentCommand({ cmd: '"/bin/zsh" -c "printf hello"' }, t).displayCommand).toBe('printf hello');

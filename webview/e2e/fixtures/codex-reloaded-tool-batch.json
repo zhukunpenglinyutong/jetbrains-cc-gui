@@ -215,8 +215,7 @@
             "name": "bash",
             "input": {
               "cmd": "git diff -- bridge",
-              "command": "git diff -- bridge",
-              "description": "Show git diff"
+              "command": "git diff -- bridge"
             }
           }
         ]
@@ -259,8 +258,7 @@
             "name": "bash",
             "input": {
               "cmd": "git diff -- java",
-              "command": "git diff -- java",
-              "description": "Show git diff"
+              "command": "git diff -- java"
             }
           }
         ]
@@ -303,8 +301,7 @@
             "name": "bash",
             "input": {
               "cmd": "node --test",
-              "command": "node --test",
-              "description": "node --test"
+              "command": "node --test"
             }
           }
         ]
@@ -366,8 +363,7 @@
             "name": "bash",
             "input": {
               "cmd": "rg --files",
-              "command": "rg --files",
-              "description": "Search in files"
+              "command": "rg --files"
             }
           }
         ]
@@ -410,8 +406,7 @@
             "name": "bash",
             "input": {
               "cmd": "git status --short",
-              "command": "git status --short",
-              "description": "Check git status"
+              "command": "git status --short"
             }
           }
         ]

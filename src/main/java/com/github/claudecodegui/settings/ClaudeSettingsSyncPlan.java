@@ -25,6 +25,12 @@ public final class ClaudeSettingsSyncPlan {
     /**
      * Env keys the plugin owns when syncing a managed provider.
      * Aligned with vscode-cc-gui {@code CLAUDE_MANAGED_ENV_KEYS}.
+     *
+     * <p>Deliberately excludes {@code API_TIMEOUT_MS}: it is a user-tunable
+     * performance knob, not a plugin-managed credential. Removing it from the
+     * managed set lets users extend the timeout for slow local-model backends
+     * (e.g. Ollama with 80k+ token contexts) that exceed the CLI default
+     * (#1307). When unset, the Claude CLI keeps its own default.
      */
     public static final Set<String> CLAUDE_MANAGED_ENV_KEYS = Set.of(
             "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN",
@@ -35,7 +41,7 @@ public final class ClaudeSettingsSyncPlan {
             "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME", "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME",
             "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME", "ANTHROPIC_DEFAULT_FABLE_MODEL_NAME",
             "CLAUDE_CODE_USE_BEDROCK",
-            "API_TIMEOUT_MS", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
             "CCGUI_CLI_LOGIN_AUTHORIZED"
     );
 
@@ -72,6 +78,19 @@ public final class ClaudeSettingsSyncPlan {
      * @param activeProvider  active Claude provider from codemoss config (may be null)
      */
     public static Decision plan(JsonObject currentSettings, JsonObject activeProvider) {
+        return plan(currentSettings, activeProvider, null);
+    }
+
+    /**
+     * @param currentSettings  existing ~/.claude/settings.json (may be empty object)
+     * @param activeProvider   active Claude provider from codemoss config (may be null)
+     * @param previousProvider the provider that last wrote settings.json (its
+     *                         {@code codemossProviderId}), or null when unknown. Unmanaged
+     *                         env keys it wrote and that still hold its value are removed, so
+     *                         preset values such as MiniMax's API_TIMEOUT_MS leave with it
+     *                         while values the user changed by hand stay.
+     */
+    public static Decision plan(JsonObject currentSettings, JsonObject activeProvider, JsonObject previousProvider) {
         if (activeProvider == null || !activeProvider.has("id") || activeProvider.get("id").isJsonNull()) {
             return Decision.skip("no-managed-provider");
         }
@@ -121,6 +140,7 @@ public final class ClaudeSettingsSyncPlan {
         for (String key : CLAUDE_MANAGED_ENV_KEYS) {
             nextEnv.remove(key);
         }
+        removeEnvWrittenBy(previousProvider, next, nextEnv);
         for (String key : envPayload.keySet()) {
             JsonElement value = envPayload.get(key);
             if (value == null || value.isJsonNull()) {
@@ -153,5 +173,42 @@ public final class ClaudeSettingsSyncPlan {
         }
 
         return Decision.write(next);
+    }
+
+    /**
+     * Drop the env values the outgoing provider wrote, provided settings.json still records it as
+     * the writer and the value is unchanged. A value that differs was edited by the user and stays.
+     *
+     * @param previousProvider the provider named by {@code codemossProviderId}, or null
+     * @param settings         the settings being planned (read for {@code codemossProviderId})
+     * @param nextEnv          the env being planned (modified in place)
+     */
+    private static void removeEnvWrittenBy(JsonObject previousProvider, JsonObject settings, JsonObject nextEnv) {
+        JsonObject previousEnv = envOf(previousProvider);
+        if (previousEnv == null || !wroteSettings(previousProvider, settings)) {
+            return;
+        }
+        for (String key : previousEnv.keySet()) {
+            JsonElement written = previousEnv.get(key);
+            if (written != null && !written.isJsonNull() && written.equals(nextEnv.get(key))) {
+                nextEnv.remove(key);
+            }
+        }
+    }
+
+    private static boolean wroteSettings(JsonObject provider, JsonObject settings) {
+        return provider.has("id") && provider.get("id").isJsonPrimitive()
+                && settings.has("codemossProviderId") && settings.get("codemossProviderId").isJsonPrimitive()
+                && provider.get("id").getAsString().equals(settings.get("codemossProviderId").getAsString());
+    }
+
+    private static JsonObject envOf(JsonObject provider) {
+        if (provider == null || !provider.has("settingsConfig") || !provider.get("settingsConfig").isJsonObject()) {
+            return null;
+        }
+        JsonObject settingsConfig = provider.getAsJsonObject("settingsConfig");
+        return settingsConfig.has("env") && settingsConfig.get("env").isJsonObject()
+                ? settingsConfig.getAsJsonObject("env")
+                : null;
     }
 }

@@ -91,4 +91,40 @@ describe('Codex native auto availability', () => {
       approvalPolicy: 'on-request', approvalsReviewer: 'user', sandboxPolicy: { type: 'workspaceWrite' },
     });
   });
+
+  it('derives an unclaimed access scope from the authoritative mode', () => {
+    // A wiped localStorage snapshot leaves the scope on the safe default while
+    // the app-level mode still says Full Auto; the scope must follow the mode
+    // instead of silently keeping the runtime sandboxed.
+    localStorage.setItem('model-selection-state', JSON.stringify({
+      provider: 'codex',
+      codexPermissionMode: 'default',
+    }));
+    const { result } = renderHook(() => useModelProviderState(options));
+    expect(result.current.codexSandboxSource).toBe('default');
+    expect(result.current.codexSandboxSelection).toBe('workspace-write');
+
+    act(() => result.current.setCodexPermissionMode('bypassPermissions'));
+
+    expect(result.current.codexSandboxSelection).toBe('danger-full-access');
+    expect(result.current.codexApprovalPreset).toBe('full-access');
+    expect(sendBridgeEvent).toHaveBeenCalledWith('set_codex_sandbox_selection', JSON.stringify({
+      selection: 'danger-full-access', source: 'default',
+    }));
+  });
+
+  it('never overrides an explicitly chosen access scope', () => {
+    localStorage.setItem('model-selection-state', JSON.stringify({
+      provider: 'codex',
+      codexPermissionMode: 'default',
+      codexSandboxSelection: 'workspace-write',
+      codexSandboxSource: 'user',
+    }));
+    const { result } = renderHook(() => useModelProviderState(options));
+
+    act(() => result.current.setCodexPermissionMode('bypassPermissions'));
+
+    expect(result.current.codexSandboxSelection).toBe('workspace-write');
+    expect(result.current.codexSandboxSource).toBe('user');
+  });
 });

@@ -9,8 +9,8 @@ type PackagedWindow = Window & typeof globalThis & {
   sendToJava: (message: string) => void;
 };
 
-// Test the packaged resources rather than Vite's development module transport.
-test('packaged chat tabs bootstrap compressed assets and preserve input and lazy imports', async ({ context }, testInfo) => {
+// Test both the shared cache and the network fallback using the packaged resources.
+const testPackagedTabs = (cacheMode: 'enabled' | 'unavailable' | 'write-denied') => test(`packaged chat tabs preserve input and lazy imports with cache ${cacheMode}`, async ({ context }, testInfo) => {
   test.skip(testInfo.project.name !== 'chromium-desktop', 'JCEF resource startup is a desktop flow');
   const resources = path.resolve(process.cwd(), '../src/main/resources');
   const assets = path.join(resources, 'webview/assets');
@@ -19,11 +19,24 @@ test('packaged chat tabs bootstrap compressed assets and preserve input and lazy
   const errors: string[] = [];
   const loadedAssets: string[] = [];
   const startupMs: number[] = [];
+  let entryRequested!: () => void;
+  const entryRequest = new Promise<void>((resolve) => { entryRequested = resolve; });
+  let stylesheetReleased = false;
+  let entryOverlappedStylesheet = false;
 
-  // Mirror JCEF's binary resource handler: .gz is fetched as-is, while lazy modules
-  // and styles are decompressed by Java before reaching Chromium.
+  // Mirror JCEF's binary resource handler: modules and styles are stored as
+  // gzip and decompressed by Java before reaching Chromium at their stable URL.
   await context.route('https://cc-gui-webview.local/assets/**', async (route) => {
     const fileName = path.posix.basename(new URL(route.request().url()).pathname);
+    if (/^index-.*\.js\.gz$/.test(fileName)) {
+      entryOverlappedStylesheet ||= !stylesheetReleased;
+      entryRequested();
+    }
+    if (/^index-.*\.css$/.test(fileName)) {
+      // A deferred module waits for CSS; holding CSS reveals that startup waterfall.
+      await Promise.race([entryRequest, new Promise((resolve) => setTimeout(resolve, 1500))]);
+      stylesheetReleased = true;
+    }
     const compressed = fileName.endsWith('.js') || fileName.endsWith('.css');
     const stored = await readFile(path.join(assets, compressed ? `${fileName}.gz` : fileName));
     const body = compressed ? gunzipSync(stored) : stored;
@@ -48,15 +61,37 @@ test('packaged chat tabs bootstrap compressed assets and preserve input and lazy
     contentType: 'text/html',
     body: html,
   }));
-  await context.addInitScript((version) => {
+  await context.addInitScript(({ version, cacheMode }) => {
+    if (cacheMode === 'unavailable') {
+      Object.defineProperty(window, 'caches', {
+        value: { open: () => Promise.reject(new DOMException('Storage denied', 'SecurityError')) },
+      });
+    } else if (cacheMode === 'write-denied') {
+      const open = caches.open.bind(caches);
+      caches.open = async (name) => {
+        const cache = await open(name);
+        cache.put = () => Promise.reject(new DOMException('Storage full', 'QuotaExceededError'));
+        return cache;
+      };
+    }
     localStorage.setItem('lastSeenChangelogVersion', version);
     localStorage.setItem('model-selection-state', JSON.stringify({
       provider: 'claude', claudeModel: 'claude-sonnet-4-6', claudePermissionMode: 'bypassPermissions',
     }));
     const bridge = window as PackagedWindow;
     bridge.__packagedBridgeEvents = [];
+    localStorage.setItem('language', 'en');
     bridge.sendToJava = (message) => {
       bridge.__packagedBridgeEvents.push(message);
+      if (message.startsWith('tt_ensure_server:') || message.startsWith('tt_proxy:')) {
+        const request = JSON.parse(message.slice(message.indexOf(':') + 1));
+        const data = message.startsWith('tt_ensure_server:')
+          ? { running: true, port: 7680 }
+          : { body: JSON.stringify({ data: [], totals: {}, projects: [], token: 'fixture' }) };
+        setTimeout(() => window.onTokenTrackerResponse?.(JSON.stringify({
+          requestId: request.requestId, ok: true, data,
+        })), 0);
+      }
       if (message.startsWith('get_dependency_status:')) {
         setTimeout(() => {
           const callback = (window as unknown as Record<string, unknown>).updateDependencyStatus;
@@ -69,7 +104,30 @@ test('packaged chat tabs bootstrap compressed assets and preserve input and lazy
         }, 0);
       }
     };
-  }, APP_VERSION);
+  }, { version: APP_VERSION, cacheMode });
+
+  if (cacheMode === 'enabled') {
+    // Cached code is untrusted until checked against the bundled digest, even if its URL matches.
+    const urls = [html.match(/https:\/\/cc-gui-webview\.local\/assets\/index-[\w-]+\.js\.gz/)![0],
+      html.match(/https:\/\/cc-gui-webview\.local\/assets\/index-[\w-]+\.css/)![0]];
+    await context.route('**/cache-seed', (route) => route.fulfill({ contentType: 'text/html', body: '<!doctype html>' }));
+    const seed = await context.newPage();
+    await seed.goto('/cache-seed');
+    await seed.evaluate(async (urls) => {
+      const cache = await caches.open('ccgui-webview-startup-v1');
+      for (const url of urls) await cache.put(url, new Response('invalid cached resource'));
+    }, urls);
+    await seed.close();
+    // Simultaneous cold restores should share one download before subsequent tabs reuse it.
+    const coldTabs = await Promise.all([context.newPage(), context.newPage()]);
+    await Promise.all(coldTabs.map(async (page) => {
+      page.on('pageerror', (error) => errors.push(error.message));
+      await page.goto('/packaged-webview');
+      await expect.poll(() => page.evaluate(() => (window as PackagedWindow).__packagedBridgeEvents
+        .some((event) => event.startsWith('frontend_ready:')))).toBe(true);
+      await page.close();
+    }));
+  }
 
   for (let tab = 0; tab < 2; tab++) {
     const page = await context.newPage();
@@ -112,12 +170,33 @@ test('packaged chat tabs bootstrap compressed assets and preserve input and lazy
     await expect(input).toBeEmpty();
 
     if (tab === 1) {
+      // This lazy chunk imports React from the entry module. Reopening it must
+      // reuse the running app rather than evaluate a second entry/React copy.
+      for (let visit = 0; visit < 2; visit++) {
+        await page.locator('.header button:has(.codicon-settings-gear)').click();
+        await page.locator('.codicon-graph').click();
+        await expect(page.locator('.tt-dashboard')).toBeVisible();
+        await expect(page.locator('.tt-dashboard')).toContainText('Daily Breakdown');
+        await expect(page.locator('.tt-dashboard').getByRole('button', { name: 'Refresh', exact: true })).toBeEnabled();
+        await expect.poll(() => page.evaluate(() => (window as PackagedWindow).__packagedBridgeEvents
+          .filter((event) => event.startsWith('frontend_ready:')).length)).toBe(1);
+        if (visit === 0) {
+          await page.screenshot({ path: testInfo.outputPath('packaged-usage.png') });
+        }
+        await page.locator('button:has(.codicon-arrow-left)').click();
+        await expect(input).toBeVisible();
+      }
       await page.screenshot({ path: testInfo.outputPath('packaged-chat.png') });
     }
     await page.close();
   }
 
   expect(loadedAssets.some((name) => /^index-.*\.js\.gz$/.test(name))).toBe(true);
+  expect(entryOverlappedStylesheet, 'entry fetching must start before CSS finishes').toBe(true);
+  expect(loadedAssets.filter((name) => /^index-.*\.js\.gz$/.test(name)))
+    .toHaveLength(cacheMode === 'enabled' ? 1 : 2);
+  expect(loadedAssets.filter((name) => /^index-.*\.css$/.test(name)))
+    .toHaveLength(cacheMode === 'enabled' ? 1 : 2);
   expect(loadedAssets.some((name) => /^flowDiagram-.*\.js$/.test(name))).toBe(true);
   expect(errors).toEqual([]);
   await testInfo.attach('startup-metrics', {
@@ -125,3 +204,7 @@ test('packaged chat tabs bootstrap compressed assets and preserve input and lazy
     contentType: 'application/json',
   });
 });
+
+testPackagedTabs('enabled');
+testPackagedTabs('unavailable');
+testPackagedTabs('write-denied');

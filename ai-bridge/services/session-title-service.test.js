@@ -22,3 +22,18 @@ test('buildSessionTitleRequest always attaches the title system prompt', () => {
   assert.equal(typeof request.system, 'string');
   assert.match(request.system, /concise title/);
 });
+
+// ---------- thinking setting per model (#1949) ----------
+
+test('buildSessionTitleRequest uses between_tools for Claude Sonnet 5.5', () => {
+  const request = buildSessionTitleRequest('claude-sonnet-5-5', 'fix the login bug');
+  assert.deepEqual(request.thinking, { type: 'between_tools' });
+  assert.equal(request.max_tokens, 2048);
+});
+
+test('buildSessionTitleRequest omits thinking and lowers effort for Claude Opus 5.5', () => {
+  const request = buildSessionTitleRequest('claude-opus-5-5', 'fix the login bug');
+  assert.equal('thinking' in request, false);
+  assert.deepEqual(request.output_config, { effort: 'low' });
+  assert.ok(request.max_tokens >= 4096);
+});

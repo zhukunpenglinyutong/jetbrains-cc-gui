@@ -164,7 +164,15 @@ public class CodexInteractionHandler extends BaseMessageHandler {
                     }
                     return acknowledgement;
                 }, CodexSDKBridge.codexControlExecutor())
-                .thenAccept(acknowledgement -> this.notifyResult(acknowledgement, interactionKey))
+                .thenAccept(acknowledgement -> {
+                    // The page reopens the dialog on failure; the log is what
+                    // explains a stalled turn when users report it afterwards.
+                    if (acknowledgement != null && acknowledgement.has("error")) {
+                        LOG.warn("[CodexInteraction] Interaction response was not delivered (key="
+                                + interactionKey + "): " + acknowledgement.get("error"));
+                    }
+                    this.notifyResult(acknowledgement, interactionKey);
+                })
                 // A silently dropped answer would leave the native request waiting
                 // until thread release; always report back to the page.
                 .exceptionally(failure -> {

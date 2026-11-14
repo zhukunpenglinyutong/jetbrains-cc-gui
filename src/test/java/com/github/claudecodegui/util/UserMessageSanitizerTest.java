@@ -13,6 +13,18 @@ import static org.junit.Assert.assertTrue;
  * the next real user message.
  */
 public class UserMessageSanitizerTest {
+    /** Hides only the transport envelope while preserving markers quoted in the request. */
+    @Test
+    public void restoresCodexIdeRequestWithoutEditorMetadata() {
+        String request = "请检查这里\n\n## My request for Codex:\n这是用户引用的格式";
+        String envelope = "# Context from my IDE setup:\n\n## Active file: src/App.java\n\n## My request for Codex:\n";
+        assertEquals(request, UserMessageSanitizer.sanitizeUserFacingText(envelope + request));
+        assertEquals(request, UserMessageSanitizer.sanitizeUserFacingText(request));
+        assertEquals("", UserMessageSanitizer.sanitizeUserFacingText(envelope));
+        String incomplete = "# Context from my IDE setup:\n\n## Active file: src/App.java";
+        assertEquals(incomplete, UserMessageSanitizer.sanitizeUserFacingText(incomplete));
+    }
+
     /** Keeps the request and real file references outside the desktop transport envelope. */
     @Test
     public void restoresDesktopRequestAndOrdinaryFileReferences() {
@@ -100,5 +112,21 @@ public class UserMessageSanitizerTest {
     public void nullAndEmptyPassThrough() {
         assertEquals(null, UserMessageSanitizer.sanitizeUserFacingText(null));
         assertEquals("", UserMessageSanitizer.sanitizeUserFacingText(""));
+    }
+
+    @Test
+    public void stripsGlobalGrokRulesAndIdeContextFromUserPrompt() {
+        String raw = "hi\n\n## Global Grok Rules (~/.grok/grok-rules.md)\n\n"
+                + "## Code Exploration Rules (IMPORTANT for large codebases)\n"
+                + "- NEVER read an entire large file\n\n"
+                + "## IDE Context (opened files)\n```json\n{\"active\":\"src/Main.java\"}\n```\n\n"
+                + "## Attachments\nUser attached: notes.txt";
+        assertEquals("hi", UserMessageSanitizer.sanitizeUserFacingText(raw));
+    }
+
+    @Test
+    public void stripsGlobalGrokRulesOnlyMessageToEmpty() {
+        String raw = "## Global Grok Rules (~/.grok/grok-rules.md)\n\n- Rule 1";
+        assertEquals("", UserMessageSanitizer.sanitizeUserFacingText(raw));
     }
 }

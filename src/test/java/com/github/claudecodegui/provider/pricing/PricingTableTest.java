@@ -53,6 +53,14 @@ public class PricingTableTest {
     }
 
     @Test
+    public void claudeResolvesFable52AtTheFableTierRate() {
+        assertEquals(10.0, ClaudePricingTable.resolve("claude-fable-5-2").inputCostPer1M(), 1e-9);
+        assertEquals(50.0, ClaudePricingTable.resolve("claude-fable-5-2").outputCostPer1M(), 1e-9);
+        assertEquals(10.0, ClaudePricingTable.resolve("claude-fable-5-2-2026-11-01").inputCostPer1M(), 1e-9);
+        assertEquals(10.0, ClaudePricingTable.resolve("claude-fable-5-1").inputCostPer1M(), 1e-9);
+    }
+
+    @Test
     public void claudeAppliesAbove200KTierForSonnet4() {
         ClaudePricing pricing = ClaudePricingTable.resolve("claude-sonnet-4");
         assertNotNull(pricing);

@@ -4,7 +4,8 @@ import {
   CHAT_BAR_COLOR_STORAGE_KEY,
   isValidHexColor,
 } from '../utils/chatBarTheme';
-import { FONT_SIZE_LEVEL_STORAGE_KEY, fontSizeLevelToScale, parseFontSizeLevel } from '../utils/fontScale';
+import { fontSizeLevelToScale } from '../utils/fontScale';
+import { getFontSizeLevel } from '../utils/fontSizePreference';
 
 /**
  * Manages IDE theme initialization and synchronization.
@@ -45,7 +46,7 @@ export function useThemeInit() {
     };
 
     // Initialize font scaling (default and level->scale mapping live in utils/fontScale.ts)
-    const fontSizeLevel = parseFontSizeLevel(localStorage.getItem(FONT_SIZE_LEVEL_STORAGE_KEY));
+    const fontSizeLevel = getFontSizeLevel();
     document.documentElement.style.setProperty('--font-scale', fontSizeLevelToScale(fontSizeLevel).toString());
 
     // Initialize chat background color (validate hex format before applying)

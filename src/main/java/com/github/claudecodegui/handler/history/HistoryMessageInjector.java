@@ -2,15 +2,16 @@ package com.github.claudecodegui.handler.history;
 
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.CodexMessageConverter;
-import com.github.claudecodegui.handler.SettingsHandler;
 import com.github.claudecodegui.handler.UsagePushService;
 import com.github.claudecodegui.handler.core.HandlerContext;
+import com.github.claudecodegui.handler.provider.ModelProviderHandler;
 import com.github.claudecodegui.provider.codex.CodexHistoryReader;
 import com.github.claudecodegui.provider.codex.CodexNativeHistoryReader;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.session.SessionState;
 import com.github.claudecodegui.util.JsUtils;
+import com.github.claudecodegui.util.WslPathUtil;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.Gson;
@@ -89,6 +90,15 @@ public class HistoryMessageInjector {
         }
     }
 
+    /** Codex rebinds the current session in place, so no session swap retires a pending restore for it. */
+    private volatile Runnable codexSessionSelectionListener = () -> {
+    };
+
+    void setCodexSessionSelectionListener(Runnable listener) {
+        this.codexSessionSelectionListener = listener != null ? listener : () -> {
+        };
+    }
+
     /**
      * Load a history session.
      */
@@ -117,6 +127,9 @@ public class HistoryMessageInjector {
             }
         } catch (Exception ignored) {
             // Backward compatible: legacy payload is the raw sessionId string.
+        }
+        if ("codex".equals(provider)) {
+            codexSessionSelectionListener.run();
         }
 
         String rawPath = context.resolveEffectiveWorkingDirectory();
@@ -449,8 +462,8 @@ public class HistoryMessageInjector {
         if (session == null) {
             return;
         }
-        int fallbackMaxTokens = SettingsHandler.getModelContextLimit(
-                session.getProvider(), session.getModel());
+        int fallbackMaxTokens = ModelProviderHandler.resolveContextLimit(
+                session.getProvider(), session.getModel(), session.getCwd());
         new UsagePushService(context).pushCurrentUsageIfAvailable(fallbackMaxTokens);
     }
 
@@ -772,7 +785,10 @@ public class HistoryMessageInjector {
         private String recordedPatchCallId;
         private final Set<String> recordedPatchItemIds = new HashSet<>();
         private CodexKnownExecReplay knownExec;
+        private CodexExecContinuation execContinuation;
         private String rootThreadId;
+        private String nativeTurnId;
+        private final Set<String> questionCalls = new HashSet<>();
         private final Map<String, CodexKnownExecReplay.Process> processCalls = new java.util.LinkedHashMap<>();
         private final CodexRecordedImageGeneration.Lifecycle generatedImages = new CodexRecordedImageGeneration.Lifecycle();
 
@@ -792,17 +808,45 @@ public class HistoryMessageInjector {
                 this.rootThreadId = getStringProperty(rawMessage.getAsJsonObject("payload"), "id");
             }
             JsonObject payload = getResponseItemPayload(rawMessage);
+            String recordType = getStringProperty(rawMessage, "type");
+            JsonObject lifecycle = rawMessage.has("payload") && rawMessage.get("payload").isJsonObject()
+                    ? rawMessage.getAsJsonObject("payload") : null;
+            if ("turn_context".equals(recordType)
+                    || "event_msg".equals(recordType) && "task_started".equals(getStringProperty(lifecycle, "type"))) {
+                this.nativeTurnId = getStringProperty(lifecycle, "turn_id");
+            }
             String callId = getStringProperty(payload, "call_id");
             String payloadType = getStringProperty(payload, "type");
             if (this.knownExec != null) {
-                if (this.knownExec.rememberNative(rawMessage, this.processCalls)) {
-                    if (this.retainedBytes() > MAX_REPLAY_BYTES) {
-                        this.flushKnownExec(null);
+                if (this.execContinuation.accept(rawMessage, this.recordNumber, this.nativeTurnId)) {
+                    if (!this.execContinuation.awaiting()) {
+                        this.flushKnownExec(this.execContinuation.mergedOutput());
+                    } else if (this.retainedBytes() > MAX_REPLAY_BYTES) {
+                        this.flushKnownExec(null, true);
                     }
                     return;
                 }
-                if (isToolOutputPayload(payload) && this.knownExec.callId().equals(callId)) {
-                    this.flushKnownExec(rawMessage);
+                if (this.knownExec.rememberNative(rawMessage, this.processCalls)) {
+                    if (this.knownExec.nativeRecords().contains(rawMessage)) {
+                        this.execContinuation.remember(rawMessage);
+                    }
+                    if (this.retainedBytes() > MAX_REPLAY_BYTES) {
+                        this.flushKnownExec(null, true);
+                    }
+                    return;
+                }
+                if (this.knownExec.nativeLimitExceeded()) {
+                    // Only a refused receipt exhausts the budget; missing script output cannot prove success.
+                    this.flushKnownExec(null, true);
+                    this.acceptRecordedExecRecord(rawMessage);
+                    return;
+                }
+                if (this.execContinuation.awaiting() && ("reasoning".equals(payloadType) || "message".equals(payloadType))
+                        && getCodexUserRecordKind(rawMessage) == null) {
+                    this.execContinuation.defer(rawMessage, this.recordNumber, this.nativeTurnId);
+                    if (this.retainedBytes() > MAX_REPLAY_BYTES) {
+                        this.flushKnownExec(null, true);
+                    }
                     return;
                 }
                 if ("custom_tool_call".equals(payloadType) || "function_call".equals(payloadType)
@@ -810,15 +854,29 @@ public class HistoryMessageInjector {
                         || "compacted".equals(getStringProperty(rawMessage, "type"))
                         || getCodexUserRecordKind(rawMessage) != null) {
                     this.flushKnownExec(null);
+                } else {
+                    boolean contextOnly = "session_meta".equals(recordType) || "turn_context".equals(recordType)
+                            || "token_usage_record".equals(recordType);
+                    if (!contextOnly) {
+                        // Usage and visible native events must wait for the assistant that opened this window.
+                        boolean usage = "event_msg".equals(recordType) && "token_count".equals(getStringProperty(lifecycle, "type"));
+                        boolean taskStarted = "event_msg".equals(recordType) && "task_started".equals(getStringProperty(lifecycle, "type"));
+                        this.execContinuation.defer(rawMessage, this.recordNumber, this.nativeTurnId, !usage && !taskStarted);
+                        if (this.retainedBytes() > MAX_REPLAY_BYTES) {
+                            this.flushKnownExec(null, true);
+                        }
+                    }
+                    return;
                 }
             }
             if ("custom_tool_call".equals(payloadType) || "function_call".equals(payloadType)) {
-                CodexKnownExecReplay candidate = CodexKnownExecReplay.begin(rawMessage, this.rootThreadId);
+                CodexKnownExecReplay candidate = CodexKnownExecReplay.begin(rawMessage, this.rootThreadId, this.nativeTurnId);
                 if (candidate != null && this.retainedBytes() + candidate.retainedBytes() <= MAX_REPLAY_BYTES) {
                     this.emitPending();
                     this.recordedPatchCallId = null;
                     this.recordedPatchItemIds.clear();
                     this.knownExec = candidate;
+                    this.execContinuation = new CodexExecContinuation(rawMessage);
                     return;
                 }
             }
@@ -826,18 +884,24 @@ public class HistoryMessageInjector {
         }
 
         private void flushKnownExec(JsonObject output) {
+            this.flushKnownExec(output, false);
+        }
+
+        private void flushKnownExec(JsonObject output, boolean preservesWrapper) {
             CodexKnownExecReplay replay = this.knownExec;
+            CodexExecContinuation continuation = this.execContinuation;
             this.knownExec = null;
+            this.execContinuation = null;
             if (replay == null) {
                 return;
             }
-            // A record stashed while the wrapper was open belongs after the wrapper's
-            // own cards, matching its position in the transcript.
+            // Passthrough records now live in the continuation; keep any pre-existing pending preview after its wrapper.
             JsonObject stashed = this.pending;
             this.pending = null;
             boolean projected = false;
             try {
-                List<JsonObject> messages = replay.project(output, this.processCalls);
+                List<JsonObject> messages = preservesWrapper || continuation.preservesWrapper() || continuation.awaiting()
+                        ? null : replay.project(output, this.processCalls);
                 if (messages != null) {
                     messages.forEach(this::acceptConverted);
                     projected = true;
@@ -847,30 +911,76 @@ public class HistoryMessageInjector {
             }
             if (projected) {
                 this.acceptConverted(stashed);
+                continuation.deferred().forEach(this::acceptDeferredExecRecord);
                 return;
             }
-            if (replay.keepsOriginalWrapper()) {
-                // A rejected ownership/index mapping must not be retried by looser legacy heuristics.
-                this.acceptOpaqueExecRecord(replay.original(), replay.callId(), false);
-                for (JsonObject record : replay.nativeRecords()) {
-                    List<JsonObject> changes = CodexRecordedFileChange.readMessages(record);
-                    if (changes.isEmpty()) {
-                        this.acceptLegacy(record);
-                    } else {
-                        changes.forEach(this::acceptConverted);
-                    }
-                }
-                if (output != null) {
-                    this.acceptOpaqueExecRecord(output, replay.callId(), true);
-                }
-            } else {
-                this.acceptLegacy(replay.original());
-                replay.nativeRecords().forEach(this::acceptLegacy);
-                if (output != null) {
-                    this.acceptLegacy(output);
-                }
+            // A wrapper can close after the next turn has started; its fallback cards keep the turn that opened it.
+            String currentTurnId = this.nativeTurnId;
+            this.nativeTurnId = replay.lifecycleTurnId();
+            try {
+                this.acceptReplayFallback(replay, continuation, output, preservesWrapper);
+            } finally {
+                this.nativeTurnId = currentTurnId;
             }
             this.acceptConverted(stashed);
+        }
+
+        private void acceptReplayFallback(CodexKnownExecReplay replay, CodexExecContinuation continuation, JsonObject output, boolean preservesWrapper) {
+            if (preservesWrapper || continuation.preservesWrapper() || continuation.continued() || replay.keepsOriginalWrapper() || !replay.nativeRecords().isEmpty()) {
+                if (replay.nativeRecords().isEmpty() && !continuation.continued()) {
+                    this.previewLiteralPatches(replay.original());
+                }
+                this.acceptOpaqueExecRecord(replay.original(), replay.callId(), false);
+                for (JsonObject record : continuation.fallbackRecords()) {
+                    if (ownsWrapperOutput(replay, continuation, record)) {
+                        this.acceptOpaqueExecRecord(record, replay.callId(), true);
+                    } else {
+                        // Waits keep their arrival scope; the original exec result stays with its opening turn.
+                        this.acceptDeferredExecRecord(record);
+                    }
+                }
+                if (preservesWrapper && output == null) {
+                    // Later native edits and the eventual output still belong to this retained opaque wrapper.
+                    this.recordedPatchCallId = replay.callId();
+                }
+                return;
+            }
+            this.acceptLegacy(replay.original());
+            for (JsonObject record : continuation.fallbackRecords()) {
+                if (ownsWrapperOutput(replay, continuation, record)) {
+                    // The caller has restored the opening turn, which this result shares with its wrapper.
+                    this.acceptRecordedExecRecord(record);
+                } else {
+                    this.acceptDeferredExecRecord(record);
+                }
+            }
+        }
+
+        private static boolean ownsWrapperOutput(CodexKnownExecReplay replay, CodexExecContinuation continuation, JsonObject record) {
+            JsonObject payload = getResponseItemPayload(record);
+            return isToolOutputPayload(payload) && replay.callId().equals(getStringProperty(payload, "call_id"))
+                    && continuation.ownsOutput(record);
+        }
+
+        private void acceptDeferredExecRecord(JsonObject record) {
+            String currentTurnId = this.nativeTurnId;
+            // Deferred records carry their arrival scope; an originally unknown turn must remain unknown.
+            this.nativeTurnId = null;
+            try {
+                this.acceptRecordedExecRecord(record);
+            } finally {
+                this.nativeTurnId = currentTurnId;
+            }
+        }
+
+        private void acceptRecordedExecRecord(JsonObject record) {
+            List<JsonObject> changes = CodexRecordedFileChange.readMessages(record);
+            if (changes.isEmpty()) {
+                this.acceptLegacy(record);
+            } else {
+                // A retained native edit does not depend on recognizing the surrounding source.
+                changes.forEach(this::acceptConverted);
+            }
         }
 
         private void acceptOpaqueExecRecord(JsonObject record, String callId, boolean result) {
@@ -882,6 +992,27 @@ public class HistoryMessageInjector {
         }
 
         private void acceptLegacy(JsonObject rawMessage) {
+            rawMessage = CodexExecContinuation.keepHostTermination(rawMessage);
+            JsonObject question = CodexRecordedQuestion.readMessage(rawMessage);
+            if (question != null) {
+                this.carryRecordedScope(question, rawMessage);
+                String id = getStringProperty(question.getAsJsonObject("raw"), "codexItemId");
+                boolean repeated = !this.questionCalls.add(id);
+                if (repeated) {
+                    if (this.pending != null && id.equals(getStringProperty(this.pending.getAsJsonObject("raw"), "codexItemId"))) {
+                        this.pending = question;
+                        this.rememberLatestAssistant(question);
+                    }
+                } else {
+                    this.acceptConverted(question);
+                }
+                return;
+            }
+            JsonObject recordedPayload = getResponseItemPayload(rawMessage);
+            if (isToolOutputPayload(recordedPayload) && this.questionCalls.contains(getStringProperty(recordedPayload, "call_id"))) {
+                // The async tool's acknowledgement is not the user's answer.
+                return;
+            }
             List<JsonObject> recordedCommands = CodexKnownExecReplay.readNativeCommand(rawMessage, this.processCalls);
             if (!recordedCommands.isEmpty()) {
                 recordedCommands.forEach(this::acceptConverted);
@@ -912,6 +1043,11 @@ public class HistoryMessageInjector {
                 mcp.forEach(this::acceptConverted);
                 return;
             }
+            List<JsonObject> dynamic = CodexRecordedDynamicToolCall.readMessages(rawMessage);
+            if (!dynamic.isEmpty()) {
+                dynamic.forEach(this::acceptConverted);
+                return;
+            }
             JsonObject usage = extractCodexTokenCountUsage(rawMessage);
             if (usage != null) {
                 attachUsageToLatestAssistant(usage);
@@ -922,7 +1058,10 @@ public class HistoryMessageInjector {
             String callId = getStringProperty(payload, "call_id");
             String timestamp = getStringProperty(rawMessage, "timestamp");
             String payloadType = getStringProperty(payload, "type");
-            if ("custom_tool_call".equals(payloadType) || "function_call".equals(payloadType)) {
+            // A wait does not replace the released cell that still owns later native edits.
+            boolean continuationWait = "function_call".equals(payloadType)
+                    && List.of("wait", "functions.wait").contains(String.valueOf(getStringProperty(payload, "name")));
+            if (!continuationWait && ("custom_tool_call".equals(payloadType) || "function_call".equals(payloadType))) {
                 this.recordedPatchCallId = callId != null && CodexExecHistoryReplay.isExecCall(payload)
                         && CodexExecHistoryReplay.needsRecordedPatch(payload) ? callId : null;
                 this.recordedPatchItemIds.clear();
@@ -938,7 +1077,8 @@ public class HistoryMessageInjector {
                     }
                     return;
                 }
-                if (isToolOutputPayload(payload) && this.recordedPatchCallId.equals(callId)
+                // Yield and notify responses cannot release ownership of edits still running after a budget flush.
+                if (isToolOutputPayload(payload) && this.recordedPatchCallId.equals(callId) && CodexExecContinuation.hasTerminalOutput(payload)
                         || getCodexUserRecordKind(rawMessage) != null) {
                     this.recordedPatchCallId = null;
                     this.recordedPatchItemIds.clear();
@@ -946,19 +1086,7 @@ public class HistoryMessageInjector {
             }
             if (callId != null && CodexExecHistoryReplay.isExecCall(payload)
                     && CodexExecHistoryReplay.containsUnsupportedToolCalls(payload)) {
-                List<String> patches = CodexExecHistoryReplay.extractPatches(payload);
-                long previewBytes = patches.stream().mapToLong(patch -> 3L * patch.length()).sum();
-                if (previewBytes <= MAX_REPLAY_BYTES) {
-                    // Literal inputs still describe reviewable edits. Keep the wrapper and its
-                    // shared result intact because neither proves an individual tool's outcome.
-                    for (int index = 0; index < patches.size(); index++) {
-                        JsonObject preview = CodexExecHistoryReplay.createPatchToolUseMessage(
-                                callId, patches.get(index), index, timestamp);
-                        preview.getAsJsonObject("raw").getAsJsonArray("content").get(0)
-                                .getAsJsonObject().getAsJsonObject("input").addProperty("status", "unknown");
-                        this.acceptConverted(preview, rawMessage);
-                    }
-                }
+                this.previewLiteralPatches(rawMessage);
             }
             if (CodexExecHistoryReplay.isExecCall(payload) && !CodexExecHistoryReplay.containsUnsupportedToolCalls(payload)
                     && !CodexKnownExecReplay.hasUnrepresentedArrayEntries(payload)) {
@@ -1017,6 +1145,11 @@ public class HistoryMessageInjector {
             JsonObject raw = incoming.getAsJsonObject("raw");
             if (raw != null) {
                 this.carryRecordedScope(incoming, rawMessage);
+                String content = getStringProperty(incoming, "content");
+                if (isUserMessage(incoming) && !this.questionCalls.isEmpty() && content != null
+                        && (content.startsWith("Answers to your questions (request: ") || content.startsWith("Answers to your questions:\n\n"))) {
+                    raw.addProperty("codexItemType", "userMessage");
+                }
                 String nativeId = getStringProperty(payload, "id");
                 String identity = nativeId != null ? nativeId : callId != null ? callId
                         : (timestamp == null ? "record" : timestamp) + ":" + this.recordNumber;
@@ -1056,6 +1189,25 @@ public class HistoryMessageInjector {
             rememberLatestAssistant(incoming);
         }
 
+        private void previewLiteralPatches(JsonObject record) {
+            JsonObject payload = getResponseItemPayload(record);
+            if (!CodexExecHistoryReplay.isExecCall(payload) || !CodexExecHistoryReplay.containsUnsupportedToolCalls(payload)) {
+                return;
+            }
+            List<String> patches = CodexExecHistoryReplay.extractPatches(payload);
+            if (patches.stream().mapToLong(patch -> 3L * patch.length()).sum() > MAX_REPLAY_BYTES) {
+                return;
+            }
+            // Literal edits remain reviewable without assigning the wrapper's shared outcome to them.
+            for (int index = 0; index < patches.size(); index++) {
+                JsonObject preview = CodexExecHistoryReplay.createPatchToolUseMessage(
+                        getStringProperty(payload, "call_id"), patches.get(index), index, getStringProperty(record, "timestamp"));
+                preview.getAsJsonObject("raw").getAsJsonArray("content").get(0)
+                        .getAsJsonObject().getAsJsonObject("input").addProperty("status", "unknown");
+                this.acceptConverted(preview, record);
+            }
+        }
+
         /**
          * Accepts an already-converted frontend message (e.g. replayed exec tool
          * cards) while preserving ordering with the buffered pending message.
@@ -1088,7 +1240,8 @@ public class HistoryMessageInjector {
                 return;
             }
             JsonObject raw = incoming.getAsJsonObject("raw");
-            JsonObject payload = getResponseItemPayload(record);
+            JsonObject payload = record != null && record.has("payload") && record.get("payload").isJsonObject()
+                    ? record.getAsJsonObject("payload") : null;
             if (payload == null) {
                 return;
             }
@@ -1097,7 +1250,7 @@ public class HistoryMessageInjector {
                     ? payload.getAsJsonObject("internal_chat_message_metadata_passthrough") : null;
             String turnId = getStringProperty(payload, "turn_id");
             if (turnId == null) {
-                turnId = getStringProperty(metadata, "turn_id");
+                turnId = this.nativeTurnId != null ? this.nativeTurnId : getStringProperty(metadata, "turn_id");
             }
             String threadId = getStringProperty(payload, "thread_id");
             if (threadId == null) {
@@ -1145,12 +1298,24 @@ public class HistoryMessageInjector {
 
         List<JsonObject> pendingMessages() {
             if (this.knownExec != null) {
-                List<JsonObject> messages = new ArrayList<>(this.knownExec.snapshot(this.processCalls));
-                JsonObject message = this.pendingMessage();
-                // A record stashed while the wrapper was open follows the wrapper's own cards.
-                if (message != null) {
-                    messages.add(message);
-                }
+                // Preview the same EOF flush as a full read without committing it to the page cache.
+                List<JsonObject> messages = new ArrayList<>();
+                CodexFrontendMessageAccumulator preview = new CodexFrontendMessageAccumulator(messages::add);
+                preview.rootThreadId = this.rootThreadId;
+                preview.nativeTurnId = this.nativeTurnId;
+                preview.recordNumber = this.recordNumber;
+                preview.shellCalls.putAll(this.shellCalls);
+                preview.planCalls.addAll(this.planCalls);
+                preview.patchCalls.putAll(this.patchCalls);
+                preview.recordedPatchCallId = this.recordedPatchCallId;
+                preview.recordedPatchItemIds.addAll(this.recordedPatchItemIds);
+                preview.processCalls.putAll(this.processCalls);
+                preview.questionCalls.addAll(this.questionCalls);
+                preview.generatedImages.copyFrom(this.generatedImages);
+                preview.knownExec = this.knownExec;
+                preview.execContinuation = this.execContinuation;
+                preview.pending = this.pendingMessage();
+                preview.finish();
                 return messages;
             }
             JsonObject message = this.pendingMessage();
@@ -1173,6 +1338,9 @@ public class HistoryMessageInjector {
             if (this.knownExec != null) {
                 bytes += this.knownExec.retainedBytes();
             }
+            if (this.execContinuation != null) {
+                bytes += this.execContinuation.retainedBytes();
+            }
             for (var process : this.processCalls.entrySet()) {
                 bytes += 3L * (process.getKey().length() + process.getValue().toolId().length()
                         + process.getValue().metadata().toString().length()
@@ -1193,13 +1361,21 @@ public class HistoryMessageInjector {
             for (String itemId : this.recordedPatchItemIds) {
                 bytes += 3L * itemId.length();
             }
+            for (String callId : this.questionCalls) {
+                bytes += 3L * callId.length();
+            }
             return bytes;
         }
 
         private void finish() {
+            if (this.knownExec != null && (this.execContinuation.awaiting() || this.execContinuation.preservesWrapper()
+                    || !this.execContinuation.deferred().isEmpty() || !this.knownExec.hasStaticActions() || !this.knownExec.nativeRecords().isEmpty())) {
+                this.flushKnownExec(null);
+            }
             if (this.knownExec != null) {
                 List<JsonObject> pendingKnown = this.knownExec.snapshot(this.processCalls);
                 this.knownExec = null;
+                this.execContinuation = null;
                 // A record stashed while the wrapper was open follows the wrapper's own
                 // cards, matching its position in the transcript and the paged index.
                 JsonObject stashed = this.pending;
@@ -1609,13 +1785,15 @@ public class HistoryMessageInjector {
         }
     }
 
-    private static JsonObject createLocalImageBlock(String imagePath) {
+    static JsonObject createLocalImageBlock(String imagePath) {
         if (imagePath == null || imagePath.trim().isEmpty()) {
             return null;
         }
 
         try {
-            Path path = Path.of(imagePath);
+            // A Codex running in WSL records Linux paths; a Windows JVM only reaches those through the UNC share.
+            String windowsPath = WslPathUtil.convertWslPathToWindowsUnc(imagePath);
+            Path path = Path.of(windowsPath != null ? windowsPath : imagePath);
             if (!Files.isRegularFile(path)) {
                 LOG.debug("[HistoryMessageInjector] Skip missing local image: " + imagePath);
                 return null;

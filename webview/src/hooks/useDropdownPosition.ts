@@ -83,15 +83,26 @@ export function useDropdownPosition({
     const dropdown = dropdownRef?.current;
 
     if (submenu) {
-      const measuredWidth = dropdown
-        ? Math.max(dropdown.getBoundingClientRect().width, dropdown.scrollWidth)
-        : minWidth;
-      const measuredHeight = dropdown
-        ? Math.max(dropdown.getBoundingClientRect().height, dropdown.scrollHeight)
-        : submenuMaxHeight;
+      // Absolute offsets and scroll sizes use layout pixels, even when DOMRects are zoomed.
+      const scale = viewport.fixedPosDivisor;
+      let measuredWidth = minWidth;
+      let measuredHeight = submenuMaxHeight;
+      if (dropdown) {
+        const rect = dropdown.getBoundingClientRect();
+        // scroll sizes keep the natural content size after maxHeight clips the box.
+        measuredWidth = Math.max(rect.width / scale, dropdown.scrollWidth + dropdown.offsetWidth - dropdown.clientWidth);
+        measuredHeight = Math.max(rect.height / scale, dropdown.scrollHeight + dropdown.offsetHeight - dropdown.clientHeight);
+      }
       const layout = getSubmenuLayout({
-        trigger,
-        viewport,
+        trigger: {
+          left: trigger.left / scale,
+          right: trigger.right / scale,
+          top: trigger.top / scale,
+          bottom: trigger.bottom / scale,
+          width: trigger.width / scale,
+          height: trigger.height / scale,
+        },
+        viewport: { ...viewport, width: viewport.width / scale, height: viewport.height / scale },
         measuredWidth,
         measuredHeight,
         minWidth,
@@ -186,12 +197,15 @@ export function useDropdownPosition({
     };
   }
 
-  const { fixedPosDivisor } = getAppViewport();
+  const { fixedPosDivisor, width } = getAppViewport();
+  const viewportMaxWidth = Math.max(1, width - 16) / fixedPosDivisor;
   return {
     positionedStyle: {
       position: 'fixed',
       left: (positionState.left ?? 0) / fixedPosDivisor,
       bottom: (positionState.bottom ?? 0) / fixedPosDivisor,
+      maxWidth: viewportMaxWidth,
+      minWidth: Math.min(minWidth, viewportMaxWidth),
       zIndex: 10000,
       ['--selector-enter-x' as string]: '0px',
       ['--selector-enter-y' as string]: '6px',

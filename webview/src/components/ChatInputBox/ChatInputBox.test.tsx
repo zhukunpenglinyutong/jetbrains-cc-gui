@@ -34,6 +34,7 @@ describe('ChatInputBox event wiring', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     localStorage.clear();
+    sessionStorage.clear();
   });
 
   afterEach(() => {

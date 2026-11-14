@@ -4,9 +4,27 @@ import {
   codexCommandProvider,
   codexCommandToDropdownItem,
   dollarCommandProvider,
+  resetDollarCommandsState,
   slashCommandProvider,
 } from '../providers/index.js';
 import type { CommandItem, TriggerQuery } from '../types.js';
+
+const nativeCatalog = vi.hoisted(() => ({
+  skills: [] as Record<string, unknown>[],
+  error: null as string | null,
+  loading: false,
+  hasPendingRequests: () => false,
+}));
+
+vi.mock('../../../hooks/useCodexNativeCatalog', () => ({
+  useCodexNativeCatalog: () => ({
+    models: [],
+    mcpServers: [],
+    refresh: vi.fn(),
+    reloadMcp: vi.fn(),
+    ...nativeCatalog,
+  }),
+}));
 
 const completionMocks: Array<{ close: ReturnType<typeof vi.fn>; isOpen: boolean }> = [];
 interface CompletionConfig {
@@ -58,6 +76,22 @@ vi.mock('./useCompletionTriggerDetection.js', () => ({
   })),
 }));
 
+function renderCoordinator(currentProvider: string) {
+  return renderHook(() =>
+    useChatInputCompletionsCoordinator({
+      editableRef: { current: document.createElement('div') },
+      sharedComposingRef: { current: false },
+      justRenderedTagRef: { current: false },
+      getTextContent: () => '',
+      pathMappingRef: { current: new Map() },
+      setCursorAfterPath: vi.fn(),
+      closeAllCompletionsRef: { current: vi.fn() },
+      handleInputRef: { current: vi.fn() },
+      currentProvider,
+    })
+  );
+}
+
 describe('useChatInputCompletionsCoordinator', () => {
   beforeEach(() => {
     completionMocks.length = 0;
@@ -65,6 +99,37 @@ describe('useChatInputCompletionsCoordinator', () => {
     inlineCompletionMock.updateQuery.mockReset();
     inlineCompletionMock.clear.mockReset();
     debouncedDetectCompletion.mockReset();
+    nativeCatalog.skills = [];
+    nativeCatalog.error = null;
+    nativeCatalog.loading = false;
+    resetDollarCommandsState();
+    delete window.updateDollarCommands;
+  });
+
+  it('keeps the native skills when the catalog reports a partial error', async () => {
+    nativeCatalog.skills = [{ name: 'ep-code', path: '/user/skills/ep-code/SKILL.md' }];
+    nativeCatalog.error = '/user/skills/broken/SKILL.md: invalid frontmatter';
+
+    renderCoordinator('codex');
+
+    await expect(dollarCommandProvider('', new AbortController().signal)).resolves.toEqual([
+      expect.objectContaining({ label: '$ep-code', contentType: 'skill' }),
+    ]);
+  });
+
+  it('keeps the backend-scanned $ list when the native catalog fails outright', async () => {
+    nativeCatalog.skills = [];
+    nativeCatalog.error = 'Native Codex request failed';
+
+    renderCoordinator('codex');
+    const pending = dollarCommandProvider('', new AbortController().signal);
+    window.updateDollarCommands?.(JSON.stringify([
+      { name: '$ep-code', source: 'codex-skill' },
+    ]));
+
+    await expect(pending).resolves.toEqual([
+      expect.objectContaining({ label: '$ep-code' }),
+    ]);
   });
 
   it('closes all completion controllers and syncs inline completion state', () => {

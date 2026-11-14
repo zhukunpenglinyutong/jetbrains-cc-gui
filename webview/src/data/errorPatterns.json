@@ -1,18 +1,126 @@
 {
   "patterns": [
     {
+      "code": "codexCliVersionTooOld",
+      "match": {
+        "regex": "unknown variant\\s+`?auto_review\\b"
+      },
+      "solutions": [
+        {
+          "key": "updateCodexCli",
+          "recommended": true,
+          "steps": [
+            {
+              "kind": "link",
+              "url": "https://learn.chatgpt.com/docs/codex/cli#getting-started"
+            },
+            {
+              "kind": "command",
+              "command": "codex --version"
+            }
+          ]
+        },
+        {
+          "key": "useDefaultMode",
+          "recommended": false,
+          "steps": [
+            {
+              "kind": "instruction"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "code": "codexWriterConflict",
       "match": {
-        "regex": "already has an active writer"
+        "regex": "already has (?:an active|a live local) writer|already owned by another (?:chat )?window"
       },
-      "solutions": []
+      "solutions": [
+        {
+          "key": "releaseWriter",
+          "recommended": true,
+          "steps": [{ "kind": "instruction" }, { "kind": "instruction" }]
+        }
+      ]
+    },
+    {
+      "code": "codexThreadClosing",
+      "match": {
+        "regex": "thread \\S+ is closing;\\s*retry thread/resume after the thread is closed"
+      },
+      "solutions": [
+        {
+          "key": "waitForClose",
+          "recommended": true,
+          "steps": [{ "kind": "instruction" }, { "kind": "instruction" }]
+        }
+      ]
+    },
+    {
+      "code": "codexThreadHistoryMissing",
+      "match": {
+        "regex": "no rollout found for (?:thread|conversation) id"
+      },
+      "solutions": [
+        {
+          "key": "checkStorage",
+          "recommended": true,
+          "steps": [{ "kind": "instruction" }, { "kind": "instruction" }]
+        },
+        {
+          "key": "startNewIfMissing",
+          "recommended": false,
+          "steps": [{ "kind": "instruction" }]
+        }
+      ]
+    },
+    {
+      "code": "codexThreadArchived",
+      "match": {
+        "regex": "(?:session|thread) \\S+ is archived"
+      },
+      "solutions": [
+        {
+          "key": "unarchive",
+          "recommended": true,
+          "steps": [{ "kind": "instruction" }, { "kind": "instruction" }]
+        }
+      ]
+    },
+    {
+      "code": "codexThreadResumeConfiguration",
+      "match": {
+        "regex": "required MCP servers failed to initialize|thread/resume[^\\r\\n]*(?:failed to load configuration|invalid config(?:uration)?|failed to parse config(?:uration)?)"
+      },
+      "solutions": [
+        {
+          "key": "repairConfiguration",
+          "recommended": true,
+          "steps": [{ "kind": "instruction" }, { "kind": "instruction" }]
+        }
+      ]
     },
     {
       "code": "codexThreadResume",
       "match": {
         "regex": "thread/resume"
       },
-      "solutions": []
+      "solutions": [
+        {
+          "key": "inspectCause",
+          "recommended": true,
+          "steps": [{ "kind": "instruction" }, { "kind": "instruction" }]
+        },
+        {
+          "key": "checkCli",
+          "recommended": false,
+          "steps": [
+            { "kind": "command", "command": "codex --version" },
+            { "kind": "link", "url": "https://learn.chatgpt.com/docs/codex/cli#getting-started" }
+          ]
+        }
+      ]
     },
     {
       "code": "sdkNativeBinaryMissing",
@@ -48,6 +156,62 @@
               "action": "openDependencySettings"
             }
           ]
+        }
+      ]
+    },
+    {
+      "code": "claudeCodeVersionTooOld",
+      "match": {
+        "regex": "claude_code_version_too_old|Claude Code \\S+ does not support this model"
+      },
+      "solutions": [
+        {
+          "key": "updateSdk",
+          "recommended": true,
+          "steps": [
+            {
+              "kind": "action",
+              "action": "updateClaudeSdk"
+            }
+          ]
+        },
+        {
+          "key": "updateCustomCli",
+          "recommended": false,
+          "steps": [
+            {
+              "kind": "command",
+              "command": "claude update"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "claudeCodeWindowsTooOld",
+      "match": {
+        "regex": "Claude Code process exited with code\\s+(?:3221225785|-1073741511)\\b"
+      },
+      "solutions": [
+        {
+          "key": "updateWindows",
+          "recommended": true,
+          "steps": [{ "kind": "instruction" }]
+        },
+        {
+          "key": "useOlderSdk",
+          "recommended": false,
+          "steps": [
+            {
+              "kind": "navigation",
+              "action": "openDependencySettings"
+            }
+          ]
+        },
+        {
+          "key": "checkCustomCli",
+          "recommended": false,
+          "steps": [{ "kind": "instruction" }]
         }
       ]
     },

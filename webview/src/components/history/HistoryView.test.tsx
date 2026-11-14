@@ -80,6 +80,28 @@ describe('HistoryView native message counts', () => {
   const actions = { currentProvider: 'codex', onLoadSession: vi.fn(), onDeleteSession: vi.fn(),
     onDeleteSessions: vi.fn(), onExportSession: vi.fn(), onToggleFavorite: vi.fn(), onUpdateTitle: vi.fn(), onConvertToCliSession: vi.fn() };
 
+  it.each(['claude', 'codex'])('confirms the original cwd before opening cross-directory %s history', provider => {
+    const onLoadSession = vi.fn();
+    const data: HistoryData = { success: true, sessions: [{ sessionId: 'cross-directory', title: 'Sibling worktree',
+      provider, cwd: '/sibling/repo', requiresCwdConfirmation: true }] };
+    render(<HistoryView {...actions} onLoadSession={onLoadSession} historyData={data} />);
+    fireEvent.click(screen.getByText('Sibling worktree'));
+    expect(onLoadSession).not.toHaveBeenCalled();
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText('/sibling/repo')).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'common.confirm' }));
+    expect(onLoadSession).toHaveBeenCalledWith('cross-directory', provider, undefined, undefined);
+  });
+
+  it('cancelling a directory confirmation leaves the current session unchanged', () => {
+    const onLoadSession = vi.fn();
+    render(<HistoryView {...actions} onLoadSession={onLoadSession} historyData={{ success: true,
+      sessions: [{ sessionId: 'cross', title: 'Cross directory', cwd: '/elsewhere', requiresCwdConfirmation: true }] }} />);
+    fireEvent.click(screen.getByText('Cross directory'));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }));
+    expect(onLoadSession).not.toHaveBeenCalled();
+  });
+
   it('distinguishes unknown counts from zero and shows a message total only when known', () => {
     const data: HistoryData = { ...historyData, source: 'native', total: undefined,
       sessions: [{ ...historyData.sessions![0], messageCount: undefined }, { ...historyData.sessions![1], messageCount: 0 }] };
@@ -112,6 +134,68 @@ describe('HistoryView native message counts', () => {
     rerender(<HistoryView {...actions} historyData={{ success: true, source: 'native', sessions: [older, { ...newer, messageCount: 0 }] }} />);
     expect(screen.getByText('0 messages')).toBeTruthy();
     expect(screen.queryByText('7 messages')).toBeNull();
+  });
+});
+
+describe('HistoryView running session protection', () => {
+  const actions = { currentProvider: 'codex', currentSessionId: 'session-two', onLoadSession: vi.fn(),
+    onDeleteSession: vi.fn(), onDeleteSessions: vi.fn(), onExportSession: vi.fn(), onToggleFavorite: vi.fn(),
+    onUpdateTitle: vi.fn(), onConvertToCliSession: vi.fn() };
+
+  it('disables deletion and excludes both active and foreign owned sessions from selection', () => {
+    const data = { ...historyData, sessions: historyData.sessions!.map(session => ({ ...session, running: true })) };
+    render(<HistoryView {...actions} historyData={data} currentSessionBusy />);
+    for (const button of screen.getAllByRole('button', { name: 'history.deleteSession' })) {
+      expect(button.hasAttribute('disabled')).toBe(true);
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select all' }));
+    expect(screen.getByRole('checkbox', { name: 'Select First session' }).hasAttribute('disabled')).toBe(true);
+    expect(screen.getByRole('checkbox', { name: 'Select Second session' }).hasAttribute('disabled')).toBe(true);
+    expect(screen.getByText('0 selected')).toBeTruthy();
+  });
+
+  it('cancels an open confirmation when the current session starts a turn', () => {
+    const { rerender } = render(<HistoryView {...actions} historyData={historyData} currentSessionBusy={false} />);
+    const row = screen.getByText('Second session').closest('.history-item') as HTMLElement;
+    fireEvent.click(within(row).getByRole('button', { name: 'history.deleteSession' }));
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeTruthy();
+    rerender(<HistoryView {...actions} historyData={historyData} currentSessionBusy />);
+    expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
+    expect(actions.onDeleteSession).not.toHaveBeenCalled();
+  });
+
+  it('removes newly running rows from a pending batch before confirmation', () => {
+    const { rerender } = render(<HistoryView {...actions} historyData={historyData} currentSessionBusy={false} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select all' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete selected' }));
+    rerender(<HistoryView {...actions} historyData={historyData} currentSessionBusy />);
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete' }));
+    expect(actions.onDeleteSessions).toHaveBeenCalledWith(['session-one']);
+  });
+
+  it('keeps host ownership protection when the local current session reports idle', () => {
+    const data = { ...historyData, sessions: historyData.sessions!.map(session => ({
+      ...session, running: true, ownedElsewhere: true })) };
+    render(<HistoryView {...actions} historyData={data} currentSessionBusy={false} />);
+    const current = screen.getByText('Second session').closest('.history-item') as HTMLElement;
+    const foreign = screen.getByText('First session').closest('.history-item') as HTMLElement;
+    expect(within(current).getByRole('button', { name: 'history.deleteSession' }).hasAttribute('disabled')).toBe(true);
+    expect(within(foreign).getByRole('button', { name: 'history.deleteSession' }).hasAttribute('disabled')).toBe(true);
+  });
+
+  it('re-enables the current session once its turn ends, even if the list was captured mid-turn', () => {
+    const data = { ...historyData, sessions: historyData.sessions!.map(session => ({ ...session, running: true })) };
+    const { rerender } = render(<HistoryView {...actions} historyData={data} currentSessionBusy />);
+    const deleteButton = (title: string) => within(screen.getByText(title).closest('.history-item') as HTMLElement)
+      .getByRole('button', { name: 'history.deleteSession' });
+    expect(deleteButton('Second session').hasAttribute('disabled')).toBe(true);
+
+    rerender(<HistoryView {...actions} historyData={data} currentSessionBusy={false} />);
+
+    expect(deleteButton('Second session').hasAttribute('disabled')).toBe(false);
+    expect(deleteButton('First session').hasAttribute('disabled')).toBe(true);
   });
 });
 

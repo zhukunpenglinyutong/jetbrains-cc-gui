@@ -3,7 +3,8 @@ import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
 import { MessagesProvider } from './contexts/MessagesContext';
 import { SessionProvider } from './contexts/SessionContext';
-import { UIStateProvider } from './contexts/UIStateContext';
+import { chatMounted, UIStateProvider } from './contexts/UIStateContext';
+import { pruneClosedDrafts } from './contexts/draftStorage';
 import { DialogProvider } from './contexts/DialogContext';
 import { TaskEventProvider } from './contexts/SubagentContext';
 import './codicon.css';
@@ -16,12 +17,8 @@ import { applyLinkifyCapabilitiesPayload } from './utils/linkifyCapabilities';
 import { installRuntimeProviderDispatchers } from './utils/runtimeProviderCapabilities';
 import { sendBridgeEvent } from './utils/bridge';
 import { debugLog } from './utils/debug';
-import { forceWebviewRepaint } from './utils/forceWebviewRepaint';
-import {
-  FONT_SIZE_LEVEL_STORAGE_KEY,
-  fontSizeLevelToScale,
-  parseFontSizeLevel,
-} from './utils/fontScale';
+import { forceWebviewRepaint, repaintRemoteWebview } from './utils/forceWebviewRepaint';
+import { fontSizeLevelToScale } from './utils/fontScale';
 import {
   advanceSurfaceDamagePulse,
   beginSurfaceDamagePulse,
@@ -32,6 +29,7 @@ import {
 } from './utils/surfaceDamagePulse';
 import { requestDependencyStatusUntilSettled, waitForBridge } from './utils/bridgeStartup';
 import type { UiFontConfig, CodeFontConfig } from './types/uiFontConfig';
+import { getFontSizeLevel, restoreFontSizeLevel } from './utils/fontSizePreference';
 
 // Silence noisy console output in production (including third-party libs).
 // console.error is preserved so ErrorBoundary and unhandled exceptions still
@@ -106,6 +104,8 @@ function createBridgeHeartbeatStarter() {
 }
 
 const startBridgeHeartbeat = createBridgeHeartbeatStarter();
+/** Upper bound on waiting for the chat tree; the draft restore itself gives up after 1 s. */
+const FRONTEND_READY_FALLBACK_MS = 5000;
 // vConsole debugging tool
 const enableVConsole =
   import.meta.env.DEV || import.meta.env.VITE_ENABLE_VCONSOLE === 'true';
@@ -144,7 +144,7 @@ function setupScaleRecovery() {
     const fromCss = getComputedStyle(document.documentElement).getPropertyValue('--font-scale').trim();
     if (fromCss) return fromCss;
 
-    return String(fontSizeLevelToScale(parseFontSizeLevel(localStorage.getItem(FONT_SIZE_LEVEL_STORAGE_KEY))));
+    return String(fontSizeLevelToScale(getFontSizeLevel()));
   };
 
   let hiddenAt: number | null = null;
@@ -399,11 +399,12 @@ function applyEditorTypographyConfig(config: {
   syncFontFamilies();
 }
 
-function applyUiFontConfig(config: UiFontConfig | string) {
+function applyUiFontConfig(config: UiFontConfig | string, isStartup = false) {
   const normalizedConfig: UiFontConfig =
     typeof config === 'string' ? JSON.parse(config) as UiFontConfig : config;
 
   latestUiFontConfig = normalizedConfig;
+  restoreFontSizeLevel(normalizedConfig.fontSizeLevel, isStartup, normalizedConfig.fontSizeRequestId);
   setUiFontFaceStyle(normalizedConfig);
   syncFontFamilies();
 }
@@ -431,7 +432,7 @@ if (window.__pendingFontConfig) {
 
 if (window.__pendingUiFontConfig) {
   debugLog('[Main] Found pending UI font config, applying...');
-  applyUiFontConfig(window.__pendingUiFontConfig);
+  applyUiFontConfig(window.__pendingUiFontConfig, true);
   delete window.__pendingUiFontConfig;
 }
 
@@ -645,11 +646,36 @@ if (typeof window !== 'undefined' && !window.onUsageUpdate) {
   };
 }
 
+// Java restores a session's persisted custom title right after frontend_ready.
+// Keep it until React's callback effect mounts.
+if (typeof window !== 'undefined' && !window.restoreSessionTitle) {
+  window.restoreSessionTitle = (sessionId: string, title: string) => {
+    window.__pendingRestoreSessionTitle = { sessionId, title };
+  };
+}
+
 // Java can answer frontend_ready before React's callback effect mounts. Keep
 // the authoritative recovery snapshot until the real callback is registered.
 if (typeof window !== 'undefined' && !window.applyBackendTabState) {
   window.applyBackendTabState = (json: string) => {
     window.__pendingBackendTabState = json;
+  };
+}
+
+// Java puts the tab's OMP approval mode back right after frontend_ready. A page
+// that missed it would stay on "Default", so keep it until the provider hook mounts.
+if (typeof window !== 'undefined' && !window.onOmpApprovalModeReceived) {
+  window.onOmpApprovalModeReceived = (mode: string) => {
+    window.__pendingOmpApprovalMode = mode;
+  };
+}
+
+// Restored-history state can be pushed immediately after frontend_ready. Buffer
+// the latest generation until the React callback is mounted so manual loading
+// remains available when automatic startup loading is disabled.
+if (typeof window !== 'undefined' && !window.updateStartupHistoryLoadState) {
+  window.updateStartupHistoryLoadState = (json: string) => {
+    window.__pendingStartupHistoryLoadState = json;
   };
 }
 
@@ -713,8 +739,10 @@ if (typeof window !== 'undefined') {
   window.updateLinkifyCapabilities = (json: string) => {
     applyLinkifyCapabilitiesPayload(json);
   };
-  window.onTabActivated = () => {
-    forceWebviewRepaint('tab-activated');
+  window.pruneClosedDrafts = pruneClosedDrafts;
+  window.onTabActivated = (remote) => {
+    if (remote === true || remote === 'true') repaintRemoteWebview();
+    else forceWebviewRepaint('tab-activated');
   };
 }
 
@@ -747,8 +775,17 @@ waitForBridge(() => {
   setupDollarCommandsCallback();
   startBridgeHeartbeat();
 
-  debugLog('[Main] Sending frontend_ready signal');
-  sendBridgeEvent('frontend_ready');
+  // Java replays the session on frontend_ready, so wait for the chat callbacks to mount. A tree
+  // that failed to render must still report readiness, as it did before the draft restore.
+  let frontendReadySent = false;
+  const sendFrontendReady = () => {
+    if (frontendReadySent) return;
+    frontendReadySent = true;
+    debugLog('[Main] Sending frontend_ready signal');
+    sendBridgeEvent('frontend_ready');
+  };
+  void chatMounted.then(sendFrontendReady);
+  window.setTimeout(sendFrontendReady, FRONTEND_READY_FALLBACK_MS);
 
   debugLog('[Main] Sending refresh_slash_commands request');
   sendBridgeEvent('refresh_slash_commands');

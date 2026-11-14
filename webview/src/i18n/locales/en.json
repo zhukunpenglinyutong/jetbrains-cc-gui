@@ -1,4 +1,18 @@
 {
+  "startupHistory": {
+    "unloaded": "History for this restored session has not been loaded.",
+    "loading": "Loading session history...",
+    "loaded_one": "Loaded {{count}} history message.",
+    "loaded_other": "Loaded {{count}} history messages.",
+    "missing": "The saved history is no longer available. A new session is ready.",
+    "timeout": "Session history loading timed out. Select Retry to try again.",
+    "cancelled": "Session history loading was cancelled. Select Retry to try again.",
+    "failed": "Session history loading failed. Select Retry to try again.",
+    "superseded": "Newer activity interrupted history loading. Select Retry to load it.",
+    "load": "Load history",
+    "retry": "Retry",
+    "cancel": "Cancel"
+  },
   "codexPet": {
     "title": "Codex pet",
     "close": "Hide pet",
@@ -61,6 +75,17 @@
     "currentMode": "Current mode: {{mode}}",
     "currentModel": "Current model: {{model}}",
     "removeAttachment": "Remove attachment",
+    "queue": {
+      "edit": "Edit queued message",
+      "remove": "Remove from queue",
+      "editLabel": "Edit queued message {{position}}",
+      "removeLabel": "Remove queued message {{position}}",
+      "reorderLabel": "Reorder message {{position}}",
+      "reorderHint": "Drag to reorder, or focus and use arrow keys",
+      "mergedIntoDraft": "Queued message added to the current draft",
+      "attachmentsNotRestored": "Attachments from the queued message were not restored",
+      "editBlockedAttachments": "Its attachments cannot be restored here, so the message stays in the queue"
+    },
     "closePreview": "Close preview",
     "loadingDropdown": "Loading...",
     "modelsLoadFailed": "Failed to load models. Click to retry",
@@ -75,6 +100,11 @@
     "usagePercentage": "Usage: {{percentage}}",
     "planUsage": {
       "title": "Claude plan usage",
+      "balanceLabel": "Balance: ",
+      "balanceRemaining": "Balance: {{value}}",
+      "balanceDetail": "Total {{total}} · Used {{used}}",
+      "grokTitle": "Grok plan usage",
+      "staleIdle": "Last reading. It refreshes the next time you use Grok",
       "loading": "Loading usage…",
       "unavailable": "Usage unavailable",
       "dash": "Usage —",
@@ -82,7 +112,12 @@
       "tooltipReset": "Resets: {{value}} (local time)",
       "clickToSwitch": "Click period label to switch window",
       "worstHint": "Dot shows worst window ({{color}})",
-      "paceColors": { "green": "green", "yellow": "yellow", "red": "red", "neutral": "unknown" },
+      "paceColors": {
+        "green": "green",
+        "yellow": "yellow",
+        "red": "red",
+        "neutral": "unknown"
+      },
       "stale": "Data may be outdated (refresh failed)"
     },
     "noMatchingFiles": "No matching files",
@@ -147,8 +182,7 @@
       "matchCase": "Match Case (Alt+C)",
       "wholeWord": "Match Whole Word (Alt+W)",
       "regex": "Use Regular Expression (Alt+R)",
-      "invalidRegex": "Invalid regex",
-      "openTooltip": "Search in conversation (Cmd/Ctrl+F)"
+      "invalidRegex": "Invalid regex"
     },
     "compactSummary": {
       "receivedTime": "Recorded time",
@@ -175,6 +209,7 @@
     "codexReviewStarted": "Codex is reviewing the workspace",
     "codexDiffUsage": "Use /diff without arguments",
     "codexApprovalsUsage": "Use /approvals without arguments",
+    "codexCliOutdated": "Codex CLI {{version}} is outdated; some models and permission modes may not work. Update to {{minimumVersion}} or newer.",
     "codexSandboxConflict": "Codex automatic review cannot use danger-full-access. Choose workspace-write or request approval.",
     "continueRefiningPlan": "Continue refining this plan:"
   },
@@ -498,6 +533,17 @@
         "disabled": "Disabled",
         "hint": "When enabled, selecting a file in the project tree will automatically send its file path to AI (note: only the file path is sent, not the file content). When disabled, manual action is required."
       },
+      "loadHistoryOnStartup": {
+        "label": "Load Session History on Startup",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "hint": "When enabled, restored sessions load their message history automatically after the webview starts. Disable this if history loading slows down or blocks startup."
+      },
+      "historyLoadTimeout": {
+        "label": "Session History Load Timeout",
+        "unit": "seconds",
+        "hint": "Automatic restore and manual loading share this timeout (5-120 seconds). Timed-out loads can be retried in the conversation."
+      },
       "promptEnhancer": {
         "label": "Prompt Enhancer",
         "modelLabel": "Enhancer Model",
@@ -547,6 +593,12 @@
         "enabled": "Enabled",
         "disabled": "Disabled",
         "hint": "When enabled, shows the 'AI Generate Commit Message' button in the commit dialog. When disabled, the button is hidden."
+      },
+      "sessionGitRepositoryMatching": {
+        "label": "Match sessions by Git remote repository",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "hint": "Include Codex and Claude Code history from other directories with the same normalized remote host, owner, and repository. When Git information is unavailable, match by working directory."
       },
       "statusBarWidget": {
         "label": "Status Bar Info Display",
@@ -820,7 +872,11 @@
       "installedVersion": "Installed {{version}}",
       "latestStableVersion": "Latest stable {{version}}",
       "targetVersionValue": "Target {{version}}",
-      "versionSourceFallback": "Remote versions could not be loaded. Showing the built-in recommended versions instead. You can still enter a version manually.",
+      "versionSourceFallback": "Remote versions could not be loaded. Showing the built-in recommended versions instead.",
+      "versionCacheAccessError": "npm file access was denied, including the separate-cache retry. Check cache permissions or security software.",
+      "versionQueryTimeout": "The npm version query timed out. Check your network or proxy and retry.",
+      "versionQueryNetworkError": "Cannot connect to the npm registry. Check your network, proxy, or registry URL and retry.",
+      "versionQueryFailed": "The npm version query failed. Check your Node.js and npm configuration and retry.",
       "rollbackWarning": "This is a rollback operation. Re-check the related AI features after switching versions.",
       "nodeNotConfigured": "Node.js is not configured. Please set the Node.js path in Basic Settings first.",
       "installSuccess": "{{name}} installed successfully",
@@ -967,6 +1023,38 @@
     "wechatPay": "WeChat Pay",
     "paypal": "PayPal",
     "provider": {
+      "backup": {
+        "exportInvalidConfig": "Export failed: a saved provider configuration did not pass validation. No backup file was created.",
+        "errorProvider": "Check saved provider #{{index}} (excluding local settings and CLI login entries).",
+        "errorField": "Field: {{field}}.",
+        "import": "Import",
+        "export": "Export",
+        "importFile": "Import from CC GUI backup",
+        "importTitle": "Import {{engine}} providers",
+        "exportTitle": "Export {{engine}} providers",
+        "scope": "Only saved providers in this tab (including keys) are transferred. Local CLI login sessions and active status are excluded.",
+        "mergeHint": "Import trusted files only. Identical configurations are skipped; different ones are added without overwriting or activating. Names, notes, IDs and timestamps do not affect deduplication.",
+        "selectFile": "Select backup file",
+        "passwordOptional": "Export password (optional)",
+        "passwordRequired": "Enter the file password",
+        "confirmPassword": "Confirm password",
+        "plaintextWarning": "I understand: without a password, API keys will be exported in plain text. Keep the file secure.",
+        "passwordHint": "Use at least 8 characters; a long, unique password is recommended. Lost passwords cannot be recovered.",
+        "passwordShort": "The password must contain at least 8 characters.",
+        "passwordMismatch": "The passwords do not match.",
+        "working": "Working, please wait…",
+        "importSuccess": "Import complete: {{imported}} added, {{skipped}} duplicate configurations skipped.",
+        "exportSuccess": "Configuration exported.",
+        "exportPartial": "Providers exported: {{exported}}. Skipped because they failed validation: {{skipped}} ({{positions}}; numbering excludes local settings and CLI login entries).",
+        "invalidFile": "Invalid file, unsupported version or invalid provider configuration. Nothing was imported.",
+        "wrongEngine": "This file belongs to a different tab. Select the matching Claude Code / Codex tab.",
+        "tooLarge": "File or configuration too large (8 MiB per file, up to 2000 providers).",
+        "empty": "No provider configurations to process.",
+        "wrongPassword": "Incorrect password or damaged encrypted file. Nothing was imported.",
+        "failed": "Operation failed. Check file permissions and configuration, then retry.",
+        "busy": "Another import/export operation is in progress. Please retry later.",
+        "timeout": "Timed out waiting for the result. The operation may still be running; check the list or exported file before retrying."
+      },
       "currentConfig": "Current ClaudeCode Configuration",
       "loading": "Loading...",
       "noConfig": "No local configuration found",
@@ -1380,6 +1468,9 @@
     }
   },
   "history": {
+    "confirmDirectoryTitle": "Open session in another directory?",
+    "confirmDirectoryMessage": "Commands and file changes will run in the directory shown below.",
+    "executionDirectory": "Run in",
     "title": "History",
     "sessionDeleted": "Session deleted",
     "confirmDelete": "Confirm Delete",
@@ -1456,7 +1547,9 @@
       "minutesAgo": "minutes ago",
       "secondsAgo": "seconds ago"
     },
-    "loadMore": "Load more"
+    "loadMore": "Load more",
+    "sessionInUse": "In-use sessions cannot be deleted.",
+    "deleteFailed": "Failed to delete the session. Please try again."
   },
   "permission": {
     "dialogTitle": "Permission Request",
@@ -1483,9 +1576,18 @@
     "previewUnavailable": "Native file preview is unavailable. You can deny or cancel this request.",
     "requestedPermissions": "Requested native permissions",
     "allowWithRule": "Allow with this command rule",
-    "allowWithNetworkRule": "Allow with this network rule"
+    "allowWithNetworkRule": "Allow with this network rule",
+    "codexDeliveryRetry": "Codex did not receive your choice ({{error}}). Please choose again.",
+    "codexDeliveryFailed": "Codex did not receive your choice ({{error}}). If the conversation does not continue, click Stop and send your message again.",
+    "codexDeliveryUnconfirmed": "Codex has not confirmed your choice yet ({{error}}). It may still take effect, so do not answer again; if the conversation does not continue, click Stop and send your message again."
   },
   "askUserQuestion": {
+    "ompTitle": "OMP has some questions for you",
+    "configWarning": "Codex reported a configuration warning. Review the details.",
+    "configWarningTitle": "Codex configuration warning",
+    "apiDeprecationWarning": "Codex reported an API compatibility notice. Review the details.",
+    "apiDeprecationTitle": "Codex API compatibility notice",
+    "warningDetails": "View details",
     "title": "Claude has some questions for you",
     "progress": "Question {{current}} / {{total}}",
     "multiSelectHint": "You can select multiple options",
@@ -1499,7 +1601,11 @@
     "timeoutWarning": "Please answer soon, dialog will close in {{seconds}} seconds",
     "expand": "Expand",
     "collapse": "Collapse",
-    "clickToAnswer": "Click to answer"
+    "clickToAnswer": "Click to answer",
+    "recordTitle": "Codex questions",
+    "recordAnswer": "Your answer",
+    "recordSkipped": "Skipped (closed without an answer)",
+    "answerNotSent": "Your answer to the Codex question was not sent because another chat is open now. Return to that chat and send the answer again."
   },
   "planApproval": {
     "title": "Plan Ready for Approval",
@@ -1631,6 +1737,9 @@
     "errorRetry": "Retry"
   },
   "mcp": {
+    "nativeToolCount": "{{count}} tools",
+    "nativeRuntime": {"notStarted": "Not started", "starting": "Connecting", "connected": "Connected", "authenticationRequired": "Authentication required", "failed": "Connection failed", "cancelled": "Cancelled", "disabled": "Disabled", "unknown": "Connection status unknown"},
+    "nativeAuth": {"unsupported": "OAuth not applicable", "notLoggedIn": "OAuth not logged in", "bearerToken": "Token authentication", "oAuth": "OAuth logged in", "unknown": "Authentication status unknown"},
     "title": "MCP Servers",
     "whatIsMcp": "What is MCP?",
     "refreshStatus": "Refresh server status",
@@ -1878,6 +1987,12 @@
     "bashGroupCompleted": "completed",
     "bashGroupAllCompleted": "All Completed",
     "bashGroupFailed": "failed",
+    "bashGroupCopyCommand": "Copy command",
+    "bashGroupCopyOutput": "Copy output",
+    "bashGroupOutput": "Output",
+    "bashGroupOutputFailed": "Failed",
+    "bashGroupRunning": "Running…",
+    "bashGroupNoOutput": "(no output)",
     "promptLabel": "Prompt",
     "updatePlan": "Update Plan",
     "applyPatch": "Apply Patch",
@@ -2173,13 +2288,13 @@
         "label": "Haiku 4.5",
         "description": "Haiku 4.5 · Fastest for quick answers"
       },
+      "fable52": {
+        "label": "Fable 5.2",
+        "description": "Fable 5.2 · Most powerful · Mythos-class"
+      },
       "fable51": {
         "label": "Fable 5.1",
-        "description": "Fable 5.1 · Most powerful · Mythos-class"
-      },
-      "fable5": {
-        "label": "Fable 5",
-        "description": "Fable 5 · Previous Fable generation"
+        "description": "Fable 5.1 · Previous Fable generation"
       }
     },
     "codex": {
@@ -2234,6 +2349,7 @@
     "effort": "Effort",
     "speed": "Speed",
     "preset": "Preset",
+    "approvals": "Approvals",
     "model": "Model"
   },
   "modes": {
@@ -2363,11 +2479,6 @@
     },
     "omp": {
       "label": "OMP CLI"
-    },
-    "beta": {
-      "badge": "Beta",
-      "title": "Beta Feature",
-      "message": "This feature is still in Beta. If you encounter any bugs, please report them to the author promptly."
     },
     "dsh": {
       "label": "DeepSeek Harness"
@@ -2549,6 +2660,25 @@
       "description": "Codex fast response mode (uses additional credits)"
     }
   },
+  "ompApprovals": {
+    "title": "Select OMP approval mode",
+    "default": {
+      "label": "Default",
+      "description": "Full auto unless OMP's tools.approvalMode is set"
+    },
+    "alwaysAsk": {
+      "label": "Ask",
+      "description": "Asks before edits and commands"
+    },
+    "write": {
+      "label": "Auto-approve edits",
+      "description": "Asks only before commands"
+    },
+    "yolo": {
+      "label": "Full auto",
+      "description": "Never asks"
+    }
+  },
   "dshPresets": {
     "title": "Select DeepSeek Harness agent preset",
     "none": {
@@ -2585,15 +2715,94 @@
     "copied": "Copied",
     "openDependencySettings": "Open Dependency Settings",
     "recommended": "Recommended",
+    "updateClaudeSdk": "Update SDK",
+    "updatingClaudeSdk": "Updating...",
+    "updateClaudeSdkSuccess": "Updated to {{version}}. Send your message again.",
+    "updateClaudeSdkFailed": "Update failed: {{error}}",
+    "updateClaudeSdkFailedUnknown": "Update failed. Open Dependency Settings for details.",
+    "updateClaudeSdkTimedOut": "No result after 15 minutes. Check Dependency Settings for the update status.",
+    "updateClaudeSdkCustomCli": "SDK updated to {{version}}, but the plugin runs your custom Claude CLI ({{path}}). Update it with Option 2.",
+    "updateClaudeSdkAlreadyLatest": "{{version}} is already the newest SDK this plugin supports, and this model needs a newer Claude Code. Update the plugin when a new release is out, or choose another model.",
     "codexWriterConflict": {
-      "title": "Codex thread is busy",
-      "intro": "Another Codex turn or client is writing to this conversation. This send could not start.",
-      "reason": "Stop the turn in the client using this conversation, then send again after it has ended."
+      "title": "Codex conversation is in use",
+      "intro": "Another Codex client or chat window owns this conversation’s writer.",
+      "reason": "This does not mean the conversation expired. The plugin does not delete locks or stop other clients automatically.",
+      "solutions": {
+        "releaseWriter": {
+          "title": "Release the conversation in its current client",
+          "step0": "Stop the task and close or release this conversation in the Codex client or chat window using it.",
+          "step1": "After that client releases the conversation, return here and send again. Do not delete writer lock files to force access."
+        }
+      }
+    },
+    "codexThreadClosing": {
+      "title": "Codex conversation is still closing",
+      "intro": "Codex has not finished closing this conversation, so it cannot restore it yet.",
+      "reason": "The plugin briefly retries this explicit closing error before starting your task. If it persists, the original error remains visible.",
+      "solutions": {
+        "waitForClose": {
+          "title": "Wait for the previous conversation to close",
+          "step0": "Wait until the previous Codex client or chat window finishes releasing the conversation, then retry.",
+          "step1": "If this repeats, reopen the conversation from history after the previous client has released it."
+        }
+      }
+    },
+    "codexThreadHistoryMissing": {
+      "title": "Codex history could not be found",
+      "intro": "The current Codex runtime cannot find this conversation’s native history.",
+      "reason": "A different history directory or an incomplete first initialization can cause this. It does not prove the history was deleted.",
+      "solutions": {
+        "checkStorage": {
+          "title": "Check the original history location",
+          "step0": "Check that Codex uses the original CODEX_HOME and the same host environment, including local versus WSL.",
+          "step1": "After restoring the original history directory or backup, reopen the conversation from history."
+        },
+        "startNewIfMissing": {
+          "title": "Start again only if the history cannot be recovered",
+          "step0": "Create a new conversation and provide the needed context again only if the original history is unrecoverable. Messages displayed here do not automatically restore Codex’s native context."
+        }
+      }
+    },
+    "codexThreadArchived": {
+      "title": "Codex conversation is archived",
+      "intro": "Codex reports that this conversation is archived and cannot be resumed directly.",
+      "reason": "Archived history is not an expired thread. Creating a new conversation is not required to recover it.",
+      "solutions": {
+        "unarchive": {
+          "title": "Unarchive the original conversation",
+          "step0": "Unarchive it in the original Codex client, or follow the unarchive command shown in the original error.",
+          "step1": "Refresh the plugin’s history list, reopen this conversation, and send again."
+        }
+      }
+    },
+    "codexThreadResumeConfiguration": {
+      "title": "Codex configuration blocked recovery",
+      "intro": "Codex could not load its configuration or initialize a required MCP server.",
+      "reason": "A new conversation will not repair the same configuration. The plugin does not disable required services automatically.",
+      "solutions": {
+        "repairConfiguration": {
+          "title": "Repair the configuration reported by Codex",
+          "step0": "Read the original error to identify the configuration entry or required MCP server that failed.",
+          "step1": "Fix the corresponding configuration, credentials, or connection in Codex, provider, or MCP settings, then reopen the conversation and retry."
+        }
+      }
     },
     "codexThreadResume": {
-      "title": "Session thread is no longer valid",
-      "intro": "Creating a new session will resolve this issue. The thread ID for the current session no longer exists on the Codex server.",
-      "reason": "Codex clears old threads after a period of time, which can trigger this error when resuming a previous session."
+      "title": "Could not restore the Codex conversation",
+      "intro": "Codex failed to restore this conversation. The cause has not been identified.",
+      "reason": "A recovery failure does not establish that the conversation expired. The plugin keeps its identity instead of silently replacing it with an empty conversation.",
+      "solutions": {
+        "inspectCause": {
+          "title": "Check the original error before retrying",
+          "step0": "Review the original error and check the provider, Codex runtime, and history directory used by this conversation.",
+          "step1": "If a response or tool execution already appeared, check its result before resending to avoid repeating the task."
+        },
+        "checkCli": {
+          "title": "Check Codex CLI compatibility",
+          "step0": "Compare this terminal version with the plugin’s CLI page. For a custom CLI path, run that executable with --version.",
+          "step1": "If the original error indicates an unsupported CLI or protocol version, update Codex using the official instructions, then refresh CLI detection."
+        }
+      }
     },
     "sdkNativeBinaryMissing": {
       "title": "SDK installation incomplete — native binary missing",
@@ -2612,6 +2821,40 @@
         }
       }
     },
+    "claudeCodeVersionTooOld": {
+      "title": "Claude Code SDK is too old for this model",
+      "intro": "The plugin runs the Claude Code bundled in its own SDK, not the claude command in your terminal. That bundled version is older than this model requires.",
+      "reason": "The SDK is installed separately from the plugin, so updating the plugin or the claude command in your terminal does not update it.",
+      "solutions": {
+        "updateSdk": {
+          "title": "Option 1: Update the Claude Code SDK",
+          "step0": "Installs the latest supported SDK. The plugin then restarts its Claude process, so you can send your message again right away."
+        },
+        "updateCustomCli": {
+          "title": "Option 2: Update your custom Claude CLI",
+          "step0": "If you set \"Claude CLI Path (override)\", the plugin runs that binary instead of the SDK. Update it in a terminal:"
+        }
+      }
+    },
+    "claudeCodeWindowsTooOld": {
+      "title": "Claude Code cannot start on this version of Windows",
+      "intro": "Windows stopped Claude Code from starting because a system function it needs was not found (error 0xC0000139). This usually means Windows is too old: Claude Code 2.1.118 and later use ClosePseudoConsole, which requires Windows 10 version 1809 or Windows Server 2019.",
+      "reason": "Windows rejects the program while loading it, before Claude Code runs, so changing the model, provider or permission settings will not help.",
+      "solutions": {
+        "updateWindows": {
+          "title": "Option 1: Update Windows",
+          "step0": "Update to Windows 10 version 1809 or later, or Windows Server 2019 or later. These versions include the missing function."
+        },
+        "useOlderSdk": {
+          "title": "Option 2: Switch to an older SDK",
+          "step0": "In Dependency Management, switch the SDK version to v0.2.112 or earlier. Newer models may not accept that older version. If a model asks for a newer Claude Code, choose another model or update Windows: updating the SDK brings this error back."
+        },
+        "checkCustomCli": {
+          "title": "Option 3: Check your custom Claude CLI",
+          "step0": "If you set \"Claude CLI Path (override)\", the plugin runs that binary instead of the SDK, so switching the SDK has no effect. Clear the path or point it to an older Claude Code. Check this first if your Windows is already up to date."
+        }
+      }
+    },
     "spawnEbusy": {
       "title": "spawn EBUSY — child process failed to launch",
       "intro": "This error is typically caused by an incompatible Node.js version or an incomplete SDK installation. Try the two options below in order:",
@@ -2625,6 +2868,22 @@
           "title": "Option 2: Reinstall the latest SDK from the official npm registry",
           "step0": "1. Switch to the official npm registry (avoid the Taobao mirror — it may not have the latest version):",
           "step1": "2. Open Dependency Management and reinstall the latest SDK:"
+        }
+      }
+    },
+    "codexCliVersionTooOld": {
+      "title": "Codex CLI is too old for this permission mode",
+      "intro": "Full Auto and Auto Mode use the automatic reviewer setting. This Codex CLI does not recognize it and rejected the request, so your message was not processed.",
+      "reason": "The plugin runs the Codex CLI found on your machine, so updating the plugin does not update the CLI. If the error continues after updating, an older codex may come first on your PATH.",
+      "solutions": {
+        "updateCodexCli": {
+          "title": "Option 1: Install or update the CLI using the official instructions",
+          "step0": "1. Open the official instructions and choose the standalone installer, npm, or Homebrew for your runtime environment. Update through the original installation channel; do not use npm uninstall for a standalone installation:",
+          "step1": "2. In a new terminal, confirm the version has changed, then restart the IDE so the plugin picks up the new CLI:"
+        },
+        "useDefaultMode": {
+          "title": "Option 2: Switch the permission mode for now",
+          "step0": "Switch to Default Mode. It does not use the automatic reviewer, so you can keep working until the CLI is updated. If the error continues, update the CLI as described in Option 1."
         }
       }
     },

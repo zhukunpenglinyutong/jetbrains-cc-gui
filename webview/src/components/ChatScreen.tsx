@@ -28,6 +28,8 @@ import { CodexPetStatusBridge } from './codexPet/CodexPetStatusBridge';
 import { shouldToggleCodexPet } from './codexPet/petState';
 import { useCodexPetPreference } from './codexPet/useCodexPetPreference';
 import { reconcileMessageKeys, type MessageKeySnapshot } from '../utils/messageUtils';
+import { StartupHistoryLoadBanner } from './StartupHistoryLoadBanner';
+import type { StartupHistoryLoadState } from '../types/startupHistory';
 import { CodexPlanActions } from './CodexPlanActions';
 import type { CodexPlanItem } from '../hooks/useCodexPlanState';
 
@@ -53,6 +55,7 @@ export interface ChatScreenProps {
   filteredFileChanges: FileChangeList;
   subagentHistoryCtxValue: SubagentHistoryMap;
   sessionIdCtxValue: { currentSessionId: string | null; currentProvider: string };
+  startupHistoryLoadState: StartupHistoryLoadState | null;
 
   // Refs
   chatInputRef: RefObject<ChatInputBoxHandle | null>;
@@ -100,6 +103,7 @@ export interface ChatScreenProps {
   reasoningEffort: ProviderState['reasoningEffort'];
   codexFastMode: ProviderState['codexFastMode'];
   dshPreset: ProviderState['dshPreset'];
+  ompApprovalMode: ProviderState['ompApprovalMode'];
   streamingEnabledSetting: ProviderState['streamingEnabledSetting'];
   sendShortcut: ProviderState['sendShortcut'];
   autoOpenFileEnabled: ProviderState['autoOpenFileEnabled'];
@@ -115,6 +119,7 @@ export interface ChatScreenProps {
   onReasoningChange: ProviderState['handleReasoningChange'];
   onCodexFastModeChange: ProviderState['handleCodexFastModeChange'];
   onDshPresetChange: ProviderState['handleDshPresetChange'];
+  onOmpApprovalModeChange: ProviderState['handleOmpApprovalModeChange'];
   onToggleThinking: ProviderState['handleToggleThinking'];
   onStreamingEnabledChange: ProviderState['handleStreamingEnabledChange'];
   onAutoOpenFileEnabledChange: ProviderState['handleAutoOpenFileEnabledChange'];
@@ -123,6 +128,8 @@ export interface ChatScreenProps {
   // Message queue
   messageQueue: MessageQueueValue;
   onRemoveFromQueue: (id: string) => void;
+  /** Edit queued message: dequeue it and restore its draft into the input */
+  onEditFromQueue: (id: string) => void;
   /** Drag-sort callback; orderedIds[0] is the next message to execute */
   onReorderQueue?: (orderedIds: string[]) => void;
 
@@ -146,7 +153,7 @@ export interface ChatScreenProps {
 export const ChatScreen = ({
   mergedMessages, sessionTitle, getMessageText, getContentBlocks, findToolResult, getToolResultRaw,
   subagents, globalTodos, filteredFileChanges,
-  subagentHistoryCtxValue, sessionIdCtxValue,
+  subagentHistoryCtxValue, sessionIdCtxValue, startupHistoryLoadState,
   chatInputRef, messagesContainerRef, messagesEndRef, inputAreaRef,
   messageNodeMapRef, userCollapsedRef, messageListRef, isAutoScrollingRef,
   anchorCollapsedCount, setAnchorCollapsedCount, onMessageNodeRef,
@@ -158,12 +165,12 @@ export const ChatScreen = ({
   codexNativeAutoReviewAvailable = true,
   sdkStatusLoading, sdkStatusError, onRetrySdkStatus, currentSdkInstalled,
   activeProviderConfig, claudeSettingsAlwaysThinkingEnabled,
-  reasoningEffort, codexFastMode, dshPreset, streamingEnabledSetting, sendShortcut, autoOpenFileEnabled,
+  reasoningEffort, codexFastMode, dshPreset, ompApprovalMode, streamingEnabledSetting, sendShortcut, autoOpenFileEnabled,
   longContextEnabled, usagePercentage, usageUsedTokens, usageMaxTokens,
-  onModeSelect, onModelSelect, onAgentSelect, onReasoningChange, onCodexFastModeChange, onDshPresetChange, onToggleThinking,
+  onModeSelect, onModelSelect, onAgentSelect, onReasoningChange, onCodexFastModeChange, onDshPresetChange, onOmpApprovalModeChange, onToggleThinking,
   onStreamingEnabledChange,
   onAutoOpenFileEnabledChange, onLongContextChange,
-  messageQueue, onRemoveFromQueue, onReorderQueue,
+  messageQueue, onRemoveFromQueue, onEditFromQueue, onReorderQueue,
   codexPlan = null, codexPlanExecutionPending = false,
   codexCompactionPending = false,
   codexCompactionStartedAt = null,
@@ -282,6 +289,7 @@ export const ChatScreen = ({
           isAutoScrollingRef={isAutoScrollingRef}
         />
         <div className="messages-container" ref={messagesContainerRef}>
+          <StartupHistoryLoadBanner state={startupHistoryLoadState} currentSessionId={currentSessionId} />
           {messages.length === 0 && (
             <WelcomeScreen
               currentProvider={currentProvider}
@@ -392,10 +400,12 @@ export const ChatScreen = ({
           onProviderSelect={onProviderSelect}
           reasoningEffort={reasoningEffort}
           dshPreset={dshPreset}
+          ompApprovalMode={ompApprovalMode}
           onReasoningChange={onReasoningChange}
           codexFastMode={codexFastMode}
           onCodexFastModeChange={onCodexFastModeChange}
           onDshPresetChange={onDshPresetChange}
+          onOmpApprovalModeChange={onOmpApprovalModeChange}
           onToggleThinking={onToggleThinking}
           streamingEnabled={streamingEnabledSetting}
           onStreamingEnabledChange={onStreamingEnabledChange}
@@ -435,6 +445,7 @@ export const ChatScreen = ({
           addToast={addToast}
           messageQueue={messageQueue}
           onRemoveFromQueue={onRemoveFromQueue}
+          onEditFromQueue={onEditFromQueue}
           onReorderQueue={onReorderQueue}
           autoOpenFileEnabled={autoOpenFileEnabled}
           onAutoOpenFileEnabledChange={onAutoOpenFileEnabledChange}

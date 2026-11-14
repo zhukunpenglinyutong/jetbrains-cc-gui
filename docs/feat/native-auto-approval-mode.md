@@ -54,6 +54,21 @@ then sends only unresolved requests to `canUseTool`. A live mode change uses the
 existing `query.setPermissionMode('auto')` control request and updates the reactive
 mode state read by the hook.
 
+The hook distinguishes worker calls using the SDK's `agent_id` (not `agent_type`,
+which can also describe the main thread). For a worker, a recognized
+`permission_mode` from the hook input takes precedence over the parent's cached
+mode. This keeps a worker's native `auto` reviewer reachable when the parent is
+in another mode, while preserving a worker's stricter `default` or `acceptEdits`
+policy. Missing or unknown modes fall back to the existing parent policy.
+Worker `plan` mode and SDK-only modes `dontAsk` and `bubble` yield to the native
+permission flow. Worker plan-file ownership and deny rules remain with the SDK;
+they must not inherit the parent plan-mode hook's explicit tool approvals or
+direct permission prompts.
+Worker `EnterPlanMode` / `ExitPlanMode` calls yield to the native SDK; they must
+not change the parent Query's permission mode or open a parent plan-approval
+dialog. Native deny rules and reviewer escalations still apply; this is not a
+Full Auto shortcut.
+
 Full Auto is intentionally different: only
 `permissionMode: 'bypassPermissions'` adds
 `allowDangerouslySkipPermissions: true` to the initial SDK options. That option is a
@@ -164,7 +179,7 @@ every mode. Users opening untrusted repositories should stay in `default` mode.
 ## Verification
 
 - `node --check` on all modified AI Bridge JavaScript files.
-- `node --test ai-bridge/services/codex/codex-utils.test.js ai-bridge/utils/permission-mapper.test.js ai-bridge/services/claude/permission-mode.test.js ai-bridge/services/claude/runtime-lifecycle.test.js ai-bridge/services/claude/setPermissionModePersistent.test.mjs ai-bridge/services/claude/setPermissionModePersistent.bypass.test.js`
+- `node --test ai-bridge/services/codex/codex-utils.test.js ai-bridge/services/claude/permission-mode.test.js ai-bridge/services/claude/runtime-lifecycle.test.js ai-bridge/services/claude/setPermissionModePersistent.test.mjs ai-bridge/services/claude/setPermissionModePersistent.bypass.test.js`
 - `cd webview && npm run test`
 - `cd webview && npx vitest run src/components/PlanApprovalDialog.test.tsx src/components/ChatInputBox/selectors/ModeSelect.test.tsx src/hooks/providers/cliProviders.test.ts`
 - `cd webview && npx tsc -p tsconfig.test.json --noEmit`

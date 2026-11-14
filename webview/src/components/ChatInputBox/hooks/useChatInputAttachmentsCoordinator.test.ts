@@ -10,6 +10,7 @@ function createFile(name: string, type: string) {
 describe('useChatInputAttachmentsCoordinator', () => {
   beforeEach(() => {
     window.localStorage.clear();
+    window.sessionStorage.clear();
   });
 
   it('delegates to parent callbacks in controlled mode', () => {

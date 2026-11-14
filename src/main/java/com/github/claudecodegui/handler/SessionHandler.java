@@ -22,6 +22,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Session management message handler.
@@ -35,9 +36,17 @@ public class SessionHandler extends BaseMessageHandler {
             "send_message",
             "send_message_with_attachments",
             "interrupt_session",
-            "restart_session"
+            "restart_session",
+            "sync_loading_state"
             // Note: create_new_session should not be handled here; it should be handled by ClaudeSDKToolWindow.createNewSession()
     };
+
+    /**
+     * Sends accepted from the webview whose turn has not begun yet. The Node
+     * check runs first and may take seconds; the session still reports the
+     * previous turn's idle state until send() begins the new turn.
+     */
+    private final AtomicInteger sendsBeforeTurnStart = new AtomicInteger();
 
     public SessionHandler(HandlerContext context) {
         super(context);
@@ -66,6 +75,9 @@ public class SessionHandler extends BaseMessageHandler {
             case "restart_session":
                 LOG.debug("[SessionHandler] 处理: restart_session");
                 handleRestartSession();
+                return true;
+            case "sync_loading_state":
+                handleSyncLoadingState();
                 return true;
             default:
                 return false;
@@ -98,16 +110,19 @@ public class SessionHandler extends BaseMessageHandler {
     }
 
     /**
-     * Send message to Claude
-     * [FIX] Now parses JSON format to extract text, agent info and file tags
+     * Validates the Node.js version and reports failures to the webview. Must
+     * run on a pooled thread: the cache-miss recovery in resolveNodeVersion
+     * spawns probe processes with up to 5s waits, and message dispatch enters
+     * this handler synchronously on the JCEF UI thread — an inline call would
+     * freeze the webview on the first send after a cache reset.
      */
-    private void handleSendMessage(String content) {
-        String nodeVersion = this.resolveNodeVersion();
+    private boolean ensureNodeVersionReady() {
+        String nodeVersion = resolveNodeVersion();
         if (nodeVersion == null) {
             ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("addErrorMessage", escapeJs("未检测到有效的 Node.js 版本，请在设置中配置或重新打开工具窗口。"));
             });
-            return;
+            return false;
         }
         if (!NodeDetector.isVersionSupported(nodeVersion)) {
             int minVersion = NodeDetector.MIN_NODE_MAJOR_VERSION;
@@ -115,8 +130,16 @@ public class SessionHandler extends BaseMessageHandler {
                 callJavaScript("addErrorMessage", escapeJs(
                         "Node.js 版本过低 (" + nodeVersion + ")，插件需要 v" + minVersion + " 或更高版本才能正常运行。请在设置中配置正确的 Node.js 路径。"));
             });
-            return;
+            return false;
         }
+        return true;
+    }
+
+    /**
+     * Send message to Claude
+     * [FIX] Now parses JSON format to extract text, agent info and file tags
+     */
+    private void handleSendMessage(String content) {
 
         // [FIX] Parse JSON format to extract text, agent info and file tags
         String prompt;
@@ -126,6 +149,7 @@ public class SessionHandler extends BaseMessageHandler {
         String requestedReasoningEffort = null;
         String requestedCodexFastMode = null;
         String requestedDshPreset = null;
+        String requestedOmpApprovalMode = null;
         String clientMessageId = null;
         JsonObject nativeCodexSettings = null;
         try {
@@ -176,6 +200,7 @@ public class SessionHandler extends BaseMessageHandler {
                 requestedCodexFastMode = payload.get("codexFastMode").getAsString();
             }
             requestedDshPreset = extractDshPreset(payload);
+            requestedOmpApprovalMode = extractOmpApprovalMode(payload);
             nativeCodexSettings = extractNativeCodexSettings(payload);
             if (payload != null && payload.has("clientMessageId")
                     && !payload.get("clientMessageId").isJsonNull()) {
@@ -194,10 +219,14 @@ public class SessionHandler extends BaseMessageHandler {
         final String finalRequestedReasoningEffort = requestedReasoningEffort;
         final String finalRequestedCodexFastMode = requestedCodexFastMode;
         final String finalRequestedDshPreset = requestedDshPreset;
+        final String finalRequestedOmpApprovalMode = requestedOmpApprovalMode;
         final String finalClientMessageId = clientMessageId;
         final JsonObject finalNativeCodexSettings = nativeCodexSettings;
 
-        CompletableFuture.runAsync(() -> {
+        runSendTask(() -> {
+            if (!ensureNodeVersionReady()) {
+                return;
+            }
             String currentWorkingDir = determineWorkingDirectory();
             String previousCwd = context.getSession().getCwd();
 
@@ -215,7 +244,8 @@ public class SessionHandler extends BaseMessageHandler {
             // [FIX] Pass agent prompt and file tags directly to session
             context.getSession().send(finalPrompt, finalAgentPrompt, finalFileTagPaths,
                             finalRequestedPermissionMode, finalRequestedReasoningEffort,
-                            finalRequestedCodexFastMode, finalRequestedDshPreset, finalClientMessageId,
+                            finalRequestedCodexFastMode, finalRequestedDshPreset,
+                            finalRequestedOmpApprovalMode, finalClientMessageId,
                             finalNativeCodexSettings)
                 .thenRun(() -> {
                     // Claude now triggers success on actual stream_end callback.
@@ -279,6 +309,7 @@ public class SessionHandler extends BaseMessageHandler {
             String requestedReasoningEffort = null;
             String requestedCodexFastMode = null;
             String requestedDshPreset = null;
+            String requestedOmpApprovalMode = null;
             String clientMessageId = null;
             JsonObject nativeCodexSettings = null;
             if (payload != null && payload.has("agent") && !payload.get("agent").isJsonNull()) {
@@ -321,6 +352,7 @@ public class SessionHandler extends BaseMessageHandler {
                 requestedCodexFastMode = payload.get("codexFastMode").getAsString();
             }
             requestedDshPreset = extractDshPreset(payload);
+            requestedOmpApprovalMode = extractOmpApprovalMode(payload);
             nativeCodexSettings = extractNativeCodexSettings(payload);
             if (payload != null && payload.has("clientMessageId")
                     && !payload.get("clientMessageId").isJsonNull()) {
@@ -328,8 +360,8 @@ public class SessionHandler extends BaseMessageHandler {
             }
 
             sendMessageWithAttachments(text, atts, agentPrompt, fileTagPaths, requestedPermissionMode,
-                    requestedReasoningEffort, requestedCodexFastMode, requestedDshPreset, clientMessageId,
-                    nativeCodexSettings);
+                    requestedReasoningEffort, requestedCodexFastMode, requestedDshPreset,
+                    requestedOmpApprovalMode, clientMessageId, nativeCodexSettings);
         } catch (Exception e) {
             LOG.error("[SessionHandler] 解析附件负载失败: " + e.getMessage(), e);
             handleSendMessage(content);
@@ -349,26 +381,13 @@ public class SessionHandler extends BaseMessageHandler {
         String requestedReasoningEffort,
         String requestedCodexFastMode,
         String requestedDshPreset,
+        String requestedOmpApprovalMode,
         String clientMessageId,
         JsonObject nativeCodexSettings
     ) {
-        // Version check (consistent with handleSendMessage)
-        String nodeVersion = this.resolveNodeVersion();
-        if (nodeVersion == null) {
-            ApplicationManager.getApplication().invokeLater(() -> {
-                callJavaScript("addErrorMessage", escapeJs("未检测到有效的 Node.js 版本，请在设置中配置或重新打开工具窗口。"));
-            });
-            return;
-        }
-        if (!NodeDetector.isVersionSupported(nodeVersion)) {
-            int minVersion = NodeDetector.MIN_NODE_MAJOR_VERSION;
-            ApplicationManager.getApplication().invokeLater(() -> {
-                callJavaScript("addErrorMessage", escapeJs(
-                        "Node.js 版本过低 (" + nodeVersion + ")，插件需要 v" + minVersion + " 或更高版本才能正常运行。请在设置中配置正确的 Node.js 路径。"));
-            });
-            return;
-        }
-
+        // Version check (consistent with handleSendMessage) — runs inside the
+        // async block below; see ensureNodeVersionReady for why it must not
+        // block the JCEF UI thread.
         final String finalAgentPrompt = agentPrompt;
         final java.util.List<String> finalFileTagPaths = fileTagPaths;
         final String finalRequestedPermissionMode = requestedPermissionMode;
@@ -378,7 +397,10 @@ public class SessionHandler extends BaseMessageHandler {
         final String finalClientMessageId = clientMessageId;
         final JsonObject finalNativeCodexSettings = nativeCodexSettings;
 
-        CompletableFuture.runAsync(() -> {
+        runSendTask(() -> {
+            if (!ensureNodeVersionReady()) {
+                return;
+            }
             String currentWorkingDir = determineWorkingDirectory();
             String previousCwd = context.getSession().getCwd();
             if (!currentWorkingDir.equals(previousCwd)) {
@@ -395,7 +417,8 @@ public class SessionHandler extends BaseMessageHandler {
             // [FIX] Pass agent prompt and file tags directly to session
             context.getSession().send(prompt, attachments, finalAgentPrompt, finalFileTagPaths,
                             finalRequestedPermissionMode, finalRequestedReasoningEffort,
-                            finalRequestedCodexFastMode, finalRequestedDshPreset, finalClientMessageId,
+                            finalRequestedCodexFastMode, finalRequestedDshPreset,
+                            requestedOmpApprovalMode, finalClientMessageId,
                             finalNativeCodexSettings)
                 .thenRun(() -> {
                     // Claude now triggers success on actual stream_end callback.
@@ -421,6 +444,35 @@ public class SessionHandler extends BaseMessageHandler {
                     return null;
                     });
         });
+    }
+
+    /**
+     * Run a send off the UI thread, counting it as pending until send() has
+     * begun its turn (send() does that synchronously) or the send gave up.
+     */
+    private void runSendTask(Runnable task) {
+        sendsBeforeTurnStart.incrementAndGet();
+        CompletableFuture.runAsync(() -> {
+            try {
+                task.run();
+            } finally {
+                sendsBeforeTurnStart.decrementAndGet();
+            }
+        });
+    }
+
+    /**
+     * Re-send the real loading state. The webview asks when a send it
+     * dispatched has not started streaming within its immunity window: the
+     * loading reset it swallowed meanwhile may have been that turn's only one.
+     */
+    private void handleSyncLoadingState() {
+        ClaudeSession session = context.getSession();
+        if (session == null) {
+            return;
+        }
+        boolean loading = session.isLoading() || sendsBeforeTurnStart.get() > 0;
+        callJavaScript("showLoading", String.valueOf(loading));
     }
 
     /**
@@ -504,6 +556,17 @@ public class SessionHandler extends BaseMessageHandler {
         }
         String preset = payload.get("dshPreset").getAsString();
         return SessionState.isValidDshPreset(preset) ? preset.trim() : null;
+    }
+
+    /**
+     * The OMP approval mode this message was sent with ("" = OMP's own setting),
+     * or null when the payload states none.
+     */
+    private String extractOmpApprovalMode(JsonObject payload) {
+        if (payload == null || !payload.has("ompApprovalMode") || payload.get("ompApprovalMode").isJsonNull()) {
+            return null;
+        }
+        return SessionState.normalizeOmpApprovalMode(payload.get("ompApprovalMode").getAsString());
     }
 
     private JsonObject extractNativeCodexSettings(JsonObject payload) {

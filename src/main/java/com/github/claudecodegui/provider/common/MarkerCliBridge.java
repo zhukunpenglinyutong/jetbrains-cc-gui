@@ -6,6 +6,8 @@ import com.google.gson.JsonObject;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CancellationException;
+import java.util.function.BooleanSupplier;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -141,6 +143,33 @@ public abstract class MarkerCliBridge extends BaseSDKBridge {
         return Collections.emptyList();
     }
 
+    /** Bounded history-read contract used by restored-session loading. */
+    public List<JsonObject> getSessionMessages(String sessionId, String cwd, BooleanSupplier cancellation) {
+        HistoryCancellation.check(cancellation);
+        List<JsonObject> messages = getSessionMessages(sessionId, cwd);
+        HistoryCancellation.check(cancellation);
+        return messages;
+    }
+
+    protected List<JsonObject> getSessionMessagesWithCancellation(BooleanSupplier cancellation,
+            HistoryMessageLoader loader, String providerName) {
+        try {
+            HistoryCancellation.check(cancellation);
+            List<JsonObject> messages = loader.load(cancellation);
+            HistoryCancellation.check(cancellation);
+            return messages;
+        } catch (CancellationException | SessionHistoryNotFoundException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to load " + providerName + " session history", e);
+        }
+    }
+
+    @FunctionalInterface
+    protected interface HistoryMessageLoader {
+        List<JsonObject> load(BooleanSupplier cancellation) throws Exception;
+    }
+
     /**
      * Send a message through the CLI provider (streaming markers).
      */
@@ -154,7 +183,7 @@ public abstract class MarkerCliBridge extends BaseSDKBridge {
             MessageCallback callback
     ) {
         return sendMessage(channelId, message, sessionId, cwd, model, reasoningEffort,
-                null, null, null, null, callback);
+                null, null, null, null, null, callback);
     }
 
     /**
@@ -175,7 +204,7 @@ public abstract class MarkerCliBridge extends BaseSDKBridge {
             MessageCallback callback
     ) {
         return sendMessage(channelId, message, sessionId, cwd, model, reasoningEffort,
-                attachments, null, null, null, callback);
+                attachments, null, null, null, null, callback);
     }
 
     /**
@@ -188,6 +217,9 @@ public abstract class MarkerCliBridge extends BaseSDKBridge {
      * <p>{@code thinking} carries the plugin "always thinking" toggle for
      * providers that gate reasoning on a CLI flag (OpenCode {@code --thinking});
      * {@code null} means the daemon default (enabled).
+     *
+     * <p>{@code ompApprovalMode} is the OMP {@code --approval-mode} override;
+     * empty means OMP's own setting decides, {@code null} omits the field.
      */
     public CompletableFuture<SDKResult> sendMessage(
             String channelId,
@@ -199,6 +231,7 @@ public abstract class MarkerCliBridge extends BaseSDKBridge {
             List<ClaudeSession.Attachment> attachments,
             String permissionMode,
             String dshPreset,
+            String ompApprovalMode,
             Boolean thinking,
             MessageCallback callback
     ) {
@@ -215,6 +248,9 @@ public abstract class MarkerCliBridge extends BaseSDKBridge {
         stdinInput.addProperty("thinking", thinking == null || thinking);
         if (dshPreset != null) {
             stdinInput.addProperty("preset", dshPreset);
+        }
+        if (ompApprovalMode != null) {
+            stdinInput.addProperty("approvalMode", ompApprovalMode);
         }
         if (attachments != null && !attachments.isEmpty()) {
             stdinInput.add("attachments", buildAttachmentArray(attachments));

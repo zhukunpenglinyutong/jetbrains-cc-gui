@@ -54,6 +54,8 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       onCodexFastModeChange,
       dshPreset,
       onDshPresetChange,
+      ompApprovalMode,
+      onOmpApprovalModeChange,
       activeFile,
       selectedLines,
       onClearContext,
@@ -80,6 +82,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       addToast,
       messageQueue,
       onRemoveFromQueue,
+      onEditFromQueue,
       onReorderQueue,
       autoOpenFileEnabled,
       onAutoOpenFileEnabledChange,
@@ -187,6 +190,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
           sdkStatusError={sdkStatusError}
           sdkInstalled={sdkInstalled}
           currentProvider={currentProvider}
+          selectedModel={selectedModel}
           onRetrySdkStatus={onRetrySdkStatus}
           onInstallSdk={onInstallSdk}
           t={t}
@@ -208,6 +212,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
           onToggleStatusPanel={onToggleStatusPanel}
           messageQueue={messageQueue}
           onRemoveFromQueue={onRemoveFromQueue}
+          onEditFromQueue={onEditFromQueue}
           onReorderQueue={onReorderQueue}
           showOpenSourceBanner={showOpenSourceBanner}
           onDismissOpenSourceBanner={handleDismissOpenSourceBanner}
@@ -248,6 +253,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
           reasoningEffort={reasoningEffort}
           codexFastMode={codexFastMode}
           dshPreset={dshPreset}
+          ompApprovalMode={ompApprovalMode}
           onSubmit={handleSubmit}
           onStop={onStop}
           onModeSelect={handleModeSelect}
@@ -256,6 +262,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
           onReasoningChange={onReasoningChange}
           onCodexFastModeChange={onCodexFastModeChange}
           onDshPresetChange={onDshPresetChange}
+          onOmpApprovalModeChange={onOmpApprovalModeChange}
           onEnhancePrompt={handleEnhancePrompt}
           alwaysThinkingEnabled={alwaysThinkingEnabled}
           onToggleThinking={onToggleThinking}

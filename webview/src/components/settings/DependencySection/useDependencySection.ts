@@ -403,6 +403,11 @@ export const useDependencySection = ({ addToast, isActive }: DependencySectionPr
     retryDependencyStatusRequest();
   };
 
+  const handleRetryVersions = (sdkId: SdkId) => {
+    setLoadingVersions(previous => ({ ...previous, [sdkId]: true }));
+    sendToJava(`get_dependency_versions:${JSON.stringify({ id: sdkId })}`);
+  };
+
   return {
     t,
     loading,
@@ -423,5 +428,6 @@ export const useDependencySection = ({ addToast, isActive }: DependencySectionPr
     handleUninstall,
     handleUpdate,
     handleRetryStatus,
+    handleRetryVersions,
   };
 };

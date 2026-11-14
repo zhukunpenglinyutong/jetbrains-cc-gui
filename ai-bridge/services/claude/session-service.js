@@ -3,7 +3,7 @@
  * Responsible for session persistence and history message management.
  */
 
-import { existsSync, createReadStream, mkdirSync, readFileSync, appendFileSync, statSync } from 'fs';
+import { existsSync, createReadStream, mkdirSync, appendFileSync, statSync, openSync, readSync, closeSync } from 'fs';
 import { dirname } from 'path';
 import { randomUUID } from 'crypto';
 import { createInterface } from 'readline';
@@ -55,39 +55,80 @@ export function persistJsonlMessage(sessionId, cwd, obj) {
   }
 }
 
+// Chunk size for the synchronous JSONL line reader below.
+const JSONL_READ_CHUNK_BYTES = 8 * 1024 * 1024;
+
 /**
- * Parse raw JSONL file content into entries and report incomplete records.
+ * Call `onLine` for every line of a JSONL file without materializing the whole
+ * file as one string. Long-running sessions grow past V8's maximum string
+ * length (~512 MiB, 0x1fffffe8 chars), and `readFileSync(file, 'utf8')` then
+ * throws "Cannot create a string longer than 0x1fffffe8 characters", which
+ * left such sessions impossible to reopen. Splitting on the 0x0A byte is
+ * UTF-8 safe because that byte never occurs inside a multi-byte sequence.
+ * The final line is reported even without a trailing newline, so a torn tail
+ * still reaches the parser. Exported for tests.
+ */
+export function forEachJsonlLineSync(filePath, onLine, chunkBytes = JSONL_READ_CHUNK_BYTES) {
+  const fd = openSync(filePath, 'r');
+  try {
+    const chunk = Buffer.allocUnsafe(chunkBytes);
+    // Pieces of a line that spans chunk boundaries (copied: `chunk` is reused).
+    let pending = [];
+    let bytesRead;
+    while ((bytesRead = readSync(fd, chunk, 0, chunkBytes, null)) > 0) {
+      const view = chunk.subarray(0, bytesRead);
+      let start = 0;
+      let newline;
+      while ((newline = view.indexOf(0x0a, start)) !== -1) {
+        if (pending.length > 0) {
+          pending.push(view.subarray(start, newline));
+          onLine(Buffer.concat(pending).toString('utf8'));
+          pending = [];
+        } else {
+          onLine(view.toString('utf8', start, newline));
+        }
+        start = newline + 1;
+      }
+      if (start < bytesRead) {
+        pending.push(Buffer.from(view.subarray(start)));
+      }
+    }
+    if (pending.length > 0) {
+      onLine(Buffer.concat(pending).toString('utf8'));
+    }
+  } finally {
+    closeSync(fd);
+  }
+}
+
+/**
+ * Parse a JSONL session file into entries and report incomplete records.
  * Only a malformed tail signals a writer mid-append and makes the read
  * incomplete; a malformed line followed by valid ones is a stale artifact that
  * must not block history access forever (retries read the same static bytes).
  */
-function parseJsonlContent(content) {
-  const lines = content.split('\n');
-  let lastNonBlankIndex = -1;
-  for (let index = lines.length - 1; index >= 0; index -= 1) {
-    if (lines[index].trim()) {
-      lastNonBlankIndex = index;
-      break;
-    }
-  }
-
+function parseJsonlFile(sessionFile) {
   const messages = [];
   const malformedLineNumbers = [];
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index];
-    if (!line.trim()) continue;
+  let lineNumber = 0;
+  let lastNonBlankMalformed = false;
+  forEachJsonlLineSync(sessionFile, (line) => {
+    lineNumber += 1;
+    if (!line.trim()) return;
     try {
       const message = JSON.parse(line);
       if (message !== null) messages.push(message);
+      lastNonBlankMalformed = false;
     } catch {
-      malformedLineNumbers.push(index + 1);
+      malformedLineNumbers.push(lineNumber);
+      lastNonBlankMalformed = true;
     }
-  }
+  });
 
   return {
     messages,
     malformedLineNumbers,
-    malformedTail: malformedLineNumbers.includes(lastNonBlankIndex + 1),
+    malformedTail: lastNonBlankMalformed,
   };
 }
 
@@ -120,7 +161,7 @@ function waitBeforeHistoryRetry() {
 function readParsedHistory(sessionFile, allowBlockingRetry) {
   let parsed;
   for (let attempt = 0; attempt < HISTORY_READ_RETRIES; attempt += 1) {
-    parsed = parseJsonlContent(readFileSync(sessionFile, 'utf8'));
+    parsed = parseJsonlFile(sessionFile);
     const lastAttempt = attempt === HISTORY_READ_RETRIES - 1;
     if (!parsed.malformedTail || lastAttempt || !allowBlockingRetry) {
       return parsed;
@@ -480,8 +521,7 @@ export function buildSessionMessagesPagePayload(sessionFile, beforeTurn = null, 
     };
   }
 
-  const content = readFileSync(sessionFile, 'utf8');
-  const parsed = parseJsonlContent(content);
+  const parsed = parseJsonlFile(sessionFile);
   const sessionTitle = extractSessionTitle(parsed.messages);
   const messages = selectConversationChain(parsed.messages)
     .filter(msg => !(msg.type === 'user' && isInterruptionMarker(msg)))

@@ -18,7 +18,7 @@ export interface UseSubmitHandlerOptions {
   invalidateCache: () => void;
   externalAttachments: Attachment[] | undefined;
   setInternalAttachments: Dispatch<SetStateAction<Attachment[]>>;
-  /** Clear attachments draft from localStorage */
+  /** Clear the webview's attachment draft from sessionStorage. */
   clearAttachmentsDraft?: () => void;
   /** Pending image reads/comparisons must finish before the draft can be submitted. */
   hasPendingImagePastes?: () => boolean;
@@ -125,7 +125,7 @@ export function useSubmitHandler({
     clearInput();
     if (externalAttachments === undefined) {
       setInternalAttachments([]);
-      // Clear attachments draft from localStorage
+      // Clear persisted images immediately so a remount cannot restore a submitted draft.
       clearAttachmentsDraft?.();
     }
 

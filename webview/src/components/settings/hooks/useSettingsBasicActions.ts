@@ -14,6 +14,10 @@ import {
   clampPermissionDialogTimeoutSeconds,
 } from '../../../utils/permissionDialogTimeout';
 import {
+  DEFAULT_HISTORY_LOAD_TIMEOUT_SECONDS,
+  clampHistoryLoadTimeoutSeconds,
+} from '../../../utils/historyLoadTimeout';
+import {
   getSkipNewSessionConfirm,
   SKIP_NEW_SESSION_CONFIRM_EVENT,
   type SkipNewSessionConfirmChangedDetail,
@@ -33,6 +37,8 @@ const sendToJava = (message: string) => {
   }
 };
 
+export type CodexSandboxModeOption = 'read-only' | 'workspace-write' | 'danger-full-access';
+
 export interface UseSettingsBasicActionsProps {
   streamingEnabledProp?: boolean;
   onStreamingEnabledChangeProp?: (enabled: boolean) => void;
@@ -42,6 +48,18 @@ export interface UseSettingsBasicActionsProps {
   onAutoOpenFileEnabledChangeProp?: (enabled: boolean) => void;
   permissionDialogTimeoutSecondsProp?: number;
   onPermissionDialogTimeoutChangeProp?: (seconds: number) => void;
+  /**
+   * Live Codex access scope owned by the chat state. The chat sends this value
+   * with every turn, so it is the only truthful source for the panel — the
+   * Java-side legacy `codexSandboxMode` record is never consulted at runtime.
+   */
+  codexSandboxSelectionProp?: CodexSandboxModeOption;
+  /** Provenance of the current scope: 'user' | 'native' | 'migrated' | 'default'. */
+  codexSandboxSourceProp?: string;
+  /** Sandbox the app-server last confirmed; null means "not confirmed yet". */
+  codexSandboxEffectiveProp?: CodexSandboxModeOption | null;
+  /** Writes the choice back into the chat state so the next turn keeps it. */
+  onCodexSandboxSelectionChangeProp?: (mode: CodexSandboxModeOption) => void;
   /** Current chat CLI — prompt enhancer auto mode follows this when available. */
   currentProvider?: string;
 }
@@ -70,10 +88,12 @@ export interface UseSettingsBasicActionsReturn {
   /** Streaming enabled state (prefers prop over local state) */
   streamingEnabled: boolean;
   localStreamingEnabled: boolean;
-  codexSandboxMode: 'read-only' | 'workspace-write' | 'danger-full-access';
+  codexSandboxMode: CodexSandboxModeOption;
   codexSandboxSource: string;
-  codexSandboxDesired: 'read-only' | 'workspace-write' | 'danger-full-access';
-  codexSandboxEffective: 'read-only' | 'workspace-write' | 'danger-full-access';
+  /** The scope the next turn will send (same source of truth as the radio). */
+  codexSandboxDesired: CodexSandboxModeOption;
+  /** Last confirmed sandbox, or null when the runtime has not reported one. */
+  codexSandboxEffective: CodexSandboxModeOption | null;
   codexSandboxConflict: boolean;
   /** Send shortcut state (prefers prop over local state) */
   sendShortcut: 'enter' | 'cmdEnter';
@@ -81,6 +101,9 @@ export interface UseSettingsBasicActionsReturn {
   /** Auto open file state (prefers prop over local state) */
   autoOpenFileEnabled: boolean;
   localAutoOpenFileEnabled: boolean;
+  /** Application-level startup history loading preference. */
+  loadHistoryOnStartup: boolean;
+  historyLoadTimeoutSeconds: number;
   commitPrompt: string;
   savingCommitPrompt: boolean;
   projectCommitPrompt: string;
@@ -99,6 +122,7 @@ export interface UseSettingsBasicActionsReturn {
   skipNewSessionConfirm: boolean;
   commitGenerationEnabled: boolean;
   aiTitleGenerationEnabled: boolean;
+  sessionGitRepositoryMatchingEnabled: boolean;
   statusBarWidgetEnabled: boolean;
   taskCompletionNotificationEnabled: boolean;
   askUserQuestionNotificationEnabled: boolean;
@@ -124,6 +148,8 @@ export interface UseSettingsBasicActionsReturn {
   handleCodexSandboxModeChange: (mode: 'read-only' | 'workspace-write' | 'danger-full-access') => void;
   handleSendShortcutChange: (shortcut: 'enter' | 'cmdEnter') => void;
   handleAutoOpenFileEnabledChange: (enabled: boolean) => void;
+  handleLoadHistoryOnStartupChange: (enabled: boolean) => void;
+  handleHistoryLoadTimeoutChange: (seconds: number) => void;
   handleSoundNotificationEnabledChange: (enabled: boolean) => void;
   handleSoundOnlyWhenUnfocusedChange: (enabled: boolean) => void;
   handleSelectedSoundChange: (soundId: string) => void;
@@ -135,6 +161,7 @@ export interface UseSettingsBasicActionsReturn {
   handleSaveProjectCommitPrompt: () => void;
   handleCommitGenerationEnabledChange: (enabled: boolean) => void;
   handleAiTitleGenerationEnabledChange: (enabled: boolean) => void;
+  handleSessionGitRepositoryMatchingEnabledChange: (enabled: boolean) => void;
   handleStatusBarWidgetEnabledChange: (enabled: boolean) => void;
   handleTaskCompletionNotificationEnabledChange: (enabled: boolean) => void;
   handleAskUserQuestionNotificationEnabledChange: (enabled: boolean) => void;
@@ -176,11 +203,10 @@ export interface UseSettingsBasicActionsReturn {
   /** @internal */ setLocalStreamingEnabled: (enabled: boolean) => void;
   /** @internal */ setCodexSandboxMode: (mode: 'read-only' | 'workspace-write' | 'danger-full-access') => void;
   /** @internal */ setCodexSandboxSource: (source: string) => void;
-  /** @internal */ setCodexSandboxDesired: (mode: 'read-only' | 'workspace-write' | 'danger-full-access') => void;
-  /** @internal */ setCodexSandboxEffective: (mode: 'read-only' | 'workspace-write' | 'danger-full-access') => void;
-  /** @internal */ setCodexSandboxConflict: (conflict: boolean) => void;
   /** @internal */ setLocalSendShortcut: (shortcut: 'enter' | 'cmdEnter') => void;
   /** @internal */ setLocalAutoOpenFileEnabled: (enabled: boolean) => void;
+  /** @internal */ setLoadHistoryOnStartup: (enabled: boolean) => void;
+  /** @internal */ setHistoryLoadTimeoutSeconds: (seconds: number) => void;
   /** @internal */ setCommitPrompt: (prompt: string) => void;
   /** @internal */ setSavingCommitPrompt: (saving: boolean) => void;
   /** @internal */ setProjectCommitPrompt: (prompt: string) => void;
@@ -194,6 +220,7 @@ export interface UseSettingsBasicActionsReturn {
   /** @internal */ setSkipNewSessionConfirm: (enabled: boolean) => void;
   /** @internal */ setCommitGenerationEnabled: (enabled: boolean) => void;
   /** @internal */ setAiTitleGenerationEnabled: (enabled: boolean) => void;
+  /** @internal */ setSessionGitRepositoryMatchingEnabled: (enabled: boolean) => void;
   /** @internal */ setStatusBarWidgetEnabled: (enabled: boolean) => void;
   /** @internal */ setTaskCompletionNotificationEnabled: (enabled: boolean) => void;
   /** @internal */ setAskUserQuestionNotificationEnabled: (enabled: boolean) => void;
@@ -212,6 +239,10 @@ export function useSettingsBasicActions({
   onAutoOpenFileEnabledChangeProp,
   permissionDialogTimeoutSecondsProp,
   onPermissionDialogTimeoutChangeProp,
+  codexSandboxSelectionProp,
+  codexSandboxSourceProp,
+  codexSandboxEffectiveProp,
+  onCodexSandboxSelectionChangeProp,
   currentProvider,
 }: UseSettingsBasicActionsProps): UseSettingsBasicActionsReturn {
   // Node.js path
@@ -244,17 +275,18 @@ export function useSettingsBasicActions({
   const [localStreamingEnabled, setLocalStreamingEnabled] = useState<boolean>(false);
   const streamingEnabled = streamingEnabledProp ?? localStreamingEnabled;
 
-  const [codexSandboxMode, setCodexSandboxMode] = useState<
-    'read-only' | 'workspace-write' | 'danger-full-access'
-  >('workspace-write');
+  // Codex access scope - prefer the chat-owned props (the value every turn
+  // actually sends), fall back to the Java legacy record only when no chat
+  // state was handed in. `effective` stays null until the runtime confirms a
+  // policy: showing the requested value there was the reported lie.
+  const [codexSandboxMode, setCodexSandboxMode] = useState<CodexSandboxModeOption>('workspace-write');
   const [codexSandboxSource, setCodexSandboxSource] = useState('default');
-  const [codexSandboxDesired, setCodexSandboxDesired] = useState<
-    'read-only' | 'workspace-write' | 'danger-full-access'
-  >('workspace-write');
-  const [codexSandboxEffective, setCodexSandboxEffective] = useState<
-    'read-only' | 'workspace-write' | 'danger-full-access'
-  >('workspace-write');
-  const [codexSandboxConflict, setCodexSandboxConflict] = useState(false);
+  const hasChatSandbox = codexSandboxSelectionProp !== undefined;
+  const effectiveCodexSandboxMode = hasChatSandbox ? codexSandboxSelectionProp : codexSandboxMode;
+  const effectiveCodexSandboxSource = hasChatSandbox ? (codexSandboxSourceProp ?? 'default') : codexSandboxSource;
+  // `effective` is only ever the runtime-confirmed policy: null until the
+  // app-server reports one. Showing the requested value here was the reported lie.
+  const codexSandboxEffective = hasChatSandbox ? (codexSandboxEffectiveProp ?? null) : null;
 
   // Send shortcut configuration - prefer props, fallback to local state
   const [localSendShortcut, setLocalSendShortcut] = useState<'enter' | 'cmdEnter'>('enter');
@@ -263,6 +295,12 @@ export function useSettingsBasicActions({
   // Auto open file configuration - prefer props, fallback to local state
   const [localAutoOpenFileEnabled, setLocalAutoOpenFileEnabled] = useState<boolean>(false);
   const autoOpenFileEnabled = autoOpenFileEnabledProp ?? localAutoOpenFileEnabled;
+
+  // Application-level startup history loading configuration.
+  const [loadHistoryOnStartup, setLoadHistoryOnStartup] = useState<boolean>(true);
+  const [historyLoadTimeoutSeconds, setHistoryLoadTimeoutSeconds] = useState(
+    DEFAULT_HISTORY_LOAD_TIMEOUT_SECONDS,
+  );
 
   // Commit AI prompt configuration
   const [commitPrompt, setCommitPrompt] = useState('');
@@ -327,6 +365,8 @@ export function useSettingsBasicActions({
   const [aiTitleGenerationEnabled, setAiTitleGenerationEnabled] = useState<boolean>(true);
 
   // Status bar widget toggle (default: true)
+  const [sessionGitRepositoryMatchingEnabled, setSessionGitRepositoryMatchingEnabled] = useState<boolean>(false);
+
   const [statusBarWidgetEnabled, setStatusBarWidgetEnabled] = useState<boolean>(true);
 
   // Task completion notification toggle (default: false, opt-in feature)
@@ -459,17 +499,18 @@ export function useSettingsBasicActions({
     }
   }, [onStreamingEnabledChangeProp]);
 
-  const handleCodexSandboxModeChange = useCallback((mode: 'read-only' | 'workspace-write' | 'danger-full-access') => {
+  const handleCodexSandboxModeChange = useCallback((mode: CodexSandboxModeOption) => {
     setCodexSandboxMode(mode);
-    setCodexSandboxDesired(mode);
-    setCodexSandboxConflict(false);
     setCodexSandboxSource('user');
+    // The chat state is what every turn sends; without this the next message
+    // would overwrite the new scope with the stale one.
+    onCodexSandboxSelectionChangeProp?.(mode);
     const payload = { sandboxMode: mode };
     sendToJava(`set_codex_sandbox_mode:${JSON.stringify(payload)}`);
     // New Codex handlers receive provenance and validate the independent
     // access range; the legacy message above remains for older hosts.
     sendToJava(`set_codex_sandbox_selection:${JSON.stringify({ selection: mode, source: 'user' })}`);
-  }, []);
+  }, [onCodexSandboxSelectionChangeProp]);
 
   // Send shortcut change handler
   const handleSendShortcutChange = useCallback((shortcut: 'enter' | 'cmdEnter') => {
@@ -496,6 +537,17 @@ export function useSettingsBasicActions({
       sendToJava(`set_auto_open_file_enabled:${JSON.stringify(payload)}`);
     }
   }, [onAutoOpenFileEnabledChangeProp]);
+
+  const handleLoadHistoryOnStartupChange = useCallback((enabled: boolean) => {
+    setLoadHistoryOnStartup(enabled);
+    sendToJava(`set_load_history_on_startup:${JSON.stringify({ loadHistoryOnStartup: enabled })}`);
+  }, []);
+
+  const handleHistoryLoadTimeoutChange = useCallback((seconds: number) => {
+    const bounded = clampHistoryLoadTimeoutSeconds(seconds);
+    setHistoryLoadTimeoutSeconds(bounded);
+    sendToJava(`set_history_load_timeout:${JSON.stringify({ historyLoadTimeoutSeconds: bounded })}`);
+  }, []);
 
   // Sound notification toggle change handler
   const handleSoundNotificationEnabledChange = useCallback((enabled: boolean) => {
@@ -552,6 +604,11 @@ export function useSettingsBasicActions({
     setAiTitleGenerationEnabled(enabled);
     const payload = { aiTitleGenerationEnabled: enabled };
     sendToJava(`set_ai_title_generation_enabled:${JSON.stringify(payload)}`);
+  }, []);
+
+  const handleSessionGitRepositoryMatchingEnabledChange = useCallback((enabled: boolean) => {
+    setSessionGitRepositoryMatchingEnabled(enabled);
+    sendToJava(`set_session_git_repository_matching_enabled:${JSON.stringify({ sessionGitRepositoryMatchingEnabled: enabled })}`);
   }, []);
 
   // Status bar widget toggle change handler
@@ -807,22 +864,23 @@ export function useSettingsBasicActions({
     localStreamingEnabled,
     setLocalStreamingEnabled,
     streamingEnabled,
-    codexSandboxMode,
+    codexSandboxMode: effectiveCodexSandboxMode,
     setCodexSandboxMode,
-    codexSandboxSource,
+    codexSandboxSource: effectiveCodexSandboxSource,
     setCodexSandboxSource,
-    codexSandboxDesired,
-    setCodexSandboxDesired,
+    codexSandboxDesired: effectiveCodexSandboxMode,
     codexSandboxEffective,
-    setCodexSandboxEffective,
-    codexSandboxConflict,
-    setCodexSandboxConflict,
+    codexSandboxConflict: false,
     localSendShortcut,
     setLocalSendShortcut,
     sendShortcut,
     localAutoOpenFileEnabled,
     setLocalAutoOpenFileEnabled,
     autoOpenFileEnabled,
+    loadHistoryOnStartup,
+    setLoadHistoryOnStartup,
+    historyLoadTimeoutSeconds,
+    setHistoryLoadTimeoutSeconds,
     commitPrompt,
     setCommitPrompt,
     savingCommitPrompt,
@@ -858,6 +916,8 @@ export function useSettingsBasicActions({
     handleCodexSandboxModeChange,
     handleSendShortcutChange,
     handleAutoOpenFileEnabledChange,
+    handleLoadHistoryOnStartupChange,
+    handleHistoryLoadTimeoutChange,
     handleSoundNotificationEnabledChange,
     handleSoundOnlyWhenUnfocusedChange,
     handleSelectedSoundChange,
@@ -877,6 +937,9 @@ export function useSettingsBasicActions({
     aiTitleGenerationEnabled,
     setAiTitleGenerationEnabled,
     handleAiTitleGenerationEnabledChange,
+    sessionGitRepositoryMatchingEnabled,
+    setSessionGitRepositoryMatchingEnabled,
+    handleSessionGitRepositoryMatchingEnabledChange,
     statusBarWidgetEnabled,
     setStatusBarWidgetEnabled,
     handleStatusBarWidgetEnabledChange,

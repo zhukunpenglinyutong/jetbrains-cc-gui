@@ -18,6 +18,11 @@ export interface ResolvedFontConfig {
   warning?: string;
 }
 
-export interface UiFontConfig extends ResolvedFontConfig {}
+export interface UiFontConfig extends ResolvedFontConfig {
+  // Null means no backend preference yet; undefined also supports older backends.
+  fontSizeLevel?: number | null;
+  // Echoed only for explicit scale saves so older acknowledgements cannot retire newer choices.
+  fontSizeRequestId?: string;
+}
 
 export interface CodeFontConfig extends ResolvedFontConfig {}

@@ -69,6 +69,9 @@ export const FILE_MODIFY_TOOL_NAMES = new Set([
   'strreplace',
   'apply_patch',
   'file_change',
+  // JetBrains MCP server; its current edit tool is apply_patch above
+  'create_new_file',
+  'replace_text_in_file',
 ]);
 
 /**
@@ -100,8 +103,8 @@ export function isTransientInternalToolName(toolName: string | undefined): boole
 
 /**
  * Whether a content block is a tool_use that renders nothing in the message
- * list (TodoWrite, TaskCreate, update_plan, and transient internal tools once
- * streaming ends). Mirrors the null-return branches in ContentBlockRenderer so
+ * list (TodoWrite, TaskCreate, update_plan, polling, local Promise computations,
+ * and transient internal tools once streaming ends). Mirrors the null-return branches in ContentBlockRenderer so
  * callers can filter such blocks before rendering - their arrival otherwise
  * re-renders the message and shifts the streaming thinking block's last-block
  * status, which flickered the thinking block. Pass the message's streaming
@@ -115,6 +118,8 @@ export function isNonRenderedToolUse(
   const toolName = normalizeToolName(block.name ?? '');
   if (toolName === 'subagentactivity' || toolName === 'sub_agent_activity') return true;
   if (toolName === 'write_stdin') return true;
+  // Local Promise bookkeeping has no tool action to display or include in command batches.
+  if (toolName === 'promise.resolve') return true;
   if (toolName === 'exec' && block.input && typeof block.input === 'object') {
     const input = block.input as Record<string, unknown>;
     const script = input.code ?? input.patch ?? input.script;

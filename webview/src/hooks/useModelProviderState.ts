@@ -27,6 +27,8 @@ import {
   applyCliModeSelect,
   applyModelSelect,
   buildThinkingUpdatePayload,
+  deriveCodexAccessScopeFromMode,
+  effectiveCodexSandboxFromSettings,
   resolveProviderModel,
   resolveProviderPermissionMode,
   selectedModelForProvider,
@@ -132,6 +134,36 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     reasoningEffort, setReasoningEffort,
     codexFastMode, setCodexFastMode,
   } = codex;
+
+  // The permission mode is app-level state that survives a plugin reinstall,
+  // while the access scope lives in webview localStorage, which does not. When
+  // the scope was never claimed explicitly (`source === 'default'`, i.e. a wiped
+  // or pre-scope snapshot) it must track the authoritative mode instead of
+  // sitting on the safe default: otherwise the selector reads Full Auto while
+  // the app-server still runs workspace-write and denies writes outside the
+  // project. An explicit 'user'/'native'/'migrated' choice is never overridden.
+  useEffect(() => {
+    if (currentProvider !== 'codex' || codexSandboxSource !== 'default') {
+      return;
+    }
+    const derived = deriveCodexAccessScopeFromMode(codexPermissionMode);
+    if (!derived) {
+      return;
+    }
+    if (derived.approvalPreset === codexApprovalPreset
+      && derived.sandboxSelection === codexSandboxSelection) {
+      return;
+    }
+    setCodexApprovalPreset(derived.approvalPreset);
+    setCodexSandboxSelection(derived.sandboxSelection);
+    setCodexSettingsPending(true);
+    sendBridgeEvent('set_codex_approval_preset', derived.approvalPreset);
+    sendBridgeEvent('set_codex_sandbox_selection', JSON.stringify({
+      selection: derived.sandboxSelection,
+      source: codexSandboxSource,
+    }));
+  }, [currentProvider, codexApprovalPreset, codexPermissionMode, codexSandboxSelection, codexSandboxSource]);
+
   const {
     selectedGrokModel, setSelectedGrokModel,
     grokPermissionMode, setGrokPermissionMode,
@@ -339,6 +371,21 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     setDshPermissionMode,
   ]);
 
+  /**
+   * Settings → Permissions sandbox change. The chat state is the value every
+   * turn sends, so it must be written here too; marking the scope 'user' stops
+   * the boot reconciliation from re-deriving it from the permission mode.
+   */
+  const handleCodexSandboxSelectionChange = useCallback((mode: CodexSandboxSelection) => {
+    setCodexSandboxSelection(mode);
+    setCodexSandboxSource('user');
+    setCodexSettingsPending(true);
+    sendBridgeEvent('set_codex_sandbox_selection', JSON.stringify({
+      selection: mode,
+      source: 'user',
+    }));
+  }, [setCodexSandboxSelection, setCodexSandboxSource]);
+
   const handleModelSelect = useCallback((modelId: string) => {
     applyModelSelect(currentProvider, modelId, longContextEnabled, ompRoles, {
       setSelectedClaudeModel,
@@ -487,6 +534,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     codexSandboxSelection, setCodexSandboxSelection,
     codexSandboxSource, setCodexSandboxSource,
     codexEffectiveSettings,
+    codexEffectiveSandbox: effectiveCodexSandboxFromSettings(codexEffectiveSettings),
     codexSettingsPending,
     selectedModel,
     currentSdkInstalled,
@@ -496,6 +544,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     codexNativeAutoReviewAvailable: true,
     currentProviderRef,
     handleModeSelect,
+    handleCodexSandboxSelectionChange,
     handleModelSelect,
     handleProviderSelect,
     handleDshPresetChange,

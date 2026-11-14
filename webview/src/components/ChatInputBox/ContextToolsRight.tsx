@@ -1,10 +1,14 @@
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useClaudePlanUsage } from '../../hooks/useClaudePlanUsage';
+import { useGrokPlanUsage } from '../../hooks/useGrokPlanUsage';
+import { useOmpPlanUsage } from '../../hooks/useOmpPlanUsage';
 import { PlanUsageIndicator } from './PlanUsageIndicator';
 
 interface ContextToolsRightProps {
   currentProvider: string;
+  /** Selected model id; the OMP plan usage is read for this model. */
+  selectedModel?: string;
   hasMessages: boolean;
   onRewind?: () => void;
   statusPanelExpanded: boolean;
@@ -14,6 +18,7 @@ interface ContextToolsRightProps {
 /** Right side tools: plan usage, StatusPanel toggle and Rewind button. */
 export const ContextToolsRight: React.FC<ContextToolsRightProps> = memo(({
   currentProvider,
+  selectedModel,
   hasMessages,
   onRewind,
   statusPanelExpanded,
@@ -21,7 +26,11 @@ export const ContextToolsRight: React.FC<ContextToolsRightProps> = memo(({
 }) => {
   const { t } = useTranslation();
   const isClaude = currentProvider === 'claude';
+  const isGrok = currentProvider === 'grok';
+  const isOmp = currentProvider === 'omp';
   const claudePlanUsage = useClaudePlanUsage(currentProvider);
+  const grokPlanUsage = useGrokPlanUsage(currentProvider);
+  const ompPlanUsage = useOmpPlanUsage(currentProvider, selectedModel ?? '');
 
   return (
     <div className="context-tools-right">
@@ -29,6 +38,18 @@ export const ContextToolsRight: React.FC<ContextToolsRightProps> = memo(({
         <PlanUsageIndicator
           snapshot={claudePlanUsage.snapshot}
           status={claudePlanUsage.status}
+        />
+      )}
+      {isGrok && (
+        <PlanUsageIndicator
+          snapshot={grokPlanUsage.snapshot}
+          status={grokPlanUsage.status}
+        />
+      )}
+      {isOmp && (
+        <PlanUsageIndicator
+          snapshot={ompPlanUsage.snapshot}
+          status={ompPlanUsage.status}
         />
       )}
 

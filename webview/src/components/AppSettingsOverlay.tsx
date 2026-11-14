@@ -16,6 +16,10 @@ interface AppSettingsOverlayProps {
   onAutoOpenFileEnabledChange?: (enabled: boolean) => void;
   permissionDialogTimeoutSeconds?: number;
   onPermissionDialogTimeoutChange?: (seconds: number) => void;
+  codexSandboxSelection?: 'read-only' | 'workspace-write' | 'danger-full-access';
+  codexSandboxSource?: string;
+  codexSandboxEffective?: 'read-only' | 'workspace-write' | 'danger-full-access' | null;
+  onCodexSandboxSelectionChange?: (mode: 'read-only' | 'workspace-write' | 'danger-full-access') => void;
 }
 
 /**

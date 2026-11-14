@@ -14,6 +14,7 @@ import java.io.File;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BooleanSupplier;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -88,6 +89,15 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
      */
     public void removeDaemonEventListener(DaemonBridge.DaemonEventListener listener) {
         this.daemonCoordinator.removeDaemonEventListener(listener);
+    }
+
+    /**
+     * Call after the Claude SDK on disk is installed or updated. Every Claude daemon in the IDE
+     * keeps the SDK module it imported, so each one restarts before its next request, never in
+     * the middle of one, to load the new SDK.
+     */
+    public static void markSdkChanged() {
+        ClaudeDaemonCoordinator.markSdkChanged();
     }
 
     /**
@@ -446,6 +456,15 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
      */
     public JsonObject getSessionMessagesPage(String sessionId, String cwd, Integer beforeTurn, int limit) {
         return sessionQueryService.getSessionMessagesPage(sessionId, cwd, beforeTurn, limit);
+    }
+
+    public JsonObject getSessionMessagesPage(String sessionId, String cwd, Integer beforeTurn, int limit,
+                                             BooleanSupplier cancellation) {
+        return sessionQueryService.getSessionMessagesPage(sessionId, cwd, beforeTurn, limit, cancellation);
+    }
+
+    public List<JsonObject> getSessionMessages(String sessionId, String cwd, BooleanSupplier cancellation) {
+        return sessionQueryService.getSessionMessages(sessionId, cwd, cancellation);
     }
 
     public JsonObject getLatestClaudeUserMessage(String sessionId, String cwd) {

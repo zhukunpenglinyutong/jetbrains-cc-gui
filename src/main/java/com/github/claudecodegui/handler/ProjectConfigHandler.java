@@ -2,6 +2,8 @@ package com.github.claudecodegui.handler;
 
 import com.github.claudecodegui.handler.core.HandlerContext;
 
+import com.github.claudecodegui.skill.OmpSlashCommandService;
+import com.github.claudecodegui.skill.SlashCommandRegistry;
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.action.SendShortcutSync;
@@ -18,6 +20,8 @@ import com.intellij.openapi.fileChooser.FileChooserDescriptor;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 
+import java.io.IOException;
+
 /**
  * Handles project-level configuration: working directory, streaming, sandbox mode,
  * auto-open file, send shortcut, commit prompt, IDE theme, editor font config, and usage statistics.
@@ -30,10 +34,16 @@ public class ProjectConfigHandler {
     private final HandlerContext context;
     private final CodemossSettingsService settingsService;
     private final Gson gson = new Gson();
+    private final java.util.function.Consumer<Runnable> uiDispatcher;
 
     public ProjectConfigHandler(HandlerContext context) {
+        this(context, callback -> ApplicationManager.getApplication().invokeLater(callback));
+    }
+
+    ProjectConfigHandler(HandlerContext context, java.util.function.Consumer<Runnable> uiDispatcher) {
         this.context = context;
         this.settingsService = context.getSettingsService();
+        this.uiDispatcher = uiDispatcher;
     }
 
     // ---- Internal helpers --------------------------------------------------
@@ -49,8 +59,8 @@ public class ProjectConfigHandler {
 
     private void pushJson(String jsCallback, JsonElement payload) {
         String json = gson.toJson(payload);
-        ApplicationManager.getApplication().invokeLater(() ->
-            context.callJavaScript(jsCallback, context.escapeJs(json)));
+        Runnable callback = () -> context.callJavaScript(jsCallback, context.escapeJs(json));
+        uiDispatcher.accept(callback);
     }
 
     private void showError(String message) {
@@ -188,6 +198,11 @@ public class ProjectConfigHandler {
                 this.context.getSession().setCwd(this.settingsService.getEffectiveWorkingDirectory(projectPath));
                 this.context.getSession().getState().setCodexCwdExplicit(true);
             }
+            if (this.context.getSession() != null
+                    && OmpSlashCommandService.isOmp(this.context.getSession().getProvider())) {
+                this.refreshOmpSlashCommandsForWorkingDirectory(
+                        this.settingsService.getEffectiveWorkingDirectory(projectPath));
+            }
             JsonObject response = new JsonObject();
             response.addProperty("projectPath", projectPath);
             response.addProperty("customWorkingDir", customWorkingDir == null ? "" : customWorkingDir);
@@ -198,6 +213,25 @@ public class ProjectConfigHandler {
             LOG.error("[ProjectConfigHandler] Failed to set working directory: " + e.getMessage(), e);
             showError("Failed to save working directory config: " + e.getMessage());
         }
+    }
+
+    /**
+     * OMP resolves skills and custom commands relative to its working directory, so a
+     * directory change needs a new catalog. The session adopts the directory now (the
+     * next send would do it anyway) so later refreshes target the same one.
+     */
+    private void refreshOmpSlashCommandsForWorkingDirectory(String workingDirectory) {
+        this.context.getSession().setCwd(workingDirectory);
+        String cachedJson = SlashCommandRegistry.toJson(OmpSlashCommandService.getCached(workingDirectory));
+        this.uiDispatcher.accept(() -> this.context.callJavaScript("updateSlashCommands", this.context.escapeJs(cachedJson)));
+        OmpSlashCommandService.refreshAndPush(
+                workingDirectory,
+                () -> this.context.getSession() != null
+                        && OmpSlashCommandService.isOmp(this.context.getSession().getProvider())
+                        && OmpSlashCommandService.cacheKey(workingDirectory)
+                                .equals(OmpSlashCommandService.cacheKey(this.context.getSession().getCwd())),
+                fetchedJson -> this.uiDispatcher.accept(
+                        () -> this.context.callJavaScript("updateSlashCommands", this.context.escapeJs(fetchedJson))));
     }
 
     public void handleGetStreamingEnabled() {
@@ -220,15 +254,12 @@ public class ProjectConfigHandler {
 
     public void handleGetCodexSandboxMode() {
         respondWithJson("window.updateCodexSandboxMode",
-            () -> {
-                JsonObject result = jsonOf(
-                    "sandboxMode", settingsService.getCodexSandboxMode(context.getProject().getBasePath()));
-                result.addProperty("sandboxSource", "legacy");
-                result.addProperty("sandboxDesired", result.get("sandboxMode").getAsString());
-                result.addProperty("sandboxEffective", result.get("sandboxMode").getAsString());
-                result.addProperty("sandboxConflict", false);
-                return result;
-            },
+            () ->
+                // Legacy project-level record only. It never takes part in a turn,
+                // so it must not be reported as the desired or effective policy:
+                // the live scope travels with each send, and the app-server echoes
+                // the confirmed policy back through thread/settings/updated.
+                sandboxPayload(settingsService.getCodexSandboxMode(context.getProject().getBasePath()), "legacy"),
             sandboxPayload("workspace-write", "default"),
             "Failed to get Codex sandbox mode");
     }
@@ -254,9 +285,6 @@ public class ProjectConfigHandler {
     private static JsonObject sandboxPayload(String mode, String source) {
         JsonObject result = jsonOf("sandboxMode", mode);
         result.addProperty("sandboxSource", source);
-        result.addProperty("sandboxDesired", mode);
-        result.addProperty("sandboxEffective", mode);
-        result.addProperty("sandboxConflict", false);
         return result;
     }
 
@@ -276,6 +304,46 @@ public class ProjectConfigHandler {
             settingsService::setAutoOpenFileEnabled,
             "window.updateAutoOpenFileEnabled",
             "Failed to save auto open file config");
+    }
+
+    public void handleGetLoadHistoryOnStartup() {
+        respondWithJson("window.updateLoadHistoryOnStartup",
+            () -> jsonOf("loadHistoryOnStartup", settingsService.isLoadHistoryOnStartup()),
+            jsonOf("loadHistoryOnStartup", true),
+            "Failed to get load history on startup");
+    }
+
+    public void handleSetLoadHistoryOnStartup(String content) {
+        handleBooleanToggle(content, "loadHistoryOnStartup", true, "load history on startup",
+            settingsService::setLoadHistoryOnStartup,
+            "window.updateLoadHistoryOnStartup",
+            "Failed to save load history on startup config");
+    }
+
+    public void handleGetHistoryLoadTimeout() {
+        respondWithJson("window.updateHistoryLoadTimeout",
+            () -> jsonOf("historyLoadTimeoutSeconds", settingsService.getHistoryLoadTimeoutSeconds()),
+            jsonOf("historyLoadTimeoutSeconds", CodemossSettingsService.DEFAULT_HISTORY_LOAD_TIMEOUT_SECONDS),
+            "Failed to get history load timeout");
+    }
+
+    public void handleSetHistoryLoadTimeout(String content) {
+        try {
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+            JsonElement element = json != null ? json.get("historyLoadTimeoutSeconds") : null;
+            if (element == null || !element.isJsonPrimitive() || !element.getAsJsonPrimitive().isNumber()) {
+                LOG.warn("[ProjectConfigHandler] Ignoring invalid history load timeout payload");
+                pushJson("window.updateHistoryLoadTimeout",
+                        jsonOf("historyLoadTimeoutSeconds", settingsService.getHistoryLoadTimeoutSeconds()));
+                return;
+            }
+            settingsService.setHistoryLoadTimeoutSeconds(element.getAsInt());
+            pushJson("window.updateHistoryLoadTimeout",
+                    jsonOf("historyLoadTimeoutSeconds", settingsService.getHistoryLoadTimeoutSeconds()));
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to set history load timeout", e);
+            showError("Failed to save history load timeout. See IDE log for details.");
+        }
     }
 
     public void handleGetPermissionDialogTimeout() {
@@ -539,6 +607,48 @@ public class ProjectConfigHandler {
         dispatchUiFontConfigUpdate();
     }
 
+    /**
+     * Save an explicit scale choice and acknowledge it through the existing font configuration channel.
+     *
+     * @param content JSON payload containing an integer fontSizeLevel from 1 to 6 and an optional fontSizeRequestId
+     */
+    public void handleSetFontSizeLevel(String content) {
+        try {
+            this.dispatchUiFontConfigUpdate(this.setFontSizeLevelAndCreateResponse(content));
+        } catch (Exception e) {
+            LOG.warn("[ProjectConfigHandler] Failed to save font size level", e);
+            this.showError("Failed to save font size level: " + e.getMessage());
+        }
+    }
+
+    JsonObject setFontSizeLevelAndCreateResponse(String content) throws IOException {
+        JsonObject json = this.gson.fromJson(content, JsonObject.class);
+        JsonElement value = json == null ? null : json.get("fontSizeLevel");
+        if (value == null || !value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber()) {
+            throw new IllegalArgumentException("Font size level must be a number");
+        }
+        int level;
+        try {
+            level = value.getAsBigDecimal().intValueExact();
+        } catch (ArithmeticException e) {
+            // Gson's "Rounding necessary" is not a readable rejection for the user.
+            throw new IllegalArgumentException("Font size level must be an integer between 1 and 6");
+        }
+        if (level < 1 || level > 6) {
+            throw new IllegalArgumentException("Font size level must be an integer between 1 and 6");
+        }
+        JsonElement requestId = json.get("fontSizeRequestId");
+        if (requestId != null && (!requestId.isJsonPrimitive() || !requestId.getAsJsonPrimitive().isString())) {
+            throw new IllegalArgumentException("Font size request ID must be a string");
+        }
+        this.settingsService.setFontSizeLevel(level);
+        JsonObject response = FontConfigService.getResolvedUiFontConfig(this.settingsService);
+        if (requestId != null) {
+            response.add("fontSizeRequestId", requestId.deepCopy());
+        }
+        return response;
+    }
+
     public void handleSetUiFontConfig(String content) {
         try {
             JsonObject json = gson.fromJson(content, JsonObject.class);
@@ -711,6 +821,20 @@ public class ProjectConfigHandler {
             "Failed to save AI title generation config");
     }
 
+    public void handleGetSessionGitRepositoryMatchingEnabled() {
+        respondWithJson("window.updateSessionGitRepositoryMatchingEnabled",
+            () -> jsonOf("sessionGitRepositoryMatchingEnabled", settingsService.getSessionGitRepositoryMatchingEnabled()),
+            jsonOf("sessionGitRepositoryMatchingEnabled", false),
+            "Failed to get session repository matching config");
+    }
+
+    public void handleSetSessionGitRepositoryMatchingEnabled(String content) {
+        handleBooleanToggle(content, "sessionGitRepositoryMatchingEnabled", false, "session repository matching",
+            settingsService::setSessionGitRepositoryMatchingEnabled,
+            "window.updateSessionGitRepositoryMatchingEnabled",
+            "Failed to save session repository matching config");
+    }
+
     public void handleGetStatusBarWidgetEnabled() {
         respondWithJson("window.updateStatusBarWidgetEnabled",
             () -> jsonOf("statusBarWidgetEnabled", settingsService.getStatusBarWidgetEnabled()),
@@ -789,11 +913,18 @@ public class ProjectConfigHandler {
 
     private void dispatchUiFontConfigUpdate() {
         try {
-            String uiFontConfigJson = FontConfigService.getResolvedUiFontConfigJson(settingsService);
-            ApplicationManager.getApplication().invokeLater(() -> {
-                context.callJavaScript("window.onUiFontConfigReceived", context.escapeJs(uiFontConfigJson));
-                context.callJavaScript("window.applyUiFontConfig", context.escapeJs(uiFontConfigJson));
-            });
+            this.dispatchUiFontConfigUpdate(FontConfigService.getResolvedUiFontConfig(this.settingsService));
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to dispatch UI font config: " + e.getMessage(), e);
+        }
+    }
+
+    private void dispatchUiFontConfigUpdate(JsonObject uiFontConfig) {
+        try {
+            String uiFontConfigJson = uiFontConfig.toString();
+            // The queue schedules EDT delivery and must capture this page before the handler returns.
+            this.context.callJavaScript("window.onUiFontConfigReceived", this.context.escapeJs(uiFontConfigJson));
+            this.context.callJavaScript("window.applyUiFontConfig", this.context.escapeJs(uiFontConfigJson));
         } catch (Exception e) {
             LOG.error("[ProjectConfigHandler] Failed to dispatch UI font config: " + e.getMessage(), e);
         }

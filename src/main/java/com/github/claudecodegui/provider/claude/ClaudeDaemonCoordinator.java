@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 
 /**
@@ -19,6 +20,10 @@ import java.util.function.Supplier;
 class ClaudeDaemonCoordinator {
 
     private static final long DAEMON_RETRY_DELAY_MS = 60_000;
+
+    // Bumped whenever the Claude SDK on disk changes. Shared by every coordinator because all
+    // chat windows load the SDK from the same dependencies directory.
+    private static final AtomicLong SDK_GENERATION = new AtomicLong();
 
     private final Logger log;
     private final NodeDetector nodeDetector;
@@ -33,6 +38,9 @@ class ClaudeDaemonCoordinator {
     // Listeners are cached so they can be re-attached when the daemon
     // restarts (a new DaemonBridge instance is created on each restart).
     private final List<DaemonBridge.DaemonEventListener> cachedEventListeners = new CopyOnWriteArrayList<>();
+    // SDK generation the current daemon process was launched under, tied to that process.
+    private volatile long launchedProcessGeneration = -1;
+    private volatile long launchedSdkGeneration;
 
     ClaudeDaemonCoordinator(
             Logger log,
@@ -71,23 +79,62 @@ class ClaudeDaemonCoordinator {
         }
     }
 
+    /**
+     * Records that the Claude SDK on disk changed. Each daemon keeps the SDK module it imported,
+     * so every coordinator replaces its daemon the next time one is requested while it is idle.
+     */
+    static void markSdkChanged() {
+        SDK_GENERATION.incrementAndGet();
+    }
+
+    /**
+     * Whether a daemon must be replaced to load a changed SDK. A daemon serving a request is kept so
+     * the change never cuts a reply short. A process this coordinator did not launch (an automatic
+     * restart inside the bridge) cannot be shown to have loaded the change, so it counts as stale.
+     */
+    static boolean shouldReloadSdk(long sdkGeneration, long launchedSdkGeneration,
+                                   long processGeneration, long launchedProcessGeneration,
+                                   int activeRequests) {
+        if (sdkGeneration == 0 || activeRequests > 0) {
+            return false;
+        }
+        return processGeneration != launchedProcessGeneration || launchedSdkGeneration < sdkGeneration;
+    }
+
+    private boolean shouldReloadSdk(DaemonBridge bridge) {
+        return shouldReloadSdk(SDK_GENERATION.get(), launchedSdkGeneration,
+                bridge.getCurrentDaemonGeneration(), launchedProcessGeneration,
+                bridge.getActiveRequestCount());
+    }
+
+    private void recordLaunch(DaemonBridge bridge, long sdkGeneration) {
+        launchedSdkGeneration = sdkGeneration;
+        launchedProcessGeneration = bridge.getCurrentDaemonGeneration();
+    }
+
     DaemonBridge getDaemonBridge() {
         DaemonBridge current = daemonBridge;
         if (current != null && current.isAlive()) {
-            return current;
-        }
-        if (System.currentTimeMillis() < daemonRetryAfter) {
+            if (!shouldReloadSdk(current)) {
+                return current;
+            }
+        } else if (System.currentTimeMillis() < daemonRetryAfter) {
             return null;
         }
 
         synchronized (daemonLock) {
             current = daemonBridge;
-            if (current != null && current.isAlive()) {
+            boolean alive = current != null && current.isAlive();
+            if (alive && !shouldReloadSdk(current)) {
                 return current;
             }
+            long sdkGeneration = SDK_GENERATION.get();
 
-            if (current != null && current.isIdleRetired()) {
+            if (alive) {
+                log.info("[DaemonCoordinator] Restarting idle daemon to load the updated Claude SDK");
+            } else if (current != null && current.isIdleRetired()) {
                 if (current.ensureRunning()) {
+                    recordLaunch(current, sdkGeneration);
                     daemonRetryAfter = 0;
                     return current;
                 }
@@ -107,6 +154,7 @@ class ClaudeDaemonCoordinator {
                         envConfigurator
                 );
                 if (newBridge.start()) {
+                    recordLaunch(newBridge, sdkGeneration);
                     daemonBridge = newBridge;
                     daemonRetryAfter = 0;
                     for (DaemonBridge.DaemonEventListener cached : cachedEventListeners) {

@@ -25,7 +25,7 @@ public class CodexProviderManager {
     private static final Logger LOG = Logger.getInstance(CodexProviderManager.class);
     private static final String APPLIED_PROVIDER_ID_KEY = "appliedProviderId";
     private static final String APPLIED_PROVIDER_REVISION_KEY = "appliedProviderRevision";
-    private static final Object PROVIDER_STATE_LOCK = new Object();
+    private static final Object PROVIDER_STATE_LOCK = ProviderManager.PROVIDER_STATE_LOCK;
     public static final String CODEX_CLI_LOGIN_PROVIDER_ID = "__codex_cli_login__";
 
     private final Function<Void, JsonObject> configReader;

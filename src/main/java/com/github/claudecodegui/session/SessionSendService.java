@@ -10,6 +10,7 @@ import com.github.claudecodegui.provider.grok.GrokSDKBridge;
 import com.github.claudecodegui.provider.common.MarkerCliBridge;
 import com.github.claudecodegui.provider.zcode.ZcodeSDKBridge;
 import com.github.claudecodegui.provider.common.MessageCallback;
+import com.github.claudecodegui.provider.common.SDKResult;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
@@ -215,6 +216,35 @@ public class SessionSendService {
             String clientMessageId,
             JsonObject nativeCodexSettings
     ) {
+        return sendMessageToProvider(channelId, input, attachments, openedFilesJson, externalAgentPrompt, fileTagPaths,
+                requestedPermissionMode, requestedReasoningEffort, requestedCodexFastMode, requestedDshPreset,
+                null, clientMessageId, nativeCodexSettings, state.getTurnOwner());
+    }
+
+    public CompletableFuture<Void> sendMessageToProvider(
+            String channelId, String input, List<ClaudeSession.Attachment> attachments, JsonObject openedFilesJson,
+            String externalAgentPrompt, List<String> fileTagPaths, String requestedPermissionMode,
+            String requestedReasoningEffort, String requestedCodexFastMode, String requestedDshPreset, Object expectedTurnOwner
+    ) {
+        return sendMessageToProvider(channelId, input, attachments, openedFilesJson, externalAgentPrompt, fileTagPaths,
+                requestedPermissionMode, requestedReasoningEffort, requestedCodexFastMode, requestedDshPreset,
+                null, null, null, expectedTurnOwner);
+    }
+
+    /**
+     * @param requestedOmpApprovalMode OMP approval mode this message was sent with
+     *                                 ("" = OMP's own setting), or null when the sender states none
+     */
+    public CompletableFuture<Void> sendMessageToProvider(
+            String channelId, String input, List<ClaudeSession.Attachment> attachments, JsonObject openedFilesJson,
+            String externalAgentPrompt, List<String> fileTagPaths, String requestedPermissionMode,
+            String requestedReasoningEffort, String requestedCodexFastMode, String requestedDshPreset,
+            String requestedOmpApprovalMode, String clientMessageId, JsonObject nativeCodexSettings,
+            Object expectedTurnOwner
+    ) {
+        if (!state.isCurrentTurn(expectedTurnOwner)) {
+            return CompletableFuture.completedFuture(null);
+        }
         String agentPrompt = externalAgentPrompt;
         if (agentPrompt == null) {
             agentPrompt = getAgentPrompt();
@@ -257,7 +287,8 @@ public class SessionSendService {
                     normalizedRequestedEffort,
                     effectiveCodexServiceTier,
                     clientMessageId,
-                    nativeCodexSettings
+                    nativeCodexSettings,
+                    expectedTurnOwner
             );
         }
 
@@ -270,7 +301,8 @@ public class SessionSendService {
                     agentPrompt,
                     fileTagPaths,
                     effectivePermissionMode,
-                    normalizedRequestedEffort
+                    normalizedRequestedEffort,
+                    expectedTurnOwner
             );
         }
         if ("zcode".equals(currentProvider) && zcodeSDKBridge != null) {
@@ -282,13 +314,17 @@ public class SessionSendService {
                     agentPrompt,
                     fileTagPaths,
                     effectivePermissionMode,
-                    normalizedRequestedEffort
+                    normalizedRequestedEffort,
+                    expectedTurnOwner
             );
         }
 
         if (cliBridges.containsKey(currentProvider) && !"grok".equals(currentProvider)) {
             if ("dsh".equals(currentProvider) && requestedDshPreset != null) {
                 state.setDshPreset(requestedDshPreset);
+            }
+            if ("omp".equals(currentProvider) && requestedOmpApprovalMode != null) {
+                state.setOmpApprovalMode(requestedOmpApprovalMode);
             }
             return sendToCliProvider(
                     currentProvider,
@@ -299,12 +335,14 @@ public class SessionSendService {
                     agentPrompt,
                     fileTagPaths,
                     normalizedRequestedEffort,
-                    effectivePermissionMode
+                    effectivePermissionMode,
+                    requestedOmpApprovalMode,
+                    expectedTurnOwner
             );
         }
 
         return sendToClaude(channelId, input, attachments, openedFilesJson, agentPrompt,
-                effectivePermissionMode, normalizedRequestedEffort);
+                effectivePermissionMode, normalizedRequestedEffort, expectedTurnOwner);
     }
 
     public static String normalizeRequestedReasoningEffort(String effort) {
@@ -434,10 +472,11 @@ public class SessionSendService {
             String requestedReasoningEffort,
             String effectiveCodexServiceTier,
             String clientMessageId,
-            JsonObject nativeCodexSettings
+            JsonObject nativeCodexSettings,
+            Object expectedTurnOwner
     ) {
         CodexMessageHandler handler = new CodexMessageHandler(this.state,
-                this.callbackFacade.getCallbackHandler(), clientMessageId);
+                this.callbackFacade.getCallbackHandler(), clientMessageId, expectedTurnOwner);
         String accessMode = CodemossSettingsService.CODEX_RUNTIME_ACCESS_INACTIVE;
         try {
             accessMode = new CodemossSettingsService().getCodexRuntimeAccessMode();
@@ -451,26 +490,36 @@ public class SessionSendService {
             return CompletableFuture.completedFuture(null);
         }
 
-        String contextAppend = this.contextService.buildCodexContextAppend(openedFilesJson, fileTagPaths);
+        JsonObject turnSettings = nativeCodexSettings == null ? new JsonObject() : nativeCodexSettings.deepCopy();
+        turnSettings.add("additionalContext", this.contextService.buildCodexAdditionalContext(
+                openedFilesJson, fileTagPaths, this.codexSDKBridge::normalizePathForNode));
         String sessionInstructions = this.contextService.buildCodexSessionInstructions(agentPrompt, openedFilesJson);
-        String finalInput = (input != null ? input : "") + contextAppend;
-        String configuredModel = new CodexSettingsManager(gson).resolveModelAlias(state.getModel());
+        String configuredModel = new CodexSettingsManager(this.gson).resolveModelAlias(this.state.getModel());
 
-        return codexSDKBridge.sendMessage(
+        return settleFromResult(expectedTurnOwner, codexSDKBridge.sendMessage(
                 channelId,
-                finalInput,
-                state.getSessionId(),
-                state.getCwd(),
+                input != null ? input : "",
+                this.state.getSessionId(),
+                this.state.getCwd(),
                 attachments,
                 effectivePermissionMode,
                 configuredModel,
                 sessionInstructions,
-                requestedReasoningEffort != null ? requestedReasoningEffort : state.getReasoningEffort(),
+                requestedReasoningEffort != null ? requestedReasoningEffort : this.state.getReasoningEffort(),
                 effectiveCodexServiceTier,
                 handler,
                 clientMessageId,
-                nativeCodexSettings
-        ).thenApply(result -> null);
+                turnSettings
+        ));
+    }
+
+    /** Provider handlers differ in bookkeeping; the result future settles every route the same way. */
+    private CompletableFuture<Void> settleFromResult(Object expectedTurnOwner, CompletableFuture<SDKResult> backend) {
+        SessionExecutionOwnership execution = state.executionOwnershipForOwner(expectedTurnOwner);
+        if (execution != null) {
+            execution.bindResult(backend);
+        }
+        return backend.thenApply(result -> null);
     }
 
     private CompletableFuture<Void> sendToGrok(
@@ -481,7 +530,8 @@ public class SessionSendService {
             String agentPrompt,
             List<String> fileTagPaths,
             String effectivePermissionMode,
-            String requestedReasoningEffort
+            String requestedReasoningEffort,
+            Object expectedTurnOwner
     ) {
         if (grokSDKBridge == null) {
             LOG.error("[Lifecycle] sendToGrok called but GrokSDKBridge is null");
@@ -507,7 +557,7 @@ public class SessionSendService {
                 + ", model=" + currentModel
                 + ", fileTags=" + (fileTagPaths != null ? fileTagPaths.size() : 0));
 
-        return grokSDKBridge.sendMessage(
+        return settleFromResult(expectedTurnOwner, grokSDKBridge.sendMessage(
                 channelId,
                 input,
                 state.getSessionId(),
@@ -522,7 +572,7 @@ public class SessionSendService {
                 false,
                 requestedReasoningEffort != null ? requestedReasoningEffort : state.getReasoningEffort(),
                 handler
-        ).thenApply(result -> null);
+        ));
     }
 
     private CompletableFuture<Void> sendToZcode(
@@ -533,7 +583,8 @@ public class SessionSendService {
             String agentPrompt,
             List<String> fileTagPaths,
             String effectivePermissionMode,
-            String requestedReasoningEffort
+            String requestedReasoningEffort,
+            Object expectedTurnOwner
     ) {
         if (zcodeSDKBridge == null) {
             LOG.error("[Lifecycle] sendToZcode called but ZcodeSDKBridge is null");
@@ -559,7 +610,7 @@ public class SessionSendService {
                 + ", model=" + currentModel
                 + ", fileTags=" + (fileTagPaths != null ? fileTagPaths.size() : 0));
 
-        return zcodeSDKBridge.sendMessage(
+        return settleFromResult(expectedTurnOwner, zcodeSDKBridge.sendMessage(
                 channelId,
                 input,
                 state.getSessionId(),
@@ -574,7 +625,7 @@ public class SessionSendService {
                 false,
                 requestedReasoningEffort != null ? requestedReasoningEffort : state.getReasoningEffort(),
                 handler
-        ).thenApply(result -> null);
+        ));
     }
 
     private CompletableFuture<Void> sendToCliProvider(
@@ -586,7 +637,9 @@ public class SessionSendService {
             String agentPrompt,
             List<String> fileTagPaths,
             String requestedReasoningEffort,
-            String permissionMode
+            String permissionMode,
+            String requestedOmpApprovalMode,
+            Object expectedTurnOwner
     ) {
         MarkerCliBridge bridge = cliBridges.get(provider);
         if (bridge == null) {
@@ -608,6 +661,7 @@ public class SessionSendService {
         }
 
         String effort = normalizeCliReasoningEffort(
+                provider,
                 requestedReasoningEffort != null ? requestedReasoningEffort : state.getReasoningEffort()
         );
         String modelForCli = normalizeCliModelForProvider(provider, state.getModel());
@@ -615,6 +669,11 @@ public class SessionSendService {
                 ? permissionMode
                 : "default";
         Boolean thinking = readThinkingEnabled();
+        // The mode travels with its message, so a later send cannot change it while this
+        // one is still starting. A send that states none (Quick Fix) uses the tab's choice.
+        String ompApprovalMode = requestedOmpApprovalMode != null
+                ? SessionState.normalizeOmpApprovalMode(requestedOmpApprovalMode)
+                : state.getOmpApprovalMode();
         int attachmentCount = attachments != null ? attachments.size() : 0;
 
         LOG.info("[Lifecycle] sendToCli provider=" + provider
@@ -627,7 +686,7 @@ public class SessionSendService {
                 + ", thinking=" + (thinking == null || thinking)
                 + ", attachments=" + attachmentCount);
 
-        return bridge.sendMessage(
+        return settleFromResult(expectedTurnOwner, bridge.sendMessage(
                 channelId,
                 finalInput,
                 state.getSessionId(),
@@ -637,9 +696,10 @@ public class SessionSendService {
                 attachments,
                 effectiveMode,
                 "dsh".equals(provider) ? state.getDshPreset() : null,
+                "omp".equals(provider) ? ompApprovalMode : null,
                 thinking,
                 handler
-        ).thenApply(result -> null);
+        ));
     }
 
     /**
@@ -677,11 +737,18 @@ public class SessionSendService {
         return new CodexMessageHandler(state, callbacks);
     }
 
-    static String normalizeCliReasoningEffort(String effort) {
-        if (effort == null) {
-            return "medium";
+    /**
+     * Map the UI effort onto the CLI flag value.
+     *
+     * <p>OMP accepts every UI level as {@code --thinking}, and an empty result
+     * omits the flag so the model keeps the level from OMP's own config. The
+     * other CLI providers only know low/medium/high and default to medium.
+     */
+    static String normalizeCliReasoningEffort(String provider, String effort) {
+        String normalized = effort == null ? "" : effort.trim().toLowerCase();
+        if ("omp".equals(provider)) {
+            return SessionState.isValidReasoningEffort(normalized) ? normalized : "";
         }
-        String normalized = effort.trim().toLowerCase();
         if ("low".equals(normalized) || "medium".equals(normalized) || "high".equals(normalized)) {
             return normalized;
         }
@@ -744,7 +811,8 @@ public class SessionSendService {
             JsonObject openedFilesJson,
             String agentPrompt,
             String effectivePermissionMode,
-            String requestedReasoningEffort
+            String requestedReasoningEffort,
+            Object expectedTurnOwner
     ) {
         ClaudeMessageHandler handler = new ClaudeMessageHandler(
                 project,
@@ -752,7 +820,9 @@ public class SessionSendService {
                 callbackFacade.getCallbackHandler(),
                 messageParser,
                 messageMerger,
-                gson
+                gson,
+                null,
+                expectedTurnOwner
         );
 
         Boolean streaming = readStreamingEnabled();
@@ -763,7 +833,7 @@ public class SessionSendService {
                 + ", cwd=" + state.getCwd()
                 + ", model=" + currentModel);
 
-        return claudeSDKBridge.sendMessage(
+        return settleFromResult(expectedTurnOwner, claudeSDKBridge.sendMessage(
                         channelId,
                         input,
                         state.getSessionId(),
@@ -778,7 +848,7 @@ public class SessionSendService {
                         false,
                         requestedReasoningEffort != null ? requestedReasoningEffort : state.getReasoningEffort(),
                         handler
-                ).thenApply(result -> null);
+                ));
     }
 
     private boolean readAutoOpenFileEnabled() {

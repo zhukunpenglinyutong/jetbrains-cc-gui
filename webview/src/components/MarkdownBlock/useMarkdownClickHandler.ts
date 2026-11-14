@@ -1,5 +1,6 @@
 import type { MouseEvent, RefObject } from 'react';
 import { openBrowser, openClass, openFile } from '../../utils/bridge';
+import { normalizeFileLinkHref } from '../../utils/linkify';
 
 // Copy to clipboard implementation
 async function copyToClipboard(text: string): Promise<boolean> {
@@ -63,6 +64,8 @@ export function useMarkdownClickHandler(
 
     const img = target?.closest('img');
     if (img && img.getAttribute('src')) {
+      // A linked image (e.g. a badge) would otherwise navigate the webview to the link.
+      event.preventDefault();
       onImagePreview(img.getAttribute('src'));
       return;
     }
@@ -96,9 +99,10 @@ export function useMarkdownClickHandler(
     }
 
     const linkType = anchor.getAttribute('data-linkify');
+    const fileTarget = anchor.getAttribute('data-file-path') || normalizeFileLinkHref(href);
 
     if (linkType === 'file') {
-      openFile(href);
+      openFile(fileTarget || href);
       return;
     }
 
@@ -109,6 +113,8 @@ export function useMarkdownClickHandler(
 
     if (linkType === 'url' || /^(https?:|mailto:)/.test(href)) {
       openBrowser(href);
+    } else if (fileTarget) {
+      openFile(fileTarget);
     } else {
       openFile(href);
     }

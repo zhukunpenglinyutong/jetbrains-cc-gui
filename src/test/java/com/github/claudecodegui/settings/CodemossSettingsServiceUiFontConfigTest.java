@@ -5,6 +5,7 @@ import com.google.gson.JsonObject;
 import org.junit.After;
 import org.junit.Test;
 
+import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
@@ -12,6 +13,7 @@ import java.nio.file.Path;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 
 public class CodemossSettingsServiceUiFontConfigTest {
@@ -36,6 +38,71 @@ public class CodemossSettingsServiceUiFontConfigTest {
         assertEquals("followEditor", config.get("mode").getAsString());
         assertFalse(config.has("presetId"));
         assertFalse(config.has("customFontPath"));
+    }
+
+    /** Verifies that an absent scale preference stays unset instead of pinning the UI default. */
+    @Test
+    public void shouldLeaveFontSizeLevelUnsetByDefault() throws Exception {
+        useTemporaryHomeDirectory(Files.createTempDirectory("font-size-default-home"));
+        assertNull(new CodemossSettingsService().getFontSizeLevel());
+    }
+
+    /** Verifies that a new settings instance restores the persisted scale independently of font-family changes. */
+    @Test
+    public void shouldRestoreFontSizeLevelAfterRestart() throws Exception {
+        useTemporaryHomeDirectory(Files.createTempDirectory("font-size-roundtrip-home"));
+        CodemossSettingsService service = new CodemossSettingsService();
+        for (int level = 1; level <= 6; level++) {
+            service.setFontSizeLevel(level);
+            service.setUiFontConfig("followEditor", null);
+            assertEquals(Integer.valueOf(level), new CodemossSettingsService().getFontSizeLevel());
+        }
+    }
+
+    /** Rejects invalid writes and malformed stored levels without replacing a valid preference. */
+    @Test
+    public void shouldRejectInvalidFontSizeLevels() throws Exception {
+        Path home = Files.createTempDirectory("font-size-invalid-home");
+        useTemporaryHomeDirectory(home);
+        CodemossSettingsService service = new CodemossSettingsService();
+        service.setFontSizeLevel(5);
+        for (int invalid : new int[]{0, 7, -1}) {
+            try {
+                service.setFontSizeLevel(invalid);
+                fail("Invalid level must not be saved");
+            } catch (IllegalArgumentException expected) {
+                assertEquals(Integer.valueOf(5), service.getFontSizeLevel());
+            }
+        }
+        for (String value : new String[]{"null", "\"5\"", "true", "{}", "[]", "2.5", "0", "7", "6.000000000000000001", "1e999"}) {
+            Files.writeString(home.resolve(".codemoss/config.json"), "{\"fontSizeLevel\":" + value + "}");
+            assertNull(new CodemossSettingsService().getFontSizeLevel());
+        }
+    }
+
+    /** Keeps a failed config read from triggering migration or replacing the existing configuration. */
+    @Test
+    public void shouldPreserveConfigWhenFontSizeReadFails() throws Exception {
+        Path home = Files.createTempDirectory("font-size-unreadable-home");
+        this.useTemporaryHomeDirectory(home);
+        CodemossSettingsService service = new CodemossSettingsService();
+        service.setFontSizeLevel(5);
+        Path configPath = home.resolve(".codemoss/config.json");
+        String brokenConfig = "{\"fontSizeLevel\":5,\"claude\":";
+        Files.writeString(configPath, brokenConfig);
+
+        try {
+            service.getFontSizeLevel();
+            fail("A failed read must not look like an unset preference");
+        } catch (IOException expected) {
+            assertEquals(brokenConfig, Files.readString(configPath));
+        }
+        try {
+            service.setFontSizeLevel(6);
+            fail("A scale update must not replace an unreadable configuration");
+        } catch (IOException expected) {
+            assertEquals(brokenConfig, Files.readString(configPath));
+        }
     }
 
     @Test

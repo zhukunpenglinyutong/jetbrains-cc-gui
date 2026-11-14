@@ -3,6 +3,8 @@ package com.github.claudecodegui.action.tab;
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.ui.toolwindow.ClaudeChatWindow;
 import com.github.claudecodegui.ui.toolwindow.ClaudeSDKToolWindow;
+import com.github.claudecodegui.util.JcefClassAvailability;
+import com.github.claudecodegui.util.JcefMissingGuidance;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
@@ -48,6 +50,13 @@ public class CreateNewTabAction extends AnAction {
                 .getToolWindow(ClaudeSDKToolWindow.TOOL_WINDOW_ID);
         if (toolWindow == null) {
             LOG.error("[CreateNewTabAction] Tool window not found");
+            return;
+        }
+
+        // ClaudeChatWindow construction links JCEF classes; without the Web Browser (JCEF)
+        // plugin it throws NoClassDefFoundError, so show guidance instead.
+        if (!JcefClassAvailability.isAvailable(CreateNewTabAction.class.getClassLoader())) {
+            JcefMissingGuidance.showNotification(project);
             return;
         }
 

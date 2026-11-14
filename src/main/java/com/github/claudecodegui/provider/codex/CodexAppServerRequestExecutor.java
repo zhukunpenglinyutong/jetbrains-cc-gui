@@ -8,6 +8,7 @@ import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -28,6 +29,12 @@ import java.util.function.Consumer;
  * daemon event listeners — never through this request's line stream.
  */
 class CodexAppServerRequestExecutor {
+
+    /** Daemon code for a reply that can never be delivered (answered, released, or runtime gone). */
+    static final String INTERACTION_NOT_PENDING = "INTERACTION_NOT_PENDING";
+
+    /** Daemon code for an answer Codex received but never confirmed; it may still take effect. */
+    static final String DELIVERY_UNCONFIRMED = "DELIVERY_UNCONFIRMED";
 
     /**
      * Dedicated executor for calls that block for a turn's whole lifetime. A
@@ -135,6 +142,7 @@ class CodexAppServerRequestExecutor {
                 result.messageCount = result.messages.size();
                 if (wasAborted.get()) {
                     result.success = false;
+                    result.cancelled = true;
                     result.error = "User interrupted";
                     return result;
                 }
@@ -150,12 +158,14 @@ class CodexAppServerRequestExecutor {
                     }
                 } else if (wasAborted.get()) {
                     result.success = false;
+                    result.cancelled = true;
                     result.error = "User interrupted";
                 }
                 return result;
             } catch (Exception e) {
                 if (wasAborted.get()) {
                     result.success = false;
+                    result.cancelled = true;
                     result.error = "User interrupted";
                     return result;
                 }
@@ -202,41 +212,96 @@ class CodexAppServerRequestExecutor {
      * queued by the daemon independently of a running codex.send.
      */
     JsonObject sendControlCommand(DaemonBridge daemon, String method, JsonObject params, long timeoutMs) {
+        AtomicReference<String> daemonCode = new AtomicReference<>();
+        AtomicReference<JsonObject> responseRef = new AtomicReference<>();
+        AtomicReference<String> errorRef = new AtomicReference<>();
         try {
-            CompletableFuture<Boolean> future = daemon.sendCommand(method, params,
-                    new DaemonBridge.DaemonOutputCallback() {
-                        @Override
-                        public void onLine(String line) {
-                            CodexAppServerRequestExecutor.this.log.debug("[CodexDaemonExecutor] control line: " + line);
-                        }
-
-                        @Override
-                        public void onStderr(String text) {
-                            CodexAppServerRequestExecutor.this.log.debug("[CodexDaemonExecutor] control stderr: " + text);
-                        }
-
-                        @Override
-                        public void onError(String error) {
-                            CodexAppServerRequestExecutor.this.log.warn("[CodexDaemonExecutor] control error: " + error);
-                        }
-
-                        @Override
-                        public void onComplete(boolean success) {
-                        }
-                    });
+            CompletableFuture<Boolean> future = daemon.sendCommand(method, params, controlCallback(daemonCode, responseRef, errorRef));
             Boolean success = future.get(timeoutMs, TimeUnit.MILLISECONDS);
             if (!Boolean.TRUE.equals(success)) {
-                JsonObject error = new JsonObject();
-                error.addProperty("error", method + " was rejected by the daemon");
-                return error;
+                return controlFailure(method, errorRef.get() == null ? method + " was rejected by the daemon" : errorRef.get(), daemonCode.get());
+            }
+            JsonObject response = responseRef.get();
+            if (response != null && response.has("result") && response.get("result").isJsonObject()) {
+                return response.getAsJsonObject("result").deepCopy();
             }
             return new JsonObject();
-        } catch (Exception e) {
-            CodexAppServerRequestExecutor.this.log.warn("[CodexDaemonExecutor] control command " + method + " failed: " + e.getMessage());
-            JsonObject error = new JsonObject();
-            error.addProperty("error", e.getMessage());
+        } catch (TimeoutException e) {
+            JsonObject error = controlFailure(method, method + " timed out after " + timeoutMs + " ms", null);
+            if (method.startsWith("codex.respondInteraction")) {
+                // The daemon may still deliver the answer late. Asking the user again would
+                // invite a second, possibly contradicting answer that Codex then rejects
+                // while the first one takes effect.
+                error.addProperty("retryable", false);
+                error.addProperty("deliveryUnconfirmed", true);
+            }
             return error;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return controlFailure(method, method + " was interrupted", null);
+        } catch (Exception e) {
+            // Timeouts carry no message; a null error would be dropped from the
+            // page ack and the failure would read as a success there.
+            Throwable cause = e instanceof ExecutionException && e.getCause() != null ? e.getCause() : e;
+            String reason = cause.getMessage() != null ? cause.getMessage()
+                    : method + " failed: " + cause.getClass().getSimpleName();
+            return controlFailure(method, reason, daemonCode.get());
         }
+    }
+
+    /**
+     * @param daemonCode the daemon's machine-readable failure code, if any
+     * @return an error ack; a reply Codex no longer waits for, or may still accept, is marked not retryable
+     */
+    private JsonObject controlFailure(String method, String reason, String daemonCode) {
+        this.log.warn("[CodexDaemonExecutor] control command " + method + " failed: " + reason
+                + (daemonCode != null ? " (" + daemonCode + ")" : ""));
+        JsonObject error = new JsonObject();
+        error.addProperty("error", reason);
+        if (daemonCode != null) {
+            error.addProperty("code", daemonCode);
+        }
+        if (INTERACTION_NOT_PENDING.equals(daemonCode)) {
+            error.addProperty("retryable", false);
+        } else if (DELIVERY_UNCONFIRMED.equals(daemonCode)) {
+            // A second answer could take effect alongside the first one.
+            error.addProperty("retryable", false);
+            error.addProperty("deliveryUnconfirmed", true);
+        }
+        return error;
+    }
+
+    private DaemonBridge.DaemonOutputCallback controlCallback(AtomicReference<String> daemonCode,
+                                                            AtomicReference<JsonObject> responseRef, AtomicReference<String> errorRef) {
+        return new DaemonBridge.DaemonOutputCallback() {
+            @Override
+            public void onLine(String line) {
+                CodexAppServerRequestExecutor.this.log.debug("[CodexDaemonExecutor] control line: " + line);
+            }
+
+            @Override
+            public void onStderr(String text) {
+                CodexAppServerRequestExecutor.this.log.debug("[CodexDaemonExecutor] control stderr: " + text);
+            }
+
+            @Override
+            public void onError(String error) {
+                errorRef.set(error);
+                CodexAppServerRequestExecutor.this.log.warn("[CodexDaemonExecutor] control error: " + error);
+            }
+
+            @Override
+            public void onResult(JsonObject response) {
+                responseRef.set(response == null ? null : response.deepCopy());
+                if (response != null && response.has("code") && response.get("code").isJsonPrimitive()) {
+                    daemonCode.set(response.get("code").getAsString());
+                }
+            }
+
+            @Override
+            public void onComplete(boolean success) {
+            }
+        };
     }
 
     /**
@@ -433,6 +498,9 @@ class CodexAppServerRequestExecutor {
             }
             if (nativeSettings.has("skills") && nativeSettings.get("skills").isJsonArray()) {
                 params.add("skills", nativeSettings.getAsJsonArray("skills").deepCopy());
+            }
+            if (nativeSettings.has("additionalContext") && nativeSettings.get("additionalContext").isJsonObject()) {
+                params.add("additionalContext", nativeSettings.getAsJsonObject("additionalContext").deepCopy());
             }
         }
         return params;

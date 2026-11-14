@@ -552,6 +552,41 @@
     &:active {
         background: var(--color-provider-card-action-active-bg);
     }
+
+    &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        pointer-events: none;
+    }
+}
+
+.error-diagnostic-action-status {
+    font-size: 12px;
+    line-height: 1.5;
+    margin: 0;
+
+    &.success {
+        color: var(--color-success);
+    }
+
+    &.warning {
+        color: var(--color-warning);
+    }
+
+    &.error {
+        color: var(--color-error);
+    }
+}
+
+.error-diagnostic-action-progress {
+    font-family: var(--cc-gui-code-font-family, var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace));
+    font-size: 11.5px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .error-diagnostic-reason {

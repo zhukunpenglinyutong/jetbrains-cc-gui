@@ -80,6 +80,29 @@ it('leaves no message surface or divider for terminal polling wrappers', () => {
   cleanup();
 });
 
+it.each([false, true])('leaves no message surface for local computations with streaming=%s', streamingActive => {
+  const { container } = renderMessageItem({ type: 'assistant', raw: { content: [
+    { type: 'tool_use', id: 'local', name: 'Promise.resolve', input: { code: 'Promise.resolve(ALL_TOOLS)' } },
+  ] } }, { currentProvider: 'codex', isLast: true, streamingActive });
+  expect(container.querySelector('.message')).toBeNull();
+  expect(container.textContent).toBe('');
+  cleanup();
+});
+
+it.each([false, true])('keeps commands in one batch across local computations with streaming=%s', streamingActive => {
+  const message: ClaudeMessage = { type: 'assistant', raw: { content: [
+    { type: 'tool_use', id: 'first-command', name: 'bash', input: { command: 'pwd' } },
+    { type: 'tool_use', id: 'local', name: 'Promise.resolve', input: { code: 'Promise.resolve(ALL_TOOLS)' } },
+    { type: 'tool_use', id: 'second-command', name: 'bash', input: { command: 'git status --short' } },
+  ] } };
+  renderMessageItem(message, { currentProvider: 'codex', isLast: true, streamingActive });
+  expect(screen.getAllByTestId('bash-tool-group-block')).toHaveLength(1);
+  expect(screen.queryByTestId('bash-tool-block')).toBeNull();
+  expect(screen.queryByTestId('content-block-tool_use')).toBeNull();
+  expect(getContentBlocks(message)).toHaveLength(3);
+  cleanup();
+});
+
 it('does not render a memoized historical item during 30 tail text updates', () => {
   const message: ClaudeMessage = { type: 'error', content: 'historical error' };
   const sessionRef = { current: 'performance-session' };

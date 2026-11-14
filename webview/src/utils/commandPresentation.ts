@@ -34,6 +34,7 @@ export function presentCommand(input: ToolInput | undefined, t: TFunction) {
     const path = text(action.path) || text(action.name);
     switch (action.type) {
       case 'read': return [t('tools.commandRead', { path })];
+      case 'list_files':
       case 'listFiles': return [t('tools.commandList', { path })];
       case 'search': return [t('tools.commandSearch', { query: text(action.query), path })];
       default: return [];

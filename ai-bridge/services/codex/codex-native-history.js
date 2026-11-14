@@ -58,7 +58,7 @@ function identityOf(item, fallbackIndex) {
 /** Reads one history operation without loading a writer or mixing transcript sources. */
 export async function readNativeHistoryPage(read, { threadId, cursor = null, limit = 30, readMode = 'paged' } = {}) {
   if (!threadId) throw new Error('A native history read requires a thread id');
-  const metadata = await read('thread/read', { threadId, includeTurns: readMode === 'full' });
+  const metadata = await read('thread/read', { threadId, includeTurns: readMode === 'full', excludeTurns: readMode !== 'full' });
   const thread = metadata.thread;
   if (!thread || thread.id !== threadId) throw new Error('Native history returned a different thread');
   let page;
@@ -69,14 +69,20 @@ export async function readNativeHistoryPage(read, { threadId, cursor = null, lim
     try {
       page = await read('thread/turns/list', { threadId, cursor, limit, sortDirection: 'desc', itemsView: 'full' });
     } catch (error) {
-      // Capability/storage errors select a full native read once. Authentication,
-      // writer and transport failures remain failures; none start exec.
-      if (error?.rpcCode !== -32601 && !/pagination (?:is )?not supported|does not support pagination|non-paginated.*history/i.test(error?.message ?? '')) throw error;
-      const full = await read('thread/read', { threadId, includeTurns: true });
-      if (full.thread?.id !== threadId) throw new Error('Native history returned a different thread');
-      if (!Array.isArray(full.thread.turns)) throw new Error('Native full history returned no turns array');
-      page = { data: full.thread.turns, nextCursor: null };
-      readMode = 'full';
+      // Native 0.163 can expose metadata before its first user message creates history.
+      // This specific response proves the thread is empty; other invalid requests remain errors.
+      if (error?.rpcCode === -32600 && error.message === `thread ${threadId} is not materialized yet; thread/turns/list is unavailable before first user message`) {
+        page = { data: [], nextCursor: null };
+      } else {
+        // Capability/storage errors select a full native read once. Authentication,
+        // writer and transport failures remain failures; none start exec.
+        if (error?.rpcCode !== -32601 && !/pagination (?:is )?not supported|does not support pagination|non-paginated.*history/i.test(error?.message ?? '')) throw error;
+        const full = await read('thread/read', { threadId, includeTurns: true });
+        if (full.thread?.id !== threadId) throw new Error('Native history returned a different thread');
+        if (!Array.isArray(full.thread.turns)) throw new Error('Native full history returned no turns array');
+        page = { data: full.thread.turns, nextCursor: null };
+        readMode = 'full';
+      }
     }
   }
   if (!Array.isArray(page?.data ?? page?.turns)) throw new Error('Native turn history returned no turns array');

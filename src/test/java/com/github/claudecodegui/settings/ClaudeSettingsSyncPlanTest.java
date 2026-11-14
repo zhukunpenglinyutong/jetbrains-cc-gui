@@ -4,6 +4,7 @@ import com.google.gson.JsonObject;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -149,5 +150,130 @@ public class ClaudeSettingsSyncPlanTest {
         assertEquals(ClaudeSettingsSyncPlan.Action.SKIP, d.action);
         assertTrue(d.reason.contains("cli-login"));
         assertNull(d.nextSettings);
+    }
+
+    /**
+     * Regression for #1307: API_TIMEOUT_MS is a user-tunable performance knob,
+     * not a plugin-managed credential. It must survive provider sync so users
+     * can extend the timeout for slow local backends (e.g. Ollama with 80k+
+     * token contexts that exceed the CLI's built-in default).
+     */
+    @Test
+    public void preservesUserConfiguredApiTimeoutMs() {
+        JsonObject current = new JsonObject();
+        JsonObject env = new JsonObject();
+        env.addProperty("ANTHROPIC_AUTH_TOKEN", "old");
+        env.addProperty("ANTHROPIC_BASE_URL", "http://localhost:11434");
+        // User explicitly raised the timeout for a slow local Ollama backend.
+        env.addProperty("API_TIMEOUT_MS", "900000");
+        current.add("env", env);
+
+        JsonObject active = new JsonObject();
+        active.addProperty("id", "proxy-ollama");
+        active.addProperty("isActive", true);
+        JsonObject settingsConfig = new JsonObject();
+        JsonObject newEnv = new JsonObject();
+        newEnv.addProperty("ANTHROPIC_AUTH_TOKEN", "new");
+        newEnv.addProperty("ANTHROPIC_BASE_URL", "http://localhost:11434");
+        settingsConfig.add("env", newEnv);
+        active.add("settingsConfig", settingsConfig);
+
+        ClaudeSettingsSyncPlan.Decision d = ClaudeSettingsSyncPlan.plan(current, active);
+        assertEquals(ClaudeSettingsSyncPlan.Action.WRITE, d.action);
+        assertNotNull(d.nextSettings);
+        JsonObject outEnv = d.nextSettings.getAsJsonObject("env");
+        // Managed credentials are replaced by the provider payload...
+        assertEquals("new", outEnv.get("ANTHROPIC_AUTH_TOKEN").getAsString());
+        // ...but the user's API_TIMEOUT_MS is NOT stripped (#1307).
+        assertTrue("API_TIMEOUT_MS must survive provider sync",
+                outEnv.has("API_TIMEOUT_MS"));
+        assertEquals("900000", outEnv.get("API_TIMEOUT_MS").getAsString());
+    }
+
+    /**
+     * A preset such as MiniMax writes API_TIMEOUT_MS itself. Once API_TIMEOUT_MS
+     * stopped being a managed key (#1307), switching away left the 50-minute
+     * timeout on the next provider. A value the previous provider wrote, still
+     * unchanged in settings.json, belongs to that provider and must go with it.
+     */
+    @Test
+    public void switchingAwayRemovesEnvTheOutgoingProviderWroteUnchanged() {
+        JsonObject current = settingsWrittenBy("minimax", "API_TIMEOUT_MS", "3000000");
+        JsonObject previous = providerWithEnv("minimax", "API_TIMEOUT_MS", "3000000");
+        JsonObject active = providerWithEnv("deepseek", "ANTHROPIC_BASE_URL", "https://api.deepseek.com");
+
+        JsonObject env = ClaudeSettingsSyncPlan.plan(current, active, previous).nextSettings.getAsJsonObject("env");
+
+        assertFalse("the outgoing provider's timeout must not leak into the next provider",
+                env.has("API_TIMEOUT_MS"));
+        assertEquals("keep", env.get("CUSTOM_ENV").getAsString());
+        assertEquals("https://api.deepseek.com", env.get("ANTHROPIC_BASE_URL").getAsString());
+    }
+
+    @Test
+    public void switchingAwayKeepsAValueTheUserChangedAfterTheProviderWroteIt() {
+        JsonObject current = settingsWrittenBy("minimax", "API_TIMEOUT_MS", "900000");
+        JsonObject previous = providerWithEnv("minimax", "API_TIMEOUT_MS", "3000000");
+        JsonObject active = providerWithEnv("deepseek", "ANTHROPIC_BASE_URL", "https://api.deepseek.com");
+
+        JsonObject env = ClaudeSettingsSyncPlan.plan(current, active, previous).nextSettings.getAsJsonObject("env");
+
+        assertEquals("900000", env.get("API_TIMEOUT_MS").getAsString());
+    }
+
+    @Test
+    public void theIncomingProvidersOwnValueWinsOverTheOutgoingOne() {
+        JsonObject current = settingsWrittenBy("minimax", "API_TIMEOUT_MS", "3000000");
+        JsonObject previous = providerWithEnv("minimax", "API_TIMEOUT_MS", "3000000");
+        JsonObject active = providerWithEnv("slow-proxy", "API_TIMEOUT_MS", "600000");
+
+        JsonObject env = ClaudeSettingsSyncPlan.plan(current, active, previous).nextSettings.getAsJsonObject("env");
+
+        assertEquals("600000", env.get("API_TIMEOUT_MS").getAsString());
+    }
+
+    @Test
+    public void anUnknownOutgoingProviderLeavesUnmanagedEnvAlone() {
+        JsonObject current = settingsWrittenBy("deleted-provider", "API_TIMEOUT_MS", "3000000");
+        JsonObject active = providerWithEnv("deepseek", "ANTHROPIC_BASE_URL", "https://api.deepseek.com");
+
+        JsonObject env = ClaudeSettingsSyncPlan.plan(current, active, null).nextSettings.getAsJsonObject("env");
+
+        assertEquals("3000000", env.get("API_TIMEOUT_MS").getAsString());
+    }
+
+    @Test
+    public void anOutgoingProviderThatDidNotWriteTheFileRemovesNothing() {
+        // settings.json was last written by provider-a; the lookup returned some other provider.
+        JsonObject current = settingsWrittenBy("provider-a", "API_TIMEOUT_MS", "3000000");
+        JsonObject unrelated = providerWithEnv("minimax", "API_TIMEOUT_MS", "3000000");
+        JsonObject active = providerWithEnv("deepseek", "ANTHROPIC_BASE_URL", "https://api.deepseek.com");
+
+        JsonObject env = ClaudeSettingsSyncPlan.plan(current, active, unrelated).nextSettings.getAsJsonObject("env");
+
+        assertEquals("3000000", env.get("API_TIMEOUT_MS").getAsString());
+    }
+
+    private static JsonObject settingsWrittenBy(String providerId, String key, String value) {
+        JsonObject current = new JsonObject();
+        current.addProperty("codemossProviderId", providerId);
+        JsonObject env = new JsonObject();
+        env.addProperty("ANTHROPIC_AUTH_TOKEN", "old-token");
+        env.addProperty("CUSTOM_ENV", "keep");
+        env.addProperty(key, value);
+        current.add("env", env);
+        return current;
+    }
+
+    private static JsonObject providerWithEnv(String id, String key, String value) {
+        JsonObject provider = new JsonObject();
+        provider.addProperty("id", id);
+        JsonObject settingsConfig = new JsonObject();
+        JsonObject env = new JsonObject();
+        env.addProperty("ANTHROPIC_AUTH_TOKEN", id + "-token");
+        env.addProperty(key, value);
+        settingsConfig.add("env", env);
+        provider.add("settingsConfig", settingsConfig);
+        return provider;
     }
 }

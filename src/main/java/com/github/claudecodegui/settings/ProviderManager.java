@@ -25,6 +25,8 @@ import java.util.function.Function;
  * Manages Claude provider configurations.
  */
 public class ProviderManager {
+    // Shared with Codex and backup imports: both engines write the same config.json.
+    static final Object PROVIDER_STATE_LOCK = ConfigFileTransaction.STATE_LOCK;
     private static final Logger LOG = Logger.getInstance(ProviderManager.class);
     private static final String BACKUP_FILE_NAME = "config.json.bak";
     public static final String DISABLED_PROVIDER_ID = "__disabled__";
@@ -54,6 +56,12 @@ public class ProviderManager {
      * Get all Claude providers.
      */
     public List<JsonObject> getClaudeProviders() {
+        synchronized (PROVIDER_STATE_LOCK) {
+            return getClaudeProvidersLocked();
+        }
+    }
+
+    private List<JsonObject> getClaudeProvidersLocked() {
         JsonObject config = configReader.apply(null);
         List<JsonObject> result = new ArrayList<>();
         String currentId = normalizeCurrentClaudeProviderId(config);
@@ -93,6 +101,12 @@ public class ProviderManager {
      * Save provider order.
      */
     public void saveProviderOrder(List<String> orderedIds) throws IOException {
+        synchronized (PROVIDER_STATE_LOCK) {
+            saveProviderOrderLocked(orderedIds);
+        }
+    }
+
+    private void saveProviderOrderLocked(List<String> orderedIds) throws IOException {
         JsonObject config = configReader.apply(null);
 
         if (!config.has("claude")) {
@@ -113,6 +127,12 @@ public class ProviderManager {
      * Get the currently active provider.
      */
     public JsonObject getActiveClaudeProvider() {
+        synchronized (PROVIDER_STATE_LOCK) {
+            return getActiveClaudeProviderLocked();
+        }
+    }
+
+    private JsonObject getActiveClaudeProviderLocked() {
         JsonObject config = configReader.apply(null);
         String currentId = normalizeCurrentClaudeProviderId(config);
         JsonObject claude = config.getAsJsonObject("claude");
@@ -149,6 +169,12 @@ public class ProviderManager {
      * Add a provider.
      */
     public void addClaudeProvider(JsonObject provider) throws IOException {
+        synchronized (PROVIDER_STATE_LOCK) {
+            addClaudeProviderLocked(provider);
+        }
+    }
+
+    private void addClaudeProviderLocked(JsonObject provider) throws IOException {
         if (!provider.has("id")) {
             throw new IllegalArgumentException("Provider must have an id");
         }
@@ -189,6 +215,12 @@ public class ProviderManager {
      * Save a provider (update if it exists, add if it doesn't).
      */
     public void saveClaudeProvider(JsonObject provider) throws IOException {
+        synchronized (PROVIDER_STATE_LOCK) {
+            saveClaudeProviderLocked(provider);
+        }
+    }
+
+    private void saveClaudeProviderLocked(JsonObject provider) throws IOException {
         if (!provider.has("id")) {
             throw new IllegalArgumentException("Provider must have an id");
         }
@@ -229,6 +261,12 @@ public class ProviderManager {
      * Update a provider.
      */
     public void updateClaudeProvider(String id, JsonObject updates) throws IOException {
+        synchronized (PROVIDER_STATE_LOCK) {
+            updateClaudeProviderLocked(id, updates);
+        }
+    }
+
+    private void updateClaudeProviderLocked(String id, JsonObject updates) throws IOException {
         JsonObject config = configReader.apply(null);
 
         if (!config.has("claude")) {
@@ -270,6 +308,12 @@ public class ProviderManager {
      * @return DeleteResult containing the operation result and error details
      */
     public DeleteResult deleteClaudeProvider(String id) {
+        synchronized (PROVIDER_STATE_LOCK) {
+            return deleteClaudeProviderLocked(id);
+        }
+    }
+
+    private DeleteResult deleteClaudeProviderLocked(String id) {
         Path configFilePath = null;
         Path backupFilePath = null;
 
@@ -361,6 +405,12 @@ public class ProviderManager {
      * Switch to a different provider.
      */
     public void switchClaudeProvider(String id) throws IOException {
+        synchronized (PROVIDER_STATE_LOCK) {
+            switchClaudeProviderLocked(id);
+        }
+    }
+
+    private void switchClaudeProviderLocked(String id) throws IOException {
         JsonObject config = configReader.apply(null);
 
         if (!config.has("claude")) {
@@ -383,6 +433,12 @@ public class ProviderManager {
      * Leave Claude with no active provider.
      */
     public void deactivateClaudeProvider() throws IOException {
+        synchronized (PROVIDER_STATE_LOCK) {
+            deactivateClaudeProviderLocked();
+        }
+    }
+
+    private void deactivateClaudeProviderLocked() throws IOException {
         JsonObject config = configReader.apply(null);
 
         if (!config.has("claude")) {
@@ -421,6 +477,12 @@ public class ProviderManager {
      * Set alwaysThinkingEnabled in the currently active provider.
      */
     public boolean setAlwaysThinkingEnabledInActiveProvider(boolean enabled) throws IOException {
+        synchronized (PROVIDER_STATE_LOCK) {
+            return setAlwaysThinkingEnabledInActiveProviderLocked(enabled);
+        }
+    }
+
+    private boolean setAlwaysThinkingEnabledInActiveProviderLocked(boolean enabled) throws IOException {
         JsonObject config = configReader.apply(null);
         if (!config.has("claude") || config.get("claude").isJsonNull()) {
             return false;
@@ -540,7 +602,56 @@ public class ProviderManager {
             LOG.info("[ProviderManager] No active provider to sync to .claude/settings.json");
             return;
         }
-        claudeSettingsManager.applyProviderToClaudeSettings(activeProvider);
+        applyProviderToClaudeSettings(activeProvider);
+    }
+
+    /**
+     * Apply {@code provider} to settings.json, removing the env values the provider that last
+     * wrote the file put there (unless the user has changed them since).
+     */
+    public void applyProviderToClaudeSettings(JsonObject provider) throws IOException {
+        applyProviderToClaudeSettings(provider, null);
+    }
+
+    /**
+     * Re-apply a provider that was just edited. The saved config already holds the edit, so the
+     * values it wrote into settings.json come from {@code providerBeforeEdit}; a value removed
+     * by the edit is then removed from settings.json as well.
+     *
+     * @param provider           the provider to apply
+     * @param providerBeforeEdit a copy of the same provider taken before the edit, or null
+     */
+    public void applyProviderToClaudeSettings(JsonObject provider, JsonObject providerBeforeEdit) throws IOException {
+        claudeSettingsManager.applyProviderToClaudeSettings(provider, id ->
+                providerBeforeEdit != null && id.equals(idOf(providerBeforeEdit))
+                        ? providerBeforeEdit
+                        : getSavedClaudeProvider(id));
+    }
+
+    private static String idOf(JsonObject provider) {
+        return provider.has("id") && provider.get("id").isJsonPrimitive() ? provider.get("id").getAsString() : null;
+    }
+
+    /**
+     * @param id a provider id
+     * @return a copy of the saved provider with that id (with {@code id} set), or null when there is none
+     */
+    public JsonObject getSavedClaudeProvider(String id) {
+        JsonObject config = configReader.apply(null);
+        if (id == null || config == null || !config.has("claude") || !config.get("claude").isJsonObject()) {
+            return null;
+        }
+        JsonObject claude = config.getAsJsonObject("claude");
+        if (!claude.has("providers") || !claude.get("providers").isJsonObject()) {
+            return null;
+        }
+        JsonObject providers = claude.getAsJsonObject("providers");
+        if (!providers.has(id) || !providers.get(id).isJsonObject()) {
+            return null;
+        }
+        JsonObject provider = providers.getAsJsonObject(id).deepCopy();
+        provider.addProperty("id", id);
+        return provider;
     }
 
     /**
@@ -894,8 +1005,10 @@ public class ProviderManager {
             currentId = claude.get("current").getAsString();
         }
 
+        // An explicitly empty id is a valid disabled state and must not trigger a config rewrite.
         boolean invalidCurrent = currentId == null
-                || (!LOCAL_SETTINGS_PROVIDER_ID.equals(currentId)
+                || (!currentId.isEmpty()
+                    && !LOCAL_SETTINGS_PROVIDER_ID.equals(currentId)
                     && !CLI_LOGIN_PROVIDER_ID.equals(currentId)
                     && !providers.has(currentId));
 

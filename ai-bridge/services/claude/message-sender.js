@@ -34,6 +34,7 @@ import {
   buildConfigErrorPayload,
   extractResultError
 } from './message-utils.js';
+import { MAX_SEND_ERROR_LENGTH, prependSdkStderr, redactSecrets } from './message-output-filter.js';
 import { createPreToolUseHook } from './permission-mode.js';
 import { loadMcpServersConfigAsRecord } from './mcp-status/config-loader.js';
 import { setActiveQueryResult } from './message-session-registry.js';
@@ -74,7 +75,7 @@ function resolveThinkingConfig(settings) {
 /**
  * Build query options object shared by both send functions.
  */
-function buildQueryOptions({ workingDirectory, permissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines, mcpServers, modelId, settingsEnv }) {
+function buildQueryOptions({ workingDirectory, permissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines, mcpServers, modelId, settingsEnv, resolvedModelId }) {
   const claudeCliOverride = getClaudeCliPathOverride();
   return {
     cwd: workingDirectory,
@@ -83,7 +84,7 @@ function buildQueryOptions({ workingDirectory, permissionMode, sdkModelName, max
     maxTurns: 1000,
     enableFileCheckpointing: true,
     env: buildCliEnv(),
-    settings: buildWebviewControlledSettingsOverride(modelId, settingsEnv),
+    settings: buildWebviewControlledSettingsOverride(modelId, settingsEnv, resolvedModelId),
     ...(maxThinkingTokens !== undefined && { maxThinkingTokens }),
     ...(streamingEnabled && { includePartialMessages: true }),
     additionalDirectories: Array.from(
@@ -470,13 +471,15 @@ function handleSendError(error, streamState, sdkStderrLines) {
   }
   const payload = buildConfigErrorPayload(error);
   if (sdkStderrLines.length > 0) {
-    const sdkErrorText = sdkStderrLines.slice(-10).join('\n');
-    payload.error = `SDK-STDERR:\n\`\`\`\n${sdkErrorText}\n\`\`\`\n\n${payload.error}`;
+    const sdkErrorText = redactSecrets(sdkStderrLines.slice(-10).join('\n'));
+    payload.error = prependSdkStderr(payload.error, sdkErrorText);
     payload.details.sdkError = sdkErrorText;
   }
-  payload.error = truncateString(payload.error);
+  payload.error = truncateString(payload.error, MAX_SEND_ERROR_LENGTH);
   console.error('[SEND_ERROR]', JSON.stringify(payload));
 }
+
+export const __testing = { handleSendError };
 
 // ========== Exported send functions ==========
 
@@ -529,7 +532,7 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
 
     const preToolUseHook = createPreToolUseHook(effectivePermissionMode, workingDirectory);
     const mcpServers = await loadMcpServersConfigAsRecord(workingDirectory);
-    const options = buildQueryOptions({ workingDirectory, permissionMode: effectivePermissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines, mcpServers, modelId: model, settingsEnv: settings?.env });
+    const options = buildQueryOptions({ workingDirectory, permissionMode: effectivePermissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines, mcpServers, modelId: model, settingsEnv: settings?.env, resolvedModelId: resolvedModel });
 
     if (normalizedReasoningEffort) {
       options.effort = normalizedReasoningEffort;
@@ -605,7 +608,7 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
     console.log('[DEBUG] (withAttachments) Config:', { normalizedPermissionMode, alwaysThinkingEnabled, maxThinkingTokens, streamingEnabled, reasoningEffort });
 
     const mcpServers = await loadMcpServersConfigAsRecord(workingDirectory);
-    const options = buildQueryOptions({ workingDirectory, permissionMode: normalizedPermissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines, mcpServers, modelId: model, settingsEnv: settings?.env });
+    const options = buildQueryOptions({ workingDirectory, permissionMode: normalizedPermissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines, mcpServers, modelId: model, settingsEnv: settings?.env, resolvedModelId: resolvedAttachModel });
 
     if (reasoningEffort) {
       options.effort = reasoningEffort;

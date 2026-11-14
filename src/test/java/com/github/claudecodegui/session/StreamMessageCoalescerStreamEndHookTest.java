@@ -27,6 +27,34 @@ import static org.junit.Assert.assertTrue;
  */
 public class StreamMessageCoalescerStreamEndHookTest {
 
+    /** Raw body corrections must travel before a later tool batch even when display summaries stay unchanged. */
+    @Test
+    public void tailsFromAnEarlierRawTextOrThinkingCorrection() {
+        for (String type : List.of("text", "thinking")) {
+            List<ClaudeSession.Message> live = messages(4);
+            ClaudeSession.Message item = live.get(1);
+            item.type = ClaudeSession.Message.Type.ASSISTANT;
+            item.raw = new JsonObject();
+            item.raw.addProperty("codexSnapshot", true);
+            JsonObject block = new JsonObject();
+            block.addProperty("type", type);
+            block.addProperty(type, "preview");
+            JsonArray blocks = new JsonArray();
+            blocks.add(block);
+            item.raw.add("content", blocks);
+            List<ClaudeSession.Message> delivered = StreamMessageCoalescer.copyMessagesForTransport(live);
+
+            block.addProperty(type, "complete intermediate content");
+            live.add(new ClaudeSession.Message(ClaudeSession.Message.Type.ASSISTANT, "next tool batch"));
+            StreamMessageCoalescer.MessageTransport transport = StreamMessageCoalescer.selectMessageTransport(
+                    StreamMessageCoalescer.copyMessagesForTransport(live), delivered);
+
+            assertTrue(transport.tailUpdate());
+            assertEquals("the earlier raw body belongs in the transported suffix", 1, transport.baseIndex());
+            assertEquals(4, transport.messages().size());
+        }
+    }
+
     /** Codex snapshots keep growing before the native turn reaches its terminal. */
     @Test
     public void codexTextAndThinkingSnapshotsAreCapturedDuringTheTurn() throws Exception {

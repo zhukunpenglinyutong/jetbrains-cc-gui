@@ -170,7 +170,7 @@ export function useHistoryLoader(options: UseHistoryLoaderOptions): void {
         if (isGuardianReviewThread(row)) return [];
         const sessionId = typeof row.id === 'string' ? row.id : '';
         if (!sessionId) return [];
-        const title = [row.name, row.title, row.preview, row.summary]
+        const title = [row.customTitle, row.name, row.title, row.preview, row.summary]
           .find((value): value is string => typeof value === 'string' && value.trim().length > 0)
           ?? sessionId;
         const rawTimestamp = [row.updatedAt, row.updated_at, row.createdAt, row.created_at]
@@ -188,6 +188,12 @@ export function useHistoryLoader(options: UseHistoryLoaderOptions): void {
           sessionId,
           title,
           provider: 'codex',
+          cwd: typeof row.cwd === 'string' ? row.cwd : undefined,
+          requiresCwdConfirmation: row.requiresCwdConfirmation === true,
+          isFavorited: row.isFavorited === true,
+          favoritedAt: typeof row.favoritedAt === 'number' ? row.favoritedAt : undefined,
+          running: active || row.running === true,
+          ownedElsewhere: row.ownedElsewhere === true,
           model: typeof row.model === 'string' ? row.model : undefined,
           messageCount: isKnownHistoryMessageCount(row.messageCount) ? row.messageCount
             : nativeRevision === previous?.nativeRevision && !active

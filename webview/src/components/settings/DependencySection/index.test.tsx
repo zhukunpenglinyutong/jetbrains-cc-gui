@@ -1,5 +1,7 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import en from '../../../i18n/locales/en.json';
+import zh from '../../../i18n/locales/zh.json';
 import { requestDependencyStatusUntilSettled } from '../../../utils/bridgeStartup';
 import DependencySection from './index';
 
@@ -25,7 +27,11 @@ const translations: Record<string, string> = {
   'settings.dependency.updateAvailable': '有更新',
   'settings.dependency.rollbackWarning': '目标版本低于当前版本，将执行回退安装。',
   'settings.dependency.targetVersionValue': '目标版本 {{version}}',
+  'settings.cli.retry': '重试',
 };
+
+const resolveLocaleKey = (locale: Record<string, unknown>, key: string): unknown =>
+  key.split('.').reduce<unknown>((node, part) => (node as Record<string, unknown> | undefined)?.[part], locale);
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -82,6 +88,54 @@ describe('DependencySection', () => {
 
     expect(window.sendToJava).toHaveBeenCalledWith('get_dependency_status:');
     expect(screen.getByText(translations['settings.dependency.loading'])).toBeTruthy();
+  });
+
+  it.each([
+    ['NPM_QUERY_EXIT_1: EPERM', 'versionCacheAccessError'],
+    ['NPM_QUERY_TIMEOUT', 'versionQueryTimeout'],
+    ['NPM_QUERY_EXIT_1: ENOTFOUND', 'versionQueryNetworkError'],
+    ['NPM_QUERY_FAILED', 'versionQueryFailed'],
+  ])('shows the cause of %s and retries version lookup without installing or claiming a bundled latest version', (error, key) => {
+    render(<DependencySection isActive={false} />);
+    act(() => {
+      window.updateDependencyStatus?.(JSON.stringify({
+        'claude-sdk': { id: 'claude-sdk', status: 'not_installed', hasUpdate: false },
+      }));
+      window.dependencyVersionsLoaded?.(JSON.stringify({
+        'claude-sdk': { sdkId: 'claude-sdk', versions: ['0.3.220'], fallbackVersions: ['0.3.220'],
+          source: 'fallback', latestVersion: '0.3.220', error },
+      }));
+    });
+    expect(screen.getByText(`settings.dependency.${key}`)).toBeTruthy();
+    expect(screen.queryByText('最新稳定版 v0.3.220')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '重试' }));
+    expect(window.sendToJava).toHaveBeenCalledWith('get_dependency_versions:{"id":"claude-sdk"}');
+    expect((screen.getByRole('button', { name: '重试' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText('版本列表加载中')).toBeTruthy();
+    act(() => {
+      window.dependencyVersionsLoaded?.(JSON.stringify({
+        'claude-sdk': { sdkId: 'claude-sdk', versions: ['0.3.307', '0.3.220'], source: 'remote', latestVersion: '0.3.307' },
+      }));
+    });
+    expect(screen.queryByText(`settings.dependency.${key}`)).toBeNull();
+    expect(screen.queryByRole('button', { name: '重试' })).toBeNull();
+    expect(screen.getByText('最新稳定版 v0.3.307')).toBeTruthy();
+    expect(screen.queryByText('版本列表加载中')).toBeNull();
+  });
+
+  it('uses version lookup keys that exist in the shipped locales', () => {
+    const keys = [
+      'settings.cli.retry',
+      'settings.dependency.versionCacheAccessError',
+      'settings.dependency.versionQueryTimeout',
+      'settings.dependency.versionQueryNetworkError',
+      'settings.dependency.versionQueryFailed',
+    ];
+    for (const locale of [en, zh]) {
+      for (const key of keys) {
+        expect(typeof resolveLocaleKey(locale, key), key).toBe('string');
+      }
+    }
   });
 
   it('returns to loading when the dependency tab retries a previous error', () => {

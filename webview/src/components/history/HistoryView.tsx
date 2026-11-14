@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import ConfirmDialog from '../ConfirmDialog';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { HistoryData, HistorySessionSummary } from '../../types';
 import { sendBridgeEvent } from '../../utils/bridge';
@@ -24,6 +25,7 @@ interface HistoryViewProps {
   historyData: HistoryData | null;
   currentProvider?: string; // Current provider (claude or codex)
   currentSessionId?: string | null; // Active session ID; its row must not offer conversion
+  currentSessionBusy?: boolean;
   onLoadSession: (sessionId: string, provider?: string, model?: string, agent?: string) => void;
   onDeleteSession: (sessionId: string) => void; // Delete session callback
   onDeleteSessions: (sessionIds: string[]) => void; // Batch delete sessions callback
@@ -33,8 +35,9 @@ interface HistoryViewProps {
   onConvertToCliSession: (sessionId: string) => void; // Convert sidechain session to CLI session callback
 }
 
-const HistoryView = ({ historyData, currentProvider, currentSessionId, onLoadSession, onDeleteSession, onDeleteSessions, onExportSession, onToggleFavorite, onUpdateTitle, onConvertToCliSession }: HistoryViewProps) => {
+const HistoryView = ({ historyData, currentProvider, currentSessionId, currentSessionBusy, onLoadSession, onDeleteSession, onDeleteSessions, onExportSession, onToggleFavorite, onUpdateTitle, onConvertToCliSession }: HistoryViewProps) => {
   const { t } = useTranslation();
+  const [pendingDirectorySession, setPendingDirectorySession] = useState<HistorySessionSummary | null>(null);
   const [viewportHeight, setViewportHeight] = useState(() => window.innerHeight || 600);
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null); // Session ID pending deletion
   const [convertingSessionId, setConvertingSessionId] = useState<string | null>(null); // Session ID pending conversion
@@ -48,7 +51,13 @@ const HistoryView = ({ historyData, currentProvider, currentSessionId, onLoadSes
   const [copiedSessionId, setCopiedSessionId] = useState<string | null>(null); // Track which session ID was copied
   const [copyFailedSessionId, setCopyFailedSessionId] = useState<string | null>(null); // Track which session ID copy failed
 
-  const { sessions, infoBar } = useHistorySessions(historyData, searchQuery, t);
+  const { sessions: listedSessions, infoBar } = useHistorySessions(historyData, searchQuery, t);
+  const sessions = useMemo(() => listedSessions.map(session => {
+    if (currentProvider !== 'codex' || session.sessionId !== currentSessionId) return session;
+    // This window tracks its own turn live; a listed snapshot can outlive it.
+    const running = Boolean(currentSessionBusy) || session.ownedElsewhere === true;
+    return Boolean(session.running) === running ? session : { ...session, running };
+  }), [listedSessions, currentProvider, currentSessionId, currentSessionBusy]);
   const {
     isSelectionMode,
     selectedSessionIds,
@@ -104,8 +113,9 @@ const HistoryView = ({ historyData, currentProvider, currentSessionId, onLoadSes
   }, [historyData?.success, historyData?.total, historyData?.sessions]);
 
   const handleDeleteRequest = useCallback((sessionId: string) => {
+    if (sessions.some(session => session.sessionId === sessionId && session.running)) return;
     setDeletingSessionId(sessionId);
-  }, []);
+  }, [sessions]);
 
   const handleExportRequest = useCallback((sessionId: string, title: string) => {
     onExportSession(sessionId, title);
@@ -116,11 +126,17 @@ const HistoryView = ({ historyData, currentProvider, currentSessionId, onLoadSes
   }, [onToggleFavorite]);
 
   const confirmDelete = useCallback(() => {
-    if (deletingSessionId) {
+    if (deletingSessionId && !sessions.some(session => session.sessionId === deletingSessionId && session.running)) {
       onDeleteSession(deletingSessionId);
       setDeletingSessionId(null);
     }
-  }, [deletingSessionId, onDeleteSession]);
+  }, [deletingSessionId, sessions, onDeleteSession]);
+
+  useEffect(() => {
+    if (deletingSessionId && sessions.some(session => session.sessionId === deletingSessionId && session.running)) {
+      setDeletingSessionId(null);
+    }
+  }, [deletingSessionId, sessions]);
 
   const cancelDelete = useCallback(() => {
     setDeletingSessionId(null);
@@ -178,6 +194,10 @@ const HistoryView = ({ historyData, currentProvider, currentSessionId, onLoadSes
       return;
     }
     if (!isEditing) {
+      if (session.requiresCwdConfirmation && session.cwd) {
+        setPendingDirectorySession(session);
+        return;
+      }
       onLoadSession(session.sessionId, session.provider, session.model, session.agent);
     }
   }, [isSelectionMode, toggleSessionSelection, onLoadSession]);
@@ -287,6 +307,23 @@ const HistoryView = ({ historyData, currentProvider, currentSessionId, onLoadSes
           {t('history.loadMore', { defaultValue: 'Load more' })}
         </button>
       )}
+      <ConfirmDialog
+        isOpen={pendingDirectorySession !== null}
+        title={t('history.confirmDirectoryTitle', 'Open session in another directory?')}
+        message={t('history.confirmDirectoryMessage', 'Commands and file changes will run in the directory shown below.')}
+        confirmText={t('common.confirm')}
+        cancelText={t('common.cancel')}
+        onCancel={() => setPendingDirectorySession(null)}
+        onConfirm={() => {
+          if (pendingDirectorySession) {
+            onLoadSession(pendingDirectorySession.sessionId, pendingDirectorySession.provider,
+              pendingDirectorySession.model, pendingDirectorySession.agent);
+          }
+          setPendingDirectorySession(null);
+        }}
+      >
+        <code style={{ overflowWrap: 'anywhere' }}>{pendingDirectorySession?.cwd}</code>
+      </ConfirmDialog>
       <HistoryConfirmDialogs
         deletingSessionId={deletingSessionId}
         convertingSessionId={convertingSessionId}

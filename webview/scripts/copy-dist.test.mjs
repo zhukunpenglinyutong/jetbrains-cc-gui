@@ -19,6 +19,7 @@ const fixture = async (t, html) => {
   const assets = path.join(cwd, 'dist/assets');
   const resources = path.join(root, 'src/main/resources');
   await mkdir(assets, { recursive: true });
+  await writeFile(path.join(assets, 'index-style.css'), 'body {}');
   await writeFile(path.join(cwd, 'dist/index.html'), html);
   return { cwd, assets, resources };
 };
@@ -54,7 +55,10 @@ test('packages a small bootstrap and lossless compressed assets with valid modul
   assert.ok(Buffer.byteLength(bootstrap) < 32_768, 'per-tab HTML must not inline the bundle');
   assert.ok(bootstrap.includes(`${origin}/assets/index-entry.js.gz`));
   assert.ok(bootstrap.includes("DecompressionStream('gzip')"));
-  assert.ok(bootstrap.includes('URL.revokeObjectURL(objectUrl)'));
+  // The canonical entry URL is remapped to the evaluated blob via an import map,
+  // so lazy chunks that import it keep one shared module identity.
+  assert.ok(bootstrap.includes('importmap'));
+  assert.ok(bootstrap.includes(`"${origin}/assets/index-entry.js"`));
 
   const packaged = path.join(resources, 'webview/assets');
   const compressed = await readFile(path.join(packaged, 'index-entry.js.gz'));

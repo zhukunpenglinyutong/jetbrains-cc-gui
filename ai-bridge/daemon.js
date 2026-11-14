@@ -51,6 +51,7 @@ import {
   setPermissionModePersistent as grokSetPermissionModePersistent,
   getContextUsagePersistent as grokGetContextUsagePersistent,
   getUsagePersistent as grokGetUsagePersistent,
+  getPlanUsagePersistent as grokGetPlanUsagePersistent,
   getRuntimeSnapshot as getGrokRuntimeSnapshot
 } from './services/grok/persistent-acp-service.js';
 import {
@@ -680,6 +681,8 @@ async function runDaemonMain() {
   sendDaemonEvent('ready', {
     pid: process.pid,
     sdkPreloaded: false, // SDK is loading in the background
+    // WSL sets this in every process; Java checks it against the project's distro.
+    wslDistro: process.env.WSL_DISTRO_NAME,
   });
 
   // Pre-load SDK in the background (non-blocking). Errors are logged but do
@@ -729,7 +732,8 @@ async function runDaemonMain() {
     const claudeBusy = (claude.anonymousRuntimeCount || 0) > 0
       || (claude.sessionRuntimeCount || 0) > 0
       || !!claude.activeTurnEpoch;
-    const grokBusy = (grok.runtimeCount || 0) > 0 || (grok.activeTurnCount || 0) > 0;
+    const grokBusy = (grok.runtimeCount || 0) > 0 || (grok.activeTurnCount || 0) > 0
+      || grok.planUsageInFlight === true;
     const zcodeBusy = zcode.clientActive || zcode.turnActive;
     const codex = getCodexRuntimeSnapshot();
     const codexBusy = codex.busy || codex.sessionCount > 0;
@@ -800,7 +804,25 @@ async function runDaemonMain() {
       return;
     }
 
-    if (request.method !== 'heartbeat' && request.method !== 'status') {
+    if (request.method === 'grok.getPlanUsage' && (!isDaemonMode || idleShutdownInFlight)) {
+      writeRawLine({
+        id: request.id || '0',
+        done: true,
+        success: true,
+        result: {
+          present: false,
+          unavailable: true,
+          // An exiting daemon is not a billing failure: Java keeps the last reading and does not back off.
+          dormant: true,
+          provider: 'grok',
+          source: 'x.ai/billing',
+          message: 'Grok daemon is shutting down',
+        },
+      });
+      return;
+    }
+
+    if (request.method !== 'heartbeat' && request.method !== 'status' && request.method !== 'grok.getPlanUsage') {
       // A retired Java generation should not send commands here. Return an
       // explicit error if a stale writer races the final exit.
       if (!isDaemonMode) {
@@ -916,11 +938,13 @@ async function runDaemonMain() {
       const handler = request.method === 'codex.respondInteraction'
         ? codexRespondInteractionPersistent
         : codexRespondInteractionErrorPersistent;
-      handler(request.params || {})
-        .then(() => writeRawLine({ id: replyId, done: true, success: true }))
+      Promise.resolve().then(() => handler(request.params || {}))
+        .then((result) => writeRawLine({ id: replyId, done: true, success: true, result }))
         .catch((e) => {
           _originalStderrWrite('[daemon] codex interaction reply error: ' + (e.message || String(e)) + '\n');
-          writeRawLine({ id: replyId, done: true, success: false, error: e.message || String(e) });
+          // The code lets the host tell "answer again" from "this can no longer be delivered".
+          writeRawLine({ id: replyId, done: true, success: false, error: e.message || String(e),
+            ...(typeof e?.code === 'string' ? { code: e.code } : {}) });
         });
       return;
     }
@@ -929,7 +953,7 @@ async function runDaemonMain() {
     // must reach the service while the send operation still owns the queue.
     if (request.method === 'codex.abortTurn') {
       const abortId = request.id || '0';
-      codexAbortTurnPersistent(request.params || {})
+      Promise.resolve().then(() => codexAbortTurnPersistent(request.params || {}))
         .then((result) => writeRawLine({ id: abortId, done: true, success: true, result }))
         .catch((e) => {
           _originalStderrWrite('[daemon] codex.abortTurn error: ' + (e.message || String(e)) + '\n');
@@ -941,7 +965,7 @@ async function runDaemonMain() {
     if (request.method === 'codex.resetRuntime' || request.method === 'codex.releaseThread') {
       const handler = request.method === 'codex.resetRuntime'
         ? codexResetRuntimePersistent : codexReleaseThreadPersistent;
-      handler(request.params || {})
+      Promise.resolve().then(() => handler(request.params || {}))
         .then((result) => writeRawLine({ id: request.id || '0', done: true, success: true, result }))
         .catch((error) => writeRawLine({ id: request.id || '0', done: true, success: false,
           error: error?.message || String(error) }));
@@ -987,6 +1011,7 @@ async function runDaemonMain() {
       ['codex.listSkills', codexListSkillsPersistent],
       ['codex.getMcpStatus', codexGetMcpStatusPersistent],
       ['codex.reloadMcp', codexReloadMcpPersistent],
+      ['grok.getPlanUsage', grokGetPlanUsagePersistent],
     ]);
     const readOnlyHandler = readOnlyCodexMethods.get(request.method);
     if (readOnlyHandler) {

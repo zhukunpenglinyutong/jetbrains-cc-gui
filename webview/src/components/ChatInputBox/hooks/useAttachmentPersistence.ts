@@ -2,25 +2,11 @@ import { useCallback, useEffect, useRef } from 'react';
 import type { Attachment } from '../types.js';
 import { debugLog, debugError } from '../../../utils/debug.js';
 
-/** localStorage key for chat input attachments draft */
+/** Webview-local key; same-origin chat tabs must never restore each other's images. */
 export const ATTACHMENTS_DRAFT_KEY = 'chat-input-attachments-draft';
 
 /** Maximum size for serialized attachments draft (2MB) */
 const MAX_DRAFT_SIZE = 2097152; // 2 * 1024 * 1024
-
-/**
- * Check if localStorage is available and working
- */
-function canUseLocalStorage(): boolean {
-  try {
-    const testKey = '__localStorage_test__';
-    window.localStorage.setItem(testKey, 'test');
-    window.localStorage.removeItem(testKey);
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 /**
  * Check if error is a quota exceeded error
@@ -53,55 +39,60 @@ function isValidAttachment(obj: unknown): obj is Attachment {
 }
 
 /**
- * Save attachments draft to localStorage
+ * Clear stale data without allowing storage failures to interrupt input or submission.
+ */
+function discardAttachmentsDraft(): void {
+  try {
+    window.sessionStorage.removeItem(ATTACHMENTS_DRAFT_KEY);
+    debugLog('[AttachmentPersistence] Draft cleared');
+  } catch (error) {
+    debugError('[AttachmentPersistence] Failed to clear draft:', error);
+  }
+}
+
+/**
+ * Save attachments draft to sessionStorage
  * WARNING: Stores base64-encoded image data which can be large.
- * If size exceeds MAX_DRAFT_SIZE, silently skips save to prevent quota errors.
+ * Drop the previous draft if its replacement cannot be persisted, so removed images stay removed.
  */
 function saveAttachmentsDraft(attachments: Attachment[]): void {
-  if (!canUseLocalStorage()) {
+  if (attachments.length === 0) {
+    discardAttachmentsDraft();
     return;
   }
 
   try {
-    if (attachments.length === 0) {
-      // If no attachments, remove the draft
-      window.localStorage.removeItem(ATTACHMENTS_DRAFT_KEY);
-      debugLog('[AttachmentPersistence] Draft cleared');
-    } else {
-      const serialized = JSON.stringify(attachments);
+    const serialized = JSON.stringify(attachments);
 
-      // Check size before saving to prevent quota errors
-      if (serialized.length > MAX_DRAFT_SIZE) {
-        debugError(
-          `[AttachmentPersistence] Draft too large (${(serialized.length / 1024).toFixed(1)}KB), ` +
-          `max allowed is ${(MAX_DRAFT_SIZE / 1024).toFixed(0)}KB. Skipping save.`
-        );
-        return;
-      }
-
-      window.localStorage.setItem(ATTACHMENTS_DRAFT_KEY, serialized);
-      debugLog(`[AttachmentPersistence] Draft saved, count: ${attachments.length}, size: ${(serialized.length / 1024).toFixed(1)}KB`);
+    // Check size before saving to prevent quota errors.
+    if (serialized.length > MAX_DRAFT_SIZE) {
+      debugError(
+        `[AttachmentPersistence] Draft too large (${(serialized.length / 1024).toFixed(1)}KB), ` +
+        `max allowed is ${(MAX_DRAFT_SIZE / 1024).toFixed(0)}KB. Skipping save.`
+      );
+      discardAttachmentsDraft();
+      return;
     }
+
+    window.sessionStorage.setItem(ATTACHMENTS_DRAFT_KEY, serialized);
+    debugLog(`[AttachmentPersistence] Draft saved, count: ${attachments.length}, size: ${(serialized.length / 1024).toFixed(1)}KB`);
   } catch (error) {
     if (isQuotaExceededError(error)) {
       debugError('[AttachmentPersistence] Storage quota exceeded - cannot save attachments. Try removing some images.');
     } else {
       debugError('[AttachmentPersistence] Failed to save draft:', error);
     }
+    discardAttachmentsDraft();
   }
 }
 
 /**
- * Load attachments draft from localStorage
+ * Load attachments draft from sessionStorage
  * Validates each attachment structure to prevent crashes from corrupted data
  */
 function loadAttachmentsDraft(): Attachment[] {
-  if (!canUseLocalStorage()) {
-    return [];
-  }
-
   try {
-    const stored = window.localStorage.getItem(ATTACHMENTS_DRAFT_KEY);
+    const stored = window.sessionStorage.getItem(ATTACHMENTS_DRAFT_KEY);
     if (!stored) {
       return [];
     }
@@ -109,7 +100,7 @@ function loadAttachmentsDraft(): Attachment[] {
     const parsed = JSON.parse(stored);
     if (!Array.isArray(parsed)) {
       debugError('[AttachmentPersistence] Invalid draft format, expected array');
-      window.localStorage.removeItem(ATTACHMENTS_DRAFT_KEY);
+      window.sessionStorage.removeItem(ATTACHMENTS_DRAFT_KEY);
       return [];
     }
 
@@ -130,12 +121,7 @@ function loadAttachmentsDraft(): Attachment[] {
     return validAttachments;
   } catch (error) {
     debugError('[AttachmentPersistence] Failed to load draft:', error);
-    // Clear corrupted data
-    try {
-      window.localStorage.removeItem(ATTACHMENTS_DRAFT_KEY);
-    } catch {
-      // Ignore cleanup errors
-    }
+    discardAttachmentsDraft();
     return [];
   }
 }
@@ -151,32 +137,33 @@ export interface UseAttachmentPersistenceOptions {
    */
   isControlled: boolean;
   /**
-   * Callback to restore attachments from localStorage on mount
+   * Callback to restore attachments from sessionStorage on mount. It must adopt the
+   * given array as-is, so the follow-up save can recognize the restored state.
    */
   onRestore: (attachments: Attachment[]) => void;
 }
 
 export interface UseAttachmentPersistenceReturn {
   /**
-   * Save current attachments to localStorage
+   * Save current attachments to sessionStorage
    */
   saveDraft: () => void;
   /**
-   * Clear attachments draft from localStorage
+   * Clear attachments draft from sessionStorage
    */
   clearDraft: () => void;
 }
 
 /**
- * useAttachmentPersistence - Persist input box attachments to localStorage
+ * useAttachmentPersistence - Persist input box attachments to sessionStorage
  *
  * IMPORTANT: This hook stores attachment metadata AND base64-encoded image data
- * in localStorage, which has limited quota (typically 5-10MB per domain).
+ * in sessionStorage, which has limited quota (typically 5-10MB per domain).
  * Large images or multiple attachments may exceed the 2MB limit and fail to persist.
  *
  * Current Limitations:
  * - Max draft size: 2MB (base64 images can be 1-5MB each)
- * - If size exceeds limit, draft is silently skipped (logged to console)
+ * - If size exceeds limit or saving fails, the previous draft is discarded
  * - Consider IndexedDB for larger attachments in future
  *
  * Features:
@@ -184,14 +171,16 @@ export interface UseAttachmentPersistenceReturn {
  * - Auto-save on attachments change (via useEffect)
  * - Clear draft when attachments are submitted
  * - Validates attachment structure on load to prevent crashes
- * - Handles localStorage quota errors gracefully
+ * - Handles sessionStorage quota errors gracefully
  *
- * This ensures attachments survive page navigation (history/settings view switches).
- * Fixes bug where attachments were lost while text drafts were preserved.
+ * sessionStorage belongs to one top-level webview, so drafts survive input remounts
+ * and page reloads without leaking into another tab. Never migrate the old
+ * localStorage draft: it has no owner and may belong to a different conversation.
  *
  * @param options.attachments - Current attachments state
  * @param options.isControlled - Whether parent manages attachments (if true, persistence disabled)
- * @param options.onRestore - Callback to restore attachments from localStorage on mount
+ * @param options.onRestore - Callback to restore attachments from sessionStorage on mount;
+ *   it must adopt the given array as-is so the follow-up save can recognize the restore.
  * @returns Methods to manually save or clear draft (auto-save is default)
  */
 export function useAttachmentPersistence({
@@ -201,6 +190,7 @@ export function useAttachmentPersistence({
 }: UseAttachmentPersistenceOptions): UseAttachmentPersistenceReturn {
   const isFirstMountRef = useRef(true);
   const prevAttachmentsRef = useRef<Attachment[]>([]);
+  const restoredDraftRef = useRef<Attachment[] | null>(null);
 
   // Restore draft on mount (uncontrolled mode only)
   useEffect(() => {
@@ -211,6 +201,7 @@ export function useAttachmentPersistence({
 
     const draft = loadAttachmentsDraft();
     if (draft.length > 0) {
+      restoredDraftRef.current = draft;
       onRestore(draft);
     }
   }, [isControlled, onRestore]);
@@ -228,6 +219,11 @@ export function useAttachmentPersistence({
     if (!hasChanged) return;
 
     prevAttachmentsRef.current = attachments;
+    // Restoring already-persisted data must not rewrite it, especially when storage is full.
+    const restoredDraft = restoredDraftRef.current;
+    restoredDraftRef.current = null;
+    if (attachments === restoredDraft) return;
+
     saveAttachmentsDraft(attachments);
   }, [attachments, isControlled]);
 
@@ -236,13 +232,5 @@ export function useAttachmentPersistence({
     saveAttachmentsDraft(attachments);
   }, [attachments]);
 
-  // Clear draft (stable reference - no dependencies)
-  const clearDraft = useCallback(() => {
-    if (canUseLocalStorage()) {
-      window.localStorage.removeItem(ATTACHMENTS_DRAFT_KEY);
-      debugLog('[AttachmentPersistence] Draft cleared manually');
-    }
-  }, []);
-
-  return { saveDraft, clearDraft };
+  return { saveDraft, clearDraft: discardAttachmentsDraft };
 }

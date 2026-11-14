@@ -11,6 +11,7 @@ export function ChatInputBoxHeader({
   sdkStatusError,
   sdkInstalled,
   currentProvider,
+  selectedModel,
   onRetrySdkStatus,
   onInstallSdk,
   t,
@@ -32,6 +33,7 @@ export function ChatInputBoxHeader({
   onToggleStatusPanel,
   messageQueue,
   onRemoveFromQueue,
+  onEditFromQueue,
   onReorderQueue,
   showOpenSourceBanner,
   onDismissOpenSourceBanner,
@@ -42,6 +44,7 @@ export function ChatInputBoxHeader({
   sdkStatusLoading: boolean;
   sdkStatusError: boolean;
   currentProvider: string;
+  selectedModel?: string;
   onRetrySdkStatus?: () => void;
   onInstallSdk?: () => void;
   t: TFunction;
@@ -63,6 +66,7 @@ export function ChatInputBoxHeader({
   onToggleStatusPanel?: () => void;
   messageQueue?: QueuedMessage[];
   onRemoveFromQueue?: (id: string) => void;
+  onEditFromQueue?: (id: string) => void;
   onReorderQueue?: (orderedIds: string[]) => void;
   showOpenSourceBanner?: boolean;
   onDismissOpenSourceBanner?: () => void;
@@ -94,7 +98,9 @@ export function ChatInputBoxHeader({
         <MessageQueue
           queue={messageQueue}
           onRemove={onRemoveFromQueue ?? (() => {})}
+          onEdit={onEditFromQueue}
           onReorder={onReorderQueue}
+          t={t}
         />
       )}
 
@@ -116,6 +122,7 @@ export function ChatInputBoxHeader({
         selectedAgent={selectedAgent}
         onClearAgent={onClearAgent}
         currentProvider={currentProvider}
+        selectedModel={selectedModel}
         hasMessages={hasMessages}
         onRewind={onRewind}
         statusPanelExpanded={statusPanelExpanded}

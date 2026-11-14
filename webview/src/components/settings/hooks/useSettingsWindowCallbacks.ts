@@ -18,6 +18,7 @@ import {
   subscribeProviderList,
 } from '../../../utils/runtimeProviderCapabilities';
 import { scheduleBatchedBridgeRequests } from './scheduleBatchedBridgeRequests';
+import { clampHistoryLoadTimeoutSeconds } from '../../../utils/historyLoadTimeout';
 
 const sendToJava = (message: string) => {
   if (window.sendToJava) {
@@ -35,6 +36,8 @@ export const SETTINGS_BOOTSTRAP_BRIDGE_MESSAGES = [
   'get_claude_cli_path:',
   'get_working_directory:',
   'get_streaming_enabled:',
+  'get_load_history_on_startup:',
+  'get_history_load_timeout:',
   'get_codex_sandbox_mode:',
   'get_permission_dialog_timeout:',
   // Appearance fonts
@@ -45,6 +48,7 @@ export const SETTINGS_BOOTSTRAP_BRIDGE_MESSAGES = [
   'get_sound_notification_config:',
   'get_commit_generation_enabled:',
   'get_ai_title_generation_enabled:',
+  'get_session_git_repository_matching_enabled:',
   'get_status_bar_widget_enabled:',
   'get_task_completion_notification_enabled:',
   'get_ask_user_question_notification_enabled:',
@@ -76,11 +80,10 @@ export interface SettingsWindowCallbacksDeps {
   setCodeFontConfig: (config: CodeFontConfig | undefined) => void;
   setIdeTheme: (theme: 'light' | 'dark' | null) => void;
   setLocalStreamingEnabled: (enabled: boolean) => void;
+  setLoadHistoryOnStartup?: (enabled: boolean) => void;
+  setHistoryLoadTimeoutSeconds?: (seconds: number) => void;
   setCodexSandboxMode?: (mode: 'read-only' | 'workspace-write' | 'danger-full-access') => void;
   setCodexSandboxSource?: (source: string) => void;
-  setCodexSandboxDesired?: (mode: 'read-only' | 'workspace-write' | 'danger-full-access') => void;
-  setCodexSandboxEffective?: (mode: 'read-only' | 'workspace-write' | 'danger-full-access') => void;
-  setCodexSandboxConflict?: (conflict: boolean) => void;
   setLocalSendShortcut: (shortcut: 'enter' | 'cmdEnter') => void;
   setLoading: (loading: boolean) => void;
   setCodexLoading: (loading: boolean) => void;
@@ -88,6 +91,7 @@ export interface SettingsWindowCallbacksDeps {
   // AI feature toggle setters
   setCommitGenerationEnabled?: (enabled: boolean) => void;
   setAiTitleGenerationEnabled?: (enabled: boolean) => void;
+  setSessionGitRepositoryMatchingEnabled?: (enabled: boolean) => void;
   setStatusBarWidgetEnabled?: (enabled: boolean) => void;
   setTaskCompletionNotificationEnabled?: (enabled: boolean) => void;
   setAskUserQuestionNotificationEnabled?: (enabled: boolean) => void;
@@ -291,24 +295,37 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       };
     }
 
-    // Codex sandbox mode callback
+    const previousUpdateLoadHistoryOnStartup = window.updateLoadHistoryOnStartup;
+    window.updateLoadHistoryOnStartup = (jsonStr: string) => {
+      try {
+        const data = JSON.parse(jsonStr);
+        d().setLoadHistoryOnStartup?.(data.loadHistoryOnStartup ?? true);
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse load history on startup config:', error);
+      }
+    };
+
+    const previousUpdateHistoryLoadTimeout = window.updateHistoryLoadTimeout;
+    window.updateHistoryLoadTimeout = (jsonStr: string) => {
+      try {
+        const data = JSON.parse(jsonStr);
+        if (typeof data.historyLoadTimeoutSeconds === 'number') {
+          d().setHistoryLoadTimeoutSeconds?.(clampHistoryLoadTimeoutSeconds(data.historyLoadTimeoutSeconds));
+        }
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse history load timeout:', error);
+      }
+    };
+
+    // Codex sandbox callback: the legacy project record only. Desired/effective
+    // are never reported by the host — the live scope comes from the chat state
+    // and the app-server's own thread/settings/updated echo.
     window.updateCodexSandboxMode = (jsonStr: string) => {
       try {
         const data = JSON.parse(jsonStr);
         const mode = data?.sandboxMode;
         if (mode === 'read-only' || mode === 'workspace-write' || mode === 'danger-full-access') {
           d().setCodexSandboxMode?.(mode);
-        }
-        const desired = data?.sandboxDesired;
-        if (desired === 'read-only' || desired === 'workspace-write' || desired === 'danger-full-access') {
-          d().setCodexSandboxDesired?.(desired);
-        }
-        const effective = data?.sandboxEffective;
-        if (effective === 'read-only' || effective === 'workspace-write' || effective === 'danger-full-access') {
-          d().setCodexSandboxEffective?.(effective);
-        }
-        if (typeof data?.sandboxConflict === 'boolean') {
-          d().setCodexSandboxConflict?.(data.sandboxConflict);
         }
         if (typeof data?.sandboxSource === 'string') {
           d().setCodexSandboxSource?.(data.sandboxSource);
@@ -401,6 +418,15 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
         d().setAiTitleGenerationEnabled?.(data.aiTitleGenerationEnabled ?? true);
       } catch (error) {
         console.error('[SettingsView] Failed to parse AI title generation config:', error);
+      }
+    };
+
+    window.updateSessionGitRepositoryMatchingEnabled = (jsonStr: string) => {
+      try {
+        const data = JSON.parse(jsonStr);
+        d().setSessionGitRepositoryMatchingEnabled?.(data.sessionGitRepositoryMatchingEnabled === true);
+      } catch (error) {
+        console.error('[SettingsView] Failed to parse session repository matching config:', error);
       }
     };
 
@@ -626,6 +652,8 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       if (!d().onStreamingEnabledChangeProp) {
         window.updateStreamingEnabled = previousUpdateStreamingEnabled;
       }
+      window.updateLoadHistoryOnStartup = previousUpdateLoadHistoryOnStartup;
+      window.updateHistoryLoadTimeout = previousUpdateHistoryLoadTimeout;
       window.updateCodexSandboxMode = undefined;
       if (!d().onSendShortcutChangeProp) {
         window.updateSendShortcut = previousUpdateSendShortcut;
@@ -637,6 +665,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       window.updateSoundNotificationConfig = undefined;
       window.updateCommitGenerationEnabled = undefined;
       window.updateAiTitleGenerationEnabled = undefined;
+      window.updateSessionGitRepositoryMatchingEnabled = undefined;
       window.updateStatusBarWidgetEnabled = undefined;
       window.updateTaskCompletionNotificationEnabled = undefined;
       window.updateAskUserQuestionNotificationEnabled = undefined;

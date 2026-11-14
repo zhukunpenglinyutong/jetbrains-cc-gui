@@ -10,8 +10,10 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 
 import javax.swing.*;
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -95,10 +97,21 @@ public class McpServerHandler extends BaseMessageHandler {
                 callJavaScript("window.updateMcpServers", escapeJs(serversJson));
             });
         } catch (Exception e) {
-            LOG.error("[McpServerHandler] Failed to get MCP servers: " + e.getMessage(), e);
-            // Send empty array so frontend exits loading state instead of hanging
+            String reason = Objects.toString(e.getMessage(), e.getClass().getSimpleName());
+            if (e instanceof IOException) {
+                // A user-fixable config state (e.g. an unreadable ~/.claude.json): the
+                // toast below reports it, so skip the IDE's internal-error notice.
+                LOG.warn("[McpServerHandler] Failed to get MCP servers: " + reason, e);
+            } else {
+                LOG.error("[McpServerHandler] Failed to get MCP servers: " + reason, e);
+            }
+            // Send empty array so frontend exits loading state instead of hanging,
+            // and say why: a silent empty list looks exactly like lost servers.
             ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.updateMcpServers", escapeJs("[]"));
+                String errorMsg = escapeJs(com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message(
+                        "mcp.loadServersFailedWithReason", reason));
+                callJavaScript("window.showError", errorMsg);
             });
         }
     }
