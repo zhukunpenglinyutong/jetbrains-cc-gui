@@ -1307,6 +1307,11 @@ public class CodexSDKBridge extends BaseSDKBridge {
         try {
             new com.github.claudecodegui.settings.CodexSettingsManager(this.gson, Path.of(this.ownerScope))
                     .prepareNativeConfig(this::isCodexRuntimeAccessAllowed);
+        } catch (Exception error) {
+            // Separating plugin aliases only removes a CLI warning; it must never block a turn.
+            LOG.warn("[Codex] Skipped plugin alias separation: " + error.getMessage());
+        }
+        try {
             JsonObject provider = this.settingsService.getActiveCodexProvider();
             if (provider != null) {
                 byte[] digest = java.security.MessageDigest.getInstance("SHA-256").digest(
