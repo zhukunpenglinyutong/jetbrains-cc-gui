@@ -7,6 +7,9 @@ import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.provider.grok.GrokSDKBridge;
 import com.github.claudecodegui.provider.common.MarkerCliBridge;
 import com.github.claudecodegui.provider.zcode.ZcodeSDKBridge;
+import com.github.claudecodegui.settings.CodemossSettingsService;
+import com.github.claudecodegui.settings.SessionSupplierCatalog;
+import com.github.claudecodegui.settings.SessionSupplierStateService;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
@@ -241,6 +244,9 @@ public class ClaudeSession {
 
         // Initialize managers
         this.state = new com.github.claudecodegui.session.SessionState();
+        if (project != null) {
+            initializeSupplierDefaults();
+        }
         this.messageParser = new com.github.claudecodegui.session.MessageParser();
         this.messageMerger = new com.github.claudecodegui.session.MessageMerger();
         this.contextCollector = new com.github.claudecodegui.session.EditorContextCollector(project);
@@ -445,7 +451,23 @@ public class ClaudeSession {
 
     /** Correlates restored identity with the history transition that accepted it. */
     public void setSessionInfo(String sessionId, String cwd, String transitionToken) {
+        setSessionInfo(sessionId, cwd, transitionToken, null);
+    }
+
+    /** Restore an explicit tab binding before publishing the restored session identity. */
+    public void setSessionInfo(String sessionId, String cwd, String transitionToken, String restoredSupplierId) {
         synchronized (this.state.getMessageStateLock()) {
+            if (restoredSupplierId != null && SessionSupplierCatalog.supports(state.getProvider())) {
+                state.setSupplierId(state.getProvider(), restoredSupplierId);
+            } else if (project != null && sessionId != null && SessionSupplierCatalog.supports(state.getProvider())) {
+                SessionSupplierStateService bindings = SessionSupplierStateService.getInstance();
+                String savedSupplier = bindings == null ? null : bindings.getSupplier(state.getProvider(), sessionId);
+                if (savedSupplier != null) {
+                    state.setSupplierId(state.getProvider(), savedSupplier);
+                } else if (!Objects.equals(sessionId, state.getSessionId())) {
+                    state.setSupplierId(state.getProvider(), SessionSupplierCatalog.defaultId(new CodemossSettingsService(), state.getProvider()));
+                }
+            }
             if ("codex".equals(this.state.getProvider())
                     && !Objects.equals(sessionId, this.state.getSessionId())) {
                 // Codex history reuses this facade. Retire the old receiver and
@@ -876,6 +898,7 @@ public class ClaudeSession {
             Boolean requestedClaudeUltracode
     ) {
         lastTurnStartedAtMillis = System.currentTimeMillis();
+        initializeSupplierDefaults();
         // Reset the manual-interrupt flag at the start of a new turn so that
         // a fresh send is not mistaken for a user-initiated stop.
         manuallyInterrupted = false;
@@ -946,6 +969,15 @@ public class ClaudeSession {
 
     private CompletableFuture<Void> syncUserMessageUuidsAfterSend() {
         return messageOrchestrator.syncUserMessageUuidsAfterSend();
+    }
+
+    private void initializeSupplierDefaults() {
+        CodemossSettingsService settings = new CodemossSettingsService();
+        for (String engine : List.of("claude", "codex")) {
+            if (state.getSupplierId(engine) == null) {
+                state.setSupplierId(engine, SessionSupplierCatalog.defaultId(settings, engine));
+            }
+        }
     }
 
     /**

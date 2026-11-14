@@ -328,6 +328,9 @@ public class ClaudeChatWindow {
 
         this.session = new ClaudeSession(
                 project, claudeSDKBridge, codexSDKBridge, cliBridges, grokSDKBridge, zcodeSDKBridge);
+        // Bind to the installed session, never to temporary lifecycle/default sessions.
+        this.claudeSDKBridge.setSessionSupplierResolver(() -> this.session.getState().getRuntimeSupplierId("claude"));
+        this.codexSDKBridge.setSessionSupplierResolver(() -> this.session.getState().getRuntimeSupplierId("codex"));
 
         this.chatWindowDelegate = new ChatWindowDelegate(createDelegateHost());
         chatWindowDelegate.loadPermissionModeFromSettings();
@@ -1664,6 +1667,12 @@ public class ClaudeChatWindow {
         if (savedState.permissionMode != null && !savedState.permissionMode.trim().isEmpty()) {
             session.setPermissionMode(savedState.permissionMode);
         }
+        if (savedState.claudeSupplierId != null) {
+            session.getState().setSupplierId("claude", savedState.claudeSupplierId);
+        }
+        if (savedState.codexSupplierId != null) {
+            session.getState().setSupplierId("codex", savedState.codexSupplierId);
+        }
         if (savedState.provider != null && !savedState.provider.trim().isEmpty()) {
             session.setProvider(savedState.provider);
             // HandlerContext keeps its own currentProvider (read by
@@ -1707,7 +1716,8 @@ public class ClaudeChatWindow {
                     + savedState.projectPath + ", currentProject="
                     + (project != null ? project.getBasePath() : null));
         }
-        session.setSessionInfo(restoredSessionId, restoredCwd);
+        String restoredSupplier = "codex".equals(session.getProvider()) ? savedState.codexSupplierId : savedState.claudeSupplierId;
+        session.setSessionInfo(restoredSessionId, restoredCwd, null, restoredSupplier);
         restoredHistory.bind(session, restoredSessionId);
         restoredHistoryLoadState = null;
         chatWindowDelegate.restoreUnread(sameProject && savedState.unread);
@@ -3257,6 +3267,10 @@ public class ClaudeChatWindow {
         if (project == null || project.isDisposed() || session == null) {
             return;
         }
+        var supplierBindings = com.github.claudecodegui.settings.SessionSupplierStateService.getInstance();
+        if (supplierBindings != null) {
+            supplierBindings.saveSupplier(session.getProvider(), session.getSessionId(), session.getState().getSupplierId(session.getProvider()));
+        }
 
         int tabIndex = getTabIndex();
         if (tabIndex < 0) {
@@ -3272,6 +3286,8 @@ public class ClaudeChatWindow {
         snapshot.model = session.getModel();
         snapshot.permissionMode = session.getPermissionMode();
         snapshot.reasoningEffort = session.getReasoningEffort();
+        snapshot.claudeSupplierId = session.getState().getSupplierId("claude");
+        snapshot.codexSupplierId = session.getState().getSupplierId("codex");
         snapshot.ompApprovalMode = session.getState().getOmpApprovalMode();
         snapshot.unread = chatWindowDelegate.hasUnread();
         snapshot.claudeUltracode = session.isClaudeUltracode();
@@ -3855,6 +3871,7 @@ public class ClaudeChatWindow {
             @Override
             public void setHandlerContext(HandlerContext ctx) {
                 handlerContext = ctx;
+                ctx.setSessionPreferencesChanged(ClaudeChatWindow.this::persistTabSessionState);
             }
 
             @Override

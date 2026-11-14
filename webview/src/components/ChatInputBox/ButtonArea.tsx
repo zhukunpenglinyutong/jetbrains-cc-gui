@@ -80,7 +80,7 @@ export const ButtonArea = ({
   const { t } = useTranslation();
   // const fileInputRef = useRef<HTMLInputElement>(null);
   const { cliModels, cliModelsLoading, cliModelsError, cliDefaultModel, cliCatalogHasEntries, cliModelsReplaceBuiltIns,
-    cliModelsLoaded, cliReasoningCapabilitiesUnconfirmed, refreshCliModels } = useCliModels(currentProvider);
+    cliModelsLoaded, cliReasoningCapabilitiesUnconfirmed, refreshCliModels } = useCliModels(currentProvider, 'session');
   // Dynamic omp roles (static smol/slow/plan fallback until loaded).
   const ompRoles = useOmpRoles();
 

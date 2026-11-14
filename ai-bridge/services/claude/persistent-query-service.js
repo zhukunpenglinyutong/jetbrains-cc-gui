@@ -11,6 +11,7 @@ import {
   buildWebviewControlledSettingsOverride,
 } from '../../config/api-config.js';
 import { selectWorkingDirectory } from '../../utils/path-utils.js';
+import { buildSessionClaudeConfig, buildSessionClaudeSettingsOverride } from '../../config/session-supplier.js';
 import {
   resolveModelFromSettings,
   resolveSdkModelName,
@@ -167,7 +168,7 @@ function resolveRequestModelState(modelId, settingsEnv) {
   };
 }
 
-function buildQueryOptions(workingDirectory, sdkModelName, permissionMode, maxThinkingTokens, reasoningEffort, streamingEnabled, systemPromptAppend, requestedSessionId, mcpServers, modelId, settingsEnv, resolvedModelId, ultracode) {
+function buildQueryOptions(workingDirectory, sdkModelName, permissionMode, maxThinkingTokens, reasoningEffort, streamingEnabled, systemPromptAppend, requestedSessionId, mcpServers, modelId, settingsEnv, resolvedModelId, ultracode, childEnv) {
   const claudeCliOverride = getClaudeCliPathOverride();
   return {
     cwd: workingDirectory,
@@ -175,7 +176,7 @@ function buildQueryOptions(workingDirectory, sdkModelName, permissionMode, maxTh
     model: sdkModelName,
     maxTurns: 1000,
     enableFileCheckpointing: true,
-    env: buildCliEnv(),
+    env: childEnv ?? buildCliEnv(),
     settings: withUltracodeSetting(buildWebviewControlledSettingsOverride(modelId, settingsEnv, resolvedModelId), ultracode),
     ...(reasoningEffort && { effort: reasoningEffort }),
     ...(maxThinkingTokens !== undefined && { maxThinkingTokens }),
@@ -224,7 +225,8 @@ async function buildUserMessage(params, withAttachments, requestedSessionId) {
 }
 
 async function buildRequestContext(params, withAttachments, overrides = {}) {
-  setupApiKey();
+  const supplier = buildSessionClaudeConfig(params.supplierId);
+  if (!supplier) setupApiKey();
 
   const baseUrl = process.env.ANTHROPIC_BASE_URL || process.env.ANTHROPIC_API_URL || '';
   if (isCustomBaseUrl(baseUrl)) {
@@ -245,10 +247,10 @@ async function buildRequestContext(params, withAttachments, overrides = {}) {
     console.error('[WARNING] Failed to change process.cwd():', error.message);
   }
 
-  const settings = overrides.settings ?? loadClaudeSettings();
+  const settings = overrides.settings ?? supplier?.settings ?? loadClaudeSettings();
   const modelId = params.model || null;
   const { sdkModelName, resolvedModelId } = resolveRequestModelState(modelId, settings?.env);
-  setModelEnvironmentVariables(resolvedModelId, modelId, settings?.env);
+  setModelEnvironmentVariables(resolvedModelId, modelId, settings?.env, supplier?.env ?? process.env);
 
   const permissionMode = normalizePermissionMode(params.permissionMode);
   const streamingEnabled = resolveStreamingEnabled(params, settings);
@@ -261,12 +263,14 @@ async function buildRequestContext(params, withAttachments, overrides = {}) {
   const options = buildQueryOptions(
     workingDirectory, sdkModelName, permissionMode,
     maxThinkingTokens, reasoningEffort, streamingEnabled, systemPromptAppend, requestedSessionId,
-    mcpServers, modelId, settings?.env, resolvedModelId, params.ultracode
+    mcpServers, modelId, settings?.env, resolvedModelId, params.ultracode, supplier?.env
   );
+  options.settings = buildSessionClaudeSettingsOverride(supplier, options.settings);
 
   const userMessage = await buildUserMessage(params, withAttachments, requestedSessionId);
 
-  const runtimeSignature = buildRuntimeSignature(options, systemPromptAppend, streamingEnabled, runtimeSessionEpoch, modelId);
+  const runtimeSignature = buildRuntimeSignature(options, systemPromptAppend, streamingEnabled, runtimeSessionEpoch, modelId)
+    + (supplier ? `:${supplier.revision}` : '');
   console.log('[LIFECYCLE] buildRequestContext sessionId=' + (requestedSessionId || '(new)')
     + ' epoch=' + (runtimeSessionEpoch || '(none)')
     + ' signature=' + runtimeSignature);
@@ -275,6 +279,7 @@ async function buildRequestContext(params, withAttachments, overrides = {}) {
     requestedSessionId,
     runtimeSessionEpoch,
     executionScope: params.executionScope,
+    supplier,
     streamingEnabled,
     options,
     userMessage,
@@ -512,7 +517,7 @@ _runtimeCleanupTimer.unref();
       runtime.titleGenerationAttempted = true;
       const userMessageText = extractUserMessageText(requestContext.userMessage);
       if (userMessageText) {
-        generateSessionTitle(userMessageText, finalSessionId, requestContext.options.cwd)
+        generateSessionTitle(userMessageText, finalSessionId, requestContext.options.cwd, requestContext.supplier)
           .then((completed) => {
             if (!completed) {
               runtime.titleGenerationAttempted = false;
@@ -957,9 +962,6 @@ export async function getContextUsagePersistent(params = {}) {
   const sessionId = safeParams.sessionId || null;
   const modelId = safeParams.model || null; // Original model ID, may contain [1m] suffix
   return withScopedContextWindowPreference(modelId, async () => {
-    const settings = loadClaudeSettings();
-    const { resolvedModelId } = resolveRequestModelState(modelId, settings?.env);
-    const targetModel = resolvedModelId || modelId || null;
     let runtime = null;
 
     // Try to find the runtime for the specific session first
@@ -974,9 +976,20 @@ export async function getContextUsagePersistent(params = {}) {
       }
     }
 
-    const mustRecreate = shouldRecreateRuntimeForModel(runtime, modelId);
+    // A status read must never replace or reconfigure a running turn, even if
+    // the saved supplier was edited or deleted after that turn started.
+    const active = runtime && !runtime.closed && ((runtime.activeTurnCount || 0) > 0
+      || runtime.cliTurnInFlight || runtime.backgroundTaskIds?.size > 0);
+    if (active && safeParams.runtimeSessionEpoch && runtime.runtimeSessionEpoch !== safeParams.runtimeSessionEpoch) {
+      throw new Error('The runtime session changed. Refresh the context usage query.');
+    }
+    const supplier = active ? null : buildSessionClaudeConfig(safeParams.supplierId);
+    const settings = active ? null : supplier?.settings ?? loadClaudeSettings();
+    const { resolvedModelId } = resolveRequestModelState(modelId, settings?.env);
+    const targetModel = resolvedModelId || modelId || null;
+    const mustRecreate = !active && shouldRecreateRuntimeForModel(runtime, modelId);
 
-    if (!runtime || runtime.closed || mustRecreate) {
+    if (!active && (!runtime || runtime.closed || mustRecreate || supplier)) {
       if (mustRecreate && runtime && !runtime.closed) {
         await disposeRuntime(runtime, { removeSession });
         runtime = null;
@@ -985,7 +998,7 @@ export async function getContextUsagePersistent(params = {}) {
         await buildRequestContext(safeParams, false)
       );
       runtime = await acquireRuntime(requestContext, { registerActiveQueryResult, removeSession });
-    } else {
+    } else if (!active) {
       // Fast path: reuse existing runtime with minimal model sync.
       // Only map the model ID and call setModel if needed - skip full buildRequestContext
       // which would unnecessarily load MCP config, settings, etc.
@@ -996,7 +1009,7 @@ export async function getContextUsagePersistent(params = {}) {
       setModelEnvironmentVariables(targetModel, modelId, settings?.env);
     }
 
-    if (typeof runtime.query?.setModel === 'function') {
+    if (!active && typeof runtime.query?.setModel === 'function') {
       try {
         await runtime.query.setModel(targetModel || undefined);
         runtime.currentModel = targetModel;

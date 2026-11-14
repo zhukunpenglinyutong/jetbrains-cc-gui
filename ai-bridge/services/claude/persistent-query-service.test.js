@@ -5,8 +5,34 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { __testing } from './persistent-query-service.js';
+import { __testing, getContextUsagePersistent } from './persistent-query-service.js';
 import { createTurnSink } from './runtime-lifecycle.js';
+
+test('context usage preserves the active supplier runtime after its configuration disappears', async () => {
+  let modelChanges = 0;
+  let reads = 0;
+  const runtime = {
+    closed: false, sessionId: 'supplier-status-session', runtimeSessionEpoch: 'supplier-status-epoch',
+    activeTurnCount: 1, modelId: 'claude-sonnet-5',
+    query: {
+      async getContextUsage() { reads++; return { totalTokens: 42 }; },
+      async setModel() { modelChanges++; },
+    },
+  };
+  __testing.setActiveTurnRuntime(runtime);
+  try {
+    await getContextUsagePersistent({ sessionId: runtime.sessionId, runtimeSessionEpoch: runtime.runtimeSessionEpoch,
+      model: 'claude-sonnet-5[1m]', supplierId: 'deleted-supplier-fixture' });
+    assert.equal(reads, 1);
+    assert.equal(modelChanges, 0);
+    assert.equal(runtime.closed, false);
+    assert.equal(__testing.getActiveTurnRuntime(), runtime);
+    await assert.rejects(getContextUsagePersistent({ sessionId: runtime.sessionId, runtimeSessionEpoch: 'stale-epoch' }),
+      /runtime session changed/);
+  } finally {
+    __testing.setActiveTurnRuntime(null);
+  }
+});
 
 test('abortCurrentTurn marks runtime as user-aborted before disposing it', async () => {
   let disposed = false;

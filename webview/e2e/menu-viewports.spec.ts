@@ -121,6 +121,15 @@ async function installBridgeMocks(page: Page, customModels = [LONG_MODEL]) {
       if (message.startsWith('get_node_processes:')) respond('updateNodeProcesses', processSnapshot);
       if (message.startsWith('get_providers:')) respond('updateProviders', claudeProviders);
       if (message.startsWith('get_codex_providers:')) respond('updateCodexProviders', codexProviders);
+      if (message.startsWith('get_session_suppliers:')) {
+        const request = JSON.parse(message.slice('get_session_suppliers:'.length));
+        const providers = request.provider === 'codex' ? codexProviders : claudeProviders;
+        respond('onSessionSuppliers', { ...request, sessionId: null, bindingToken: 'viewport-binding',
+          supplierId: providers[0].id, activeSupplierId: providers[0].id,
+          suppliers: providers.map(provider => ({ id: provider.id, name: provider.name, available: true })),
+          modelCatalog: { models, defaultModel: null, replaceBuiltInOptions: false },
+        });
+      }
     };
   }, {
     processSnapshot: NODE_PROCESS_SNAPSHOT,

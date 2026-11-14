@@ -1,4 +1,10 @@
 {
+  "sessionSupplier": {
+    "label": "供应商",
+    "choose": "请选择供应商",
+    "nextTurn": "下一轮生效",
+    "unavailable": "供应商不可用，请重新打开菜单重试或选择其他供应商。"
+  },
   "startupHistory": {
     "unloaded": "该恢复会话的历史消息尚未加载。",
     "loading": "正在加载会话历史…",

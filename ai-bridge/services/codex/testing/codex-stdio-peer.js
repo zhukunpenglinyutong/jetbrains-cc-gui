@@ -24,6 +24,8 @@ import { createInterface } from 'node:readline';
 import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createHash, randomUUID } from 'node:crypto';
+import { parse } from 'smol-toml';
 
 export const PEER_PROTOCOL_VERSION = 1;
 
@@ -111,11 +113,11 @@ export class PeerTrace {
   }
 }
 
-function turnCompleted(turnId, status = 'completed') {
+function turnCompleted(turnId, status = 'completed', threadId = THREAD_ID) {
   return {
     method: 'turn/completed',
     params: {
-      threadId: THREAD_ID,
+      threadId,
       turn: { id: turnId, status, error: null },
       usage: null,
     },
@@ -126,7 +128,56 @@ function normalizedServiceTier(tier) {
   return tier === 'fast' ? 'priority' : tier === null ? 'default' : tier;
 }
 
+function nativeProviderOverrides() {
+  return Object.assign({}, ...process.argv.flatMap((arg, index, argv) =>
+    arg === '-c' ? [parse(argv[index + 1])] : []));
+}
+
 export const SCENARIOS = {
+  'session-supplier': {
+    async onThreadStart(params, ctx) {
+      ctx.threadSettings = params;
+      ctx.reply(ctx.currentId, makeThreadStartResponse(params));
+    },
+    async onThreadResume(params, ctx) {
+      if (params.threadId === 'th-test-legacy-supplier') {
+        const currentModelProvider = nativeProviderOverrides().model_provider;
+        if (currentModelProvider !== 'OpenAI') {
+          ctx.replyError(ctx.currentId, { code: -32600,
+            message: 'This chat uses OpenAI, but the current provider differs',
+            data: { type: 'modelProviderMismatch', modelProvider: 'OpenAI', currentModelProvider } });
+          return;
+        }
+      }
+      return SCENARIOS['session-supplier'].onThreadStart(params, ctx);
+    },
+    async onTurnsList(_params, ctx) {
+      ctx.reply(ctx.currentId, { data: [{ id: ctx.supplierTurnId, status: 'completed', items: [ctx.supplierPlan] }], nextCursor: null });
+    },
+    async onTurnStart(params, ctx) {
+      const overrides = nativeProviderOverrides();
+      const providerId = ctx.threadSettings.modelProvider;
+      if (overrides.model_provider !== providerId || !overrides.model_providers?.[providerId]) {
+        ctx.replyError(ctx.currentId, { code: -32600,
+          message: `This chat uses ${providerId}, but the process provider does not match` });
+        return;
+      }
+      const turnId = `supplier-turn-${randomUUID()}`;
+      ctx.supplierTurnId = turnId;
+      ctx.supplierPlan = { id: `supplier-plan-${turnId}`, type: 'plan', text: 'authoritative supplier plan', status: 'completed' };
+      ctx.reply(ctx.currentId, { turn: { id: turnId } });
+      await ctx.sleep(40);
+      const entry = overrides.model_providers[providerId];
+      ctx.notify({ method: 'item/completed', params: { threadId: params.threadId, turnId,
+        item: { id: `supplier-status-${turnId}`, type: 'agentMessage', text: JSON.stringify({
+          baseUrl: entry?.base_url, providerId, codexHome: process.env.CODEX_HOME,
+          model: params.model, collaborationMode: params.collaborationMode,
+          credentialHash: createHash('sha256').update(process.env[entry?.env_key] || '').digest('hex'),
+        }) } } });
+      ctx.notify({ method: 'item/completed', params: { threadId: params.threadId, turnId, item: ctx.supplierPlan } });
+      ctx.notify(turnCompleted(turnId, 'completed', params.threadId));
+    },
+  },
   'credential-env': {
     async onTurnStart(params, ctx) {
       const configured = Boolean(process.env.CODEMOSS_TEST_NATIVE_KEY);

@@ -17,6 +17,25 @@ import static org.junit.Assert.assertNull;
  * Regression tests for ProviderManager.
  */
 public class ProviderManagerTest {
+    @Test
+    public void thinkingChangeKeepsTheDefaultAndOtherSupplierCredentials() throws Exception {
+        JsonObject config = createConfigWithCurrent("a");
+        JsonObject providers = config.getAsJsonObject("claude").getAsJsonObject("providers");
+        providers.add("a", createProvider("A"));
+        JsonObject b = createProvider("B");
+        JsonObject env = new JsonObject();
+        env.addProperty("ANTHROPIC_AUTH_TOKEN", "fixture-key");
+        b.getAsJsonObject("settingsConfig").add("env", env);
+        providers.add("b", b);
+        AtomicReference<JsonObject> reference = new AtomicReference<>(config);
+        ProviderManager manager = createProviderManager(reference);
+        org.junit.Assert.assertTrue(manager.setAlwaysThinkingEnabledInProvider("b", false));
+        assertEquals("a", reference.get().getAsJsonObject("claude").get("current").getAsString());
+        JsonObject updated = reference.get().getAsJsonObject("claude").getAsJsonObject("providers").getAsJsonObject("b").getAsJsonObject("settingsConfig");
+        assertEquals("fixture-key", updated.getAsJsonObject("env").get("ANTHROPIC_AUTH_TOKEN").getAsString());
+        assertFalse(updated.get("alwaysThinkingEnabled").getAsBoolean());
+        assertFalse(manager.setAlwaysThinkingEnabledInProvider("missing", true));
+    }
     /**
      * When current is blank and there are no saved providers, Claude should remain inactive.
      */

@@ -191,6 +191,41 @@ public class SessionState {
     private boolean psiContextEnabled = true;
 
     // Getters
+    private final java.util.Map<String, String> supplierIds = new java.util.HashMap<>();
+    private String turnSupplierId;
+    private String turnSupplierProvider;
+
+    public String getSupplierId(String engine) {
+        synchronized (messageStateLock) {
+            return supplierIds.get(engine);
+        }
+    }
+
+    public void setSupplierId(String engine, String supplierId) {
+        synchronized (messageStateLock) {
+            if (supplierId == null || supplierId.isBlank()) {
+                supplierIds.remove(engine);
+            } else {
+                supplierIds.put(engine, supplierId);
+            }
+        }
+    }
+
+    /** Freeze routing before launch; changing the selection cannot redirect active controls. */
+    public void captureTurnSupplier() {
+        synchronized (messageStateLock) {
+            turnSupplierProvider = provider;
+            turnSupplierId = supplierIds.get(provider);
+        }
+    }
+
+    public String getRuntimeSupplierId(String engine) {
+        synchronized (messageStateLock) {
+            return (busy || executionState.hasLiveTurn()) && java.util.Objects.equals(engine, turnSupplierProvider)
+                    ? turnSupplierId : supplierIds.get(engine);
+        }
+    }
+
     public String getSessionId() {
         return sessionId;
     }
@@ -206,6 +241,7 @@ public class SessionState {
     /** Starts a send before any previous provider process has finished shutting down. */
     public Object beginTurn() {
         synchronized (messageStateLock) {
+            captureTurnSupplier();
             // Preserve an unfinished predecessor as a detached source, without changing cancellation policy.
             if (executionState.hasLiveTurn()) {
                 rebindExecution();

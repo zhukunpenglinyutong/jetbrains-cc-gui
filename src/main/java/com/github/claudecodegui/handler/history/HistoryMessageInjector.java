@@ -516,7 +516,7 @@ public class HistoryMessageInjector {
             return;
         }
         int fallbackMaxTokens = ModelProviderHandler.resolveContextLimit(
-                session.getProvider(), session.getModel(), session.getCwd());
+                session.getProvider(), session.getModel(), session.getCwd(), session.getState().getRuntimeSupplierId(session.getProvider()));
         new UsagePushService(context).pushCurrentUsageIfAvailable(fallbackMaxTokens);
     }
 

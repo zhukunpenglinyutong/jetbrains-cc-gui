@@ -87,7 +87,8 @@ async function handleScopedClaudeCommand(command, args, stdinData) {
           streaming,  // Pass streaming parameter
           disableThinking || false,  // Pass disableThinking parameter
           reasoningEffort || null,  // Pass reasoning effort level
-          ultracode
+          ultracode,
+          stdinData.supplierId
         );
       } else {
         await claudeSendMessage(args[0], args[1], args[2], args[3], args[4]);
@@ -105,7 +106,7 @@ async function handleScopedClaudeCommand(command, args, stdinData) {
           cwd || '',
           permissionMode || '',
           model || '',
-          { ...(attachments ? { attachments } : {}), openedFiles, agentPrompt, streaming, reasoningEffort, ultracode }
+          { ...(attachments ? { attachments } : {}), openedFiles, agentPrompt, streaming, reasoningEffort, ultracode, supplierId: stdinData.supplierId }
         );
       } else {
         await claudeSendMessageWithAttachments(args[0], args[1], args[2], args[3], args[4], stdinData);

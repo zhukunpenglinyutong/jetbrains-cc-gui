@@ -1,0 +1,99 @@
+# Session supplier deep review
+
+## v0.6.6 base synchronization (2026-11-11)
+
+PR #2067 now targets `feature/v0.6.6`. The merge incorporates official commit `7944d092064ca1d7c915300641993f097ba660f6` without replacing the conversation supplier implementation or the maintainer follow-up fixes.
+
+The only manual conflict was the comment in `RuntimeProviderMenuItem.tsx`. The resolution keeps upstream's non-beta CLI wording and retains the session supplier callback, next-turn feedback and keyboard/menu behavior. The automatically merged Java window callbacks, model mappings, settings panel and browser fixtures were checked for both sets of changes. No new finding was confirmed in this merge review.
+
+The official CHANGELOG, frontend version history, Gradle version and both README files match the upstream commit byte-for-byte. The delivery document and PR description target the current development branch.
+
+Validation: the full Java run passed 2584 tests with 28 skipped; Checkstyle passed. The full frontend passed 2909 tests across 259 files, six packaging-script checks and test TypeScript checking. The production frontend build passed. The full Bridge run passed 1442 tests with 7 skipped. All 16 browser checks passed on the first single-worker run across four viewport sizes: 12 supplier-menu scenarios and 4 configuration-submenu viewport checks, using the actual application with only the Java transport mocked.
+
+
+## Maintainer follow-up (2026-11-10)
+
+The maintainer's blocking JavaScript finding and the reviewed configuration/UI issues are corrected in this follow-up.
+
+| Finding | Resolution and evidence |
+| --- | --- |
+| P1: the new-session bootstrap serialized an Event expression into a quoted bridge argument | Java now calls a named, no-argument webview callback. A Node-backed Java regression parses and executes the generated batch, checks binding/history/status order, and verifies zero arguments. The callback dispatches a real Event and is installed before React mounts. The lifecycle event is protected from ordinary queue backpressure. |
+| P2: global pricing settings used the active conversation's model mapping | The settings hook reads the global mapping explicitly. A regression keeps a conflicting conversation mapping mounted while changing the global mapping. Remaining session-aware mapping consumers are chat controls. |
+| P2: the thinking control silently ignored clicks without a supplier snapshot | The control is disabled while the snapshot is missing, pending, failed, or unavailable. Mouse, keyboard, and successful retry behavior are covered. |
+| P2: bound cloud settings could inherit another profile's endpoints, headers, or auth bypasses | The inline override clears the reviewed Bedrock/Vertex/header/auth keys and all routing-family keys present in inherited settings before applying the selected profile. Regressions cover both cloud modes, future routing keys, explicit bound headers, and unchanged input settings. |
+| P2: unsupported Codex MCP/skills fragments appeared selectable | The Java catalog parses the fragment with the existing TOML parser and marks top-level MCP/skills fragments and invalid TOML unavailable. Both the picker snapshot and selection validation use the same rule. The Bridge retains its independent check. Tests cover inline tables, nested tables, dotted keys, malformed TOML, and harmless occurrences in strings/comments. |
+| Follow-up: model deduplication lost a later 1M capability | Duplicate entries retain the first display metadata and OR their context capability. Both option orders and mixed-case suffixes are covered. |
+
+The two new catalog regressions failed against the previous implementation before passing with the fixes. Configured API suppliers remain independent of the global default. Local/CLI login remains a shared, globally authorized native mode; the PRD and API now state that changing away from that global mode makes its existing native bindings unavailable until restored or explicitly rebound. Independent OAuth account pinning is outside this feature's scope.
+
+PR-worktree validation: the full Java run passed 2557 tests with 28 skipped before the last catalog changes; the final affected Java suites passed 39 tests and Checkstyle. The full frontend passed 2899 tests across 261 files plus packaging checks, test TypeScript checking passed, and the production frontend build passed. The supplier Bridge suite passed all 10 tests. All 12 supplier-menu Playwright checks passed across four viewport sizes, with only the Java transport mocked and the real callback required to be installed. The first parallel cold-start run timed out during four initial page navigations; the isolated-port single-worker run completed without failures.
+
+Development-workspace validation: Java 3315 passed with 32 skipped; Checkstyle, both production frontend bundles and buildPlugin passed. The frontend passed 3294 tests across 302 files plus packaging checks and test TypeScript checking. The full Bridge run passed 1480 tests with 15 skipped and one five-second process-exit timeout; that unchanged test passed its isolated rerun in 671 ms. All 27 final archive checks passed, including exact Bridge sources and Java class bytes, the named callback in Java and frontend, and the compressed frontend resource bytes.
+
+Non-blocking follow-ups remain: pruning deleted-history binding metadata, reducing manual reselection after configuring the first supplier, and validating direct Bedrock title construction with the actual SDK or an installed IDE. Supplier changes retired by a real conversation replacement remain fenced and cannot mutate the replacement conversation. This follow-up does not introduce independent native login accounts or per-supplier MCP/skills configuration.
+
+## Earlier review evidence
+
+
+Review date: 2026-11-10 (Asia/Shanghai). The initial review's ten findings and two subsequent P1 native-provider findings have been fixed. The current native-provider follow-up has no confirmed finding left open within its scope. Java, frontend, Bridge, Checkstyle, production builds and the final updated archive audit passed. Live supplier connectivity and installed-IDE acceptance remain unverified as described below.
+
+## Confirmed findings and fixes
+
+| ID | Severity | Trigger and observed defect | Fix and regression evidence |
+| --- | --- | --- | --- |
+| R1 | P1 | A Codex configuration names a custom `model_provider` absent from `model_providers`. The resolver synthesized an OpenAI provider instead of rejecting the typo, changing the endpoint receiving the configured key. | `session-supplier.js` rejects missing custom entries, invalid types and blank IDs. The new negative regression failed before the fix. The built-in OpenAI default remains valid. |
+| R2 | P1 | Execute Plan bypassed Java runtime configuration capture. The daemon received no session supplier and could rebuild a bound runtime from global configuration. | `CodexSDKBridge.executeCodexPlan` captures supplier and native home before dispatch. A Java transport fixture checks all seven runtime-starting message paths. |
+| R3 | P2 | Codex settings updates and plan execution put a raw UI model alias into `collaborationMode.settings.model`, even when the top-level model was resolved. | Both paths reuse the selected supplier's resolved model, including nested settings overrides. The real-stdio supplier fixture reproduced `fixture-model` instead of `b-codex-model` before the fix and now covers plan/default transitions and object updates. |
+| R4 | P2 | Focus or busy refresh during an outstanding supplier SET replaced its request ID. Java could apply the change while the UI ignored its acknowledgement. | `useSessionSuppliers` (extracted from `SessionSupplierSelect`) serializes requests and coalesces read refreshes until acknowledgement. The failing focus/busy regression passes. |
+| R5 | P2 | Creating another conversation before the first message leaves both IDs null. React dependencies did not change, so the UI retained its old supplier and epoch while Java installed the new default. | `SessionLifecycleManager` announces the installed binding; the selector clears snapshots/catalogs and retires pending replies before reloading. Java lifecycle and frontend null-ID regressions cover notification order and stale replies. |
+| R6 | P2 | Claude's chat picker queried the global catalog after choosing another conversation supplier. Custom routes, defaults, replacement mode and 1M capabilities could belong to another profile. | Java returns a safe selected-profile `modelCatalog`; the conversation hook subscribes to it and ignores late global replies. Tests cover bound routes, global switches, explicit refresh, capabilities and aggregation transitions. Global settings keep a separate catalog. |
+| R7 | P2 | Virtual native login entries have no `settingsConfig`; interpreting them as empty profiles removed native mappings and custom picker options. | Authorized native modes read native model settings. Java regression verifies names, defaults, context capability and credential exclusion, and blocks inactive native reads. |
+| R8 | P2 | Cloud Claude suppliers disable host-managed stripping. CLI settings env could override the bound child environment with global cloud flags, credentials or endpoints. | Persistent and fallback sends supply selected-profile routing settings, clear conflicting fields and retain request-owned model/thinking controls. Tests exercise precedence and actual request options without changing daemon env. |
+| R9 | P2 | Bound Bedrock title generation assumed an Anthropic token. AWS-key profiles skipped titles, while a placeholder Anthropic token could select the wrong client. | Title auth selects Bedrock with captured explicit AWS credentials/token, endpoint, region and model. SDK constructor/request fixtures verify options and unchanged daemon env. Unsupported direct cloud credential chains skip safely. |
+| R10 | P2 | A Codex conversation supplier change did not invalidate its native model catalog. Old native replies could retain the previous supplier's models, while unrelated global defaults could refresh a bound catalog. | Safe binding snapshots invalidate the catalog/request ID once the current turn is idle. Native replies from the old request are ignored, repeated identical snapshots do not refetch, managed global changes are ignored, and shared native login retains its global refresh. The new regression failed before the fix. |
+| R11 | P1 | Native `turn/start` rejected a managed thread because the process still used the global provider. Thread-only provider overrides did not change the process provider. | Managed process startup now supplies the selected provider id/table through process-local TOML overrides. Real CLI regression and packaged launch tests cover actual request routing and credential isolation. |
+| R12 | P1 | Restoring an older `OpenAI` thread still failed because its persisted provider id differed from the new `codemoss_session` process. The startup-only test restored only newly created threads. | A structured native mismatch triggers one guarded replacement using the captured supplier under the historical custom provider id. No historical files or thread ids are changed. Real CLI tests reproduce the original error and now cover old history, another cold restart and switching that thread to supplier B. |
+
+## Native provider follow-up
+
+The follow-up reviewed app-server launch serialization, managed environment preparation, persistent client factory overrides, shared resume ownership, cancellation/reset races, runtime generation replacement, read-only controls and diagnostic redaction. Recovery requires a structured native rejection before dispatch and cannot retire a loaded thread, active operation, independent resume or pending interaction. Unstructured errors and native login authorization retain their original handling.
+
+Final follow-up evidence: Bridge 1495 tests (1480 passed, 15 skipped); the separate real CLI regression passed on Codex 0.167.0; all 151 affected tests passed from the final packaged Bridge; 21 archive checks and the complete plugin build passed. These supersede the earlier Bridge/package counts below. Original Java/frontend suite results remain applicable to unchanged sources; their production bundles and Checkstyle were revalidated by the build. See `native-provider-fix.md` for the two failure reproductions and acceptance boundaries.
+
+## Deep-review validation
+
+- Frontend: 3285 tests across 301 files and six packaging-script checks passed; production/test TypeScript checks and application/office production builds passed. This full run includes the final Codex catalog regression and shared-native-login refresh assertion.
+- Bridge: 1484 tests, 1470 passed, 14 skipped, zero failures/cancellations with concurrency limited to four. Supplier/Codex targeted controls: 51 passed; title fixtures: four passed.
+- Java: 3344 tests across 392 suites, 3312 passed, 32 skipped, zero failures/errors; Checkstyle and plugin build passed. Java production sources remain unchanged since that full suite. A final resource-only package rebuild includes the updated frontend.
+- Final archive: packaged Bridge sources and hash, Java bytecode, compressed frontend resources, both bound model catalogs and binding notifications match the final build inputs. See `delivery.md` for the artifact size and SHA-256.
+- `git diff --check` passed. Original 24 report files, HEAD and staged diff are unchanged.
+
+The first frontend run found three tests still using the global callback; they now exercise the session catalog contract and the full suite passes. An unrestricted Bridge run hit two process timing failures; the complete bounded-concurrency rerun passes. A new Java lifecycle fixture initially lacked an IntelliJ Application; it now queues UI callbacks through a local proxy and restores the previous application. Intermediate logs are retained.
+
+## Retained implementation checks
+
+The review covered the feature diff, Java request/state/storage handling, Claude persistent and fallback sends, Codex native launch and control paths, auxiliary title generation, webview selection and model labels, and the associated regression tests. It was performed in the main thread with the code-reviewer workflow and focused CodeGraph/diff inspection. Live authenticated upstream API calls and an installed IDE session are outside this review.
+
+| Resolved issue | Final behavior and verification |
+| --- | --- |
+| A temporary lifecycle session could redirect a shared bridge resolver | Resolvers belong to the installed window and dynamically read its current session. |
+| A pending selection could redirect controls before the native turn ended | Turn routing is captured before launch and retained while either busy state or the execution actor remains active. Java regression covers the interval after the busy flag clears. |
+| Context usage refresh could recreate a running Claude runtime after profile edits | Active queries read the existing runtime without changing model, supplier or process; stale epochs are rejected. Bridge regression covers an unavailable profile during a live turn. |
+| Claude thinking controls used the globally active profile | The response exposes a boolean only; the control updates the selected profile under the existing configuration transaction, retaining all other profile fields and credentials. |
+| Restoring tab metadata could briefly replace a saved supplier with the default | Explicit supplier metadata is installed before the restored identity is published. |
+| Codex aliases and generated titles could use another profile | Aliases resolve from the selected configuration; title work uses its originating turn's runtime/environment snapshot. |
+| Claude cost/capacity and global auxiliary settings could display another profile's mapping | Cost and capacity follow the current turn's supplier; the global auxiliary settings panel explicitly reads the global mapping. A pricing regression covers switching suppliers while a turn is active. |
+| Raw configuration diagnostics could reach the webview | Selection errors use a dedicated safe exception; all other failures return a generic message. Protocol replies whitelist display metadata and never include credentials. |
+
+Supplier selection preserves native access authorization, project/session ownership, real Codex history storage, and existing global supplier management. No database schema, release history, dependency, credential file, or global default changes are required by selection.
+
+The feature-specific QA report records build/test results and the installed-IDE validation boundary. Independent OAuth accounts remain outside scope. Direct cloud titles require a safely captured supported SDK credential form; unsupported credential-chain-only titles are skipped without affecting chat. A new actual-application browser run with the Java transport mocked passed focus/busy refresh, deferred model display, late global catalog rejection, null-ID binding replacement, retired responses, new-token mutations and a narrow viewport. Historical implementation screenshots remain separate. Current evidence is in `.codex/session-suppliers/deep-review-*`.
+
+
+## Existing supplier menu consolidation (2026-11-10)
+
+The chat's original configuration submenu still emitted `switch_provider` / `switch_codex_provider`, while the added selector above the input owned conversation binding. Keeping both controls exposed two different scopes under the same supplier label. The original submenu now reads the shared conversation controller and sends only `set_session_supplier` with its acknowledged session id and binding token. The additional input row, native select, refresh button and stylesheet are removed.
+
+The controller remains mounted independently of menu visibility, so model mappings/catalogs, thinking settings, focus/configuration refreshes, busy transitions and unsaved-session replacement keep their existing behavior. Opening the submenu refreshes its list automatically. Global provider management in Settings retains its existing protocol. Selection success is reported only after an acknowledgement; rejected, expired, unmounted or retired selections cannot emit a late success toast. During a live turn, feedback states that the choice applies to the next turn. Unavailable historical bindings remain explicit and require an available choice.
+
+Validation: the full frontend run passed 3289 tests across 301 files, six packaging-script checks and test TypeScript checking. The final affected suites passed 25 tests after adding timeout and unmount regressions. Sixteen Playwright checks passed across 1280x900, 496x884, 1018x365 and 393x851 viewports, using the actual application with only the Java transport mocked. These cover original-menu routing for both engines, automatic refresh/checkmarks, absence of the extra strip, failure handling, new null-id binding fences and submenu bounds. The browser scenario closes the old input menu before starting another chat, matching the user interaction; it does not require a hover menu to remain open across a chat replacement. Native runtime sources remain unchanged from the preceding real-CLI-validated fix.

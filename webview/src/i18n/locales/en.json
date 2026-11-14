@@ -1,4 +1,10 @@
 {
+  "sessionSupplier": {
+    "label": "Supplier",
+    "choose": "Select a supplier",
+    "nextTurn": "Applies to the next turn",
+    "unavailable": "Supplier unavailable. Reopen this menu to retry or select another supplier."
+  },
   "startupHistory": {
     "unloaded": "History for this restored session has not been loaded.",
     "loading": "Loading session history...",

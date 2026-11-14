@@ -681,6 +681,8 @@ public class SessionLifecycleManager {
 
         ApplicationManager.getApplication().invokeLater(() -> {
             if (!isCurrentTransition(transition) || host.getSession() != newSession) { return; }
+            // Unsaved sessions both have a null id, so publish the new binding explicitly.
+            host.callJavaScript("notifySessionSupplierBindingChanged");
             host.callJavaScript("onStreamEnd");
             host.callJavaScript("showLoading", "false");
             // Release the frontend session transition guard so updateMessages works again.

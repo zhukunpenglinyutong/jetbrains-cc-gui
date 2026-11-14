@@ -38,7 +38,7 @@ function makeService({
     channelId: 'channel-test',
     stopBudgetMs: 400,
     ...serviceOpts,
-    clientFactory: () => {
+    clientFactory: (launch = {}) => {
       const clientToPeer = new PassThrough();
       const peerToClient = new PassThrough();
       const peerStderr = new PassThrough();
@@ -66,6 +66,8 @@ function makeService({
         command: ['in-process-peer'],
         contextSupportProbe: async () => true,
         ...clientOpts,
+        ...(launch.modelProvider && launch.nativeConfig
+          ? { modelProvider: launch.modelProvider, nativeConfig: launch.nativeConfig } : {}),
         spawnFn: () => ({
           stdin: clientToPeer,
           stdout: peerToClient,
@@ -86,6 +88,120 @@ function makeService({
 function eventsOf(events, kind) {
   return events.filter((event) => event.kind === kind);
 }
+
+function legacyProviderFixture({ rejectedError = null, beforeReplacement = null } = {}) {
+  const nativeConfig = { model_providers: { codemoss_session: { name: 'Selected supplier',
+    base_url: 'https://bound.example.invalid/v1', wire_api: 'responses', env_key: 'CODEX_API_KEY' } } };
+  const fixture = makeService({ serviceOpts: { launchOptions: { nativeConfig, modelProvider: 'codemoss_session' } } });
+  const factory = fixture.service.clientFactory;
+  const clients = [];
+  const resumes = [];
+  fixture.service.clientFactory = async options => {
+    if (options.modelProvider === 'OpenAI') await beforeReplacement?.();
+    const client = factory(options);
+    clients.push({ client, options });
+    const request = client.request.bind(client);
+    client.request = async (method, params, ...rest) => {
+      if (method === 'thread/resume') {
+        resumes.push(structuredClone(params));
+        if (options.modelProvider !== 'OpenAI') {
+          throw rejectedError ?? new ClassifiedError('RPC_ERROR', 'This chat uses OpenAI, but the current provider differs', {
+            method, rpcCode: -32600, data: { type: 'modelProviderMismatch',
+              modelProvider: 'OpenAI', currentModelProvider: 'codemoss_session' },
+          });
+        }
+      }
+      return request(method, params, ...rest);
+    };
+    return client;
+  };
+  return { ...fixture, clients, resumes, nativeConfig };
+}
+
+test('a legacy provider resume shared by preconnect and send keeps the thread and sends exactly once', async () => {
+  const fixture = legacyProviderFixture();
+  const { service, clients, resumes, nativeConfig, dispatchCounts } = fixture;
+  const beforeConfig = structuredClone(nativeConfig);
+  try {
+    await service.ensureRuntime();
+    const preconnect = service.preconnect({ threadId: THREAD_ID });
+    const send = service.send({ threadId: THREAD_ID, input: [] });
+    await preconnect;
+    assert.equal((await send).outcome, 'completed');
+    assert.equal(resumes.length, 2);
+    assert.equal(clients.length, 2);
+    assert.equal(clients[0].client.closeRequested, true);
+    assert.equal(clients[1].options.modelProvider, 'OpenAI');
+    assert.deepEqual(clients[1].options.nativeConfig.model_providers.OpenAI, nativeConfig.model_providers.codemoss_session);
+    assert.deepEqual(nativeConfig, beforeConfig);
+    assert.equal(service.rootThreadId, THREAD_ID);
+    assert.equal(service.bootstrapInFlight, false);
+    assert.equal(dispatchCounts.get('thread/start') ?? 0, 0);
+    assert.equal(dispatchCounts.get('turn/start'), 1);
+    assert.equal(eventsOf(fixture.events, 'operationDone').length, 1);
+    await service.resetRuntime();
+    await service.preconnect({ threadId: THREAD_ID });
+    assert.equal(clients.length, 3);
+    assert.equal(clients[2].options.modelProvider, 'OpenAI', 'cold startup retains the native history alias');
+    assert.equal(resumes.length, 3, 'cold restore does not repeat the rejected provider');
+    assert.equal((await service.send({ threadId: THREAD_ID, input: [] })).outcome, 'completed');
+    assert.equal(dispatchCounts.get('turn/start'), 2);
+  } finally { await service.resetRuntime(); }
+});
+
+test('reset while preparing a legacy provider replacement cannot resurrect the runtime or send a turn', async () => {
+  let release;
+  let preparing = false;
+  const gate = new Promise(resolve => { release = resolve; });
+  const fixture = legacyProviderFixture({ beforeReplacement: async () => { preparing = true; await gate; } });
+  try {
+    const connecting = fixture.service.preconnect({ threadId: THREAD_ID });
+    const rejected = assert.rejects(connecting, /runtime changed during provider recovery/);
+    await waitFor(() => preparing, 1000, 'provider replacement preparation');
+    await fixture.service.resetRuntime();
+    release();
+    await rejected;
+    assert.equal(fixture.clients.at(-1).client.closeRequested, true);
+    assert.equal(fixture.clients.at(-1).client.child, null, 'released replacement never spawns');
+    assert.equal(fixture.service.state, 'stopped');
+    assert.equal(fixture.dispatchCounts.get('turn/start') ?? 0, 0);
+  } finally { release(); await fixture.service.resetRuntime(); }
+});
+
+test('cancelling a shared send allows the legacy preconnect to recover without sending the cancelled message', async () => {
+  let release;
+  let preparing = false;
+  const gate = new Promise(resolve => { release = resolve; });
+  const fixture = legacyProviderFixture({ beforeReplacement: async () => { preparing = true; await gate; } });
+  const { service } = fixture;
+  try {
+    await service.ensureRuntime();
+    const connecting = service.preconnect({ threadId: THREAD_ID });
+    const operation = service.enqueueOperation({ kind: 'send', threadId: THREAD_ID, markerPayload: { input: [] } });
+    await waitFor(() => preparing && service.bootstrapInFlight, 1000, 'shared provider recovery');
+    await service.stopOperation(operation.clientOperationId);
+    release();
+    await connecting;
+    assert.equal((await operation.promise).outcome, 'cancelled');
+    assert.equal(service.rootThreadId, THREAD_ID);
+    assert.equal(service.bootstrapInFlight, false);
+    assert.equal(fixture.dispatchCounts.get('turn/start') ?? 0, 0);
+    assert.equal((await service.send({ threadId: THREAD_ID, input: [] })).outcome, 'completed');
+  } finally { release(); await service.resetRuntime(); }
+});
+
+test('text-only provider errors are preserved without guessing a replacement or replaying work', async () => {
+  const failure = new ClassifiedError('RPC_ERROR', 'This chat uses OpenAI, but the current provider differs', {
+    method: 'thread/resume', rpcCode: -32600,
+  });
+  const fixture = legacyProviderFixture({ rejectedError: failure });
+  try {
+    await assert.rejects(fixture.service.preconnect({ threadId: THREAD_ID }), error => error.cause === failure);
+    assert.equal(fixture.clients.length, 1);
+    assert.equal(fixture.resumes.length, 1);
+    assert.equal(fixture.dispatchCounts.get('turn/start') ?? 0, 0);
+  } finally { await fixture.service.resetRuntime(); }
+});
 
 test('native configuration and guardian warnings remain visible without finishing a running turn', async () => {
   const fixture = makeService({ scenario: 'never-respond' });
@@ -2031,7 +2147,9 @@ test('preconnect and send share closing retries and start the user turn only onc
 test('closing retries preserve their original provider parameters until the idle rebuild', async () => {
   const { service, getClient, dispatchCounts } = makeService({ serviceOpts: {
     runtimeFingerprint: 'original',
-    launchOptions: { nativeConfig: { model: 'original-model' }, modelProvider: 'original-provider', developerInstructions: 'original role' },
+    launchOptions: { nativeConfig: { model: 'original-model', model_providers: {
+      'original-provider': { name: 'Original fixture', wire_api: 'responses' },
+    } }, modelProvider: 'original-provider', developerInstructions: 'original role' },
   } });
   const resumes = [];
   try {
@@ -2048,7 +2166,9 @@ test('closing retries preserve their original provider parameters until the idle
     const sending = service.send({ threadId: THREAD_ID, input: [{ type: 'text', text: 'finish with the original provider' }] });
     await waitFor(() => resumes.length === 1);
     const rebuild = service.notifyLaunchConfigChange({
-      nativeConfig: { model: 'replacement-model' }, modelProvider: 'replacement-provider', developerInstructions: 'replacement role',
+      nativeConfig: { model: 'replacement-model', model_providers: {
+        'replacement-provider': { name: 'Replacement fixture', wire_api: 'responses' },
+      } }, modelProvider: 'replacement-provider', developerInstructions: 'replacement role',
     }, 'replacement');
     assert.equal(rebuild.rebuild, 'deferred');
     assert.equal((await sending).outcome, 'completed');
