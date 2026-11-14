@@ -34,6 +34,12 @@ checkstyle {
     sourceSets = [project.sourceSets.main]
 }
 
+// The default 512m worker heap runs out on the full main source set (OutOfMemoryError
+// surfaces as "Error was thrown while processing <random file>").
+tasks.withType(Checkstyle).configureEach {
+    maxHeapSize = '1g'
+}
+
 // sourceSets above unhooks checkstyleTest from the check lifecycle; disabling the
 // task as well makes an explicit `gradlew checkstyleTest` a SKIPPED no-op instead
 // of a failure.

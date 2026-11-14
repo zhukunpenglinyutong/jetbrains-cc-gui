@@ -178,7 +178,12 @@
     "backgroundTasksRunning": "{{count}} पृष्ठभूमि कार्य चल रहे हैं",
     "backgroundTasksRunning_one": "{{count}} पृष्ठभूमि कार्य चल रहा है",
     "backgroundTasksRunning_other": "{{count}} पृष्ठभूमि कार्य चल रहे हैं",
-    "stopBackgroundTasks": "पृष्ठभूमि कार्य रोकें"
+    "stopBackgroundTasks": "पृष्ठभूमि कार्य रोकें",
+    "planUsage": {
+      "balanceLabel": "शेष राशि: ",
+      "balanceRemaining": "शेष राशि: {{value}}",
+      "balanceDetail": "कुल {{total}} · उपयोग किया गया {{used}}"
+    }
   },
   "settings": {
     "title": "सेटिंग्स",
@@ -406,6 +411,12 @@
         "enabled": "सक्षम",
         "disabled": "अक्षम",
         "hint": "अक्षम होने पर, मौजूदा संदेशों वाले सत्र में नया बनाने पर पुष्टि संवाद नहीं दिखेगा।"
+      },
+      "sessionGitRepositoryMatching": {
+        "label": "Git रिमोट रिपॉज़िटरी के आधार पर सत्र मिलाएँ",
+        "enabled": "सक्षम",
+        "disabled": "अक्षम",
+        "hint": "उन दूसरी डायरेक्टरी का Codex और Claude Code इतिहास भी शामिल करें जिनका नॉर्मलाइज़्ड रिमोट होस्ट, मालिक और रिपॉज़िटरी एक जैसा है। Git जानकारी उपलब्ध न होने पर वर्किंग डायरेक्टरी से मिलान होता है।"
       }
     },
     "providers": "प्रदाता प्रबंधन",
@@ -1222,7 +1233,10 @@
     },
     "loadMore": "Load more",
     "sessionInUse": "उपयोग में चल रहे सत्र हटाए नहीं जा सकते।",
-    "deleteFailed": "सत्र हटाया नहीं जा सका। कृपया फिर से प्रयास करें।"
+    "deleteFailed": "सत्र हटाया नहीं जा सका। कृपया फिर से प्रयास करें।",
+    "confirmDirectoryTitle": "सत्र को दूसरी डायरेक्टरी में खोलें?",
+    "confirmDirectoryMessage": "कमांड और फ़ाइल बदलाव नीचे दिखाई गई डायरेक्टरी में चलेंगे।",
+    "executionDirectory": "यहाँ चलाएँ"
   },
   "permission": {
     "dialogTitle": "अनुमति अनुरोध",
@@ -2451,5 +2465,11 @@
       "executing": "Executing…",
       "adjust": "Continue adjusting"
     }
+  },
+  "sessionSupplier": {
+    "label": "प्रदाता",
+    "choose": "प्रदाता चुनें",
+    "nextTurn": "अगले टर्न से लागू होगा",
+    "unavailable": "प्रदाता उपलब्ध नहीं है। फिर से कोशिश करने के लिए यह मेनू दोबारा खोलें या कोई दूसरा प्रदाता चुनें।"
   }
 }

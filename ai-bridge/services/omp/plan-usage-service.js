@@ -7,14 +7,13 @@
  * (`present:false`), which hides the bar; nothing here throws.
  */
 
-import { spawnSync } from 'child_process';
 import { homedir } from 'os';
 import {
   commonCliBinDirs,
   enrichPathWithBinDirs,
-  isWindowsCmdShim,
   resolveOmpCliPath,
 } from '../../utils/cli-path.js';
+import { spawnCliSync } from '../../utils/cli-spawn.js';
 
 const USAGE_TIMEOUT_MS = 30_000;
 const ROLES_TIMEOUT_MS = 15_000;
@@ -212,13 +211,11 @@ export function pickReport(stdout, provider) {
 }
 
 function runOmp(bin, env, args, timeout) {
-  return spawnSync(bin, args, {
+  return spawnCliSync(bin, args, {
     encoding: 'utf8',
     env,
     timeout,
     maxBuffer: MAX_BUFFER_BYTES,
-    // Windows npm `.cmd` shims require a shell to spawn.
-    shell: isWindowsCmdShim(bin),
   });
 }
 

@@ -2722,12 +2722,7 @@ public class ClaudeChatWindow {
         }
         if (dispatcher.dispatch(type, content)) {
             if ("set_claude_ultracode".equals(type) || "set_reasoning_effort".equals(type)) {
-                ClaudeSession configuredSession = this.session;
-                ApplicationManager.getApplication().invokeLater(() -> {
-                    if (!this.disposed && this.session == configuredSession) {
-                        this.persistTabSessionState();
-                    }
-                });
+                persistTabSessionStateLater();
             }
             return;
         }
@@ -3263,14 +3258,31 @@ public class ClaudeChatWindow {
         return contentManager.getIndexOfContent(content);
     }
 
+    /** Saves the supplier binding now, so a quick session switch cannot drop it; the tab snapshot follows on the EDT. */
+    private void persistTabSessionStateLater() {
+        ClaudeSession configuredSession = this.session;
+        if (project != null && !project.isDisposed()) {
+            saveSupplierBinding(configuredSession);
+        }
+        ApplicationManager.getApplication().invokeLater(() -> {
+            if (!this.disposed && this.session == configuredSession) {
+                this.persistTabSessionState();
+            }
+        });
+    }
+
+    private static void saveSupplierBinding(ClaudeSession target) {
+        var supplierBindings = com.github.claudecodegui.settings.SessionSupplierStateService.getInstance();
+        if (supplierBindings != null && target != null) {
+            supplierBindings.saveSupplier(target.getProvider(), target.getSessionId(), target.getState().getSupplierId(target.getProvider()));
+        }
+    }
+
     private void persistTabSessionState() {
         if (project == null || project.isDisposed() || session == null) {
             return;
         }
-        var supplierBindings = com.github.claudecodegui.settings.SessionSupplierStateService.getInstance();
-        if (supplierBindings != null) {
-            supplierBindings.saveSupplier(session.getProvider(), session.getSessionId(), session.getState().getSupplierId(session.getProvider()));
-        }
+        saveSupplierBinding(session);
 
         int tabIndex = getTabIndex();
         if (tabIndex < 0) {
@@ -3871,7 +3883,8 @@ public class ClaudeChatWindow {
             @Override
             public void setHandlerContext(HandlerContext ctx) {
                 handlerContext = ctx;
-                ctx.setSessionPreferencesChanged(ClaudeChatWindow.this::persistTabSessionState);
+                // Callers may hold the session state lock on a handler thread; save on the EDT afterwards.
+                ctx.setSessionPreferencesChanged(ClaudeChatWindow.this::persistTabSessionStateLater);
             }
 
             @Override

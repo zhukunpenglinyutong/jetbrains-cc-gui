@@ -6,14 +6,13 @@
  *                   "cost": {} } ] }
  */
 
-import { spawnSync } from 'child_process';
 import { homedir } from 'os';
 import {
   commonCliBinDirs,
   enrichPathWithBinDirs,
-  isWindowsCmdShim,
   resolveOmpCliPath,
 } from '../../utils/cli-path.js';
+import { spawnCliSync } from '../../utils/cli-spawn.js';
 
 function stripAnsi(input) {
   return String(input || '').replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, '');
@@ -100,13 +99,11 @@ export function parseOmpRolesJson(stdout) {
  */
 function fetchOmpRoles(bin, env) {
   try {
-    const result = spawnSync(bin, ['config', 'get', 'modelRoles', '--json'], {
+    const result = spawnCliSync(bin, ['config', 'get', 'modelRoles', '--json'], {
       encoding: 'utf8',
       env,
       timeout: 15_000,
       maxBuffer: 1024 * 1024,
-      // Windows npm `.cmd` shims require a shell to spawn.
-      shell: isWindowsCmdShim(bin),
     });
     if (!result || result.error || result.status !== 0) return [];
     return parseOmpRolesJson(result.stdout || '');
@@ -125,13 +122,11 @@ export function listModels() {
 
   let result;
   try {
-    result = spawnSync(bin, ['models', '--json'], {
+    result = spawnCliSync(bin, ['models', '--json'], {
       encoding: 'utf8',
       env,
       timeout: 45_000,
       maxBuffer: 8 * 1024 * 1024,
-      // Windows npm `.cmd` shims require a shell to spawn.
-      shell: isWindowsCmdShim(bin),
     });
   } catch (error) {
     console.log(JSON.stringify({

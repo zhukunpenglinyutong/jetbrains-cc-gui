@@ -178,7 +178,12 @@
     "backgroundTasksRunning": "{{count}} tarefas em segundo plano em execução",
     "backgroundTasksRunning_one": "{{count}} tarefa em segundo plano em execução",
     "backgroundTasksRunning_other": "{{count}} tarefas em segundo plano em execução",
-    "stopBackgroundTasks": "Parar tarefas em segundo plano"
+    "stopBackgroundTasks": "Parar tarefas em segundo plano",
+    "planUsage": {
+      "balanceLabel": "Saldo: ",
+      "balanceRemaining": "Saldo: {{value}}",
+      "balanceDetail": "Total {{total}} · Usado {{used}}"
+    }
   },
   "settings": {
     "title": "Configurações",
@@ -429,6 +434,12 @@
         "enabled": "Ativado",
         "disabled": "Desativado",
         "hint": "Quando desativado, criar uma nova sessão em uma conversa com mensagens existentes irá pular a caixa de confirmação."
+      },
+      "sessionGitRepositoryMatching": {
+        "label": "Agrupar sessões pelo repositório remoto do Git",
+        "enabled": "Ativado",
+        "disabled": "Desativado",
+        "hint": "Inclui o histórico do Codex e do Claude Code de outros diretórios com o mesmo host remoto, proprietário e repositório normalizados. Sem informações do Git, agrupa pelo diretório de trabalho."
       }
     },
     "providers": "Gerenciamento de Provedores",
@@ -1360,7 +1371,10 @@
     },
     "loadMore": "Load more",
     "sessionInUse": "Sessões em uso não podem ser excluídas.",
-    "deleteFailed": "Não foi possível excluir a sessão. Tente novamente."
+    "deleteFailed": "Não foi possível excluir a sessão. Tente novamente.",
+    "confirmDirectoryTitle": "Abrir a sessão em outro diretório?",
+    "confirmDirectoryMessage": "Os comandos e as alterações de arquivos serão executados no diretório abaixo.",
+    "executionDirectory": "Executar em"
   },
   "permission": {
     "dialogTitle": "Solicitação de Permissão",
@@ -2594,5 +2608,11 @@
       "executing": "Executing…",
       "adjust": "Continue adjusting"
     }
+  },
+  "sessionSupplier": {
+    "label": "Fornecedor",
+    "choose": "Selecione um fornecedor",
+    "nextTurn": "Vale a partir do próximo turno",
+    "unavailable": "Fornecedor indisponível. Reabra este menu para tentar novamente ou selecione outro fornecedor."
   }
 }

@@ -269,8 +269,9 @@ async function buildRequestContext(params, withAttachments, overrides = {}) {
 
   const userMessage = await buildUserMessage(params, withAttachments, requestedSessionId);
 
-  const runtimeSignature = buildRuntimeSignature(options, systemPromptAppend, streamingEnabled, runtimeSessionEpoch, modelId)
-    + (supplier ? `:${supplier.revision}` : '');
+  const runtimeSignature = buildRuntimeSignature(
+    options, systemPromptAppend, streamingEnabled, runtimeSessionEpoch, modelId, supplier?.revision
+  );
   console.log('[LIFECYCLE] buildRequestContext sessionId=' + (requestedSessionId || '(new)')
     + ' epoch=' + (runtimeSessionEpoch || '(none)')
     + ' signature=' + runtimeSignature);
@@ -949,6 +950,15 @@ async function abortRuntime(runtime) {
   return runtime.abortPromise;
 }
 
+/** An idle runtime serves a status read only if it was built for the same supplier revision. */
+function runtimeMatchesSupplier(runtime, supplier) {
+  try {
+    return (JSON.parse(runtime.runtimeSignature).supplierRevision || null) === (supplier?.revision || null);
+  } catch {
+    return !supplier;
+  }
+}
+
 /**
  * Get context usage breakdown from the active runtime.
  * Calls the SDK's getContextUsage() control request on the persistent runtime's query object.
@@ -989,7 +999,7 @@ export async function getContextUsagePersistent(params = {}) {
     const targetModel = resolvedModelId || modelId || null;
     const mustRecreate = !active && shouldRecreateRuntimeForModel(runtime, modelId);
 
-    if (!active && (!runtime || runtime.closed || mustRecreate || supplier)) {
+    if (!active && (!runtime || runtime.closed || mustRecreate || !runtimeMatchesSupplier(runtime, supplier))) {
       if (mustRecreate && runtime && !runtime.closed) {
         await disposeRuntime(runtime, { removeSession });
         runtime = null;
@@ -1006,7 +1016,8 @@ export async function getContextUsagePersistent(params = {}) {
       // only the current tier would leave tiers spread by an earlier turn in place, out of sync
       // with this turn's settings.json. setModelEnvironmentVariables() also clears tiers the
       // current settings no longer configure, which is what keeps this path in agreement.
-      setModelEnvironmentVariables(targetModel, modelId, settings?.env);
+      // A supplier's routing goes into its own child env copy, as in buildRequestContext.
+      setModelEnvironmentVariables(targetModel, modelId, settings?.env, supplier?.env ?? process.env);
     }
 
     if (!active && typeof runtime.query?.setModel === 'function') {

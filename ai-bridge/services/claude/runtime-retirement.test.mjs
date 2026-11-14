@@ -3,7 +3,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { __testing, sendMessagePersistent } from './persistent-query-service.js';
 import { disposeRuntime } from './runtime-lifecycle.js';
-import { cleanupStaleSessionRuntimes, getAllRuntimes } from './runtime-registry.js';
+import {
+  cleanupStaleSessionRuntimes, getAllRuntimes, RUNTIME_MAX_ABSOLUTE_LIFETIME_MS, RUNTIME_STUCK_SILENCE_MS,
+} from './runtime-registry.js';
 import { createScriptedQuery, RESULT_OK } from './testing/scripted-query.js';
 
 const params = { sessionId: 'retiring', runtimeSessionEpoch: 'epoch', message: 'first', cwd: process.cwd() };
@@ -30,6 +32,34 @@ test('Stop after idle cleanup is an idempotent no-op and a later send starts nor
   assert.deepEqual(await __testing.abortTurnPersistent(params), { stopped: false });
   assert.deepEqual(await sendMessagePersistent({ ...params, message: 'new send' }), { outcome: 'completed' });
   assert.equal(queries.length, 2);
+});
+
+test('reaping a stuck runtime ends its active turn instead of leaving the send hanging', { timeout: 5000 }, async () => {
+  let query;
+  __testing.setQueryFn(args => {
+    query = createScriptedQuery(args, [[{
+      type: 'assistant',
+      message: { content: [{ type: 'tool_use', id: 'tu1', name: 'Bash', input: { command: 'sleep 99999' } }] },
+    }]]);
+    query.interrupt = async () => {};
+    return query;
+  });
+  let settled = false;
+  const sending = sendMessagePersistent(params).then(result => { settled = true; return result; }, error => { settled = true; throw error; });
+  for (let i = 0; i < 50 && !query; i++) await tick();
+  await query.waitForInput();
+  for (let i = 0; i < 10; i++) await tick();
+  const runtime = __testing.getRuntimeForSession(params.sessionId);
+  assert.equal(runtime.activeTurnCount, 1);
+  runtime.createdAt = Date.now() - RUNTIME_MAX_ABSOLUTE_LIFETIME_MS - 1000;
+  runtime.lastUsedAt = Date.now() - RUNTIME_STUCK_SILENCE_MS - 1000;
+
+  await cleanupStaleSessionRuntimes(item => disposeRuntime(item, {}));
+  for (let i = 0; i < 50 && !settled; i++) await tick();
+
+  assert.equal(runtime.closed, true);
+  assert.equal(settled, true, 'the reaped turn must settle so the daemon command queue moves on');
+  await sending.catch(() => {});
 });
 
 test('pending idle disposal is still an owner for Stop and ambiguous-target checks', async t => {

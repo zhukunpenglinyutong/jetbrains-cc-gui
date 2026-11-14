@@ -178,7 +178,12 @@
     "backgroundTasksRunning": "{{count}} tâches en arrière-plan en cours",
     "backgroundTasksRunning_one": "{{count}} tâche en arrière-plan en cours",
     "backgroundTasksRunning_other": "{{count}} tâches en arrière-plan en cours",
-    "stopBackgroundTasks": "Arrêter les tâches en arrière-plan"
+    "stopBackgroundTasks": "Arrêter les tâches en arrière-plan",
+    "planUsage": {
+      "balanceLabel": "Solde : ",
+      "balanceRemaining": "Solde : {{value}}",
+      "balanceDetail": "Total {{total}} · Utilisé {{used}}"
+    }
   },
   "settings": {
     "title": "Paramètres",
@@ -406,6 +411,12 @@
         "enabled": "Activé",
         "disabled": "Désactivé",
         "hint": "Lorsqu'elle est désactivée, créer une nouvelle session dans une conversation contenant des messages se fera directement, sans afficher la boîte de dialogue de confirmation."
+      },
+      "sessionGitRepositoryMatching": {
+        "label": "Associer les sessions par dépôt Git distant",
+        "enabled": "Activé",
+        "disabled": "Désactivé",
+        "hint": "Inclut l'historique Codex et Claude Code d'autres répertoires ayant le même hôte distant, propriétaire et dépôt normalisés. Sans informations Git, l'association se fait par répertoire de travail."
       }
     },
     "providers": "Gestion des fournisseurs",
@@ -1222,7 +1233,10 @@
     },
     "loadMore": "Load more",
     "sessionInUse": "Les sessions en cours d'utilisation ne peuvent pas être supprimées.",
-    "deleteFailed": "Impossible de supprimer la session. Veuillez réessayer."
+    "deleteFailed": "Impossible de supprimer la session. Veuillez réessayer.",
+    "confirmDirectoryTitle": "Ouvrir la session dans un autre répertoire ?",
+    "confirmDirectoryMessage": "Les commandes et les modifications de fichiers seront exécutées dans le répertoire ci-dessous.",
+    "executionDirectory": "Exécuter dans"
   },
   "permission": {
     "dialogTitle": "Demande de permission",
@@ -2453,5 +2467,11 @@
       "executing": "Executing…",
       "adjust": "Continue adjusting"
     }
+  },
+  "sessionSupplier": {
+    "label": "Fournisseur",
+    "choose": "Sélectionnez un fournisseur",
+    "nextTurn": "S'applique au prochain tour",
+    "unavailable": "Fournisseur indisponible. Rouvrez ce menu pour réessayer ou sélectionnez un autre fournisseur."
   }
 }

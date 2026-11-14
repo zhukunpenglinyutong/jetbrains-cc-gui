@@ -178,7 +178,12 @@
     "backgroundTasksRunning": "{{count}} tareas en segundo plano en ejecución",
     "backgroundTasksRunning_one": "{{count}} tarea en segundo plano en ejecución",
     "backgroundTasksRunning_other": "{{count}} tareas en segundo plano en ejecución",
-    "stopBackgroundTasks": "Detener tareas en segundo plano"
+    "stopBackgroundTasks": "Detener tareas en segundo plano",
+    "planUsage": {
+      "balanceLabel": "Saldo: ",
+      "balanceRemaining": "Saldo: {{value}}",
+      "balanceDetail": "Total {{total}} · Usado {{used}}"
+    }
   },
   "settings": {
     "title": "Configuración",
@@ -406,6 +411,12 @@
         "enabled": "Habilitado",
         "disabled": "Deshabilitado",
         "hint": "Cuando está deshabilitado, crear una nueva sesión en una conversación con mensajes existentes omitirá el cuadro de confirmación."
+      },
+      "sessionGitRepositoryMatching": {
+        "label": "Agrupar sesiones por repositorio remoto de Git",
+        "enabled": "Activado",
+        "disabled": "Desactivado",
+        "hint": "Incluye el historial de Codex y Claude Code de otros directorios con el mismo host remoto, propietario y repositorio normalizados. Si no hay información de Git, se agrupa por directorio de trabajo."
       }
     },
     "providers": "Gestión de proveedores",
@@ -1222,7 +1233,10 @@
     },
     "loadMore": "Load more",
     "sessionInUse": "No se pueden eliminar las sesiones en uso.",
-    "deleteFailed": "No se pudo eliminar la sesión. Inténtalo de nuevo."
+    "deleteFailed": "No se pudo eliminar la sesión. Inténtalo de nuevo.",
+    "confirmDirectoryTitle": "¿Abrir la sesión en otro directorio?",
+    "confirmDirectoryMessage": "Los comandos y los cambios de archivos se ejecutarán en el directorio indicado abajo.",
+    "executionDirectory": "Ejecutar en"
   },
   "permission": {
     "dialogTitle": "Solicitud de permiso",
@@ -2459,5 +2473,11 @@
       "executing": "Executing…",
       "adjust": "Continue adjusting"
     }
+  },
+  "sessionSupplier": {
+    "label": "Proveedor",
+    "choose": "Selecciona un proveedor",
+    "nextTurn": "Se aplica en el siguiente turno",
+    "unavailable": "Proveedor no disponible. Vuelve a abrir este menú para reintentar o selecciona otro proveedor."
   }
 }

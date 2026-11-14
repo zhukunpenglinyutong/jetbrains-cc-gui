@@ -102,6 +102,24 @@ describe('useClaudePlanUsage', () => {
     expect(w.sendToJava).toHaveBeenLastCalledWith(expect.stringMatching(/^get_claude_plan_usage:\d+$/));
   });
 
+  it('re-polls when this conversation switches Claude supplier, once the binding is live', () => {
+    w.sendToJava = vi.fn();
+    renderHook(() => useClaudePlanUsage('claude'));
+    const snapshot = (supplierId: string, busy = false, provider = 'claude') => act(() => {
+      window.dispatchEvent(new CustomEvent('session-supplier-snapshot', { detail: { provider, supplierId, busy } }));
+    });
+    expect(w.sendToJava).toHaveBeenCalledTimes(1);
+    snapshot('a');
+    expect(w.sendToJava).toHaveBeenCalledTimes(1);
+    snapshot('b', true);
+    snapshot('b', false, 'codex');
+    expect(w.sendToJava).toHaveBeenCalledTimes(1);
+    snapshot('b');
+    expect(w.sendToJava).toHaveBeenCalledTimes(2);
+    snapshot('b');
+    expect(w.sendToJava).toHaveBeenCalledTimes(2);
+  });
+
   it('re-polls on the first switch after a remount (back from the settings view)', () => {
     installRuntimeProviderDispatchers();
     w.sendToJava = vi.fn();

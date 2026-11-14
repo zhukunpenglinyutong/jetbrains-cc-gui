@@ -136,12 +136,23 @@ public class ChatWindowDelegateTest {
         assertEquals("fast", state.get("codexFastMode").getAsString());
     }
 
+    /** Recovery uses the same provider resolvers as a live turn, e.g. the window OMP declared. */
+    @Test
+    public void resolvesOmpRecoveryLimitFromTheDeclaredModelWindow() {
+        com.github.claudecodegui.provider.omp.OmpContextWindows.update(JsonParser.parseString(
+                "{\"success\":true,\"models\":[{\"id\":\"vendor/recovery-model\",\"contextWindow\":123456}]}")
+                .getAsJsonObject());
+        assertEquals(123_456, ChatWindowDelegate.resolveModelContextLimitForRecovery(
+                "omp", "vendor/recovery-model", null, null, null));
+    }
+
     /** Verifies that recovery preserves v0.5's provider-aware Codex context-window lookup. */
     @Test
     public void resolvesCodexRecoveryLimitThroughExistingProviderConfiguration() {
         int limit = ChatWindowDelegate.resolveModelContextLimitForRecovery(
                 "codex",
                 "gpt-5.6-sol",
+                null,
                 null,
                 null
         );
@@ -171,6 +182,7 @@ public class ChatWindowDelegateTest {
             int limit = ChatWindowDelegate.resolveModelContextLimitForRecovery(
                     "grok",
                     "grok-build",
+                    null,
                     null,
                     null
             );

@@ -359,11 +359,14 @@ export function useMessageSender({
     // Read current capabilities synchronously: a settled catalog can arrive
     // before the picker's reconciliation effect updates the selected effort.
     const codexEfforts = currentProvider === 'codex' ? codexModelReasoningEfforts(selectedModel) : undefined;
-    // omp resolves a level its model lacks by itself, so its stored effort goes out unchanged.
-    const effectiveEffort = (currentProvider === 'codex' || currentProvider === 'omp') && reasoningEffort !== 'ultra'
-      ? reasoningEffort
-      : resolveCurrentReasoningLevel(reasoningEffort,
-        getAvailableReasoningLevels(currentProvider, selectedModel, undefined, codexEfforts))?.id;
+    // omp resolves a level its model lacks by itself, so its stored effort goes out unchanged;
+    // a Codex-only 'ultra' becomes omp's top level, which is what its picker shows.
+    const effectiveEffort = currentProvider === 'omp'
+      ? (reasoningEffort === 'ultra' ? 'max' : reasoningEffort)
+      : currentProvider === 'codex' && reasoningEffort !== 'ultra'
+        ? reasoningEffort
+        : resolveCurrentReasoningLevel(reasoningEffort,
+          getAvailableReasoningLevels(currentProvider, selectedModel, undefined, codexEfforts))?.id;
     const reasoningEffortPayload = shouldSendReasoningEffort(currentProvider, selectedModel)
       ? { reasoningEffort: effectiveEffort }
       : {};

@@ -124,6 +124,23 @@ describe('useCliModels', () => {
     expect(sendBridgeEventMock).toHaveBeenCalledWith('codex_native_list_models', expect.any(String));
   });
 
+  it('drops the previous supplier\'s Ultra capability when the conversation switches Codex supplier', () => {
+    renderHook(() => useCliModels('codex', 'session'));
+    const snapshot = (supplierId: string, bindingToken: string) => act(() => window.dispatchEvent(new CustomEvent('session-supplier-snapshot', {
+      detail: { provider: 'codex', supplierId, bindingToken, busy: false },
+    })));
+    snapshot('a', 'binding-a');
+    const request = JSON.parse(sendBridgeEventMock.mock.calls.at(-1)?.[1] as string) as { requestId: string };
+    act(() => window.dispatchEvent(new CustomEvent('codex-native-data', { detail: {
+      requestType: 'codex_native_list_models', requestId: request.requestId,
+      data: [{ model: 'shared-model', supportedReasoningEfforts: ['high', 'ultra'] }],
+    } })));
+    expect(isCodexUltraCapabilityUnconfirmed('shared-model', 'ultra')).toBe(false);
+    snapshot('b', 'binding-b');
+    expect(codexModelReasoningEfforts('shared-model')).toBeUndefined();
+    expect(isCodexUltraCapabilityUnconfirmed('shared-model', 'ultra')).toBe(true);
+  });
+
   it('publishes a delayed native catalog atomically for restored Ultra and settles unknown models', () => {
     const { result } = renderHook(() => useCliModels('codex'));
     expect(isCodexUltraCapabilityUnconfirmed('native-model', 'ultra')).toBe(true);

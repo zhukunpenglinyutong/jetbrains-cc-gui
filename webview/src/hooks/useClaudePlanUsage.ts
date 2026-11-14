@@ -139,6 +139,25 @@ export function useClaudePlanUsage(currentProvider: string) {
     return unsubscribe;
   }, [currentProvider, refresh]);
 
+  // A conversation bound to another supplier (#2067) changes whose balance applies
+  // without any global provider push. Busy snapshots still run the old supplier's turn.
+  useEffect(() => {
+    if (currentProvider !== 'claude') return;
+    let previous: string | null = null;
+    const onSnapshot = (event: Event) => {
+      const detail = (event as CustomEvent<{ provider?: string; supplierId?: string; busy?: boolean }>).detail;
+      if (detail?.provider !== 'claude' || !detail.supplierId || detail.busy) return;
+      const changed = previous !== null && previous !== detail.supplierId;
+      previous = detail.supplierId;
+      if (changed) {
+        setState(EMPTY);
+        void refresh();
+      }
+    };
+    window.addEventListener('session-supplier-snapshot', onSnapshot);
+    return () => window.removeEventListener('session-supplier-snapshot', onSnapshot);
+  }, [currentProvider, refresh]);
+
   return { ...state, refresh };
 }
 

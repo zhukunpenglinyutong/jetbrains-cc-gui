@@ -178,7 +178,12 @@
     "backgroundTasksRunning": "{{count}} 件のバックグラウンドタスクを実行中",
     "backgroundTasksRunning_one": "{{count}} 件のバックグラウンドタスクを実行中",
     "backgroundTasksRunning_other": "{{count}} 件のバックグラウンドタスクを実行中",
-    "stopBackgroundTasks": "バックグラウンドタスクを停止"
+    "stopBackgroundTasks": "バックグラウンドタスクを停止",
+    "planUsage": {
+      "balanceLabel": "残高：",
+      "balanceRemaining": "残高：{{value}}",
+      "balanceDetail": "合計 {{total}} · 使用済み {{used}}"
+    }
   },
   "settings": {
     "title": "設定",
@@ -406,6 +411,12 @@
         "enabled": "有効",
         "disabled": "無効",
         "hint": "無効にすると、メッセージが存在するセッションで新規作成を選択した際、確認ダイアログを表示せず直接新規セッションを作成します。"
+      },
+      "sessionGitRepositoryMatching": {
+        "label": "Git リモートリポジトリでセッションを照合",
+        "enabled": "有効",
+        "disabled": "無効",
+        "hint": "正規化したリモートホスト、オーナー、リポジトリが同じ他のディレクトリの Codex と Claude Code の履歴も表示します。Git 情報を取得できない場合は作業ディレクトリで照合します。"
       }
     },
     "providers": "プロバイダー管理",
@@ -1217,7 +1228,10 @@
     },
     "loadMore": "Load more",
     "sessionInUse": "使用中のセッションは削除できません。",
-    "deleteFailed": "セッションを削除できませんでした。もう一度お試しください。"
+    "deleteFailed": "セッションを削除できませんでした。もう一度お試しください。",
+    "confirmDirectoryTitle": "別のディレクトリでセッションを開きますか？",
+    "confirmDirectoryMessage": "コマンドとファイルの変更は下記のディレクトリで実行されます。",
+    "executionDirectory": "実行ディレクトリ"
   },
   "permission": {
     "dialogTitle": "権限リクエスト",
@@ -2445,5 +2459,11 @@
       "executing": "Executing…",
       "adjust": "Continue adjusting"
     }
+  },
+  "sessionSupplier": {
+    "label": "プロバイダー",
+    "choose": "プロバイダーを選択",
+    "nextTurn": "次のターンから適用",
+    "unavailable": "プロバイダーを利用できません。メニューを開き直して再試行するか、別のプロバイダーを選択してください。"
   }
 }

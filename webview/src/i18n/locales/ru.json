@@ -178,7 +178,12 @@
     "backgroundTasksRunning": "Фоновых задач выполняется: {{count}}",
     "backgroundTasksRunning_one": "Выполняется {{count}} фоновая задача",
     "backgroundTasksRunning_other": "Фоновых задач выполняется: {{count}}",
-    "stopBackgroundTasks": "Остановить фоновые задачи"
+    "stopBackgroundTasks": "Остановить фоновые задачи",
+    "planUsage": {
+      "balanceLabel": "Баланс: ",
+      "balanceRemaining": "Баланс: {{value}}",
+      "balanceDetail": "Всего {{total}} · Использовано {{used}}"
+    }
   },
   "settings": {
     "title": "Настройки",
@@ -406,6 +411,12 @@
         "enabled": "Включено",
         "disabled": "Отключено",
         "hint": "При отключении создание нового чата в существующем диалоге будет происходить напрямую, без подтверждения."
+      },
+      "sessionGitRepositoryMatching": {
+        "label": "Сопоставлять сессии по удалённому Git-репозиторию",
+        "enabled": "Включено",
+        "disabled": "Выключено",
+        "hint": "Показывать историю Codex и Claude Code из других каталогов с тем же нормализованным удалённым хостом, владельцем и репозиторием. Если данные Git недоступны, сопоставление идёт по рабочему каталогу."
       }
     },
     "providers": "Управление провайдерами",
@@ -1234,7 +1245,10 @@
     },
     "loadMore": "Load more",
     "sessionInUse": "Используемые чаты нельзя удалить.",
-    "deleteFailed": "Не удалось удалить чат. Повторите попытку."
+    "deleteFailed": "Не удалось удалить чат. Повторите попытку.",
+    "confirmDirectoryTitle": "Открыть сессию в другом каталоге?",
+    "confirmDirectoryMessage": "Команды и изменения файлов будут выполняться в каталоге, указанном ниже.",
+    "executionDirectory": "Каталог запуска"
   },
   "permission": {
     "dialogTitle": "Запрос разрешения",
@@ -2465,5 +2479,11 @@
       "executing": "Executing…",
       "adjust": "Continue adjusting"
     }
+  },
+  "sessionSupplier": {
+    "label": "Поставщик",
+    "choose": "Выберите поставщика",
+    "nextTurn": "Применится со следующего хода",
+    "unavailable": "Поставщик недоступен. Откройте меню снова, чтобы повторить попытку, или выберите другого поставщика."
   }
 }

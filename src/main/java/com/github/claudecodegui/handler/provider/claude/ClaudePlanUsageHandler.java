@@ -3,6 +3,7 @@ package com.github.claudecodegui.handler.provider.claude;
 import com.github.claudecodegui.handler.core.BaseMessageHandler;
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.provider.claude.ClaudePlanUsageService;
+import com.github.claudecodegui.session.ClaudeSession;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
 
@@ -36,7 +37,9 @@ public class ClaudePlanUsageHandler extends BaseMessageHandler {
             String requestId = content == null ? "" : content.trim();
             ApplicationManager.getApplication().executeOnPooledThread(() -> {
                 try {
-                    JsonObject usage = ClaudePlanUsageService.resolvePlanUsagePayload(context.getSettingsService());
+                    ClaudeSession session = context.getSession();
+                    String supplierId = session == null ? null : session.getState().getRuntimeSupplierId("claude");
+                    JsonObject usage = ClaudePlanUsageService.resolvePlanUsagePayload(context.getSettingsService(), supplierId);
                     if (usage == null) {
                         usage = new JsonObject();
                         usage.addProperty("error", true);

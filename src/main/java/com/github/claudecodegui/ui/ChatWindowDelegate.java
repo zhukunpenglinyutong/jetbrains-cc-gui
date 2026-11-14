@@ -2,6 +2,7 @@ package com.github.claudecodegui.ui;
 
 import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.settings.CodemossSettingsService;
+import com.github.claudecodegui.settings.SessionSupplierCatalog;
 import com.github.claudecodegui.handler.AgentHandler;
 import com.github.claudecodegui.handler.ClipboardHandler;
 import com.github.claudecodegui.handler.ContextHandler;
@@ -1032,30 +1033,35 @@ public class ChatWindowDelegate {
                 session.getProvider(),
                 session.getModel(),
                 session.getCwd(),
-                context.getSettingsService()
+                context.getSettingsService(),
+                session.getState().getRuntimeSupplierId(session.getProvider())
         ));
         usagePushService.refreshContextBar();
     }
 
     /**
-     * Resolves the same configured Claude model mapping used by an explicit model selection,
-     * while retaining v0.5's provider-aware Codex/static context-window behavior.
+     * Resolves the same configured Claude model mapping used by an explicit model selection
+     * (from the conversation's supplier), while retaining v0.5's provider-aware Codex
+     * behavior and the per-provider resolvers (OMP, OpenCode, Grok, custom windows).
      */
     static int resolveModelContextLimitForRecovery(
             String provider,
             String model,
             String cwd,
-            CodemossSettingsService settingsService
+            CodemossSettingsService settingsService,
+            String supplierId
     ) {
         if ("codex".equalsIgnoreCase(provider)) {
             return SettingsHandler.getModelContextLimit(provider, model);
         }
+        if (!"claude".equalsIgnoreCase(provider)) {
+            return ModelProviderHandler.resolveContextLimit(provider, model, cwd);
+        }
 
-        boolean isClaude = "claude".equalsIgnoreCase(provider);
         String resolvedModel = model;
-        if (isClaude && settingsService != null) {
+        if (settingsService != null) {
             try {
-                JsonObject settings = settingsService.readClaudeSettings();
+                JsonObject settings = SessionSupplierCatalog.claudeSettings(settingsService, supplierId);
                 if (settings != null && settings.has("env") && settings.get("env").isJsonObject()) {
                     resolvedModel = ModelProviderHandler.resolveConfiguredClaudeModel(
                             model,
@@ -1067,9 +1073,7 @@ public class ChatWindowDelegate {
                         + e.getMessage());
             }
         }
-        return isClaude
-                ? ModelProviderHandler.getClaudeContextLimit(resolvedModel, cwd)
-                : SettingsHandler.getModelContextLimit(resolvedModel);
+        return ModelProviderHandler.getClaudeContextLimit(resolvedModel, cwd);
     }
 
     private void replayCurrentSessionStateToFrontend() {

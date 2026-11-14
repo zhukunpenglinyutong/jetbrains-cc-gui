@@ -208,6 +208,14 @@ describe('useMessageSender - /context command', () => {
     expect(getBridgePayload('send_message').reasoningEffort).toBe('max');
   });
 
+  it('sends a stored Codex Ultra effort to OMP as max, the level its picker shows', () => {
+    const { result } = renderHook(() => useMessageSender(createOptions({
+      currentProvider: 'omp', selectedModel: 'omp-model', reasoningEffort: 'ultra',
+    })));
+    act(() => result.current.handleSubmit('hello'));
+    expect(getBridgePayload('send_message').reasoningEffort).toBe('max');
+  });
+
   it.each([false, true])('ends a refused Codex message dispatch without sending a text fallback (attachments: %s)', withAttachments => {
     const opts = createOptions({ currentProvider: 'codex', selectedModel: 'gpt-5.5' });
     window.sendToJava = vi.fn(message => {

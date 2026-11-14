@@ -2555,5 +2555,11 @@
       "executing": "執行中…",
       "adjust": "繼續調整"
     }
+  },
+  "sessionSupplier": {
+    "label": "供應商",
+    "choose": "請選擇供應商",
+    "nextTurn": "下一輪生效",
+    "unavailable": "供應商無法使用，請重新開啟選單重試或選擇其他供應商。"
   }
 }

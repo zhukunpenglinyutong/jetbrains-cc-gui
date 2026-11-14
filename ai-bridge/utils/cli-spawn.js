@@ -2,7 +2,7 @@
  * Shared headless CLI spawn + stream loop for Grok / Kimi / OpenCode.
  */
 
-import { spawn } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
 import { existsSync } from 'fs';
 import { createInterface } from 'readline';
 import { StringDecoder } from 'string_decoder';
@@ -23,6 +23,15 @@ export function trimPartialUtf8Head(buf) {
   return start ? buf.subarray(start) : buf;
 }
 
+/**
+ * spawnSync for a CLI that may be a Windows `.cmd` shim. `shell: true` would leave a
+ * spaced shim path unquoted (see resolveCliSpawn), so the shim goes through cmd explicitly.
+ */
+export function spawnCliSync(bin, args = [], options = {}) {
+  const invocation = resolveCliSpawn(bin, args, options);
+  return spawnSync(invocation.file, invocation.args, invocation.options);
+}
+
 export function killChildTree(child, label) {
   if (!child || child.killed) return;
   try {
@@ -30,7 +39,7 @@ export function killChildTree(child, label) {
       if (child.pid) {
         // Tree-kill via taskkill so grandchild node processes (npm .cmd shims)
         // do not outlive the cmd.exe wrapper and hold stdout open.
-        spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' })
+        spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true })
           .on('error', () => {
             try {
               child.kill();

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { runCliStreaming, trimPartialUtf8Head } from './cli-spawn.js';
+import { runCliStreaming, spawnCliSync, trimPartialUtf8Head } from './cli-spawn.js';
 import { decodeCliOutput } from './cli-path.js';
 
 test('a UTF-8 character split across stderr chunks survives decoding', async () => {
@@ -61,4 +61,10 @@ test('a byte-capped stderr tail that starts mid-character still decodes as UTF-8
   assert.equal(decodeCliOutput(trimPartialUtf8Head(cut), { forceWindows: true }), text.slice(1));
   const whole = Buffer.from(text, 'utf8');
   assert.equal(trimPartialUtf8Head(whole), whole);
+});
+
+test('spawnCliSync runs a CLI synchronously and returns its output', () => {
+  const result = spawnCliSync(process.execPath, ['-e', 'process.stdout.write("ok")'], { encoding: 'utf8', timeout: 10_000 });
+  assert.equal(result.status, 0);
+  assert.equal(result.stdout, 'ok');
 });

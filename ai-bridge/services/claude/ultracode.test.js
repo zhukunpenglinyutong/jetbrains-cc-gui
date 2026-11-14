@@ -171,6 +171,33 @@ test('native model and effort updates preserve workflows and Ultracode in one co
   }
 });
 
+test('a supplier-bound runtime still updates effort in place, while a new supplier revision rebuilds it', async () => {
+  await __testing.resetState();
+  const calls = [];
+  const options = { model: 'opus', effort: 'low', settings: { ultracode: true } };
+  const signature = (opts, revision) => buildRuntimeSignature(opts, '', false, 'epoch', undefined, revision);
+  const runtime = {
+    closed: false, sessionId: 'supplier-flags', runtimeSessionEpoch: 'epoch', runtimeSignature: signature(options, 'rev-1'),
+    currentModel: 'opus', currentResolvedModel: 'opus', currentEffort: 'low', currentUltracode: true,
+    currentPermissionMode: 'default', permissionModeState: { value: 'default' }, currentMaxThinkingTokens: null,
+    createdAt: Date.now(), lastUsedAt: Date.now(), backgroundTaskIds: new Set(['workflow']), inputStream: new AsyncStream(),
+    query: nativeQuery({ applyFlagSettings: async settings => calls.push(settings) }),
+  };
+  rememberRuntime(runtime, { requestedSessionId: runtime.sessionId, runtimeSessionEpoch: 'epoch' });
+  const nextOptions = { ...options, effort: 'max' };
+  const request = revision => ({ requestedSessionId: runtime.sessionId, runtimeSessionEpoch: 'epoch',
+    runtimeSignature: signature(nextOptions, revision), permissionMode: 'default', sdkModelName: 'opus',
+    resolvedModelId: 'opus', reasoningEffort: 'max', ultracode: true, options: nextOptions });
+  try {
+    assert.equal(await __testing.acquireRuntime(request('rev-1')), runtime);
+    assert.deepEqual(calls, [{ effortLevel: 'max', ultracode: true }]);
+    assert.notEqual(signature(nextOptions, 'rev-1'), signature(nextOptions, 'rev-2'));
+    await assert.rejects(__testing.acquireRuntime(request('rev-2')), /still running background tasks/);
+  } finally {
+    await __testing.resetState();
+  }
+});
+
 test('background task snapshots replace edges, ignore ambient work and survive old-runtime cleanup', () => {
   const runtime = { closed: false, createdAt: 0, lastUsedAt: 0, backgroundTaskIds: new Set(['old-tool']) };
   updateBackgroundTaskState(runtime, { type: 'system', subtype: 'background_tasks_changed', tasks: [

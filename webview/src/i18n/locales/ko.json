@@ -178,7 +178,12 @@
     "backgroundTasksRunning": "백그라운드 작업 {{count}}개 실행 중",
     "backgroundTasksRunning_one": "백그라운드 작업 {{count}}개 실행 중",
     "backgroundTasksRunning_other": "백그라운드 작업 {{count}}개 실행 중",
-    "stopBackgroundTasks": "백그라운드 작업 중지"
+    "stopBackgroundTasks": "백그라운드 작업 중지",
+    "planUsage": {
+      "balanceLabel": "잔액: ",
+      "balanceRemaining": "잔액: {{value}}",
+      "balanceDetail": "총 {{total}} · 사용 {{used}}"
+    }
   },
   "settings": {
     "title": "설정",
@@ -406,6 +411,12 @@
         "enabled": "활성화",
         "disabled": "비활성화",
         "hint": "비활성화하면 메시지가 있는 세션에서 새로 만들기를 선택할 때 확인 대화 상자 없이 바로 새 세션을 만듭니다."
+      },
+      "sessionGitRepositoryMatching": {
+        "label": "Git 원격 저장소로 세션 매칭",
+        "enabled": "사용",
+        "disabled": "사용 안 함",
+        "hint": "정규화된 원격 호스트, 소유자, 저장소가 같은 다른 디렉터리의 Codex 및 Claude Code 기록도 포함합니다. Git 정보를 읽을 수 없으면 작업 디렉터리로 매칭합니다."
       }
     },
     "providers": "제공자 관리",
@@ -1307,7 +1318,10 @@
     },
     "loadMore": "Load more",
     "sessionInUse": "사용 중인 세션은 삭제할 수 없습니다.",
-    "deleteFailed": "세션을 삭제하지 못했습니다. 다시 시도해 주세요."
+    "deleteFailed": "세션을 삭제하지 못했습니다. 다시 시도해 주세요.",
+    "confirmDirectoryTitle": "다른 디렉터리에서 세션을 여시겠습니까?",
+    "confirmDirectoryMessage": "명령과 파일 변경은 아래 디렉터리에서 실행됩니다.",
+    "executionDirectory": "실행 위치"
   },
   "permission": {
     "dialogTitle": "권한 요청",
@@ -2542,5 +2556,11 @@
       "executing": "Executing…",
       "adjust": "Continue adjusting"
     }
+  },
+  "sessionSupplier": {
+    "label": "공급자",
+    "choose": "공급자를 선택하세요",
+    "nextTurn": "다음 턴부터 적용",
+    "unavailable": "공급자를 사용할 수 없습니다. 메뉴를 다시 열어 재시도하거나 다른 공급자를 선택하세요."
   }
 }

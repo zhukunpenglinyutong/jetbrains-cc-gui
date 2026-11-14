@@ -166,8 +166,10 @@ export function createTurnSink() {
   };
 }
 
-export function buildRuntimeSignature(options, systemPromptAppend, streamingEnabled, runtimeSessionEpoch, modelId) {
+export function buildRuntimeSignature(options, systemPromptAppend, streamingEnabled, runtimeSessionEpoch, modelId, supplierRevision) {
   const material = {
+    // Inside the JSON so canUpdateRuntimeSignature can still parse and compare it.
+    ...(supplierRevision ? { supplierRevision } : {}),
     cwd: options.cwd || '',
     additionalDirectories: options.additionalDirectories || [],
     systemPromptAppend: systemPromptAppend || '',
@@ -611,7 +613,13 @@ export function startPerpetualReader(runtime, callbacks) {
 
         // Disposal can finish while next() is pending. Its terminal task
         // snapshot must not be followed by buffered output from the old query.
-        if (runtime.closed) break;
+        // A turn still waiting on this reader (e.g. after a stuck-runtime reap)
+        // must end here, or executeTurn blocks the daemon command queue forever.
+        if (runtime.closed) {
+          runtime.turnSink?.fail(runtime.terminalError
+            || Object.assign(new Error('Claude runtime was closed'), { runtimeTerminated: true }));
+          break;
+        }
 
         // Check for iterator completion
         if (next.done) {

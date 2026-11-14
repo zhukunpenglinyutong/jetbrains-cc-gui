@@ -367,6 +367,8 @@ export function useCliModels(currentProvider: string, scope: 'global' | 'session
       if (previous?.token === detail.bindingToken && previous.supplierId === detail.supplierId) return;
       codexBindingRef.current = { token: detail.bindingToken, supplierId: detail.supplierId };
       nativeRequestRef.current = null;
+      // Another supplier's catalog cannot vouch for this one's efforts (e.g. Ultra).
+      if (previous && previous.supplierId !== detail.supplierId) updateCodexReasoningCapabilities([], true);
       delete modelsCache.codex;
       delete defaultModelCache.codex;
       delete catalogHasEntriesCache.codex;

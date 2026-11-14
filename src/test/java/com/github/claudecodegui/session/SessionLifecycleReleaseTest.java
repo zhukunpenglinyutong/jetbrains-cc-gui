@@ -4,6 +4,7 @@ import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.provider.common.MarkerCliBridge;
+import com.github.claudecodegui.provider.zcode.ZcodeSDKBridge;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.Application;
 import com.intellij.openapi.application.ApplicationManager;
@@ -14,6 +15,7 @@ import org.junit.Test;
 import java.util.Map;
 import java.util.List;
 import java.util.ArrayList;
+import java.lang.reflect.Field;
 import java.lang.reflect.Proxy;
 import java.util.concurrent.CompletableFuture;
 
@@ -102,6 +104,25 @@ public class SessionLifecycleReleaseTest {
         }
     }
 
+    /** A restored ZCode chat keeps its bridge, so its messages are not routed to Claude. */
+    @Test
+    public void historyRestoreKeepsTheZcodeBridge() throws Exception {
+        HoldingReleaseBridge bridge = new HoldingReleaseBridge();
+        Host host = new Host(bridge);
+        host.zcodeBridge = new ZcodeSDKBridge();
+        try {
+            new SessionLifecycleManager(host).loadHistorySession("next-root", "/fixture", "zcode", "glm-5");
+            bridge.release.complete(new JsonObject());
+            assertEquals("next-root", host.session.getSessionId());
+            Field field = ClaudeSession.class.getDeclaredField("zcodeSDKBridge");
+            field.setAccessible(true);
+            assertSame(host.zcodeBridge, field.get(host.session));
+        } finally {
+            host.coalescer.dispose();
+            bridge.cleanupAllProcesses();
+        }
+    }
+
     /** A failed release leaves the old logical owner in place instead of opening another writer. */
     @Test
     public void failedWriterReleaseDoesNotCreateTheNextHistorySession() {
@@ -148,6 +169,7 @@ public class SessionLifecycleReleaseTest {
         private ClaudeSession session;
         private final List<String> scriptNames = new ArrayList<>();
         private int bindingArgumentCount = -1;
+        private ZcodeSDKBridge zcodeBridge;
 
         private Host(HoldingReleaseBridge bridge) {
             this.bridge = bridge;
@@ -173,6 +195,8 @@ public class SessionLifecycleReleaseTest {
         @Override public ClaudeSDKBridge getClaudeSDKBridge() { return null; }
         /** Routes native teardown to the held acknowledgement. */
         @Override public CodexSDKBridge getCodexSDKBridge() { return this.bridge; }
+        /** Supplies the ZCode bridge only when a test opts in. */
+        @Override public ZcodeSDKBridge getZcodeSDKBridge() { return this.zcodeBridge; }
         /** Excludes unrelated CLI lifecycles from the fixture. */
         @Override public Map<String, MarkerCliBridge> getCliBridges() { return Map.of(); }
         /** Exposes the logical session that currently owns the channel. */

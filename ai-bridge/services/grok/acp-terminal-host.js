@@ -201,6 +201,17 @@ function killTerminalProcess(child, signal) {
   }
 }
 
+/**
+ * Once a terminal's process group is seen gone, its id may be reused by an unrelated
+ * group, so later checks must not probe (and then signal) it again.
+ */
+function groupAlive(state) {
+  if (state.groupGone) return false;
+  const alive = isProcessGroupAlive(state.child);
+  if (!alive) state.groupGone = true;
+  return alive;
+}
+
 function isProcessGroupAlive(child) {
   if (!child) return false;
   if (process.platform !== 'win32' && typeof child.pid === 'number' && child.pid > 0) {
@@ -479,6 +490,7 @@ export class AcpTerminalHost {
       });
       child.on('close', (code, signal) => {
         state.closedPipes = true;
+        groupAlive(state);
         resolveClose();
         cleanupTempScript();
         finish(code, signal);
@@ -558,7 +570,7 @@ export class AcpTerminalHost {
   async #terminateProcess(state) {
     if (!state?.child) return;
     const needsKill = () =>
-      !state.exited || !state.closedPipes || isProcessGroupAlive(state.child);
+      !state.exited || !state.closedPipes || groupAlive(state);
 
     if (needsKill()) {
       killTerminalProcess(state.child, 'SIGTERM');
@@ -574,7 +586,7 @@ export class AcpTerminalHost {
         state.closePromise,
         new Promise((r) => setTimeout(r, 1000)),
       ]);
-      while (isProcessGroupAlive(state.child) && Date.now() < waitUntil) {
+      while (groupAlive(state) && Date.now() < waitUntil) {
         await new Promise((r) => setTimeout(r, 20));
       }
       if (!needsKill()) {
