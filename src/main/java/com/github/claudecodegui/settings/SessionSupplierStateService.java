@@ -32,6 +32,11 @@ public final class SessionSupplierStateService implements PersistentStateCompone
         return bindings.get(provider + ":" + sessionId);
     }
 
+    /** Remove only the binding whose history has been confirmed deleted. */
+    public synchronized void removeSupplier(String provider, String sessionId) {
+        bindings.remove(provider + ":" + sessionId);
+    }
+
     @Override
     public synchronized @NotNull Bindings getState() {
         Bindings state = new Bindings();

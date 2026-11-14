@@ -1328,7 +1328,10 @@
     "providerAdded": "प्रदाता जोड़ा गया",
     "providerUpdated": "प्रदाता अपडेट किया गया",
     "providerDeleted": "प्रदाता हटाया गया",
-    "codexSettingsDispatchFailed": "Codex की सेटिंग IDE को नहीं भेजी जा सकी। चैट दोबारा खोलकर फिर कोशिश करें।"
+    "codexSettingsDispatchFailed": "Codex की सेटिंग IDE को नहीं भेजी जा सकी। चैट दोबारा खोलकर फिर कोशिश करें।",
+    "codexSettingsRuntimeInactive": "Codex रनटाइम निष्क्रिय है। चैट फिर से खोलें और दोबारा प्रयास करें।",
+    "codexSettingsServiceUnavailable": "Codex सेवा उपलब्ध नहीं है। चैट फिर से खोलें और दोबारा प्रयास करें।",
+    "codexSettingsUpdateFailed": "Codex सेटिंग्स की पुष्टि नहीं हो सकी। चैट फिर से खोलें और दोबारा प्रयास करें।"
   },
   "config": {
     "clickToCopy": "कॉपी करने के लिए क्लिक करें",

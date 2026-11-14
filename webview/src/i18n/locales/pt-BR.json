@@ -1467,7 +1467,10 @@
     "providerAdded": "Provedor adicionado",
     "providerUpdated": "Provedor atualizado",
     "providerDeleted": "Provedor excluído",
-    "codexSettingsDispatchFailed": "Não foi possível enviar as configurações do Codex para a IDE. Reabra o chat e tente novamente."
+    "codexSettingsDispatchFailed": "Não foi possível enviar as configurações do Codex para a IDE. Reabra o chat e tente novamente.",
+    "codexSettingsRuntimeInactive": "O ambiente de execução do Codex está inativo. Reabra a conversa e tente novamente.",
+    "codexSettingsServiceUnavailable": "O serviço do Codex está indisponível. Reabra a conversa e tente novamente.",
+    "codexSettingsUpdateFailed": "Não foi possível confirmar as configurações do Codex. Reabra a conversa e tente novamente."
   },
   "config": {
     "clickToCopy": "Clique para copiar",

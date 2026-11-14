@@ -159,11 +159,18 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
       if (!keys.length || keys.some(key => values[key] !== expected[key])) return;
       pendingCodexSettingsRequest.current = null;
       setCodexSettingsPending(false);
-      addToast(response.error, 'error');
+      const errorKey = response.error === 'Codex runtime access is inactive'
+        ? 'toast.codexSettingsRuntimeInactive'
+        : response.error === 'Codex app-server daemon is unavailable' || response.error === 'Codex bridge is unavailable'
+          ? 'toast.codexSettingsServiceUnavailable'
+          : response.error === 'Codex settings update failed' || response.error === 'Codex settings update returned no acknowledgement'
+            ? 'toast.codexSettingsUpdateFailed'
+            : null;
+      addToast(errorKey ? t(errorKey) : response.error, 'error');
     };
     window.addEventListener('codex-interaction-response', handleSettingsResponse);
     return () => window.removeEventListener('codex-interaction-response', handleSettingsResponse);
-  }, [currentProvider, codexApprovalPreset, codexCollaborationMode, codexSandboxSelection, addToast]);
+  }, [currentProvider, codexApprovalPreset, codexCollaborationMode, codexSandboxSelection, addToast, t]);
 
   // ── Provider-specific sub-hooks ──
   const claude = useClaudeProvider();

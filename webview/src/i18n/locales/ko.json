@@ -1413,7 +1413,10 @@
     "providerAdded": "제공자 추가됨",
     "providerUpdated": "제공자 업데이트됨",
     "providerDeleted": "제공자 삭제됨",
-    "codexSettingsDispatchFailed": "Codex 설정을 IDE로 보낼 수 없습니다. 대화를 다시 열고 재시도하세요."
+    "codexSettingsDispatchFailed": "Codex 설정을 IDE로 보낼 수 없습니다. 대화를 다시 열고 재시도하세요.",
+    "codexSettingsRuntimeInactive": "Codex 실행 환경이 비활성 상태입니다. 채팅을 다시 열고 재시도하세요.",
+    "codexSettingsServiceUnavailable": "Codex 서비스를 사용할 수 없습니다. 채팅을 다시 열고 재시도하세요.",
+    "codexSettingsUpdateFailed": "Codex 설정을 확인하지 못했습니다. 채팅을 다시 열고 재시도하세요."
   },
   "config": {
     "clickToCopy": "클릭하여 복사",

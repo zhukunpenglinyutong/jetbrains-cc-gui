@@ -1323,7 +1323,10 @@
     "providerAdded": "プロバイダーを追加しました",
     "providerUpdated": "プロバイダーを更新しました",
     "providerDeleted": "プロバイダーを削除しました",
-    "codexSettingsDispatchFailed": "Codex の設定を IDE に送信できません。チャットを開き直して、もう一度お試しください。"
+    "codexSettingsDispatchFailed": "Codex の設定を IDE に送信できません。チャットを開き直して、もう一度お試しください。",
+    "codexSettingsRuntimeInactive": "Codex の実行環境が無効です。チャットを開き直して、もう一度お試しください。",
+    "codexSettingsServiceUnavailable": "Codex サービスを利用できません。チャットを開き直して、もう一度お試しください。",
+    "codexSettingsUpdateFailed": "Codex の設定を確認できませんでした。チャットを開き直して、もう一度お試しください。"
   },
   "config": {
     "clickToCopy": "クリックしてコピー",

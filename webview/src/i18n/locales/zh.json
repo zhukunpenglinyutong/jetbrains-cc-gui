@@ -1773,7 +1773,10 @@
     "providerAdded": "供应商添加成功",
     "providerUpdated": "供应商更新成功",
     "providerDeleted": "供应商删除成功",
-    "codexSettingsDispatchFailed": "无法将 Codex 设置发送到 IDE，请重新打开对话后重试。"
+    "codexSettingsDispatchFailed": "无法将 Codex 设置发送到 IDE，请重新打开对话后重试。",
+    "codexSettingsRuntimeInactive": "Codex 运行环境未启用，请重新打开对话后重试。",
+    "codexSettingsServiceUnavailable": "Codex 服务当前不可用，请重新打开对话后重试。",
+    "codexSettingsUpdateFailed": "无法确认 Codex 设置，请重新打开对话后重试。"
   },
   "config": {
     "clickToCopy": "点击复制",
