@@ -34,7 +34,7 @@ public class SessionLifecycleReleaseTest {
         ClaudeSession previous = host.session;
         SessionLifecycleManager manager = new SessionLifecycleManager(host) {
             @Override public String determineWorkingDirectory() { return "/fixture"; }
-            @Override public void fetchSlashCommandsOnStartup() { }
+            @Override public void fetchSlashCommandsOnStartup(boolean userRequested) { }
         };
         Application previousApplication = ApplicationManager.getApplication();
         List<Runnable> uiCalls = new ArrayList<>();
