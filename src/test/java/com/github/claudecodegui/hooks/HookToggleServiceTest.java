@@ -248,7 +248,11 @@ public class HookToggleServiceTest {
         Path home = temporaryFolder.getRoot().toPath();
         Path physical = Files.createDirectories(home.resolve("physical-codex"));
         Path alias = home.resolve("codex-link");
-        Files.createSymbolicLink(alias, physical);
+        try {
+            Files.createSymbolicLink(alias, physical);
+        } catch (java.io.IOException | UnsupportedOperationException | SecurityException unavailable) {
+            org.junit.Assume.assumeNoException(unavailable);
+        }
         Path declaration = physical.resolve("hooks.json");
         String original = "{\"hooks\":{\"Stop\":[{\"hooks\":[{\"type\":\"command\",\"command\":\"echo fixture\"}]}]}}";
         Files.writeString(declaration, original);

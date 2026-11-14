@@ -4,6 +4,7 @@ import com.github.claudecodegui.cli.CliStatusDetector;
 import com.github.claudecodegui.util.PlatformUtils;
 import com.google.gson.JsonObject;
 import org.junit.After;
+import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -46,6 +47,7 @@ public class CodemossSettingsServicePromptEnhancerConfigTest {
         CodemossSettingsService service = new CodemossSettingsService();
 
         JsonObject config = invokeGetPromptEnhancerConfig(service);
+        assumeCodexCliDetected(config);
 
         assertTrue(config.get("provider").isJsonNull());
         assertEquals("codex", config.get("effectiveProvider").getAsString());
@@ -80,6 +82,7 @@ public class CodemossSettingsServicePromptEnhancerConfigTest {
 
         // Preferred provider unavailable → still Codex
         JsonObject withoutGrok = invokeGetPromptEnhancerConfig(service, "grok");
+        assumeCodexCliDetected(withoutGrok);
         assertTrue(withoutGrok.get("provider").isJsonNull());
         // Grok CLI may or may not be installed on the machine; if not, fall back to codex.
         String effectiveWithoutInstalledGrok = withoutGrok.get("effectiveProvider").isJsonNull()
@@ -295,14 +298,26 @@ public class CodemossSettingsServicePromptEnhancerConfigTest {
     }
 
     /**
+     * Skips on Windows when no Codex CLI is detected. There the detector only accepts a real
+     * codex.exe (or one on PATH) that prints its version, which this test cannot stub, so the
+     * "both providers installed" precondition depends on the machine.
+     */
+    private static void assumeCodexCliDetected(JsonObject config) {
+        if (PlatformUtils.isWindows()) {
+            Assume.assumeTrue("Windows needs a real Codex CLI for this test, and none was detected",
+                    config.getAsJsonObject("availability").get("codex").getAsBoolean());
+        }
+    }
+
+    /**
      * Creates an executable stub for the legacy bundled Codex CLI at the layout
      * {@link CliStatusDetector} probes, so codex availability does not depend on
      * a real CLI being on the machine's PATH (CI runners have none).
      */
     private void installLegacyCodexCli(Path tempHome) throws Exception {
         if (PlatformUtils.isWindows()) {
-            // Windows probes the real CLI through PATH resolution; a fake codex.exe
-            // cannot be produced here and is not needed.
+            // Windows probes the real CLI through PATH resolution, and a fake codex.exe
+            // cannot be produced here; tests that need Codex skip without a real one.
             return;
         }
         String platform = PlatformUtils.isMac() ? "darwin" : "linux";

@@ -369,11 +369,26 @@ public class OmpHistoryRestoreTest {
     @Test
     public void plainPathsAreTheOnesOmpWritesToAsWritten() {
         for (String path : new String[]{"notes.md", "src/a.ts", "/abs/a.ts", "~", "~/a", "C:\\a\\b.txt"}) {
-            assertTrue(path, OmpToolMapper.isPlainPath(path));
+            assertTrue(path, OmpToolMapper.isPlainPath(path, false));
         }
-        for (String path : new String[]{"@/abs/a", ":./a", "~name", "[src/a.ts#1A2B]", "bundle.zip:inner.txt",
-                "a\u00A0b", "/", "", " a", "xd://lsp"}) {
-            assertFalse(path, OmpToolMapper.isPlainPath(path));
+        for (boolean windows : new boolean[]{false, true}) {
+            for (String path : new String[]{"@/abs/a", ":./a", "~name", "[src/a.ts#1A2B]", "bundle.zip:inner.txt",
+                    "a\u00A0b", "/", "", " a", "xd://lsp"}) {
+                assertFalse(path + " windows=" + windows, OmpToolMapper.isPlainPath(path, windows));
+            }
+        }
+        assertFalse(OmpToolMapper.isPlainPath("/c/a", true));
+        assertFalse(OmpToolMapper.isPlainPath("/abs/a.ts", true));
+        for (String path : new String[]{"notes.md", "src/a.ts", "~", "~/a", "C:\\a\\b.txt"}) {
+            assertTrue(path, OmpToolMapper.isPlainPath(path, true));
+        }
+    }
+
+    @Test
+    public void plainPathsFollowTheHostRules() {
+        boolean windowsHost = File.separatorChar == '\\';
+        for (String path : new String[]{"notes.md", "/abs/a.ts", "/c/a", "C:\\a\\b.txt", "@/abs/a"}) {
+            assertEquals(path, OmpToolMapper.isPlainPath(path, windowsHost), OmpToolMapper.isPlainPath(path));
         }
     }
 
@@ -432,7 +447,7 @@ public class OmpHistoryRestoreTest {
                 assistant("a1", null,
                         call("t1", "todo", "{'ops':[]}") + ","
                                 + call("e1", "edit", "{'path':'/abs/x.ts'}") + ","
-                                + call("w1", "write", "{'path':'/abs/w.txt','content':'c'}") + ","
+                                + call("w1", "write", "{'path':'w.txt','content':'c'}") + ","
                                 + call("k1", "task", "{'tasks':[{'name':'N','task':'P'},{'name':'M','task':'Q'}]}")));
 
         List<JsonObject> messages = load();
@@ -442,7 +457,7 @@ public class OmpHistoryRestoreTest {
         assertEquals("edit", uses.get(1).get("name").getAsString());
         assertEquals("/abs/x.ts", uses.get(1).getAsJsonObject("input").get("file_path").getAsString());
         assertEquals("Write", uses.get(2).get("name").getAsString());
-        assertEquals("/abs/w.txt", uses.get(2).getAsJsonObject("input").get("file_path").getAsString());
+        assertEquals(CWD + "/w.txt", uses.get(2).getAsJsonObject("input").get("file_path").getAsString());
         assertEquals("Task", uses.get(3).get("name").getAsString());
         assertEquals("k1#2", uses.get(4).get("id").getAsString());
         assertTrue(blocks(messages, "tool_result").isEmpty());
