@@ -1,0 +1,53 @@
+name: Codex compatibility
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/codex-compatibility.yml'
+      - 'ai-bridge/services/codex/**'
+      - 'ai-bridge/utils/sdk-loader*'
+      - 'src/main/java/com/github/claudecodegui/provider/codex/**'
+      - 'src/main/java/com/github/claudecodegui/storage/**'
+      - 'src/main/java/com/github/claudecodegui/dependency/**'
+      - 'src/main/java/com/github/claudecodegui/handler/history/**'
+      - 'src/test/java/com/github/claudecodegui/provider/codex/**'
+      - 'src/test/java/com/github/claudecodegui/storage/**'
+      - 'src/test/java/com/github/claudecodegui/dependency/**'
+      - 'build.gradle'
+
+permissions:
+  contents: read
+
+jobs:
+  cli-transport:
+    name: Official CLI ${{ matrix.cli }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        cli: ['0.146.0', '0.163.0']
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22.12.0'
+      - name: Install bridge dependencies
+        working-directory: ai-bridge
+        run: npm ci
+      - name: Install the official CLI in an isolated directory
+        env:
+          CLI_VERSION: ${{ matrix.cli }}
+        run: npm install --prefix "$RUNNER_TEMP/codex-cli-test" --ignore-scripts --no-audit --no-fund "@openai/codex@$CLI_VERSION"
+      - name: Verify official CLI catalogs, permissions, history and bridge contracts
+        env:
+          CODEX_CLI_REQUIRE_REAL: '1'
+          CODEX_CLI_TEST_VERSION: ${{ matrix.cli }}
+        run: |
+          export CODEX_CLI_TEST_COMMAND="$(node -e 'process.stdout.write(JSON.stringify([process.execPath, require("node:path").join(process.env.RUNNER_TEMP, "codex-cli-test/node_modules/@openai/codex/bin/codex.js")]))')"
+          node --test --test-concurrency=2 ai-bridge/services/codex/*.test.js ai-bridge/services/codex/*.test.mjs ai-bridge/utils/sdk-loader.test.js
