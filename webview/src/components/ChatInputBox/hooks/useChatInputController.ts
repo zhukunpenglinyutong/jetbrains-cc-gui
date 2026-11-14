@@ -15,6 +15,7 @@ import {
   useTooltip,
   useSubmitHandler,
   usePromptEnhancer,
+  useVoiceInput,
   useChatInputSelectionController,
   useKeyboardHandler,
   useControlledValueSync,
@@ -24,6 +25,7 @@ import {
   useResizableChatInputBox,
 } from './index.js';
 import { useChatInputTextPipeline } from './useChatInputTextPipeline.js';
+import { VOICE_INPUT_CONFIG_PROBLEMS } from './useVoiceInput.js';
 import { SessionContext } from '../../../contexts/SessionContext.js';
 import { useUIState } from '../../../contexts/UIStateContext.js';
 import { useContextMenu } from '../../../hooks/useContextMenu.js';
@@ -259,6 +261,22 @@ export function useChatInputController({
     selectedModel,
   });
 
+  const voiceInput = useVoiceInput({
+    editableRef,
+    getTextContent,
+    setHasContent,
+    onInput: notifyInput,
+    onError: (code, detail) => {
+      const message = t(`voiceInput.error.${code}`);
+      const informational = code === 'too_short' || code === 'no_speech';
+      addToast?.(detail ? `${message}: ${detail}` : message, informational ? 'info' : 'error');
+      if ((VOICE_INPUT_CONFIG_PROBLEMS as readonly string[]).includes(code)) {
+        setSettingsInitialTab('voiceInput');
+        setCurrentView('settings');
+      }
+    },
+  });
+
   const handleOpenPromptEnhancerSettings = useCallback(() => {
     handleCloseEnhancerDialog();
     setSettingsInitialTab('promptEnhancer');
@@ -449,6 +467,7 @@ export function useChatInputController({
     isEnhancing,
     handleEnhancePrompt,
     promptEnhancer,
+    voiceInput,
     handleModeSelect,
     handleModelSelect,
     inlineCompletion,

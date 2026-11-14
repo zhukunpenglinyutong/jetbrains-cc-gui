@@ -448,6 +448,65 @@
       "title": "Prompt Enhancer",
       "description": "Choose which provider and model should be used when enhancing prompts before sending them."
     },
+    "voiceInput": {
+      "title": "Entrada de voz",
+      "description": "Dite na caixa do chat com o botão do microfone ou um atalho de teclado. O áudio é enviado apenas ao serviço de fala para texto que você configurar. As alterações são salvas automaticamente.",
+      "service": {
+        "title": "Serviço de fala para texto"
+      },
+      "baseUrl": {
+        "label": "Endpoint",
+        "placeholder": "https://stt.example.com/v1",
+        "hint": "URL base de uma API de transcrição compatível com OpenAI; as requisições vão para /audio/transcriptions abaixo dela. Use https, ou http para um servidor nesta máquina."
+      },
+      "apiKey": {
+        "label": "Chave de API",
+        "hint": "Enviada apenas a este endpoint e salva em ~/.codemoss/config.json. Deixe vazia para servidores que não precisam de chave.",
+        "placeholderNone": "Não definida",
+        "placeholderSaved": "Salva ({{hint}}), digite para substituir",
+        "clear": "Remover"
+      },
+      "model": {
+        "label": "Modelo",
+        "placeholder": "ID do modelo",
+        "hint": "Como o seu provedor o nomeia."
+      },
+      "language": {
+        "label": "Idioma",
+        "placeholder": "Detecção automática",
+        "hint": "Código ISO 639-1 opcional, por exemplo en ou de."
+      },
+      "test": {
+        "button": "Testar conexão",
+        "testing": "Testando…",
+        "ok": "Conectado em {{ms}} ms",
+        "failed": "Falha: {{error}}"
+      },
+      "behavior": {
+        "title": "Comportamento"
+      },
+      "live": {
+        "label": "Transcrição ao vivo",
+        "description": "Mostra cada frase assim que você pausa, em vez da gravação inteira depois que você para."
+      },
+      "fillers": {
+        "label": "Palavras a remover",
+        "placeholder": "ex.: hã, tipo, né",
+        "hint": "Palavras ou expressões separadas por vírgula a remover das transcrições; apenas palavras inteiras, sem diferenciar maiúsculas. Deixe vazio para manter as transcrições como vieram."
+      },
+      "shortcut": {
+        "title": "Atalho de teclado",
+        "label": "Pressione para falar",
+        "unbound": "Não atribuído",
+        "hint": "Segure para falar ou toque para iniciar e parar; Esc cancela. Funciona em qualquer lugar da IDE. Altere em Configurações → Keymap (pesquise “Voice Input”)."
+      },
+      "savedInline": "Salvo",
+      "saveFailed": "Não foi possível salvar: {{error}}",
+      "loading": "Carregando…",
+      "loadFailed": "Não foi possível carregar as configurações de entrada de voz: {{error}}",
+      "noResponse": "a IDE não respondeu",
+      "retry": "Tentar novamente"
+    },
     "providerTab": {
       "claude": "Claude Code",
       "codex": "Codex",
@@ -2299,6 +2358,23 @@
     "openSettings": "Configurar",
     "openSettingsTooltip": "Abrir configurações do aprimorador de prompt",
     "resolvingUsage": "Resolvendo configuração…"
+  },
+  "voiceInput": {
+    "start": "Entrada de voz",
+    "stop": "Parar e transcrever",
+    "transcribing": "Transcrevendo… Esc cancela",
+    "shortcutHint": "segure para falar, toque para alternar",
+    "error": {
+      "missing_endpoint": "Defina um endpoint de fala para texto em Configurações → Entrada de voz",
+      "invalid_endpoint": "Digite uma URL completa que comece com https://",
+      "insecure_endpoint": "Use https; http só é permitido para um servidor nesta máquina",
+      "missing_model": "Defina um modelo de transcrição em Configurações → Entrada de voz",
+      "mic_unavailable": "O microfone não está disponível",
+      "too_short": "A gravação foi muito curta",
+      "config_unreadable": "Não foi possível ler as configurações de entrada de voz",
+      "transcription_failed": "Falha na transcrição",
+      "no_speech": "Nenhuma fala detectada"
+    }
   },
   "fileContext": {
     "placeholder": "Contexto do Arquivo",

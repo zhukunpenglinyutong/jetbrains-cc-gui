@@ -497,6 +497,65 @@
       "title": "Prompt Enhancer",
       "description": "Choose which provider and model should be used when enhancing prompts before sending them."
     },
+    "voiceInput": {
+      "title": "Saisie vocale",
+      "description": "Dictez dans la zone de chat avec le bouton micro ou un raccourci clavier. L'audio n'est envoyé qu'au service de transcription que vous configurez. Les modifications sont enregistrées automatiquement.",
+      "service": {
+        "title": "Service de transcription"
+      },
+      "baseUrl": {
+        "label": "Point de terminaison",
+        "placeholder": "https://stt.example.com/v1",
+        "hint": "URL de base d'une API de transcription compatible OpenAI ; les requêtes vont vers /audio/transcriptions sous cette URL. Utilisez https, ou http pour un serveur sur cette machine."
+      },
+      "apiKey": {
+        "label": "Clé d'API",
+        "hint": "Envoyée uniquement à ce point de terminaison et stockée dans ~/.codemoss/config.json. Laissez vide pour les serveurs sans clé.",
+        "placeholderNone": "Non définie",
+        "placeholderSaved": "Enregistrée ({{hint}}), saisissez-en une autre pour la remplacer",
+        "clear": "Supprimer"
+      },
+      "model": {
+        "label": "Modèle",
+        "placeholder": "ID du modèle",
+        "hint": "Tel que nommé par votre fournisseur."
+      },
+      "language": {
+        "label": "Langue",
+        "placeholder": "Détection automatique",
+        "hint": "Code ISO 639-1 facultatif, par exemple en ou de."
+      },
+      "test": {
+        "button": "Tester la connexion",
+        "testing": "Test…",
+        "ok": "Connecté en {{ms}} ms",
+        "failed": "Échec : {{error}}"
+      },
+      "behavior": {
+        "title": "Comportement"
+      },
+      "live": {
+        "label": "Transcription en direct",
+        "description": "Affiche chaque phrase dès que vous faites une pause, au lieu de tout l'enregistrement après l'arrêt."
+      },
+      "fillers": {
+        "label": "Mots à supprimer",
+        "placeholder": "p. ex. euh, bah, du coup",
+        "hint": "Mots ou expressions séparés par des virgules à retirer des transcriptions ; mots entiers uniquement, sans tenir compte de la casse. Laissez vide pour garder les transcriptions telles quelles."
+      },
+      "shortcut": {
+        "title": "Raccourci clavier",
+        "label": "Appuyer pour parler",
+        "unbound": "Non attribué",
+        "hint": "Maintenez pour parler ou appuyez pour démarrer et arrêter ; Échap annule. Fonctionne partout dans l'IDE. Modifiez-le dans Paramètres → Keymap (recherchez « Voice Input »)."
+      },
+      "savedInline": "Enregistré",
+      "saveFailed": "Échec de l'enregistrement : {{error}}",
+      "loading": "Chargement…",
+      "loadFailed": "Impossible de charger les paramètres de saisie vocale : {{error}}",
+      "noResponse": "l'IDE n'a pas répondu",
+      "retry": "Réessayer"
+    },
     "commit": {
       "title": "Commit AI",
       "description": "Configure AI-generated Git commit message behavior",
@@ -2158,6 +2217,23 @@
     "openSettings": "Configurer",
     "openSettingsTooltip": "Ouvrir les paramètres d'amélioration de prompt",
     "resolvingUsage": "Résolution de la configuration…"
+  },
+  "voiceInput": {
+    "start": "Saisie vocale",
+    "stop": "Arrêter et transcrire",
+    "transcribing": "Transcription… Échap annule",
+    "shortcutHint": "maintenir pour parler, appuyer pour basculer",
+    "error": {
+      "missing_endpoint": "Définissez un point de terminaison de transcription dans Paramètres → Saisie vocale",
+      "invalid_endpoint": "Saisissez une URL complète commençant par https://",
+      "insecure_endpoint": "Utilisez https ; http n'est autorisé que pour un serveur sur cette machine",
+      "missing_model": "Définissez un modèle de transcription dans Paramètres → Saisie vocale",
+      "mic_unavailable": "Le microphone n'est pas disponible",
+      "too_short": "L'enregistrement est trop court",
+      "config_unreadable": "Impossible de lire les paramètres de saisie vocale",
+      "transcription_failed": "Échec de la transcription",
+      "no_speech": "Aucune parole détectée"
+    }
   },
   "fileContext": {
     "placeholder": "Contexte de fichier",

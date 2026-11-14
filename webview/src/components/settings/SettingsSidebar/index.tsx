@@ -3,7 +3,7 @@ import type { KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import Tooltip from 'antd/es/tooltip';
 
-export type SettingsTab = 'basic' | 'providers' | 'dependencies' | 'usage' | 'permissions' | 'promptEnhancer' | 'commit' | 'mcp' | 'agents' | 'prompts' | 'skills' | 'hooks' | 'pet' | 'other' | 'community';
+export type SettingsTab = 'basic' | 'providers' | 'dependencies' | 'usage' | 'permissions' | 'promptEnhancer' | 'voiceInput' | 'commit' | 'mcp' | 'agents' | 'prompts' | 'skills' | 'hooks' | 'pet' | 'other' | 'community';
 
 interface SidebarItem {
   key: SettingsTab;
@@ -21,6 +21,7 @@ const sidebarGroups: { key: string; items: SidebarItem[] }[] = [
   { key: 'prompts', items: [
     { key: 'prompts', icon: 'codicon-notebook', labelKey: 'settings.prompts' },
     { key: 'promptEnhancer', icon: 'codicon-sparkle', labelKey: 'settings.promptEnhancer.title' },
+    { key: 'voiceInput', icon: 'codicon-mic', labelKey: 'settings.voiceInput.title' },
     { key: 'commit', icon: 'codicon-git-commit', labelKey: 'settings.commit.title' },
   ] },
   { key: 'extensions', items: [

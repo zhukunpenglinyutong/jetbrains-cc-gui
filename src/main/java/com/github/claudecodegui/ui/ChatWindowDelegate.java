@@ -26,6 +26,7 @@ import com.github.claudecodegui.handler.NodeProcessHandler;
 import com.github.claudecodegui.handler.PermissionHandler;
 import com.github.claudecodegui.handler.PromptEnhancerHandler;
 import com.github.claudecodegui.handler.PromptHandler;
+import com.github.claudecodegui.handler.VoiceInputHandler;
 import com.github.claudecodegui.handler.provider.CustomModelPricingHandler;
 import com.github.claudecodegui.handler.provider.ModelProviderHandler;
 import com.github.claudecodegui.handler.provider.ProviderHandler;
@@ -194,6 +195,7 @@ public class ChatWindowDelegate {
     // Reference to the SettingsHandler for clean theme-callback unregistration on dispose.
     private com.github.claudecodegui.handler.SettingsHandler settingsHandler;
     private volatile ClipboardHandler clipboardHandler;
+    private volatile VoiceInputHandler voiceInputHandler;
 
     public ChatWindowDelegate(DelegateHost host) {
         this(host, runnable -> ApplicationManager.getApplication().invokeLater(runnable));
@@ -589,6 +591,8 @@ public class ChatWindowDelegate {
         messageDispatcher.registerHandler(new FileExportHandler(handlerContext));
         messageDispatcher.registerHandler(new DiffHandler(handlerContext));
         messageDispatcher.registerHandler(new PromptEnhancerHandler(handlerContext));
+        this.voiceInputHandler = new VoiceInputHandler(handlerContext);
+        messageDispatcher.registerHandler(this.voiceInputHandler);
         messageDispatcher.registerHandler(new AgentHandler(handlerContext));
         messageDispatcher.registerHandler(new PromptHandler(handlerContext));
         messageDispatcher.registerHandler(new TabHandler(handlerContext));
@@ -1162,6 +1166,11 @@ public class ChatWindowDelegate {
         if (settingsHandler != null) {
             settingsHandler.dispose();
             settingsHandler = null;
+        }
+        VoiceInputHandler voice = this.voiceInputHandler;
+        this.voiceInputHandler = null;
+        if (voice != null) {
+            voice.dispose();
         }
     }
 }

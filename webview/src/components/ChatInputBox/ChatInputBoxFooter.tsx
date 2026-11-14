@@ -4,6 +4,7 @@ import type { TooltipState } from './hooks/useTooltip.js';
 import { ButtonArea } from './ButtonArea.js';
 import { CompletionDropdown } from './Dropdown/index.js';
 import { PromptEnhancerDialog } from './PromptEnhancerDialog.js';
+import type { UseVoiceInputReturn } from './hooks/useVoiceInput.js';
 
 interface CompletionController {
   isOpen: boolean;
@@ -41,6 +42,7 @@ export function ChatInputBoxFooter({
   onDshPresetChange,
   onOmpApprovalModeChange,
   onEnhancePrompt,
+  voiceInput,
   alwaysThinkingEnabled,
   onToggleThinking,
   streamingEnabled,
@@ -86,6 +88,7 @@ export function ChatInputBoxFooter({
   onDshPresetChange?: (preset: string) => void;
   onOmpApprovalModeChange?: (mode: OmpApprovalMode) => void;
   onEnhancePrompt: () => void;
+  voiceInput?: UseVoiceInputReturn;
   alwaysThinkingEnabled?: boolean;
   onToggleThinking?: (enabled: boolean) => void;
   streamingEnabled?: boolean;
@@ -149,6 +152,7 @@ export function ChatInputBoxFooter({
         onDshPresetChange={onDshPresetChange}
         onOmpApprovalModeChange={onOmpApprovalModeChange}
         onEnhancePrompt={onEnhancePrompt}
+        voiceInput={voiceInput}
         alwaysThinkingEnabled={alwaysThinkingEnabled}
         onToggleThinking={onToggleThinking}
         streamingEnabled={streamingEnabled}

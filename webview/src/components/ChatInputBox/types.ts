@@ -7,6 +7,7 @@
 // Core Entity Types
 // ============================================================
 import { pickerModelSupports1MContext } from '../../utils/claudeModelCapabilities';
+import type { UseVoiceInputReturn } from './hooks/useVoiceInput';
 
 /**
  * File tag information for backend context injection (Codex mode)
@@ -1185,6 +1186,8 @@ export interface ButtonAreaProps {
   onOmpApprovalModeChange?: (mode: OmpApprovalMode) => void;
   /** Enhance prompt callback */
   onEnhancePrompt?: () => void;
+  /** Push-to-talk dictation controller */
+  voiceInput?: UseVoiceInputReturn;
   /** Whether always thinking enabled */
   alwaysThinkingEnabled?: boolean;
   /** Toggle thinking mode */

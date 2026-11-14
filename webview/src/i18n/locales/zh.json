@@ -726,6 +726,65 @@
       "title": "增强提示词",
       "description": "配置增强提示词功能使用的 provider 与模型，在消息发送前对输入内容进行重写增强。"
     },
+    "voiceInput": {
+      "title": "语音输入",
+      "description": "使用麦克风按钮或键盘快捷键在聊天框中听写。音频只会发送到你配置的语音转文字服务。更改会自动保存。",
+      "service": {
+        "title": "语音转文字服务"
+      },
+      "baseUrl": {
+        "label": "接口地址",
+        "placeholder": "https://stt.example.com/v1",
+        "hint": "OpenAI 兼容转写 API 的基础 URL，请求发送到其下的 /audio/transcriptions。请使用 https，本机服务器可使用 http。"
+      },
+      "apiKey": {
+        "label": "API 密钥",
+        "hint": "仅发送到此接口，并保存在 ~/.codemoss/config.json。无需密钥的服务器可留空。",
+        "placeholderNone": "未设置",
+        "placeholderSaved": "已保存（{{hint}}），输入以替换",
+        "clear": "移除"
+      },
+      "model": {
+        "label": "模型",
+        "placeholder": "模型 ID",
+        "hint": "按服务商的命名填写。"
+      },
+      "language": {
+        "label": "语言",
+        "placeholder": "自动检测",
+        "hint": "可选的 ISO 639-1 代码，例如 en 或 de。"
+      },
+      "test": {
+        "button": "测试连接",
+        "testing": "测试中…",
+        "ok": "已连接，用时 {{ms}} ms",
+        "failed": "失败：{{error}}"
+      },
+      "behavior": {
+        "title": "行为"
+      },
+      "live": {
+        "label": "实时转写",
+        "description": "每次停顿时立即显示该句，而不是停止后显示整段录音。"
+      },
+      "fillers": {
+        "label": "要移除的词",
+        "placeholder": "例如 uh, um, 那个",
+        "hint": "用逗号分隔要从转写中删除的词或短语；仅匹配完整单词，不区分大小写。留空则保留原始转写。"
+      },
+      "shortcut": {
+        "title": "键盘快捷键",
+        "label": "按住说话",
+        "unbound": "未分配",
+        "hint": "按住说话，或轻按开始和停止；Esc 取消。在 IDE 任何位置都可用。可在 设置 → 键盘映射 中修改（搜索“Voice Input”）。"
+      },
+      "savedInline": "已保存",
+      "saveFailed": "保存失败：{{error}}",
+      "loading": "加载中…",
+      "loadFailed": "无法加载语音输入设置：{{error}}",
+      "noResponse": "IDE 未响应",
+      "retry": "重试"
+    },
     "providerTab": {
       "claude": "Claude Code",
       "codex": "Codex",
@@ -2665,6 +2724,23 @@
     "openSettings": "配置",
     "openSettingsTooltip": "打开增强提示词设置",
     "resolvingUsage": "正在解析运行配置…"
+  },
+  "voiceInput": {
+    "start": "语音输入",
+    "stop": "停止并转写",
+    "transcribing": "正在转写… 按 Esc 取消",
+    "shortcutHint": "按住说话，轻按切换",
+    "error": {
+      "missing_endpoint": "请在 设置 → 语音输入 中设置语音转文字接口地址",
+      "invalid_endpoint": "请输入以 https:// 开头的完整 URL",
+      "insecure_endpoint": "请使用 https；仅本机服务器允许使用 http",
+      "missing_model": "请在 设置 → 语音输入 中设置转写模型",
+      "mic_unavailable": "麦克风不可用",
+      "too_short": "录音太短",
+      "config_unreadable": "无法读取语音输入设置",
+      "transcription_failed": "转写失败",
+      "no_speech": "未检测到语音"
+    }
   },
   "fileContext": {
     "placeholder": "文件上下文",

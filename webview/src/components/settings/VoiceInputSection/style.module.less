@@ -1,0 +1,308 @@
+// Voice Input settings: one card, three titled groups, aligned label/control rows.
+@label-width: 132px;
+@control-max: 440px;
+@control-height: 32px;
+@column-gap: 16px;
+// Switch and shortcut rows end where the input column ends, so every control shares one right edge.
+@row-max: @label-width + @column-gap + @control-max;
+
+.configSection {
+  max-width: 800px;
+  padding-bottom: 24px;
+}
+
+.loadBanner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.group + .group {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border-secondary);
+}
+
+.groupHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.groupTitle {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.field {
+  display: grid;
+  grid-template-columns: @label-width minmax(0, @control-max);
+  column-gap: @column-gap;
+  align-items: center;
+  padding: 6px 0;
+}
+
+.fieldLabel {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.fieldControl {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.fieldHint,
+.fieldError {
+  grid-column: 2;
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-tertiary);
+}
+
+.fieldError {
+  color: var(--color-error);
+}
+
+.input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: @control-height;
+  padding: 0 10px;
+  border: 1px solid var(--border-secondary);
+  border-radius: 6px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+
+  &::placeholder {
+    color: var(--text-placeholder);
+  }
+
+  &:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 1px var(--accent-primary);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+  }
+}
+
+.inputInvalid,
+.inputInvalid:focus {
+  border-color: var(--color-error);
+  box-shadow: none;
+}
+
+.inputShort {
+  flex: 0 0 140px;
+}
+
+.button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  height: @control-height;
+  padding: 0 12px;
+  border: 1px solid var(--border-secondary);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: var(--border-hover, var(--border-secondary));
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 1px;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .codicon {
+    font-size: 14px;
+  }
+}
+
+.groupFooter {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 10px;
+  margin-left: @label-width + @column-gap;
+}
+
+.statusText,
+.savedBadge,
+.errorText {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.savedBadge {
+  color: var(--color-success);
+}
+
+.errorText {
+  color: var(--color-error);
+}
+
+.switchRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  max-width: @row-max;
+  padding: 8px 0;
+}
+
+.switchText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.switchLabel {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.switchDescription {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-tertiary);
+}
+
+.switch {
+  position: relative;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--border-secondary);
+  border-radius: 10px;
+  background: var(--bg-tertiary);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--text-tertiary);
+    transition: transform 0.15s ease, background 0.15s ease;
+  }
+
+  &[aria-checked='true'] {
+    border-color: var(--accent-primary);
+    background: var(--accent-primary);
+
+    &::after {
+      transform: translateX(16px);
+      background: #fff;
+    }
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.keys {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.keyGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.keyJoin {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.kbd {
+  min-width: 22px;
+  padding: 2px 7px;
+  border: 1px solid var(--border-secondary);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 12px;
+  text-align: center;
+}
+
+// Narrow tool windows: stack labels above controls.
+@media (max-width: 560px) {
+  .field {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 6px;
+  }
+
+  .fieldHint,
+  .fieldError {
+    grid-column: 1;
+    margin-top: 0;
+  }
+
+  .groupFooter {
+    margin-left: 0;
+  }
+
+  .switchRow {
+    gap: 12px;
+  }
+
+  .shortcutRow {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}

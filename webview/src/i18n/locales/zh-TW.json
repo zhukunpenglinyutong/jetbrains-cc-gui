@@ -509,6 +509,65 @@
       "title": "增強提示詞",
       "description": "設定增強提示詞功能使用的 provider 與模型，在訊息送出前先重寫並增強輸入內容。"
     },
+    "voiceInput": {
+      "title": "語音輸入",
+      "description": "使用麥克風按鈕或鍵盤快捷鍵在聊天框中聽寫。音訊只會傳送到你設定的語音轉文字服務。變更會自動儲存。",
+      "service": {
+        "title": "語音轉文字服務"
+      },
+      "baseUrl": {
+        "label": "端點",
+        "placeholder": "https://stt.example.com/v1",
+        "hint": "OpenAI 相容轉寫 API 的基礎 URL，請求會傳送到其下的 /audio/transcriptions。請使用 https，本機伺服器可使用 http。"
+      },
+      "apiKey": {
+        "label": "API 金鑰",
+        "hint": "只會傳送到此端點，並儲存在 ~/.codemoss/config.json。不需要金鑰的伺服器可留空。",
+        "placeholderNone": "未設定",
+        "placeholderSaved": "已儲存（{{hint}}），輸入以取代",
+        "clear": "移除"
+      },
+      "model": {
+        "label": "模型",
+        "placeholder": "模型 ID",
+        "hint": "依服務商的命名填寫。"
+      },
+      "language": {
+        "label": "語言",
+        "placeholder": "自動偵測",
+        "hint": "選填的 ISO 639-1 代碼，例如 en 或 de。"
+      },
+      "test": {
+        "button": "測試連線",
+        "testing": "測試中…",
+        "ok": "已連線，耗時 {{ms}} ms",
+        "failed": "失敗：{{error}}"
+      },
+      "behavior": {
+        "title": "行為"
+      },
+      "live": {
+        "label": "即時轉寫",
+        "description": "每次停頓時立即顯示該句，而不是停止後顯示整段錄音。"
+      },
+      "fillers": {
+        "label": "要移除的詞",
+        "placeholder": "例如 uh, um, 那個",
+        "hint": "以逗號分隔要從轉寫中刪除的詞或片語；只比對完整單字，不分大小寫。留空則保留原始轉寫。"
+      },
+      "shortcut": {
+        "title": "鍵盤快捷鍵",
+        "label": "按住說話",
+        "unbound": "未指派",
+        "hint": "按住說話，或輕按開始和停止；Esc 取消。在 IDE 任何位置都能使用。可在 設定 → 鍵盤對應 中修改（搜尋「Voice Input」）。"
+      },
+      "savedInline": "已儲存",
+      "saveFailed": "儲存失敗：{{error}}",
+      "loading": "載入中…",
+      "loadFailed": "無法載入語音輸入設定：{{error}}",
+      "noResponse": "IDE 沒有回應",
+      "retry": "重試"
+    },
     "commit": {
       "title": "Commit AI",
       "description": "Configure AI-generated Git commit message behavior",
@@ -2190,6 +2249,23 @@
     "openSettings": "設定",
     "openSettingsTooltip": "開啟增強提示詞設定",
     "resolvingUsage": "正在解析執行設定…"
+  },
+  "voiceInput": {
+    "start": "語音輸入",
+    "stop": "停止並轉寫",
+    "transcribing": "正在轉寫… 按 Esc 取消",
+    "shortcutHint": "按住說話，輕按切換",
+    "error": {
+      "missing_endpoint": "請在 設定 → 語音輸入 中設定語音轉文字端點",
+      "invalid_endpoint": "請輸入以 https:// 開頭的完整 URL",
+      "insecure_endpoint": "請使用 https；僅本機伺服器允許使用 http",
+      "missing_model": "請在 設定 → 語音輸入 中設定轉寫模型",
+      "mic_unavailable": "麥克風無法使用",
+      "too_short": "錄音太短",
+      "config_unreadable": "無法讀取語音輸入設定",
+      "transcription_failed": "轉寫失敗",
+      "no_speech": "未偵測到語音"
+    }
   },
   "fileContext": {
     "placeholder": "檔案上下文",

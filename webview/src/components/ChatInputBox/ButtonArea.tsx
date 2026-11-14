@@ -65,6 +65,7 @@ export const ButtonArea = ({
   onDshPresetChange,
   onOmpApprovalModeChange,
   onEnhancePrompt,
+  voiceInput,
   alwaysThinkingEnabled = false,
   onToggleThinking,
   streamingEnabled = true,
@@ -251,6 +252,26 @@ export const ButtonArea = ({
     onEnhancePrompt?.();
   }, [onEnhancePrompt]);
 
+  const handleVoiceClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    voiceInput?.toggle();
+  }, [voiceInput]);
+
+  const voiceState = voiceInput?.state ?? 'idle';
+  const voiceShortcut = voiceInput?.shortcut ?? '';
+  const voiceLabel = voiceState === 'recording'
+    ? voiceShortcut ? `${t('voiceInput.stop')} (${voiceShortcut})` : t('voiceInput.stop')
+    : voiceState === 'transcribing'
+      ? t('voiceInput.transcribing')
+      : voiceShortcut
+        ? `${t('voiceInput.start')} (${voiceShortcut} · ${t('voiceInput.shortcutHint')})`
+        : t('voiceInput.start');
+  const voiceIcon = voiceState === 'recording'
+    ? 'codicon-mic-filled'
+    : voiceState === 'transcribing'
+      ? 'codicon-loading codicon-modifier-spin'
+      : 'codicon-mic';
+
   // Collapse selector labels for every CLI when left cluster is about to hit the send cluster (10px).
   const buttonAreaRef = useRef<HTMLDivElement>(null);
   const buttonAreaLeftRef = useRef<HTMLDivElement>(null);
@@ -332,6 +353,18 @@ export const ButtonArea = ({
       {/* Right side: tool buttons */}
       <div ref={buttonAreaRightRef} className="button-area-right">
         <div className="button-divider" />
+
+        {voiceInput && (
+          <button
+            className={`voice-input-button has-tooltip${voiceState === 'recording' ? ' recording' : ''}`}
+            onClick={handleVoiceClick}
+            disabled={voiceState === 'transcribing'}
+            data-tooltip={voiceLabel}
+            aria-label={voiceLabel}
+          >
+            <span className={`codicon ${voiceIcon}`} />
+          </button>
+        )}
 
         {/* Enhance prompt button */}
         <button

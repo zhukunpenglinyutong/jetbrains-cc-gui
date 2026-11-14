@@ -130,6 +130,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       isEnhancing,
       handleEnhancePrompt,
       promptEnhancer,
+      voiceInput,
       handleModeSelect,
       handleModelSelect,
       inlineCompletion,
@@ -269,6 +270,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
           onDshPresetChange={onDshPresetChange}
           onOmpApprovalModeChange={onOmpApprovalModeChange}
           onEnhancePrompt={handleEnhancePrompt}
+          voiceInput={voiceInput}
           alwaysThinkingEnabled={alwaysThinkingEnabled}
           onToggleThinking={onToggleThinking}
           streamingEnabled={streamingEnabled}

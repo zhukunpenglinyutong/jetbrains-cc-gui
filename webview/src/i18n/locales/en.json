@@ -726,6 +726,65 @@
       "title": "Prompt Enhancer",
       "description": "Choose which provider and model should be used when enhancing prompts before sending them."
     },
+    "voiceInput": {
+      "title": "Voice Input",
+      "description": "Dictate into the chat box with the microphone button or a keyboard shortcut. Audio goes only to the speech-to-text service you configure. Changes save automatically.",
+      "service": {
+        "title": "Speech-to-text service"
+      },
+      "baseUrl": {
+        "label": "Endpoint",
+        "placeholder": "https://stt.example.com/v1",
+        "hint": "Base URL of an OpenAI-compatible transcription API; requests go to /audio/transcriptions under it. Use https, or http for a server on this machine."
+      },
+      "apiKey": {
+        "label": "API key",
+        "hint": "Sent only to this endpoint and stored in ~/.codemoss/config.json. Leave empty for servers that need no key.",
+        "placeholderNone": "Not set",
+        "placeholderSaved": "Saved ({{hint}}), type to replace",
+        "clear": "Remove"
+      },
+      "model": {
+        "label": "Model",
+        "placeholder": "Model ID",
+        "hint": "As named by your provider."
+      },
+      "language": {
+        "label": "Language",
+        "placeholder": "Auto-detect",
+        "hint": "Optional ISO 639-1 code, for example en or de."
+      },
+      "test": {
+        "button": "Test connection",
+        "testing": "Testing…",
+        "ok": "Connected in {{ms}} ms",
+        "failed": "Failed: {{error}}"
+      },
+      "behavior": {
+        "title": "Behavior"
+      },
+      "live": {
+        "label": "Live transcription",
+        "description": "Show each phrase as soon as you pause, instead of the whole recording after you stop."
+      },
+      "fillers": {
+        "label": "Words to remove",
+        "placeholder": "e.g. uh, um, you know",
+        "hint": "Comma-separated words or phrases to drop from transcripts; whole words only, any letter case. Leave empty to keep transcripts as returned."
+      },
+      "shortcut": {
+        "title": "Keyboard shortcut",
+        "label": "Push to talk",
+        "unbound": "Not assigned",
+        "hint": "Hold to talk or tap to start and stop; Esc cancels. Works anywhere in the IDE. Change it in Settings → Keymap (search “Voice Input”)."
+      },
+      "savedInline": "Saved",
+      "saveFailed": "Couldn't save: {{error}}",
+      "loading": "Loading…",
+      "loadFailed": "Couldn't load voice input settings: {{error}}",
+      "noResponse": "the IDE did not respond",
+      "retry": "Retry"
+    },
     "providerTab": {
       "claude": "Claude Code",
       "codex": "Codex",
@@ -2671,6 +2730,23 @@
     "openSettings": "Configure",
     "openSettingsTooltip": "Open prompt enhancer settings",
     "resolvingUsage": "Resolving runtime config…"
+  },
+  "voiceInput": {
+    "start": "Voice input",
+    "stop": "Stop and transcribe",
+    "transcribing": "Transcribing… Esc cancels",
+    "shortcutHint": "hold to talk, tap to toggle",
+    "error": {
+      "missing_endpoint": "Set a speech-to-text endpoint in Settings → Voice Input",
+      "invalid_endpoint": "Enter a full URL that starts with https://",
+      "insecure_endpoint": "Use https; plain http is only allowed for a server on this machine",
+      "missing_model": "Set a transcription model in Settings → Voice Input",
+      "mic_unavailable": "Microphone is unavailable",
+      "too_short": "Recording was too short",
+      "config_unreadable": "Could not read voice input settings",
+      "transcription_failed": "Transcription failed",
+      "no_speech": "No speech detected"
+    }
   },
   "fileContext": {
     "placeholder": "File Context",

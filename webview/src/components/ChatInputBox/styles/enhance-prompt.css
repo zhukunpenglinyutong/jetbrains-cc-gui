@@ -1,7 +1,8 @@
 /* ============================================================
    Enhance Prompt Button
    ============================================================ */
-.enhance-prompt-button {
+.enhance-prompt-button,
+.voice-input-button {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -15,18 +16,31 @@
   transition: background 0.15s, color 0.15s;
 }
 
-.enhance-prompt-button:hover:not(:disabled) {
+.enhance-prompt-button:hover:not(:disabled),
+.voice-input-button:hover:not(:disabled) {
   background: var(--button-hover);
   color: var(--text-primary);
 }
 
-.enhance-prompt-button:disabled {
+.enhance-prompt-button:disabled,
+.voice-input-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.enhance-prompt-button .codicon {
+.enhance-prompt-button .codicon,
+.voice-input-button .codicon {
   font-size: 16px;
+}
+
+.voice-input-button.recording,
+.voice-input-button.recording:hover:not(:disabled) {
+  color: var(--color-error);
+  animation: voice-input-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes voice-input-pulse {
+  50% { opacity: 0.55; }
 }
 
 /* ============================================================

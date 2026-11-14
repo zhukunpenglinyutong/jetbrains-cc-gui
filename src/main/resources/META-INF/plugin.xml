@@ -239,6 +239,16 @@
           action. Shift+Esc is intentionally not registered here to avoid clashing with the IDE's
           built-in HideActiveWindow shortcut.
         -->
+        <!-- Voice input: hold to talk, tap to toggle. Works from any focus; text goes to the selected chat tab. -->
+        <action id="ClaudeCodeGUI.VoiceInputAction"
+                class="com.github.claudecodegui.action.VoiceInputAction"
+                text="Voice Input (Push to Talk)"
+                description="Dictate into the CC GUI chat input: hold to talk, tap to start and stop">
+            <keyboard-shortcut keymap="$default" first-keystroke="control alt shift M"/>
+            <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta alt shift M"/>
+            <keyboard-shortcut keymap="macOS" first-keystroke="meta alt shift M"/>
+        </action>
+
         <action id="ClaudeCodeGUI.HidePanelAction"
                 class="com.github.claudecodegui.action.HidePanelAction"
                 text="Hide CC GUI Panel"

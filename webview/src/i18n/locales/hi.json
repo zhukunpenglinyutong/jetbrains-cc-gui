@@ -497,6 +497,65 @@
       "title": "Prompt Enhancer",
       "description": "Choose which provider and model should be used when enhancing prompts before sending them."
     },
+    "voiceInput": {
+      "title": "वॉइस इनपुट",
+      "description": "माइक्रोफ़ोन बटन या कीबोर्ड शॉर्टकट से चैट बॉक्स में बोलकर लिखें। ऑडियो सिर्फ़ आपकी कॉन्फ़िगर की गई स्पीच-टू-टेक्स्ट सेवा को भेजा जाता है। बदलाव अपने आप सहेजे जाते हैं।",
+      "service": {
+        "title": "स्पीच-टू-टेक्स्ट सेवा"
+      },
+      "baseUrl": {
+        "label": "एंडपॉइंट",
+        "placeholder": "https://stt.example.com/v1",
+        "hint": "OpenAI-संगत ट्रांसक्रिप्शन API का बेस URL; अनुरोध इसके नीचे /audio/transcriptions पर जाते हैं। https का उपयोग करें, या इसी मशीन के सर्वर के लिए http।"
+      },
+      "apiKey": {
+        "label": "API कुंजी",
+        "hint": "सिर्फ़ इसी एंडपॉइंट को भेजी जाती है और ~/.codemoss/config.json में सहेजी जाती है। जिन सर्वरों को कुंजी नहीं चाहिए, उनके लिए खाली छोड़ें।",
+        "placeholderNone": "सेट नहीं है",
+        "placeholderSaved": "सहेजी गई ({{hint}}), बदलने के लिए टाइप करें",
+        "clear": "हटाएँ"
+      },
+      "model": {
+        "label": "मॉडल",
+        "placeholder": "मॉडल ID",
+        "hint": "जैसा आपका प्रदाता नाम देता है।"
+      },
+      "language": {
+        "label": "भाषा",
+        "placeholder": "स्वतः पहचान",
+        "hint": "वैकल्पिक ISO 639-1 कोड, जैसे en या de।"
+      },
+      "test": {
+        "button": "कनेक्शन जाँचें",
+        "testing": "जाँच हो रही है…",
+        "ok": "{{ms}} ms में कनेक्ट हुआ",
+        "failed": "विफल: {{error}}"
+      },
+      "behavior": {
+        "title": "व्यवहार"
+      },
+      "live": {
+        "label": "लाइव ट्रांसक्रिप्शन",
+        "description": "रुकने के बाद पूरी रिकॉर्डिंग के बजाय, हर विराम पर वाक्य तुरंत दिखाएँ।"
+      },
+      "fillers": {
+        "label": "हटाने वाले शब्द",
+        "placeholder": "जैसे: उम्म, मतलब",
+        "hint": "ट्रांसक्रिप्ट से हटाने वाले शब्द या वाक्यांश, कॉमा से अलग करें; सिर्फ़ पूरे शब्द, बड़े-छोटे अक्षर का फ़र्क नहीं। ट्रांसक्रिप्ट जैसे का तैसा रखने के लिए खाली छोड़ें।"
+      },
+      "shortcut": {
+        "title": "कीबोर्ड शॉर्टकट",
+        "label": "दबाकर बोलें",
+        "unbound": "असाइन नहीं है",
+        "hint": "बोलने के लिए दबाए रखें या शुरू और बंद करने के लिए टैप करें; Esc रद्द करता है। IDE में कहीं भी काम करता है। सेटिंग्स → Keymap में बदलें (“Voice Input” खोजें)।"
+      },
+      "savedInline": "सहेजा गया",
+      "saveFailed": "सहेजा नहीं जा सका: {{error}}",
+      "loading": "लोड हो रहा है…",
+      "loadFailed": "वॉइस इनपुट सेटिंग्स लोड नहीं हो सकीं: {{error}}",
+      "noResponse": "IDE ने जवाब नहीं दिया",
+      "retry": "फिर से कोशिश करें"
+    },
     "commit": {
       "title": "Commit AI",
       "description": "Configure AI-generated Git commit message behavior",
@@ -2156,6 +2215,23 @@
     "openSettings": "Configure",
     "openSettingsTooltip": "Open prompt enhancer settings",
     "resolvingUsage": "Resolving runtime config…"
+  },
+  "voiceInput": {
+    "start": "वॉइस इनपुट",
+    "stop": "रोकें और ट्रांसक्राइब करें",
+    "transcribing": "ट्रांसक्राइब हो रहा है… Esc से रद्द करें",
+    "shortcutHint": "बोलने के लिए दबाए रखें, टॉगल के लिए टैप करें",
+    "error": {
+      "missing_endpoint": "सेटिंग्स → वॉइस इनपुट में स्पीच-टू-टेक्स्ट एंडपॉइंट सेट करें",
+      "invalid_endpoint": "https:// से शुरू होने वाला पूरा URL दर्ज करें",
+      "insecure_endpoint": "https का उपयोग करें; http सिर्फ़ इसी मशीन के सर्वर के लिए अनुमत है",
+      "missing_model": "सेटिंग्स → वॉइस इनपुट में ट्रांसक्रिप्शन मॉडल सेट करें",
+      "mic_unavailable": "माइक्रोफ़ोन उपलब्ध नहीं है",
+      "too_short": "रिकॉर्डिंग बहुत छोटी थी",
+      "config_unreadable": "वॉइस इनपुट सेटिंग्स नहीं पढ़ी जा सकीं",
+      "transcription_failed": "ट्रांसक्रिप्शन विफल रहा",
+      "no_speech": "कोई आवाज़ नहीं मिली"
+    }
   },
   "fileContext": {
     "placeholder": "File Context",

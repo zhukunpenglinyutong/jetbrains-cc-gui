@@ -497,6 +497,65 @@
       "title": "Prompt Enhancer",
       "description": "Choose which provider and model should be used when enhancing prompts before sending them."
     },
+    "voiceInput": {
+      "title": "音声入力",
+      "description": "マイクボタンまたはキーボードショートカットでチャット欄に音声入力します。音声は設定した音声認識サービスにのみ送信されます。変更は自動的に保存されます。",
+      "service": {
+        "title": "音声認識サービス"
+      },
+      "baseUrl": {
+        "label": "エンドポイント",
+        "placeholder": "https://stt.example.com/v1",
+        "hint": "OpenAI 互換の文字起こし API のベース URL。リクエストはその下の /audio/transcriptions に送られます。https、またはこのマシン上のサーバーなら http を使用してください。"
+      },
+      "apiKey": {
+        "label": "API キー",
+        "hint": "このエンドポイントにのみ送信され、~/.codemoss/config.json に保存されます。キー不要のサーバーでは空欄のままにしてください。",
+        "placeholderNone": "未設定",
+        "placeholderSaved": "保存済み（{{hint}}）。入力すると置き換えます",
+        "clear": "削除"
+      },
+      "model": {
+        "label": "モデル",
+        "placeholder": "モデル ID",
+        "hint": "プロバイダーが定める名前で入力します。"
+      },
+      "language": {
+        "label": "言語",
+        "placeholder": "自動検出",
+        "hint": "任意の ISO 639-1 コード（例：en、de）。"
+      },
+      "test": {
+        "button": "接続をテスト",
+        "testing": "テスト中…",
+        "ok": "{{ms}} ms で接続しました",
+        "failed": "失敗：{{error}}"
+      },
+      "behavior": {
+        "title": "動作"
+      },
+      "live": {
+        "label": "ライブ文字起こし",
+        "description": "停止後に録音全体を表示する代わりに、間ができるたびにフレーズを表示します。"
+      },
+      "fillers": {
+        "label": "削除する語",
+        "placeholder": "例: uh, um, えーと",
+        "hint": "文字起こしから取り除く語や語句をカンマ区切りで指定します。単語単位で一致し、大文字小文字は区別しません。空欄なら文字起こしをそのまま残します。"
+      },
+      "shortcut": {
+        "title": "キーボードショートカット",
+        "label": "押して話す",
+        "unbound": "未割り当て",
+        "hint": "長押しで話すか、タップで開始・停止します。Esc でキャンセル。IDE のどこでも使えます。設定 → キーマップ で変更できます（「Voice Input」で検索）。"
+      },
+      "savedInline": "保存しました",
+      "saveFailed": "保存できませんでした：{{error}}",
+      "loading": "読み込み中…",
+      "loadFailed": "音声入力の設定を読み込めませんでした：{{error}}",
+      "noResponse": "IDE が応答しません",
+      "retry": "再試行"
+    },
     "commit": {
       "title": "Commit AI",
       "description": "Configure AI-generated Git commit message behavior",
@@ -2150,6 +2209,23 @@
     "openSettings": "設定",
     "openSettingsTooltip": "プロンプト強化の設定を開く",
     "resolvingUsage": "実行設定を解決中…"
+  },
+  "voiceInput": {
+    "start": "音声入力",
+    "stop": "停止して文字起こし",
+    "transcribing": "文字起こし中… Esc でキャンセル",
+    "shortcutHint": "長押しで話す、タップで切り替え",
+    "error": {
+      "missing_endpoint": "設定 → 音声入力 で音声認識のエンドポイントを設定してください",
+      "invalid_endpoint": "https:// で始まる完全な URL を入力してください",
+      "insecure_endpoint": "https を使用してください。http はこのマシン上のサーバーにのみ使用できます",
+      "missing_model": "設定 → 音声入力 で文字起こしモデルを設定してください",
+      "mic_unavailable": "マイクを使用できません",
+      "too_short": "録音が短すぎます",
+      "config_unreadable": "音声入力の設定を読み込めませんでした",
+      "transcription_failed": "文字起こしに失敗しました",
+      "no_speech": "音声が検出されませんでした"
+    }
   },
   "fileContext": {
     "placeholder": "ファイルコンテキスト",

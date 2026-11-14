@@ -11,6 +11,7 @@ import AgentSection from './AgentSection';
 import PromptSection from './PromptSection';
 import CommitSection from './CommitSection';
 import PromptEnhancerSection from './PromptEnhancerSection';
+import VoiceInputSection from './VoiceInputSection';
 import OtherSettingsSection from './OtherSettingsSection';
 import PetSettingsSection from './PetSettingsSection';
 import { SkillsSettingsSection } from '../skills/SkillsSettingsSection';
@@ -100,6 +101,8 @@ export const PromptEnhancerPanel = ({ basicActions }: SettingsTabPanelProps) => 
     onPromptEnhancerResetToDefault={basicActions.handlePromptEnhancerResetToDefault}
   />
 );
+
+export const VoiceInputPanel = () => <VoiceInputSection />;
 
 export const CommitPanel = ({ basicActions }: SettingsTabPanelProps) => (
   <CommitSection

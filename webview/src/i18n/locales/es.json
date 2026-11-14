@@ -497,6 +497,65 @@
       "title": "Prompt Enhancer",
       "description": "Choose which provider and model should be used when enhancing prompts before sending them."
     },
+    "voiceInput": {
+      "title": "Entrada de voz",
+      "description": "Dicta en el cuadro de chat con el botón del micrófono o un atajo de teclado. El audio solo se envía al servicio de voz a texto que configures. Los cambios se guardan automáticamente.",
+      "service": {
+        "title": "Servicio de voz a texto"
+      },
+      "baseUrl": {
+        "label": "Endpoint",
+        "placeholder": "https://stt.example.com/v1",
+        "hint": "URL base de una API de transcripción compatible con OpenAI; las solicitudes van a /audio/transcriptions bajo ella. Usa https, o http para un servidor en este equipo."
+      },
+      "apiKey": {
+        "label": "Clave de API",
+        "hint": "Solo se envía a este endpoint y se guarda en ~/.codemoss/config.json. Déjala vacía para servidores que no necesitan clave.",
+        "placeholderNone": "Sin configurar",
+        "placeholderSaved": "Guardada ({{hint}}), escribe para reemplazarla",
+        "clear": "Quitar"
+      },
+      "model": {
+        "label": "Modelo",
+        "placeholder": "ID del modelo",
+        "hint": "Tal como lo nombra tu proveedor."
+      },
+      "language": {
+        "label": "Idioma",
+        "placeholder": "Detección automática",
+        "hint": "Código ISO 639-1 opcional, por ejemplo en o de."
+      },
+      "test": {
+        "button": "Probar conexión",
+        "testing": "Probando…",
+        "ok": "Conectado en {{ms}} ms",
+        "failed": "Error: {{error}}"
+      },
+      "behavior": {
+        "title": "Comportamiento"
+      },
+      "live": {
+        "label": "Transcripción en vivo",
+        "description": "Muestra cada frase en cuanto haces una pausa, en lugar de toda la grabación al detenerte."
+      },
+      "fillers": {
+        "label": "Palabras a quitar",
+        "placeholder": "p. ej. eh, este, o sea",
+        "hint": "Palabras o frases separadas por comas que se quitan de la transcripción; solo palabras completas, sin distinguir mayúsculas. Déjalo vacío para mantener la transcripción tal cual."
+      },
+      "shortcut": {
+        "title": "Atajo de teclado",
+        "label": "Pulsar para hablar",
+        "unbound": "Sin asignar",
+        "hint": "Mantén pulsado para hablar o pulsa para iniciar y detener; Esc cancela. Funciona en cualquier parte del IDE. Cámbialo en Ajustes → Keymap (busca “Voice Input”)."
+      },
+      "savedInline": "Guardado",
+      "saveFailed": "No se pudo guardar: {{error}}",
+      "loading": "Cargando…",
+      "loadFailed": "No se pudo cargar la configuración de entrada de voz: {{error}}",
+      "noResponse": "el IDE no respondió",
+      "retry": "Reintentar"
+    },
     "commit": {
       "title": "Commit AI",
       "description": "Configure AI-generated Git commit message behavior",
@@ -2164,6 +2223,23 @@
     "openSettings": "Configurar",
     "openSettingsTooltip": "Abrir configuración del mejorador de prompts",
     "resolvingUsage": "Resolviendo configuración…"
+  },
+  "voiceInput": {
+    "start": "Entrada de voz",
+    "stop": "Detener y transcribir",
+    "transcribing": "Transcribiendo… Esc cancela",
+    "shortcutHint": "mantén pulsado para hablar, pulsa para alternar",
+    "error": {
+      "missing_endpoint": "Configura un endpoint de voz a texto en Ajustes → Entrada de voz",
+      "invalid_endpoint": "Escribe una URL completa que empiece por https://",
+      "insecure_endpoint": "Usa https; http solo se permite para un servidor en este equipo",
+      "missing_model": "Configura un modelo de transcripción en Ajustes → Entrada de voz",
+      "mic_unavailable": "El micrófono no está disponible",
+      "too_short": "La grabación fue demasiado corta",
+      "config_unreadable": "No se pudo leer la configuración de entrada de voz",
+      "transcription_failed": "Error en la transcripción",
+      "no_speech": "No se detectó voz"
+    }
   },
   "fileContext": {
     "placeholder": "Contexto de archivo",
