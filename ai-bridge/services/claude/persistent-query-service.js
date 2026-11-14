@@ -11,6 +11,7 @@ import {
   buildWebviewControlledSettingsOverride,
 } from '../../config/api-config.js';
 import { selectWorkingDirectory } from '../../utils/path-utils.js';
+import { buildSessionClaudeConfig, buildSessionClaudeSettingsOverride } from '../../config/session-supplier.js';
 import {
   resolveModelFromSettings,
   resolveSdkModelName,
@@ -18,7 +19,7 @@ import {
 } from '../../utils/model-utils.js';
 import { canUseTool } from '../../permission-handler.js';
 import { buildContentBlocks, loadAttachments } from './attachment-service.js';
-import { buildIDEContextPrompt } from '../system-prompts.js';
+import { buildIDEContextPrompt, buildTurnIDEContextPrompt } from '../system-prompts.js';
 import { buildQuickFixPrompt } from '../quickfix-prompts.js';
 import { registerActiveQueryResult, removeSession } from './message-service.js';
 import { normalizePermissionMode } from './permission-mode.js';
@@ -64,10 +65,37 @@ import {
   processToolResultMessages,
   shouldOutputMessage,
 } from './stream-event-processor.js';
+import { resolveStallTimeoutMs, takeWithStallTimeout, trackToolActivity } from './turn-stall-watchdog.js';
 import { generateSessionTitle } from '../session-title-service.js';
 import { getClaudeCliPathOverride } from '../../utils/claude-cli-path.js';
+import { withUltracodeSetting } from './ultracode.js';
 
 const SUPPORTED_EFFORT_LEVELS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
+// Individual sends own their cancellation intent. Never keep a session-level
+// tombstone that could accidentally cancel a later message in the same chat.
+const pendingSends = new Set();
+
+export function matchesClaudeStopTarget(candidate, target = {}) {
+  const sessionId = typeof target.sessionId === 'string' ? target.sessionId.trim() : '';
+  const epoch = typeof target.runtimeSessionEpoch === 'string' ? target.runtimeSessionEpoch.trim() : '';
+  return !!(sessionId || epoch)
+    && (!sessionId || (typeof candidate?.sessionId === 'string' && candidate.sessionId.trim() === sessionId))
+    && (!epoch || (typeof candidate?.runtimeSessionEpoch === 'string' && candidate.runtimeSessionEpoch.trim() === epoch));
+}
+
+export function validateClaudeStopTarget(params = {}, queuedParams = []) {
+  if (!matchesClaudeStopTarget(params, params)) {
+    throw new Error('Claude stop requires a session ID or runtime session epoch.');
+  }
+  if (typeof params.runtimeSessionEpoch === 'string' && params.runtimeSessionEpoch.trim()) return;
+  const matching = [...pendingSends, ...getAllRuntimes(), ...queuedParams]
+    .filter(candidate => (!candidate.closed || candidate.abortPromise || candidate.disposePromise)
+      && matchesClaudeStopTarget(candidate, params));
+  const epochs = new Set(matching.map(candidate => candidate.runtimeSessionEpoch || ''));
+  if (epochs.size > 1) {
+    throw new Error('Claude stop is ambiguous across session generations. Specify the runtime session epoch.');
+  }
+}
 
 function resolveReasoningEffort(params) {
   const effort = typeof params.reasoningEffort === 'string'
@@ -112,12 +140,23 @@ function extractUserMessageText(userMessage) {
 }
 
 function buildSystemPromptAppend(params) {
-  const openedFiles = params.openedFiles || null;
-  const agentPrompt = params.agentPrompt || null;
-  if (openedFiles && openedFiles.isQuickFix) {
-    return buildQuickFixPrompt(openedFiles, params.message || '');
-  }
-  return buildIDEContextPrompt(openedFiles, agentPrompt);
+  // Only conversation-wide instructions belong in the launch-time prompt.
+  // Editor changes must not restart a query that owns background work.
+  return buildIDEContextPrompt(null, params.agentPrompt || null);
+}
+
+function appendTurnContext(contentBlocks, params) {
+  if (!params.openedFiles || typeof params.openedFiles !== 'object') return contentBlocks;
+  const context = params.openedFiles.isQuickFix
+    ? buildQuickFixPrompt(params.openedFiles, params.message || '')
+    : buildTurnIDEContextPrompt(params.openedFiles);
+  // Keep the wrapper well-formed even if selected source contains these tags.
+  // Java strips this internal block from both live echoes and history replay.
+  const escapedContext = context.replace(/<\/?system-reminder>/g, tag => tag.replace('<', '&lt;').replace('>', '&gt;'));
+  return [...contentBlocks, {
+    type: 'text',
+    text: `<system-reminder>\nThe following IDE context applies only to this user message.\n${escapedContext || 'No active editor context is available.'}\n</system-reminder>`,
+  }];
 }
 
 function resolveRequestModelState(modelId, settingsEnv) {
@@ -129,7 +168,7 @@ function resolveRequestModelState(modelId, settingsEnv) {
   };
 }
 
-function buildQueryOptions(workingDirectory, sdkModelName, permissionMode, maxThinkingTokens, reasoningEffort, streamingEnabled, systemPromptAppend, requestedSessionId, mcpServers, modelId, settingsEnv, resolvedModelId) {
+function buildQueryOptions(workingDirectory, sdkModelName, permissionMode, maxThinkingTokens, reasoningEffort, streamingEnabled, systemPromptAppend, requestedSessionId, mcpServers, modelId, settingsEnv, resolvedModelId, ultracode, childEnv) {
   const claudeCliOverride = getClaudeCliPathOverride();
   return {
     cwd: workingDirectory,
@@ -137,8 +176,8 @@ function buildQueryOptions(workingDirectory, sdkModelName, permissionMode, maxTh
     model: sdkModelName,
     maxTurns: 1000,
     enableFileCheckpointing: true,
-    env: buildCliEnv(),
-    settings: buildWebviewControlledSettingsOverride(modelId, settingsEnv, resolvedModelId),
+    env: childEnv ?? buildCliEnv(),
+    settings: withUltracodeSetting(buildWebviewControlledSettingsOverride(modelId, settingsEnv, resolvedModelId), ultracode),
     ...(reasoningEffort && { effort: reasoningEffort }),
     ...(maxThinkingTokens !== undefined && { maxThinkingTokens }),
     ...(streamingEnabled && { includePartialMessages: true }),
@@ -172,7 +211,7 @@ async function buildUserMessage(params, withAttachments, requestedSessionId) {
       type: 'user',
       session_id: requestedSessionId || '',
       parent_tool_use_id: null,
-      message: { role: 'user', content: contentBlocks }
+      message: { role: 'user', content: appendTurnContext(contentBlocks, params) }
     };
   }
 
@@ -181,12 +220,13 @@ async function buildUserMessage(params, withAttachments, requestedSessionId) {
     type: 'user',
     session_id: requestedSessionId || '',
     parent_tool_use_id: null,
-    message: { role: 'user', content: [{ type: 'text', text: userText }] }
+    message: { role: 'user', content: appendTurnContext([{ type: 'text', text: userText }], params) }
   };
 }
 
 async function buildRequestContext(params, withAttachments, overrides = {}) {
-  setupApiKey();
+  const supplier = buildSessionClaudeConfig(params.supplierId);
+  if (!supplier) setupApiKey();
 
   const baseUrl = process.env.ANTHROPIC_BASE_URL || process.env.ANTHROPIC_API_URL || '';
   if (isCustomBaseUrl(baseUrl)) {
@@ -207,10 +247,10 @@ async function buildRequestContext(params, withAttachments, overrides = {}) {
     console.error('[WARNING] Failed to change process.cwd():', error.message);
   }
 
-  const settings = overrides.settings ?? loadClaudeSettings();
+  const settings = overrides.settings ?? supplier?.settings ?? loadClaudeSettings();
   const modelId = params.model || null;
   const { sdkModelName, resolvedModelId } = resolveRequestModelState(modelId, settings?.env);
-  setModelEnvironmentVariables(resolvedModelId, modelId, settings?.env);
+  setModelEnvironmentVariables(resolvedModelId, modelId, settings?.env, supplier?.env ?? process.env);
 
   const permissionMode = normalizePermissionMode(params.permissionMode);
   const streamingEnabled = resolveStreamingEnabled(params, settings);
@@ -223,12 +263,14 @@ async function buildRequestContext(params, withAttachments, overrides = {}) {
   const options = buildQueryOptions(
     workingDirectory, sdkModelName, permissionMode,
     maxThinkingTokens, reasoningEffort, streamingEnabled, systemPromptAppend, requestedSessionId,
-    mcpServers, modelId, settings?.env, resolvedModelId
+    mcpServers, modelId, settings?.env, resolvedModelId, params.ultracode, supplier?.env
   );
+  options.settings = buildSessionClaudeSettingsOverride(supplier, options.settings);
 
   const userMessage = await buildUserMessage(params, withAttachments, requestedSessionId);
 
-  const runtimeSignature = buildRuntimeSignature(options, systemPromptAppend, streamingEnabled, runtimeSessionEpoch, modelId);
+  const runtimeSignature = buildRuntimeSignature(options, systemPromptAppend, streamingEnabled, runtimeSessionEpoch, modelId)
+    + (supplier ? `:${supplier.revision}` : '');
   console.log('[LIFECYCLE] buildRequestContext sessionId=' + (requestedSessionId || '(new)')
     + ' epoch=' + (runtimeSessionEpoch || '(none)')
     + ' signature=' + runtimeSignature);
@@ -237,6 +279,7 @@ async function buildRequestContext(params, withAttachments, overrides = {}) {
     requestedSessionId,
     runtimeSessionEpoch,
     executionScope: params.executionScope,
+    supplier,
     streamingEnabled,
     options,
     userMessage,
@@ -246,6 +289,7 @@ async function buildRequestContext(params, withAttachments, overrides = {}) {
     permissionMode,
     maxThinkingTokens,
     reasoningEffort,
+    ultracode: typeof params.ultracode === 'boolean' ? params.ultracode : undefined,
     runtimeSignature
   };
 }
@@ -274,6 +318,7 @@ _runtimeCleanupTimer.unref();
     err.runtimeTerminated = true;
     throw err;
   }
+  if (runtime.abortPromise) throw new Error('Turn aborted');
 
   setActiveTurnRuntime(runtime);
   console.log('[LIFECYCLE] executeTurn sessionId=' + (requestContext.requestedSessionId || runtime.sessionId || '(new)')
@@ -305,6 +350,11 @@ _runtimeCleanupTimer.unref();
     // Resolves on quiescence, on dispose (abort stays responsive), or a 120s
     // protocol-anomaly backstop.
     await waitForReaderQuiescent(runtime);
+    // Stop may have failed a still-null sink while native interrupt is pending.
+    // Do not open a new sink or enqueue after that cancellation intent.
+    if (runtime.closed || runtime.abortRequested || runtime.abortPromise) {
+      throw new Error('Turn aborted');
+    }
 
     // Create and register turnSink after beginRuntimeTurn to avoid race
     // (ensures executeTurn is ready to consume before perpetual reader can push)
@@ -316,14 +366,22 @@ _runtimeCleanupTimer.unref();
     console.log('[MESSAGE_START]');
     runtime.inputStream.enqueue(requestContext.userMessage);
 
+    const stallTimeoutMs = resolveStallTimeoutMs();
+    const pendingToolUseIds = new Set();
+
     while (true) {
       let next;
       try {
         // Receive message from perpetual reader via turnSink
-        // (perpetual reader owns runtime.query.next())
-        next = await runtime.turnSink.take();
+        // (perpetual reader owns runtime.query.next()). A stalled upstream would
+        // otherwise leave this wait, and every request queued behind it, hanging.
+        next = await takeWithStallTimeout(runtime.turnSink, {
+          timeoutMs: stallTimeoutMs,
+          hasToolInFlight: () => pendingToolUseIds.size > 0,
+        });
       } catch (error) {
         const wrapped = new Error(error?.message || String(error));
+        if (error?.code) wrapped.code = error.code;
         wrapped.runtimeTerminated = true;
         wrapped.resumeExpiredNotified = error?.resumeExpiredNotified === true;
         throw wrapped;
@@ -337,6 +395,10 @@ _runtimeCleanupTimer.unref();
 
       touchRuntime(runtime);
       const msg = next.value;
+
+      if (!msg?.parent_tool_use_id) {
+        trackToolActivity(pendingToolUseIds, msg);
+      }
 
       if (turnState.streamingEnabled && !turnState.streamStarted) {
         process.stdout.write('[STREAM_START]\n');
@@ -375,7 +437,7 @@ _runtimeCleanupTimer.unref();
         const event = buildTaskNotificationEvent(parsed);
         if (event && runtime.sessionId) {
           console.log('[LIFECYCLE] In-turn task-notification message for sessionId=' + runtime.sessionId + ', toolUseId=' + parsed.toolUseId + ', status=' + event.status);
-          emitTaskEvent(runtime.sessionId, event);
+          emitTaskEvent(runtime.sessionId, event, runtime.runtimeSessionEpoch);
         } else if (!event) {
           console.log('[LIFECYCLE] In-turn task-notification message could not be parsed (no tool_use_id or non-terminal status), consuming silently');
         } else {
@@ -455,7 +517,7 @@ _runtimeCleanupTimer.unref();
       runtime.titleGenerationAttempted = true;
       const userMessageText = extractUserMessageText(requestContext.userMessage);
       if (userMessageText) {
-        generateSessionTitle(userMessageText, finalSessionId, requestContext.options.cwd)
+        generateSessionTitle(userMessageText, finalSessionId, requestContext.options.cwd, requestContext.supplier)
           .then((completed) => {
             if (!completed) {
               runtime.titleGenerationAttempted = false;
@@ -594,21 +656,51 @@ async function withScopedContextWindowPreference(modelId, operation) {
 
 async function sendInternal(params, withAttachments) {
   const safeParams = params || {};
+  // Registration must precede the first await: Stop can arrive while settings,
+  // attachments, SDK loading, or runtime initialization are still in progress.
+  const pendingSend = {
+    sessionId: safeParams.sessionId,
+    runtimeSessionEpoch: safeParams.runtimeSessionEpoch,
+    cancelled: false,
+  };
+  pendingSends.add(pendingSend);
   const turnMeta = { state: null };
   let runtime = null;
   let requestContext = null;
   const sendStartTime = Date.now();
   try {
     requestContext = await buildRequestContext(safeParams, withAttachments);
+    if (pendingSend.cancelled) {
+      await pendingSend.abortPromise;
+      return { outcome: 'cancelled' };
+    }
     runtime = await acquireRuntime(requestContext, { registerActiveQueryResult, removeSession });
+    if (pendingSend.cancelled) {
+      await abortRuntime(runtime);
+      return { outcome: 'cancelled' };
+    }
     await executeTurn(runtime, requestContext, turnMeta);
+    return { outcome: 'completed' };
   } catch (error) {
     // Only clear if this runtime still owns the pointer (not cleared by abort)
     clearActiveTurnRuntimeIf(runtime);
 
     const elapsedMs = Date.now() - sendStartTime;
 
-    const wasAborted = runtime?.abortRequested === true && error?.runtimeTerminated;
+    const abortCompletion = runtime?.abortRequested === true && runtime.abortPromise
+      || pendingSend.cancelled && pendingSend.abortPromise;
+    const abortRequested = !!abortCompletion;
+    let wasAborted = false;
+    if (abortRequested) {
+      try {
+        // Failing the turn sink only unblocks the reader. A native interrupt
+        // acknowledgement and successful cleanup establish cancellation.
+        const result = await abortCompletion;
+        wasAborted = result?.stopped === true;
+      } catch (abortError) {
+        error = abortError;
+      }
+    }
 
     if (turnMeta.state?.streamingEnabled && turnMeta.state?.streamStarted && !turnMeta.state?.streamEnded) {
       process.stdout.write('[STREAM_END]\n');
@@ -631,18 +723,23 @@ async function sendInternal(params, withAttachments) {
 
     // A failed resume must retire its query too, even if the SDK returned an
     // error result without closing the iterator.
-    if (runtime && !runtime.closed && (error?.runtimeTerminated || expiredResume)) {
+    if (runtime && !runtime.closed && !abortRequested && (error?.runtimeTerminated || expiredResume)) {
       await disposeRuntime(runtime, { removeSession });
     }
+    return wasAborted
+      ? { outcome: 'cancelled' }
+      : { outcome: 'failed', error: redactSecrets(error?.message || String(error)) };
+  } finally {
+    pendingSends.delete(pendingSend);
   }
 }
 
 export async function sendMessagePersistent(params = {}) {
-  await sendInternal(params, false);
+  return sendInternal(params, false);
 }
 
 export async function sendMessageWithAttachmentsPersistent(params = {}) {
-  await sendInternal(params, true);
+  return sendInternal(params, true);
 }
 
 export async function preconnectPersistent(params = {}) {
@@ -771,6 +868,45 @@ export async function abortCurrentTurn() {
   // a non-null runtime, subsequent callers see null and exit early.
   const runtime = getActiveTurnRuntime();
   if (!runtime) return;
+  return abortRuntime(runtime);
+}
+
+/** Stop one session's foreground turn and native background workflows. */
+export async function abortTurnPersistent(params = {}) {
+  validateClaudeStopTarget(params);
+  const matchingSends = [...pendingSends].filter(send => matchesClaudeStopTarget(send, params));
+  for (const send of matchingSends) send.cancelled = true;
+  const runtime = [...getAllRuntimes()].find(candidate => (!candidate.closed || candidate.abortPromise || candidate.disposePromise)
+    && matchesClaudeStopTarget(candidate, params));
+  // An unsent request is cancellable locally: its token prevents input from
+  // ever reaching the SDK. Submitted work still needs native acknowledgement.
+  const completions = new Set(matchingSends.map(send => send.abortPromise).filter(Boolean));
+  if (runtime) completions.add(abortRuntime(runtime));
+  const abortPromise = completions.size
+    ? Promise.all(completions).then(results => ({ stopped: results.some(result => result.stopped) }))
+    : Promise.resolve({ stopped: matchingSends.length > 0 });
+  // Preserve the exact cancellation outcome even if acquisition/setup throws
+  // before its runtime can be assigned to sendInternal's local variable.
+  // Repeated Stop must not replace an in-progress/failed native cancellation
+  // with a local success merely because disposal has already set closed=true.
+  for (const send of matchingSends) send.abortPromise ||= abortPromise;
+  return abortPromise;
+}
+
+async function withAbortTimeout(operation, timeoutMs, message) {
+  let timeout;
+  try {
+    return await Promise.race([
+      operation,
+      new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error(message)), timeoutMs); }),
+    ]);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function abortRuntime(runtime) {
+  if (runtime.abortPromise) return runtime.abortPromise;
   console.log('[LIFECYCLE] abortCurrentTurn epoch=' + (runtime.runtimeSessionEpoch || '(none)'));
 
   // Clear turnSink first to stop incoming messages, then fail it to unblock waiting take()
@@ -784,16 +920,33 @@ export async function abortCurrentTurn() {
   // Mark abort after sink is cleared
   runtime.abortRequested = true;
 
-  clearActiveTurnRuntime();
+  clearActiveTurnRuntimeIf(runtime);
 
-  try {
-    if (!runtime.closed) {
-      await disposeRuntime(runtime, { removeSession });
+  runtime.abortPromise = (async () => {
+    let failure;
+    try {
+      if (typeof runtime.query?.interrupt !== 'function') {
+        throw new Error('The running Claude SDK cannot acknowledge native cancellation. Update Claude in Settings > Dependencies.');
+      }
+      // Native interrupt covers foreground and background work. Cancel queued
+      // input too on SDKs that support it; close remains the final cleanup step.
+      await withAbortTimeout(runtime.query.interrupt({ cancelQueued: true }), 5000,
+        'Claude did not acknowledge native cancellation within 5 seconds.');
+    } catch (error) {
+      failure = error;
+      console.error('[ABORT] Native interrupt failed:', error.message);
     }
-  } catch (error) {
-    // Best-effort — log but don't throw so abort always "succeeds"
-    console.error('[ABORT] Failed to dispose runtime:', error.message);
-  }
+    try {
+      await withAbortTimeout(disposeRuntime(runtime, { removeSession }), 3000,
+        'Claude runtime cleanup did not finish within 3 seconds.');
+      if (runtime.closeError) throw runtime.closeError;
+    } catch (error) {
+      failure ||= error;
+    }
+    if (failure) throw failure;
+    return { stopped: true };
+  })();
+  return runtime.abortPromise;
 }
 
 /**
@@ -809,9 +962,6 @@ export async function getContextUsagePersistent(params = {}) {
   const sessionId = safeParams.sessionId || null;
   const modelId = safeParams.model || null; // Original model ID, may contain [1m] suffix
   return withScopedContextWindowPreference(modelId, async () => {
-    const settings = loadClaudeSettings();
-    const { resolvedModelId } = resolveRequestModelState(modelId, settings?.env);
-    const targetModel = resolvedModelId || modelId || null;
     let runtime = null;
 
     // Try to find the runtime for the specific session first
@@ -826,9 +976,20 @@ export async function getContextUsagePersistent(params = {}) {
       }
     }
 
-    const mustRecreate = shouldRecreateRuntimeForModel(runtime, modelId);
+    // A status read must never replace or reconfigure a running turn, even if
+    // the saved supplier was edited or deleted after that turn started.
+    const active = runtime && !runtime.closed && ((runtime.activeTurnCount || 0) > 0
+      || runtime.cliTurnInFlight || runtime.backgroundTaskIds?.size > 0);
+    if (active && safeParams.runtimeSessionEpoch && runtime.runtimeSessionEpoch !== safeParams.runtimeSessionEpoch) {
+      throw new Error('The runtime session changed. Refresh the context usage query.');
+    }
+    const supplier = active ? null : buildSessionClaudeConfig(safeParams.supplierId);
+    const settings = active ? null : supplier?.settings ?? loadClaudeSettings();
+    const { resolvedModelId } = resolveRequestModelState(modelId, settings?.env);
+    const targetModel = resolvedModelId || modelId || null;
+    const mustRecreate = !active && shouldRecreateRuntimeForModel(runtime, modelId);
 
-    if (!runtime || runtime.closed || mustRecreate) {
+    if (!active && (!runtime || runtime.closed || mustRecreate || supplier)) {
       if (mustRecreate && runtime && !runtime.closed) {
         await disposeRuntime(runtime, { removeSession });
         runtime = null;
@@ -837,7 +998,7 @@ export async function getContextUsagePersistent(params = {}) {
         await buildRequestContext(safeParams, false)
       );
       runtime = await acquireRuntime(requestContext, { registerActiveQueryResult, removeSession });
-    } else {
+    } else if (!active) {
       // Fast path: reuse existing runtime with minimal model sync.
       // Only map the model ID and call setModel if needed - skip full buildRequestContext
       // which would unnecessarily load MCP config, settings, etc.
@@ -848,7 +1009,7 @@ export async function getContextUsagePersistent(params = {}) {
       setModelEnvironmentVariables(targetModel, modelId, settings?.env);
     }
 
-    if (typeof runtime.query?.setModel === 'function') {
+    if (!active && typeof runtime.query?.setModel === 'function') {
       try {
         await runtime.query.setModel(targetModel || undefined);
         runtime.currentModel = targetModel;
@@ -925,6 +1086,7 @@ export const __testing = {
   async abortCurrentTurn() {
     return abortCurrentTurn();
   },
+  abortTurnPersistent,
   setActiveTurnRuntime(runtime) {
     setActiveTurnRuntime(runtime);
   },

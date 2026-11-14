@@ -106,6 +106,10 @@
     "localProject": "Local",
     "disabled": "Desativado",
     "sdkNotInstalled": "O SDK de {{provider}} não está instalado. Por favor, instale o SDK para iniciar o chat.",
+    "codexUltraCapabilitiesLoading": "Verificando a disponibilidade do Ultra. Tente enviar novamente após o carregamento do modelo.",
+    "codexUltraCapabilitiesUnavailable": "Não foi possível verificar a disponibilidade do Ultra. Recarregue os modelos ou escolha outro nível de esforço.",
+    "sessionTransitionTakingLonger": "A mudança de sessão está demorando mais que o esperado. Você pode tentar abri-la novamente; as mensagens na fila estão pausadas.",
+    "sessionTransitionInProgress": "Uma mudança de sessão já está em andamento. Aguarde um momento.",
     "sdkStatusLoading": "Verificando status do SDK...",
     "pasteImagePreparing": "Preparando imagem colada...",
     "sdkStatusUnavailable": "Não foi possível verificar o status do SDK.",
@@ -141,8 +145,7 @@
       "matchCase": "Diferenciar maiúsculas (Alt+C)",
       "wholeWord": "Palavra inteira (Alt+W)",
       "regex": "Expressão regular (Alt+R)",
-      "invalidRegex": "Regex inválida",
-      "openTooltip": "Pesquisar na conversa (Cmd/Ctrl+F)"
+      "invalidRegex": "Regex inválida"
     },
     "compactSummary": {
       "receivedTime": "Hora registrada",
@@ -171,7 +174,11 @@
     "codexApprovalsUsage": "Use /approvals without arguments",
     "codexCliOutdated": "O Codex CLI {{version}} está desatualizado; alguns modelos e modos de permissão podem não funcionar. Atualize para a versão {{minimumVersion}} ou mais recente.",
     "codexSandboxConflict": "Codex automatic review cannot use danger-full-access. Choose workspace-write or request approval.",
-    "continueRefiningPlan": "Continuar refinando este plano:"
+    "continueRefiningPlan": "Continuar refinando este plano:",
+    "backgroundTasksRunning": "{{count}} tarefas em segundo plano em execução",
+    "backgroundTasksRunning_one": "{{count}} tarefa em segundo plano em execução",
+    "backgroundTasksRunning_other": "{{count}} tarefas em segundo plano em execução",
+    "stopBackgroundTasks": "Parar tarefas em segundo plano"
   },
   "settings": {
     "title": "Configurações",
@@ -1146,6 +1153,132 @@
         "hide": "Ocultar no seletor de provedor",
         "show": "Mostrar no seletor de provedor"
       }
+    },
+    "hooks": {
+      "title": "Hooks",
+      "description": "Inspecione e edite com segurança os hooks do Codex e Claude Code.",
+      "refresh": "Atualizar",
+      "provider": "Provedor",
+      "scope": "Escopo",
+      "all": "Todos",
+      "allProviders": "Todos os provedores",
+      "allScopes": "Todos os escopos",
+      "global": "Usuário",
+      "project": "Projeto",
+      "projectLocal": "Projeto (substituição local)",
+      "search": "Buscar hooks",
+      "searchPlaceholder": "Buscar eventos, comandos ou caminhos",
+      "noMatches": "Nenhum hook corresponde aos filtros.",
+      "toggleUnavailable": "A ativação individual requer verificar o comportamento do provedor.",
+      "enabled": "Ativado",
+      "disabled": "Desativado",
+      "enable": "Ativar hook",
+      "disable": "Desativar hook",
+      "managedToggleHint": "Controle gerenciado pelo CC GUI; preserva a configuração original e permite restaurá-la.",
+      "nativeToggleHint": "Altera sua preferência do Codex; confiança, recursos e políticas também controlam a execução.",
+      "toggleFailed": "Falha ao alterar o hook",
+      "loading": "Buscando hooks…",
+      "empty": "Nenhum hook encontrado.",
+      "valid": "Formato reconhecido",
+      "validationWarning": "Requer revisão",
+      "matcher": "Filtro",
+      "noCommand": "Sem comando",
+      "readOnly": "Somente leitura",
+      "viewSource": "Ver fonte",
+      "editSource": "Editar fonte",
+      "sourcePreview": "Prévia da fonte",
+      "sourceTab": "Fonte",
+      "detailsTab": "Detalhes",
+      "viewMode": "Visualização de hooks",
+      "loadingSource": "Carregando fonte…",
+      "sourceEditor": "Editor de fonte",
+      "affectedFile": "Arquivo afetado",
+      "backupDirectory": "Pasta de backup",
+      "latestBackup": "Restaurar o último backup desta sessão de edição",
+      "lastModified": "Última modificação",
+      "event": "Evento",
+      "format": "Formato",
+      "revision": "Revisão",
+      "command": "Comando",
+      "validationIssues": "Problemas de validação",
+      "providerFields": "Campos do provedor",
+      "noProviderFields": "Sem campos específicos",
+      "none": "Nenhum",
+      "reviewChanges": "Revisar alterações",
+      "hideChanges": "Ocultar alterações",
+      "noChanges": "Sem alterações para salvar",
+      "technicalInfo": "Informações técnicas",
+      "moreActions": "Mais ações",
+      "conflictTitle": "A fonte foi alterada externamente",
+      "conflictDescription": "Recarregue a versão externa ou mantenha o rascunho e sincronize a última revisão.",
+      "reloadExternal": "Recarregar versão externa",
+      "keepDraft": "Manter rascunho e sincronizar",
+      "discardDraft": "Descartar rascunho",
+      "discardChangesTitle": "Descartar alterações não salvas?",
+      "discardChangesMessage": "As alterações não salvas serão perdidas ao fechar.",
+      "backupOnSave": "Um backup é criado antes de salvar",
+      "save": "Salvar",
+      "saving": "Salvando…",
+      "restore": "Restaurar o último backup desta sessão de edição",
+      "saveFailed": "Falha ao salvar",
+      "sourceLoadFailed": "Falha ao recarregar fonte",
+      "noPreview": "Sem prévia.",
+      "sourceNotice": "Revise {{count}} fontes; suas operações estão restritas.",
+      "sharedProjectWarning": "A configuração do projeto pode ser commitada e afetar outros usuários. Revise as diferenças antes de compartilhar.",
+      "bridgeUnavailable": "A conexão ao IDE está indisponível. Reabra as configurações.",
+      "sourceTimeout": "A leitura expirou. Recarregue a fonte antes de editar.",
+      "mutationTimeout": "A confirmação expirou. Atualize antes de tentar; a alteração pode estar salva.",
+      "mutationConfirmedLate": "O salvamento atrasado foi confirmado. Rascunho mantido; recarregue a fonte.",
+      "issues": {
+        "COMMAND_MISSING": "Comando ausente",
+        "TYPE_MISSING": "Tipo ausente",
+        "HOOKS_NOT_OBJECT": "hooks deve ser um objeto",
+        "SETTINGS_NOT_OBJECT": "A configuração deve ser um objeto",
+        "INVALID_JSON": "JSON inválido",
+        "HOOK_ENTRY_NOT_OBJECT": "A entrada deve ser um objeto",
+        "INVALID_TOML": "TOML inválido",
+        "CODEX_HOOKS_NOT_TABLE": "hooks do Codex deve ser uma tabela",
+        "CODEX_HOOK_EVENT_NOT_ARRAY": "Os eventos devem ser listas",
+        "CODEX_HOOK_ENTRY_NOT_TABLE": "A entrada deve ser uma tabela",
+        "CODEX_ENABLED_INVALID": "Campo de ativação inválido",
+        "CODEX_MATCHER_INVALID": "Filtro inválido",
+        "CODEX_COMMANDS_INVALID": "Falta comando ou ferramenta MCP válida",
+        "CODEX_HOOKS_FEATURE_DISABLED": "Recurso hooks desativado",
+        "READ_FAILED": "Falha na leitura",
+        "CODEX_EVENT_UNSUPPORTED": "Evento incompatível com o esquema verificado",
+        "CODEX_HANDLER_UNSUPPORTED": "Tipo de manipulador incompatível",
+        "CODEX_HOOK_FILE_FIELDS_INVALID": "Campos do arquivo inválidos",
+        "CODEX_STATE_INLINE_UNSUPPORTED": "Não é possível editar o estado inline com segurança; use uma tabela.",
+        "LINKED_SOURCE_READ_ONLY": "Arquivos vinculados são somente leitura. Edite diretamente o arquivo original.",
+        "HOOK_SOURCE_UNAVAILABLE": "O arquivo de origem está indisponível."
+      },
+      "sharedToggleTitle": "Confirmar alteração no projeto compartilhado",
+      "sharedToggleMessage": "Isso altera o arquivo compartilhado .claude/settings.json e pode afetar outros colaboradores. Os dados de restauração ficam apenas neste computador.",
+      "confirmSharedToggle": "Alterar configuração compartilhada",
+      "sensitiveSourceWarning": "Este arquivo pode conter credenciais e configurações confidenciais. Revele-o quando estiver pronto para editar.",
+      "revealSource": "Revelar configuração",
+      "errors": {
+        "HOOK_SHARED_CONFIRMATION_REQUIRED": "Confirme primeiro a alteração da configuração compartilhada.",
+        "HOOK_CATALOG_TIMEOUT": "A atualização dos hooks expirou. Atualize antes de alterar outro hook.",
+        "HOOK_REVISION_CONFLICT": "O arquivo foi alterado fora desta página. Atualize e tente novamente.",
+        "HOOK_RESTORE_CONFLICT": "Não foi possível restaurar o hook porque este evento não é mais uma lista no arquivo. Corrija o arquivo e tente novamente.",
+        "HOOK_TOGGLE_LOCKED": "Outra alteração neste arquivo está em andamento. Tente novamente em instantes.",
+        "HOOK_TOGGLE_LOCK_FAILED": "Não foi possível bloquear o arquivo para esta alteração.",
+        "HOOK_FILE_LOCKED": "Outra alteração neste arquivo está em andamento. Tente novamente em instantes.",
+        "HOOK_NOT_FOUND": "Este hook não está mais no arquivo. Atualize a lista.",
+        "HOOK_NOT_DISABLED": "Este hook não está desativado. Atualize a lista.",
+        "HOOK_ALREADY_DISABLED": "Este hook já está desativado. Atualize a lista.",
+        "HOOK_STATE_WRITE_FAILED": "Não foi possível salvar o registro do hook desativado. A alteração do arquivo foi desfeita quando possível.",
+        "HOOK_TOGGLE_FAILED": "Não foi possível alterar o hook.",
+        "INVALID_HOOK_PATH": "Este arquivo não pode ser alterado aqui. Arquivos vinculados e arquivos fora dos locais conhecidos são somente leitura.",
+        "INVALID_BACKUP_PATH": "O arquivo de backup não está disponível.",
+        "SOURCE_TOO_LARGE": "O arquivo tem mais de 128 KB e não pode ser editado aqui.",
+        "INVALID_REQUEST": "Solicitação inválida. Atualize a página e tente novamente.",
+        "WRITE_FAILED": "Não foi possível salvar o arquivo.",
+        "RESTORE_FAILED": "Não foi possível restaurar o backup.",
+        "UNSUPPORTED_HOOK_PROVIDER": "Este tipo de hook não pode ser alterado aqui.",
+        "UNKNOWN_ERROR": "Erro desconhecido."
+      }
     }
   },
   "history": {
@@ -1259,7 +1392,15 @@
     "codexDeliveryFailed": "O Codex não recebeu sua escolha ({{error}}). Se a conversa não continuar, clique em Parar e envie a mensagem novamente.",
     "codexDeliveryUnconfirmed": "O Codex ainda não confirmou sua escolha ({{error}}). Ela ainda pode ter efeito, então não responda de novo; se a conversa não continuar, clique em Parar e envie a mensagem novamente."
   },
+  "modelConfig": {
+    "approvals": "Aprovações",
+    "ultracode": {
+      "label": "Ultracode",
+      "description": "Fluxo nativo do Claude com delegação automática de tarefas. Mantém o nível de raciocínio selecionado."
+    }
+  },
   "askUserQuestion": {
+    "ompTitle": "O OMP tem algumas perguntas para você",
     "title": "Claude tem algumas perguntas para você",
     "progress": "Pergunta {{current}} / {{total}}",
     "multiSelectHint": "Você pode selecionar múltiplas opções",
@@ -1652,6 +1793,12 @@
     "bashGroupCompleted": "concluído",
     "bashGroupAllCompleted": "Todos Concluídos",
     "bashGroupFailed": "falhou",
+    "bashGroupCopyCommand": "Copiar comando",
+    "bashGroupCopyOutput": "Copiar saída",
+    "bashGroupOutput": "Saída",
+    "bashGroupOutputFailed": "Falhou",
+    "bashGroupRunning": "Executando…",
+    "bashGroupNoOutput": "(sem saída)",
     "updatePlan": "Atualizar Plano",
     "applyPatch": "Aplicar Patch",
     "reportFindings": {
@@ -1698,6 +1845,7 @@
       "loading": "Carregando processo do agente…",
       "unavailable": "O log do processo não está disponível até que a sessão tenha um id.",
       "reportGenerated": "Relatório de análise estruturada gerado",
+      "historyTruncated": "Histórico reduzido: {{count}} registros omitidos. A tarefa inicial e a atividade recente foram mantidas.",
       "unitMs": "ms",
       "unitS": "s",
       "unitTools": "ferramentas",
@@ -1916,13 +2064,13 @@
         "label": "Haiku 4.5",
         "description": "Haiku 4.5 · Mais rápido para respostas rápidas"
       },
+      "fable52": {
+        "label": "Fable 5.2",
+        "description": "Fable 5.2 · O mais poderoso · classe Mythos"
+      },
       "fable51": {
         "label": "Fable 5.1",
-        "description": "Fable 5.1 · O mais poderoso · classe Mythos"
-      },
-      "fable5": {
-        "label": "Fable 5",
-        "description": "Fable 5 · Geração anterior do Fable"
+        "description": "Fable 5.1 · Geração anterior do Fable"
       }
     },
     "longContext": {
@@ -2040,6 +2188,25 @@
       "label": "Auto Total",
       "tooltip": "Codex approval_policy=never – executa comandos e escreve arquivos sem solicitar (sandbox do workspace ainda aplicado).",
       "description": "Modo autônomo. O Codex executa edições e comandos shell imediatamente."
+    }
+  },
+  "ompApprovals": {
+    "title": "Selecionar o modo de aprovação do OMP",
+    "default": {
+      "label": "Padrão",
+      "description": "Automático total sem tools.approvalMode no OMP"
+    },
+    "alwaysAsk": {
+      "label": "Perguntar",
+      "description": "Pergunta antes de edições e comandos"
+    },
+    "write": {
+      "label": "Aprovar edições automaticamente",
+      "description": "Pergunta somente antes de comandos"
+    },
+    "yolo": {
+      "label": "Automático total",
+      "description": "Nunca pergunta"
     }
   },
   "ompModes": {
@@ -2160,6 +2327,10 @@
     "xhigh": {
       "label": "Máximo",
       "description": "Profundidade máxima de raciocínio"
+    },
+    "ultra": {
+      "label": "Ultra",
+      "description": "Raciocínio máximo com delegação automática de tarefas"
     }
   },
   "errorBoundary": {

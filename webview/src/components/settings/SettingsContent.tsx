@@ -14,6 +14,7 @@ import {
   AgentsPanel,
   PromptsPanel,
   SkillsPanel,
+  HooksPanel,
   PetPanel,
   AiDataStoragePanel,
   OtherPanel,
@@ -26,6 +27,7 @@ import type {
   UseProviderManagementReturn,
   UseCodexProviderManagementReturn,
   UseAgentManagementReturn,
+  UseHookManagementReturn,
 } from './hooks';
 import styles from './style.module.less';
 
@@ -41,6 +43,7 @@ const TAB_PANELS: Record<SettingsTab, ComponentType<SettingsTabPanelProps>> = {
   agents: AgentsPanel,
   prompts: PromptsPanel,
   skills: SkillsPanel,
+  hooks: HooksPanel,
   pet: PetPanel,
   storage: AiDataStoragePanel,
   other: OtherPanel,
@@ -57,6 +60,7 @@ interface SettingsContentProps {
   providerManagement: UseProviderManagementReturn;
   codexProviderManagement: UseCodexProviderManagementReturn;
   agentManagement: UseAgentManagementReturn;
+  hooksManagement: UseHookManagementReturn;
 }
 
 // Content area — mount only the active tab.
@@ -72,6 +76,7 @@ const SettingsContent = ({
   providerManagement,
   codexProviderManagement,
   agentManagement,
+  hooksManagement,
 }: SettingsContentProps) => {
   const ActivePanel = TAB_PANELS[currentTab];
   return (
@@ -85,6 +90,7 @@ const SettingsContent = ({
         providerManagement={providerManagement}
         codexProviderManagement={codexProviderManagement}
         agentManagement={agentManagement}
+        hooksManagement={hooksManagement}
       />
     </div>
   );

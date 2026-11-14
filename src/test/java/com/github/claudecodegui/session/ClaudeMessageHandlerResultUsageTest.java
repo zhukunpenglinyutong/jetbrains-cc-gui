@@ -150,6 +150,40 @@ public class ClaudeMessageHandlerResultUsageTest {
     }
 
     @Test
+    public void pendingSupplierChangeDoesNotAlterTheActiveTurnsMappedPricing() throws Exception {
+        Path config = Files.createTempFile("session-supplier-pricing", ".json");
+        Files.writeString(config, "{\"customModelPricing\":{\"claude\":{\"deepseek-v4-flash\":{"
+                + "\"inputCostPer1M\":1.0,\"outputCostPer1M\":2.0,\"cacheReadCostPer1M\":0.02}}}}");
+        CustomPricingProvider.setInstanceForTests(CustomPricingProvider.createForTests(config));
+        try {
+            state.setSupplierId("claude", "selected");
+            state.beginTurn();
+            state.setSupplierId("claude", "next-turn");
+            CodemossSettingsService settings = new CodemossSettingsService() {
+                @Override
+                public JsonObject readClaudeSettings() {
+                    throw new AssertionError("An explicitly bound supplier must not use global pricing mappings");
+                }
+
+                @Override
+                public List<JsonObject> getClaudeProviders() {
+                    return List.of(new Gson().fromJson("{\"id\":\"selected\",\"settingsConfig\":{\"env\":{"
+                            + "\"ANTHROPIC_DEFAULT_SONNET_MODEL\":\"deepseek-v4-flash\"}}}", JsonObject.class));
+                }
+            };
+            handler = new ClaudeMessageHandler(null, state, new CallbackHandler(), new MessageParser(), new MessageMerger(), new Gson(), settings);
+            Message message = newAssistantMessageWithUsage(37, 353);
+            setCurrentAssistantMessage(message);
+            invokeHandleResult("{\"type\":\"result\",\"subtype\":\"success\",\"usage\":{"
+                    + "\"input_tokens\":1200,\"cache_read_input_tokens\":363100,\"output_tokens\":4560}}");
+            assertEquals(0.017582, message.raw.get("turnCostUsd").getAsDouble(), 0.000001);
+        } finally {
+            CustomPricingProvider.setInstanceForTests(null);
+            Files.deleteIfExists(config);
+        }
+    }
+
+    @Test
     public void resultWithoutUsageDoesNotStampTurnUsage() throws Exception {
         Message msg = newAssistantMessageWithUsage(37, 353);
         setCurrentAssistantMessage(msg);

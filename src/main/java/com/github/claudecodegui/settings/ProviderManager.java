@@ -484,6 +484,25 @@ public class ProviderManager {
         }
     }
 
+    /** Update only the selected profile; keep credentials and the global selection unchanged. */
+    public boolean setAlwaysThinkingEnabledInProvider(String id, boolean enabled) throws IOException {
+        synchronized (PROVIDER_STATE_LOCK) {
+            JsonObject config = configReader.apply(null);
+            JsonObject claude = config.has("claude") ? config.getAsJsonObject("claude") : null;
+            JsonObject providers = claude != null && claude.has("providers") ? claude.getAsJsonObject("providers") : null;
+            if (providers == null || !providers.has(id) || !providers.get(id).isJsonObject()) {
+                return false;
+            }
+            JsonObject provider = providers.getAsJsonObject(id);
+            JsonObject settings = provider.has("settingsConfig") && provider.get("settingsConfig").isJsonObject()
+                    ? provider.getAsJsonObject("settingsConfig") : new JsonObject();
+            settings.addProperty("alwaysThinkingEnabled", enabled);
+            provider.add("settingsConfig", settings);
+            configWriter.accept(config);
+            return true;
+        }
+    }
+
     private boolean setAlwaysThinkingEnabledInActiveProviderLocked(boolean enabled) throws IOException {
         JsonObject config = configReader.apply(null);
         if (!config.has("claude") || config.get("claude").isJsonNull()) {

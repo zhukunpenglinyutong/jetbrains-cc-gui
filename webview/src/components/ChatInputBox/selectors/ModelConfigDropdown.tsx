@@ -1,10 +1,13 @@
 import { useTranslation } from 'react-i18next';
-import type { CodexFastMode, ModelInfo, ReasoningEffort } from '../types';
+import type { CodexFastMode, ModelInfo, OmpApprovalMode, ReasoningEffort } from '../types';
+import type { OmpReasoningCatalog } from '../reasoningUtils';
 import { CodexFastModeSelect } from './CodexFastModeSelect';
 import { DshPresetSelect } from './DshPresetSelect';
+import { ModelConfigUltracodeRow } from './ModelConfigUltracodeRow';
 import { ModelConfigContextRow } from './ModelConfigContextRow';
 import { ModelConfigSubmenuRow } from './ModelConfigSubmenuRow';
 import { ModelSelect } from './ModelSelect';
+import { OmpApprovalSelect } from './OmpApprovalSelect';
 import { ReasoningSelect } from './ReasoningSelect';
 import type { ActiveSubmenu } from './useModelConfigSubmenu';
 
@@ -36,6 +39,11 @@ interface ModelConfigDropdownProps {
   longContextEnabled: boolean;
   onLongContextChange?: (enabled: boolean) => void;
   // Function rows below the model list.
+  showUltracode: boolean;
+  claudeUltracode: boolean;
+  onClaudeUltracodeChange?: (enabled: boolean) => void;
+  supportedReasoningEfforts?: readonly string[];
+  reasoningCapabilitiesUnconfirmed: boolean;
   showDivider: boolean;
   showContextRow: boolean;
   contextSupported: boolean;
@@ -47,15 +55,21 @@ interface ModelConfigDropdownProps {
   dshPreset: string;
   onDshPresetChange?: (preset: string) => void;
   dshPresetLabel: string;
+  showApproval: boolean;
+  ompApprovalMode: OmpApprovalMode;
+  onOmpApprovalModeChange?: (mode: OmpApprovalMode) => void;
+  ompApprovalLabel: string;
   showEffortRow: boolean;
   reasoningEffort: ReasoningEffort;
   onReasoningChange: (effort: ReasoningEffort) => void;
+  ompCatalog?: OmpReasoningCatalog;
   effortLabel: string;
   // Fly-out submenu state.
   activeSubmenu: ActiveSubmenu;
   effortTriggerRef: React.RefObject<HTMLDivElement | null>;
   speedTriggerRef: React.RefObject<HTMLDivElement | null>;
   presetTriggerRef: React.RefObject<HTMLDivElement | null>;
+  approvalTriggerRef: React.RefObject<HTMLDivElement | null>;
   scheduleSubmenu: (submenu: ActiveSubmenu) => void;
   openSubmenu: (submenu: ActiveSubmenu) => void;
 }
@@ -81,6 +95,11 @@ export const ModelConfigDropdown = ({
   onAddModel,
   longContextEnabled,
   onLongContextChange,
+  showUltracode,
+  claudeUltracode,
+  onClaudeUltracodeChange,
+  supportedReasoningEfforts,
+  reasoningCapabilitiesUnconfirmed,
   showDivider,
   showContextRow,
   contextSupported,
@@ -92,14 +111,20 @@ export const ModelConfigDropdown = ({
   dshPreset,
   onDshPresetChange,
   dshPresetLabel,
+  showApproval,
+  ompApprovalMode,
+  onOmpApprovalModeChange,
+  ompApprovalLabel,
   showEffortRow,
   reasoningEffort,
   onReasoningChange,
+  ompCatalog,
   effortLabel,
   activeSubmenu,
   effortTriggerRef,
   speedTriggerRef,
   presetTriggerRef,
+  approvalTriggerRef,
   scheduleSubmenu,
   openSubmenu,
 }: ModelConfigDropdownProps) => {
@@ -141,6 +166,13 @@ export const ModelConfigDropdown = ({
         supported={contextSupported}
         enabled={longContextEnabled}
         onChange={onLongContextChange}
+        onHover={() => scheduleSubmenu('none')}
+      />
+
+      <ModelConfigUltracodeRow
+        visible={showUltracode}
+        enabled={claudeUltracode}
+        onChange={onClaudeUltracodeChange}
         onHover={() => scheduleSubmenu('none')}
       />
 
@@ -187,6 +219,27 @@ export const ModelConfigDropdown = ({
       </ModelConfigSubmenuRow>
 
       <ModelConfigSubmenuRow
+        visible={showApproval && !!onOmpApprovalModeChange}
+        active={activeSubmenu === 'approval'}
+        testId="model-config-option-approval"
+        label={t('modelConfig.approvals', { defaultValue: 'Approvals' })}
+        valueLabel={ompApprovalLabel}
+        triggerRef={approvalTriggerRef}
+        onHover={() => scheduleSubmenu('approval')}
+        onOpen={() => openSubmenu('approval')}
+      >
+        {onOmpApprovalModeChange && (
+          <OmpApprovalSelect
+            value={ompApprovalMode}
+            onChange={onOmpApprovalModeChange}
+            embedded
+            triggerRef={approvalTriggerRef}
+            onClose={onClose}
+          />
+        )}
+      </ModelConfigSubmenuRow>
+
+      <ModelConfigSubmenuRow
         visible={showEffortRow}
         active={activeSubmenu === 'effort'}
         testId="model-config-option-effort"
@@ -201,6 +254,9 @@ export const ModelConfigDropdown = ({
           onChange={onReasoningChange}
           selectedModel={selectedModel}
           currentProvider={currentProvider}
+          ompCatalog={ompCatalog}
+          supportedReasoningEfforts={supportedReasoningEfforts}
+          reasoningCapabilitiesUnconfirmed={reasoningCapabilitiesUnconfirmed}
           embedded
           triggerRef={effortTriggerRef}
           onClose={onClose}

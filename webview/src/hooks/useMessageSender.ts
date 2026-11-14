@@ -1,17 +1,26 @@
-import { useCallback, type RefObject } from 'react';
+import { useCallback, useMemo, useSyncExternalStore, type RefObject } from 'react';
+import type { MessageDispatchResult } from './useMessageQueue';
+import { getSessionTransitionPending } from '../utils/sessionTransitionState';
 import { selectedCodexSkillInputs } from '../components/ChatInputBox/providers/dollarCommandProvider';
 import type { TFunction } from 'i18next';
 import { sendBridgeEvent } from '../utils/bridge';
 import { clearPendingStreamStart, markPendingStreamStart } from '../utils/streamLifecycle';
 import type { ClaudeContentBlock, ClaudeMessage } from '../types';
 import {
+  OMP_APPROVAL_DEFAULT,
   apply1MContextSuffix,
 } from '../components/ChatInputBox/types';
-import { claudeModelAllowsEffort } from '../components/ChatInputBox/reasoningUtils';
-import type { Attachment, ChatInputBoxHandle, PermissionMode, ReasoningEffort, SelectedAgent, CodexFastMode } from '../components/ChatInputBox/types';
+import { claudeModelAllowsEffort, getAvailableReasoningLevels, resolveCurrentReasoningLevel } from '../components/ChatInputBox/reasoningUtils';
+import type { Attachment, ChatInputBoxHandle, OmpApprovalMode, PermissionMode, ReasoningEffort, SelectedAgent, CodexFastMode } from '../components/ChatInputBox/types';
 import { expandQuoteTokens } from '../components/ChatInputBox/utils/quoteRegistry';
 import type { ViewMode } from './useModelProviderState';
 import { parseCodexCommand } from './codexCommandDispatcher';
+import {
+  codexModelReasoningEfforts,
+  getCodexReasoningCapabilities,
+  isCodexUltraCapabilityUnconfirmed,
+  subscribeCodexReasoningCapabilities,
+} from '../utils/codexReasoningCapabilities';
 
 /**
  * Command sets for local handling (shared with App.tsx to avoid duplication)
@@ -25,6 +34,12 @@ export const CODEX_REVIEW_COMMANDS = new Set(['/review']);
 
 // Hoisted regex to avoid creating new RegExp on every call
 const WHITESPACE_REGEX = /\s+/;
+
+/** Whether `/context` is answered by the plugin itself. OMP has a `/context` of its own. */
+export function isLocalContextCommand(text: string, provider: string): boolean {
+  if (provider === 'omp' || !text.startsWith('/')) return false;
+  return CONTEXT_COMMANDS.has(text.split(WHITESPACE_REGEX)[0].toLowerCase());
+}
 
 function createContextUsageRequestId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -47,12 +62,14 @@ export interface UseMessageSenderOptions {
   selectedModel: string;
   permissionMode: PermissionMode;
   reasoningEffort: ReasoningEffort;
+  claudeUltracode?: boolean;
   codexFastMode: CodexFastMode;
   codexCollaborationMode?: 'default' | 'plan';
   codexApprovalPreset?: 'request' | 'auto' | 'sandboxed-auto' | 'full-access';
   codexSandboxSelection?: 'read-only' | 'workspace-write' | 'danger-full-access';
   codexNativeAutoReviewAvailable: boolean;
   dshPreset?: string;
+  ompApprovalMode?: OmpApprovalMode;
   selectedAgent: SelectedAgent | null;
   sdkStatusLoading: boolean;
   currentSdkInstalled: boolean;
@@ -73,7 +90,7 @@ export interface UseMessageSenderOptions {
   longContextEnabled?: boolean;
   openContextUsageDialog: (requestId?: string | null, loading?: boolean) => void;
   closeContextUsageDialog: (requestId?: string | null) => boolean;
-  startCodexCompaction: () => void;
+  startCodexCompaction: () => boolean;
   codexCompactionPending?: boolean;
 }
 
@@ -87,12 +104,14 @@ export function useMessageSender({
   selectedModel,
   permissionMode,
   reasoningEffort,
+  claudeUltracode = false,
   codexFastMode,
   codexCollaborationMode = 'default',
   codexApprovalPreset = 'request',
   codexSandboxSelection = 'workspace-write',
   codexNativeAutoReviewAvailable,
   dshPreset,
+  ompApprovalMode,
   selectedAgent,
   sdkStatusLoading,
   currentSdkInstalled,
@@ -116,6 +135,12 @@ export function useMessageSender({
   startCodexCompaction,
   codexCompactionPending = false,
 }: UseMessageSenderOptions) {
+  // Queued messages stay queued while a restored Ultra choice is unconfirmed.
+  const codexCapabilities = useSyncExternalStore(subscribeCodexReasoningCapabilities, getCodexReasoningCapabilities);
+  const reasoningCapabilitiesUnconfirmed = currentProvider === 'codex' && reasoningEffort === 'ultra'
+    && codexCapabilities.status !== 'ready' && !codexCapabilities.effortsByModel.get(selectedModel)?.includes('ultra');
+  const queueRetryKey = useMemo(() => ({}), [codexCapabilities, currentProvider, selectedModel,
+    reasoningEffort, sdkStatusLoading, currentSdkInstalled, codexApprovalPreset, codexSandboxSelection]);
   /**
    * Check if the input is a new session command
    */
@@ -160,98 +185,97 @@ export function useMessageSender({
     return false;
   }, [setCurrentView, handleModeSelect, currentProvider, addToast, t]);
 
-  const checkCodexControlCommand = useCallback((text: string): boolean => {
-    if (currentProvider !== 'codex') return false;
+  const checkCodexControlCommand = useCallback((text: string): MessageDispatchResult | null => {
+    if (currentProvider !== 'codex') return null;
     const parsed = parseCodexCommand(text);
-    if (!parsed) return false;
+    if (!parsed) return null;
     if (parsed.kind === 'compact') {
       if (parsed.hasArguments) {
         addToast(t('chat.codexCompactUsage', { defaultValue: 'Use /compact without arguments' }), 'info');
-        return true;
+        return 'handled';
       }
-      startCodexCompaction();
-      return true;
+      return startCodexCompaction() ? 'started' : 'blocked';
     }
     if (parsed.kind === 'review') {
       if (parsed.hasArguments) {
         addToast(t('chat.codexReviewUsage', { defaultValue: 'Use /review without arguments' }), 'info');
-        return true;
+        return 'handled';
       }
       if (sendBridgeEvent('codex_review', JSON.stringify({}))) {
         addToast(t('chat.codexReviewStarted', { defaultValue: 'Codex is reviewing the workspace' }), 'info');
+        return 'started';
       } else {
         addToast(t('chat.bridgeUnavailable', { defaultValue: 'Bridge is not available right now' }), 'error');
+        return 'blocked';
       }
-      return true;
     }
     if (parsed.kind === 'diff') {
       if (parsed.hasArguments) {
         addToast(t('chat.codexDiffUsage', { defaultValue: 'Use /diff without arguments' }), 'info');
-        return true;
+        return 'handled';
       }
       if (!sendBridgeEvent('codex_read_workspace_diff', JSON.stringify({}))) {
         addToast(t('chat.bridgeUnavailable', { defaultValue: 'Bridge is not available right now' }), 'error');
+        return 'blocked';
       }
-      return true;
+      return 'handled';
     }
     if (parsed.kind === 'approvals') {
       if (parsed.hasArguments) {
         addToast(t('chat.codexApprovalsUsage', { defaultValue: 'Use /approvals without arguments' }), 'info');
-        return true;
+        return 'handled';
       }
       setSettingsInitialTab('permissions');
       setCurrentView('settings');
-      return true;
+      return 'handled';
     }
-    return false;
+    return null;
   }, [currentProvider, addToast, t, setSettingsInitialTab, setCurrentView, startCodexCompaction]);
 
   /**
    * Check for context usage command (/context)
-   * Only available for Claude provider. Opens a dialog to display context window usage.
+   * Opens the plugin's context window dialog for Claude. OMP has a /context of
+   * its own, so there the command is sent on like any other.
    */
   const checkContextCommand = useCallback((text: string): boolean => {
-    if (!text.startsWith('/')) return false;
+    if (!isLocalContextCommand(text, currentProvider)) return false;
     const command = text.split(WHITESPACE_REGEX)[0].toLowerCase();
-    if (CONTEXT_COMMANDS.has(command)) {
-      if (currentProvider !== 'claude') {
-        addToast(t('chat.commandProviderOnly', {
-          command,
-          provider: 'Claude',
-          defaultValue: `${command} is only available for Claude provider`,
-        }), 'warning');
-        return true;
-      }
-
-      const requestId = createContextUsageRequestId();
-
-      // Open dialog with loading state immediately
-      openContextUsageDialog(requestId, true);
-
-      // Send bridge event to fetch context usage with current model
-      // Apply [1m] suffix if long context is enabled so the SDK creates
-      // a runtime with the correct context window limit.
-      const sent = sendBridgeEvent('get_context_usage', JSON.stringify({
-        model: apply1MContextSuffix(selectedModel, longContextEnabled ?? false),
-        requestId,
-      }));
-
-      if (!sent) {
-        closeContextUsageDialog(requestId);
-        addToast(t('chat.bridgeUnavailable', {
-          defaultValue: 'Bridge is not available right now',
-        }), 'error');
-      }
+    if (currentProvider !== 'claude') {
+      addToast(t('chat.commandProviderOnly', {
+        command,
+        provider: 'Claude',
+        defaultValue: `${command} is only available for Claude provider`,
+      }), 'warning');
       return true;
     }
-    return false;
+
+    const requestId = createContextUsageRequestId();
+
+    // Open dialog with loading state immediately
+    openContextUsageDialog(requestId, true);
+
+    // Send bridge event to fetch context usage with current model
+    // Apply [1m] suffix if long context is enabled so the SDK creates
+    // a runtime with the correct context window limit.
+    const sent = sendBridgeEvent('get_context_usage', JSON.stringify({
+      model: apply1MContextSuffix(selectedModel, longContextEnabled ?? false),
+      requestId,
+    }));
+
+    if (!sent) {
+      closeContextUsageDialog(requestId);
+      addToast(t('chat.bridgeUnavailable', {
+        defaultValue: 'Bridge is not available right now',
+      }), 'error');
+    }
+    return true;
   }, [currentProvider, selectedModel, longContextEnabled, addToast, t, openContextUsageDialog, closeContextUsageDialog]);
 
   /**
-   * Check for unimplemented slash commands
+   * Check for unimplemented slash commands (OMP implements /plugins itself)
    */
   const checkUnimplementedCommand = useCallback((text: string): boolean => {
-    if (!text.startsWith('/')) return false;
+    if (!text.startsWith('/') || currentProvider === 'omp') return false;
 
     const command = text.split(/\s+/)[0].toLowerCase();
     const unimplementedCommands = ['/plugin', '/plugins'];
@@ -271,7 +295,7 @@ export function useMessageSender({
       return true;
     }
     return false;
-  }, [t, setMessages]);
+  }, [t, setMessages, currentProvider]);
 
   /**
    * Build content blocks for the user message
@@ -332,8 +356,16 @@ export function useMessageSender({
       effectiveMode: effectivePermissionMode,
     });
 
+    // Read current capabilities synchronously: a settled catalog can arrive
+    // before the picker's reconciliation effect updates the selected effort.
+    const codexEfforts = currentProvider === 'codex' ? codexModelReasoningEfforts(selectedModel) : undefined;
+    // omp resolves a level its model lacks by itself, so its stored effort goes out unchanged.
+    const effectiveEffort = (currentProvider === 'codex' || currentProvider === 'omp') && reasoningEffort !== 'ultra'
+      ? reasoningEffort
+      : resolveCurrentReasoningLevel(reasoningEffort,
+        getAvailableReasoningLevels(currentProvider, selectedModel, undefined, codexEfforts))?.id;
     const reasoningEffortPayload = shouldSendReasoningEffort(currentProvider, selectedModel)
-      ? { reasoningEffort }
+      ? { reasoningEffort: effectiveEffort }
       : {};
 
     try {
@@ -347,7 +379,9 @@ export function useMessageSender({
         permissionMode: effectivePermissionMode,
         clientMessageId,
         ...reasoningEffortPayload,
+        ...(currentProvider === 'claude' ? { claudeUltracode } : {}),
         ...(currentProvider === 'dsh' ? { dshPreset: dshPreset || '' } : {}),
+        ...(currentProvider === 'omp' ? { ompApprovalMode: ompApprovalMode || OMP_APPROVAL_DEFAULT } : {}),
         codexFastMode,
         ...(currentProvider === 'codex' ? {
           codexSettings: {
@@ -368,8 +402,8 @@ export function useMessageSender({
       // Losing attachments changes the user's task; never retry it as text-only work.
       return false;
     }
-  }, [codexApprovalPreset, codexCollaborationMode, codexFastMode, codexNativeAutoReviewAvailable,
-    codexSandboxSelection, currentProvider, dshPreset, selectedModel, reasoningEffort, longContextEnabled]);
+  }, [claudeUltracode, codexApprovalPreset, codexCollaborationMode, codexFastMode, codexNativeAutoReviewAvailable,
+    codexSandboxSelection, currentProvider, dshPreset, ompApprovalMode, selectedModel, reasoningEffort, longContextEnabled]);
 
   /**
    * Execute message sending (from queue or directly)
@@ -378,12 +412,23 @@ export function useMessageSender({
     content: string,
     attachments?: Attachment[],
     permissionModeOverride?: PermissionMode,
-  ) => {
+  ): MessageDispatchResult => {
+    if (getSessionTransitionPending()) return 'blocked';
     // Expand inline quote chips (tokens) into their full Markdown blockquotes.
     const text = expandQuoteTokens(content).replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
     const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
 
-    if (!text && !hasAttachments) return;
+    if (!text && !hasAttachments) return 'handled';
+
+    if (currentProvider === 'codex' && isCodexUltraCapabilityUnconfirmed(selectedModel, reasoningEffort)) {
+      addToast(t(getCodexReasoningCapabilities().status === 'unavailable'
+        ? 'chat.codexUltraCapabilitiesUnavailable' : 'chat.codexUltraCapabilitiesLoading', {
+        defaultValue: getCodexReasoningCapabilities().status === 'unavailable'
+          ? 'Could not verify Ultra availability. Retry loading models or choose another effort.'
+          : 'Checking Ultra availability. Try sending again when model loading finishes.',
+      }), 'info');
+      return 'blocked';
+    }
 
     // Native automatic review is bounded to a protected sandbox. Keep the
     // user's desired full-access value visible for correction, but never send
@@ -394,14 +439,14 @@ export function useMessageSender({
       addToast(t('chat.codexSandboxConflict', {
         defaultValue: 'Codex automatic review cannot use danger-full-access. Choose workspace-write or request approval.',
       }), 'warning');
-      return;
+      return 'blocked';
     }
 
     // Same gate as the input box: a provider that is already installed must
     // not wait on the shared Claude/Codex SDK query.
     if (sdkStatusLoading && !currentSdkInstalled) {
       addToast(t('chat.sdkStatusLoading'), 'info');
-      return;
+      return 'blocked';
     }
     if (!currentSdkInstalled) {
       addToast(
@@ -410,12 +455,12 @@ export function useMessageSender({
       );
       setSettingsInitialTab('dependencies');
       setCurrentView('settings');
-      return;
+      return 'blocked';
     }
 
     // Build user message content blocks
     const userContentBlocks = buildUserContentBlocks(text, attachments);
-    if (userContentBlocks.length === 0) return;
+    if (userContentBlocks.length === 0) return 'handled';
 
     // Persist non-image attachment metadata
     const nonImageAttachments = Array.isArray(attachments)
@@ -494,13 +539,21 @@ export function useMessageSender({
       setLoading(false);
       setLoadingStartTime(null);
       setStreamingActive(false);
+      // The queue/draft still owns refused work; remove only this speculative
+      // bubble so retrying it cannot produce a duplicate user message.
+      setMessages(prev => prev.filter(message => message !== userMessage));
       addToast(t('chat.bridgeUnavailable', { defaultValue: 'Bridge is not available right now' }), 'error');
+      return 'blocked';
     }
+    return 'started';
   }, [
     sdkStatusLoading,
     currentSdkInstalled,
     currentProvider,
+    selectedModel,
+    reasoningEffort,
     dshPreset,
+    ompApprovalMode,
     permissionMode,
     selectedAgent,
     buildUserContentBlocks,
@@ -512,17 +565,20 @@ export function useMessageSender({
   /**
    * Handle message submission (from ChatInputBox)
    */
-  const handleSubmit = useCallback((content: string, attachments?: Attachment[]) => {
+  const handleSubmit = useCallback((content: string, attachments?: Attachment[]): MessageDispatchResult => {
+    // Native commands such as /review bypass executeMessage, so guard their
+    // dispatch too while Java is deciding whether a session swap can commit.
+    if (getSessionTransitionPending()) return 'blocked';
     const text = content.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
     const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
 
-    if (!text && !hasAttachments) return;
+    if (!text && !hasAttachments) return 'handled';
 
     // Check new session commands
-    if (checkNewSessionCommand(text)) return;
+    if (checkNewSessionCommand(text)) return 'handled';
 
     // Check local-handled commands (/resume, /plan)
-    if (checkLocalCommand(text)) return;
+    if (checkLocalCommand(text)) return 'handled';
 
     // /plan with a body changes mode and submits only the body.
     const parsedCommand = parseCodexCommand(text);
@@ -530,28 +586,28 @@ export function useMessageSender({
       const body = parsedCommand.body;
       if (body && handleModeSelect) {
         handleModeSelect('plan');
-        executeMessage(body, attachments, 'plan');
+        return executeMessage(body, attachments, 'plan');
       }
-      return;
+      return 'blocked';
     }
 
     if (currentProvider === 'codex' && parsedCommand?.kind === 'init') {
       const initPrompt = 'Inspect this repository and create or update AGENTS.md with concise instructions for working in it.'
         + (parsedCommand.body ? `\n\nAdditional instructions: ${parsedCommand.body}` : '');
-      executeMessage(initPrompt, attachments);
-      return;
+      return executeMessage(initPrompt, attachments);
     }
 
-    if (checkCodexControlCommand(text)) return;
+    const controlResult = checkCodexControlCommand(text);
+    if (controlResult) return controlResult;
 
     // Check context usage command (/context)
-    if (checkContextCommand(text)) return;
+    if (checkContextCommand(text)) return 'handled';
 
     // Check for unimplemented commands
-    if (checkUnimplementedCommand(text)) return;
+    if (checkUnimplementedCommand(text)) return 'handled';
 
     // Execute message
-    executeMessage(content, attachments);
+    return executeMessage(content, attachments);
   }, [checkNewSessionCommand, checkLocalCommand, checkContextCommand, checkCodexControlCommand, checkUnimplementedCommand, executeMessage, currentProvider, handleModeSelect]);
 
   /**
@@ -572,5 +628,7 @@ export function useMessageSender({
     handleSubmit,
     executeMessage,
     interruptSession,
+    reasoningCapabilitiesUnconfirmed,
+    queueRetryKey,
   };
 }

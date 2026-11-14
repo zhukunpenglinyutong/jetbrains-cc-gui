@@ -9,6 +9,7 @@ import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.provider.common.MarkerCliBridge;
+import com.github.claudecodegui.skill.OmpSlashCommandService;
 import com.github.claudecodegui.skill.SlashCommandRegistry;
 import com.github.claudecodegui.util.JsUtils;
 import com.intellij.ide.util.PropertiesComponent;
@@ -74,12 +75,23 @@ public class SessionLifecycleManager {
 
         void invalidateSessionCallbacks();
 
+        /** Cancel pending history reads without invalidating the currently displayed session. */
+        default void invalidatePendingHistoryLoads() { }
+
+        /** Drop the replaced session's paged history state. */
+        default void clearReplacedHistory() { }
+
         void setSlashCommandsFetched(boolean fetched);
 
         void setFetchedSlashCommandsCount(int count);
     }
 
     private final SessionHost host;
+    private final Object transitionLock = new Object();
+    // Written under transitionLock, read lock-free by isCurrentTransition.
+    private volatile long transitionGeneration;
+
+    private record Transition(long generation, String token, ClaudeSession previous) { }
 
     public SessionLifecycleManager(SessionHost host) {
         this.host = host;
@@ -89,52 +101,53 @@ public class SessionLifecycleManager {
      * Create a new session, interrupting the old one first.
      */
     public void createNewSession() {
+        createNewSession(null);
+    }
+
+    /** Starts a frontend-correlated transition, or creates a token for an IDE action. */
+    public void createNewSession(String transitionToken) {
+        createNewSession(transitionToken, null);
+    }
+
+    /** Applies a requested provider only after the old session has safely retired. */
+    public void createNewSession(String transitionToken, String targetProvider) {
         LOG.info("Creating new session...");
 
-        ClaudeSession oldSession = host.getSession();
+        Transition transition = beginTransition(transitionToken, "");
+        ClaudeSession oldSession = transition.previous();
         ClaudeSession defaultSession = createDefaultSession();
         String previousPermissionMode = (oldSession != null) ? oldSession.getPermissionMode() : defaultSession.getPermissionMode();
         String previousProvider = (oldSession != null) ? oldSession.getProvider() : defaultSession.getProvider();
         String previousModel = (oldSession != null) ? oldSession.getModel() : defaultSession.getModel();
+        String previousEffort = oldSession != null ? oldSession.getReasoningEffort() : null;
+        boolean previousUltracode = oldSession != null && oldSession.isClaudeUltracode();
         LOG.info("Preserving session state: mode=" + previousPermissionMode
                          + ", provider=" + previousProvider + ", model=" + previousModel);
 
-        host.invalidateSessionCallbacks();
-        long clearBarrierSeq = host.getStreamCoalescer().resetStreamState();
-        host.callJavaScript("clearMessages", String.valueOf(clearBarrierSeq));
+        CompletableFuture<Void> interruptFuture = interruptTransition(transition);
 
-        CompletableFuture<Void> interruptFuture = oldSession != null
-                                                          ? oldSession.interrupt()
-                                                          : CompletableFuture.completedFuture(null);
-
-        interruptFuture.thenCompose(ignored -> this.releasePersistentProviderResources(oldSession, "new session"))
-                .thenRun(() -> {
+        interruptFuture.thenCompose(ignored -> this.releaseTransitionResources(transition, "new session"))
+                .thenRun(() -> commitTransition(transition, clearBarrierSeq -> {
             LOG.info("Old session interrupted, creating new session");
-
-            ApplicationManager.getApplication().invokeLater(() -> {
-                host.callJavaScript("onStreamEnd");
-                host.callJavaScript("showLoading", "false");
-            });
 
             ClaudeSession newSession = createDefaultSession();
             newSession.setPermissionMode(previousPermissionMode);
-            newSession.setProvider(previousProvider);
+            newSession.setProvider(targetProvider != null && !targetProvider.isBlank() ? targetProvider : previousProvider);
             // Verbatim copy: the live value was already sanitized when set (migrated
             // on restore, or an explicit custom id via set_model), so re-migrating
             // here could only rewrite a user's custom model behind their back.
             newSession.setModelVerbatim(previousModel);
+            newSession.setReasoningEffort(previousEffort);
+            newSession.setClaudeUltracode(previousUltracode);
+            keepOmpApprovalMode(oldSession, newSession);
             LOG.info("Restored session state to new session: mode=" + previousPermissionMode
-                             + ", provider=" + previousProvider + ", model=" + previousModel);
+                             + ", provider=" + newSession.getProvider() + ", model=" + previousModel);
 
             completeNewSessionBootstrap(newSession, determineWorkingDirectory(),
-                    "New session created successfully, working directory: ");
-        }).exceptionally(ex -> {
-            LOG.error("Failed to create new session: " + ex.getMessage(), ex);
-            ApplicationManager.getApplication().invokeLater(() -> {
-                host.callJavaScript("historyLoadComplete");
-                host.callJavaScript("updateStatus",
-                        JsUtils.escapeJs("Failed to create new session: " + ex.getMessage()));
-            });
+                    "New session created successfully, working directory: ", transition, clearBarrierSeq);
+        })).exceptionally(ex -> {
+            LOG.warn("Failed to create new session: " + ex.getMessage(), ex);
+            reportTransitionFailure(transition, "Failed to create new session: " + ex.getMessage());
             return null;
         });
     }
@@ -143,26 +156,21 @@ public class SessionLifecycleManager {
      * Create a new session from a template, interrupting the old one first.
      */
     public void createNewSessionFromTemplate(SessionTemplate template) {
+        createNewSessionFromTemplate(template, null);
+    }
+
+    /** Starts a template transition with the same acceptance and cancellation fences. */
+    public void createNewSessionFromTemplate(SessionTemplate template, String transitionToken) {
         LOG.info("Creating new session from template: " + template.getName());
 
-        ClaudeSession oldSession = host.getSession();
+        Transition transition = beginTransition(transitionToken, "");
+        ClaudeSession oldSession = transition.previous();
 
-        host.invalidateSessionCallbacks();
-        long clearBarrierSeq = host.getStreamCoalescer().resetStreamState();
-        host.callJavaScript("clearMessages", String.valueOf(clearBarrierSeq));
+        CompletableFuture<Void> interruptFuture = interruptTransition(transition);
 
-        CompletableFuture<Void> interruptFuture = oldSession != null
-                ? oldSession.interrupt()
-                : CompletableFuture.completedFuture(null);
-
-        interruptFuture.thenCompose(ignored -> this.releasePersistentProviderResources(oldSession, "new session from template"))
-                .thenRun(() -> {
+        interruptFuture.thenCompose(ignored -> this.releaseTransitionResources(transition, "new session from template"))
+                .thenRun(() -> commitTransition(transition, clearBarrierSeq -> {
             LOG.info("Old session interrupted, creating new session from template");
-
-            ApplicationManager.getApplication().invokeLater(() -> {
-                host.callJavaScript("onStreamEnd");
-                host.callJavaScript("showLoading", "false");
-            });
 
             ClaudeSession newSession = createDefaultSession();
 
@@ -181,7 +189,9 @@ public class SessionLifecycleManager {
             if (template.getReasoningEffort() != null) {
                 newSession.setReasoningEffort(template.getReasoningEffort());
             }
+            newSession.setClaudeUltracode(template.isClaudeUltracode());
             newSession.getState().setPsiContextEnabled(template.isPsiContextEnabled());
+            keepOmpApprovalMode(oldSession, newSession);
 
             LOG.info("Applied template settings to new session: provider=" + template.getProvider()
                     + ", model=" + template.getModel() + ", mode=" + template.getPermissionMode());
@@ -189,14 +199,10 @@ public class SessionLifecycleManager {
             String workingDirectory = template.getCwd() != null && !template.getCwd().trim().isEmpty()
                     ? template.getCwd() : determineWorkingDirectory();
             completeNewSessionBootstrap(newSession, workingDirectory,
-                    "New session created from template successfully, working directory: ");
-        }).exceptionally(ex -> {
-            LOG.error("Failed to create new session from template: " + ex.getMessage(), ex);
-            ApplicationManager.getApplication().invokeLater(() -> {
-                host.callJavaScript("historyLoadComplete");
-                host.callJavaScript("updateStatus",
-                        JsUtils.escapeJs("Failed to create new session from template: " + ex.getMessage()));
-            });
+                    "New session created from template successfully, working directory: ", transition, clearBarrierSeq);
+        })).exceptionally(ex -> {
+            LOG.warn("Failed to create new session from template: " + ex.getMessage(), ex);
+            reportTransitionFailure(transition, "Failed to create new session from template: " + ex.getMessage());
             return null;
         });
     }
@@ -204,6 +210,11 @@ public class SessionLifecycleManager {
     /**
      * Load a history session by ID.
      */
+    static String resolveClaudeHistoryWorkingDirectory(String sessionId, String fallbackCwd, String projectRoot,
+            CodemossSettingsService settings, com.github.claudecodegui.provider.claude.ClaudeHistoryReader reader) {
+        return reader.resolveRepositoryHistoryCwd(sessionId, fallbackCwd, projectRoot, settings);
+    }
+
     public void loadHistorySession(String sessionId, String projectPath) {
         loadHistorySession(sessionId, projectPath, null, null);
     }
@@ -221,9 +232,15 @@ public class SessionLifecycleManager {
      * @param model when non-blank, restores that model instead of keeping the previous UI selection
      */
     public void loadHistorySession(String sessionId, String projectPath, String provider, String model) {
+        loadHistorySession(sessionId, projectPath, provider, model, null);
+    }
+
+    /** Correlates a history selection with its frontend transition token. */
+    public void loadHistorySession(String sessionId, String projectPath, String provider, String model, String transitionToken) {
         LOG.info("Loading history session: " + sessionId + " from project: " + projectPath);
 
-        ClaudeSession oldSession = host.getSession();
+        Transition transition = beginTransition(transitionToken, sessionId);
+        ClaudeSession oldSession = transition.previous();
         String previousPermissionMode;
         String previousProvider;
         String previousModel;
@@ -246,18 +263,12 @@ public class SessionLifecycleManager {
                          + ", provider=" + previousProvider + ", model=" + modelToRestore
                          + (model != null && !model.trim().isEmpty() ? " (from history)" : " (previous)"));
 
-        host.invalidateSessionCallbacks();
-        long clearBarrierSeq = host.getStreamCoalescer().resetStreamState();
-        host.callJavaScript("clearMessages", String.valueOf(clearBarrierSeq));
-        host.clearPendingPermissionRequests();
-        host.clearPermissionDecisionMemory();
+        CompletableFuture<Void> interruptFuture = interruptTransition(transition);
 
-        CompletableFuture<Void> interruptFuture = oldSession != null
-                ? oldSession.interrupt()
-                : CompletableFuture.completedFuture(null);
-
-        interruptFuture.thenCompose(ignored -> this.releasePersistentProviderResources(oldSession, "history load"))
-                .thenRun(() -> {
+        interruptFuture.thenCompose(ignored -> this.releaseTransitionResources(transition, "history load"))
+                .thenRun(() -> commitTransition(transition, clearBarrierSeq -> {
+            host.clearPendingPermissionRequests();
+            host.clearPermissionDecisionMemory();
 
             ClaudeSession newSession = createDefaultSession();
             newSession.setPermissionMode(previousPermissionMode);
@@ -266,40 +277,130 @@ public class SessionLifecycleManager {
             // on custom ids and already applied retired-id migration where it is safe;
             // a fallback previousModel is a live value that was sanitized when set.
             newSession.setModelVerbatim(modelToRestore);
+            if (oldSession != null) {
+                newSession.setReasoningEffort(oldSession.getReasoningEffort());
+                newSession.setClaudeUltracode(oldSession.isClaudeUltracode());
+            }
+            keepOmpApprovalMode(oldSession, newSession);
             LOG.info("Restored session state to loaded session: mode=" + previousPermissionMode
                              + ", provider=" + newSession.getProvider() + ", model=" + modelToRestore);
 
             host.setSession(newSession);
             host.getHandlerContext().setSession(newSession);
             host.setupSessionCallbacks();
+            acceptTransition(transition, clearBarrierSeq);
 
             String workingDir = (projectPath != null && !projectPath.isEmpty())
                                     ? projectPath : NodeDetector.convertToWslPath(determineWorkingDirectory());
-            newSession.setSessionInfo(sessionId, workingDir);
+            if ("claude".equals(newSession.getProvider()) && host.getProject() != null) {
+                workingDir = resolveClaudeHistoryWorkingDirectory(sessionId, workingDir, host.getProject().getBasePath(),
+                        host.getHandlerContext().getSettingsService(), new com.github.claudecodegui.provider.claude.ClaudeHistoryReader());
+            }
+            newSession.setSessionInfo(sessionId, workingDir, transition.token());
 
             newSession.loadFromServer().thenRun(() -> ApplicationManager.getApplication().invokeLater(() -> {
                 // loadFromServer only enqueues updateMessages through the coalescer; if we
                 // call historyLoadComplete immediately the frontend releases the transition
                 // guard before the snapshot arrives (or a reordered clearMessages can wipe a
                 // stashed snapshot). Flush the coalescer first so messages land before complete.
-                completeHistoryLoadAfterCoalescerFlush(newSession);
+                completeHistoryLoadAfterCoalescerFlush(newSession, transition);
             })).exceptionally(ex -> {
                 ApplicationManager.getApplication().invokeLater(() -> {
-                    // Release transition guard so the frontend is not permanently stuck
-                    host.callJavaScript("historyLoadComplete");
-                    host.callJavaScript("addErrorMessage",
-                            JsUtils.escapeJs("Failed to load session: " + ex.getMessage()));
+                    if (!isCurrentTransition(transition) || host.getSession() != newSession) { return; }
+                    // Release the accepted transition without reviving a superseded selection.
+                    host.callJavaScript("sessionTransitionFailed",
+                            JsUtils.escapeJs("Failed to load session: " + ex.getMessage()), JsUtils.escapeJs(transition.token()));
                 });
                 return null;
             });
-        }).exceptionally(ex -> {
-            LOG.error("Failed to load history session: " + ex.getMessage(), ex);
-            ApplicationManager.getApplication().invokeLater(() -> {
-                host.callJavaScript("historyLoadComplete");
-                host.callJavaScript("addErrorMessage",
-                        JsUtils.escapeJs("Failed to load session: " + ex.getMessage()));
-            });
+        })).exceptionally(ex -> {
+            LOG.warn("Failed to load history session: " + ex.getMessage(), ex);
+            reportTransitionFailure(transition, "Failed to load session: " + ex.getMessage());
             return null;
+        });
+    }
+
+    private Transition beginTransition(String requestedToken, String targetSessionId) {
+        synchronized (transitionLock) {
+            String token = requestedToken == null || requestedToken.isBlank()
+                    ? "backend:" + java.util.UUID.randomUUID() : requestedToken;
+            Transition transition = new Transition(++transitionGeneration, token, host.getSession());
+            host.invalidatePendingHistoryLoads();
+            host.callJavaScript("sessionTransitionStarted", JsUtils.escapeJs(targetSessionId), "", JsUtils.escapeJs(token));
+            return transition;
+        }
+    }
+
+    /** A provider-specific history loader supersedes any pending session replacement. */
+    public void invalidatePendingTransition() {
+        synchronized (transitionLock) {
+            transitionGeneration++;
+        }
+    }
+
+    /** Lock-free: EDT callbacks call this while a release may be shutting daemons down. */
+    private boolean isCurrentTransition(Transition transition) {
+        return transition.generation() == transitionGeneration && !host.isDisposed();
+    }
+
+    private CompletableFuture<Void> interruptTransition(Transition transition) {
+        synchronized (transitionLock) {
+            return isCurrentTransition(transition) && transition.previous() != null
+                    ? transition.previous().interrupt() : CompletableFuture.completedFuture(null);
+        }
+    }
+
+    /** Daemon shutdown can block for seconds, so it runs outside transitionLock; commit re-checks the generation. */
+    private CompletableFuture<Void> releaseTransitionResources(Transition transition, String reason) {
+        if (!isCurrentTransition(transition) || host.getSession() != transition.previous()) {
+            return CompletableFuture.completedFuture(null);
+        }
+        return releasePersistentProviderResources(transition.previous(), reason);
+    }
+
+    private void commitTransition(Transition transition, LongConsumer replacement) {
+        synchronized (transitionLock) {
+            if (!isCurrentTransition(transition) || host.getSession() != transition.previous()) {
+                return;
+            }
+            host.invalidateSessionCallbacks();
+            host.clearReplacedHistory();
+            long clearBarrierSeq = host.getStreamCoalescer().resetStreamState();
+            replacement.accept(clearBarrierSeq);
+        }
+    }
+
+    /** The frontend may immediately send settings from this acknowledgement. Bind the replacement first. */
+    private void acceptTransition(Transition transition, long clearBarrierSeq) {
+        host.callJavaScript("clearMessages", String.valueOf(clearBarrierSeq), JsUtils.escapeJs(transition.token()));
+    }
+
+    /** Release a refused transition with a fresh old-session snapshot, without discarding its binding. */
+    private void reportTransitionFailure(Transition transition, String error) {
+        ApplicationManager.getApplication().invokeLater(() -> {
+            if (!isCurrentTransition(transition)) {
+                return;
+            }
+            ClaudeSession oldSession = transition.previous();
+            String escapedError = JsUtils.escapeJs(error);
+            if (host.getSession() != oldSession) {
+                // Bootstrap failed after acceptance; the old session no longer owns this page.
+                host.callJavaScript("sessionTransitionFailed", escapedError, JsUtils.escapeJs(transition.token()));
+                return;
+            }
+            LongConsumer failed = seq -> {
+                if (isCurrentTransition(transition) && host.getSession() == oldSession) {
+                    host.callJavaScript("sessionTransitionFailed", escapedError, JsUtils.escapeJs(transition.token()));
+                }
+            };
+            StreamMessageCoalescer coalescer = host.getStreamCoalescer();
+            if (oldSession != null && coalescer != null) {
+                synchronized (oldSession.getState().getMessageStateLock()) {
+                    coalescer.flush(oldSession.getMessages(), failed);
+                }
+            } else {
+                failed.accept(0);
+            }
         });
     }
 
@@ -308,19 +409,19 @@ public class SessionLifecycleManager {
      * {@code historyLoadComplete} with the message count. Ensures the transcript
      * is not lost when the frontend holds {@code __sessionTransitioning} until complete.
      */
-    private void completeHistoryLoadAfterCoalescerFlush(ClaudeSession loadedSession) {
-        if (host.isDisposed()) {
+    private void completeHistoryLoadAfterCoalescerFlush(ClaudeSession loadedSession, Transition transition) {
+        if (!isCurrentTransition(transition) || host.getSession() != loadedSession) {
             return;
         }
         int messageCount = loadedSession != null ? loadedSession.getMessages().size() : 0;
         StreamMessageCoalescer coalescer = host.getStreamCoalescer();
         if (coalescer == null) {
-            host.callJavaScript("historyLoadComplete", String.valueOf(messageCount));
+            host.callJavaScript("historyLoadComplete", String.valueOf(messageCount), JsUtils.escapeJs(transition.token()));
             return;
         }
         LongConsumer signalComplete = seq -> {
-            if (!host.isDisposed()) {
-                host.callJavaScript("historyLoadComplete", String.valueOf(messageCount));
+            if (isCurrentTransition(transition) && host.getSession() == loadedSession) {
+                host.callJavaScript("historyLoadComplete", String.valueOf(messageCount), JsUtils.escapeJs(transition.token()));
             }
         };
         // Same lock contract as enqueue: the flush may deep-copy live messages, and
@@ -367,8 +468,11 @@ public class SessionLifecycleManager {
     /**
      * Fetch slash commands using local registry (no SDK/API call needed).
      * Merges built-in commands with skill-derived commands per provider.
+     *
+     * @param userRequested true when the webview asked for a refresh (the user is waiting
+     *                      for the list), which also bypasses the OMP failure backoff
      */
-    public void fetchSlashCommandsOnStartup() {
+    public void fetchSlashCommandsOnStartup(boolean userRequested) {
         ClaudeSession currentSession = host.getSession();
         String cwd = currentSession != null ? currentSession.getCwd() : null;
         if (cwd == null) {
@@ -415,6 +519,31 @@ public class SessionLifecycleManager {
                 LOG.warn("Failed to send slash commands to frontend: " + e.getMessage(), e);
             }
         });
+
+        // Cached (or empty) list is queued above; the fetched catalog is queued after it.
+        if (OmpSlashCommandService.isOmp(provider)) {
+            final String ompCwd = cwd;
+            OmpSlashCommandService.refreshAndPush(
+                    ompCwd,
+                    userRequested,
+                    () -> !host.isDisposed() && isCurrentOmpSlashCwd(ompCwd),
+                    fetchedJson -> ApplicationManager.getApplication().invokeLater(() -> {
+                        try {
+                            host.callJavaScript("updateSlashCommands", JsUtils.escapeJs(fetchedJson));
+                        } catch (Exception e) {
+                            LOG.warn("Failed to send omp slash commands to frontend: " + e.getMessage(), e);
+                        }
+                    }));
+        }
+    }
+
+    private boolean isCurrentOmpSlashCwd(String cwd) {
+        ClaudeSession session = host.getSession();
+        if (session == null || !OmpSlashCommandService.isOmp(session.getProvider())) {
+            return false;
+        }
+        String currentCwd = session.getCwd() != null ? session.getCwd() : host.getProject().getBasePath();
+        return OmpSlashCommandService.cacheKey(cwd).equals(OmpSlashCommandService.cacheKey(currentCwd));
     }
 
     /**
@@ -441,6 +570,33 @@ public class SessionLifecycleManager {
             });
         } catch (Exception e) {
             LOG.error("Failed to send current permission mode: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Send the tab's OMP approval mode to the frontend. A (re)loaded page starts at
+     * "default", which hands the decision to OMP's own setting, so the choice made in
+     * this tab has to be put back.
+     */
+    public void sendCurrentOmpApprovalMode() {
+        try {
+            ClaudeSession currentSession = host.getSession();
+            String mode = currentSession != null ? currentSession.getState().getOmpApprovalMode() : "";
+            String modeToSend = mode.isEmpty() ? "default" : mode;
+            ApplicationManager.getApplication().invokeLater(() -> {
+                if (!host.isDisposed() && host.getBrowser() != null) {
+                    host.callJavaScript("window.onOmpApprovalModeReceived", JsUtils.escapeJs(modeToSend));
+                }
+            });
+        } catch (Exception e) {
+            LOG.error("Failed to send current OMP approval mode: " + e.getMessage(), e);
+        }
+    }
+
+    /** A tab keeps its OMP approval mode when its session is replaced. */
+    private static void keepOmpApprovalMode(ClaudeSession from, ClaudeSession to) {
+        if (from != null) {
+            to.getState().setOmpApprovalMode(from.getState().getOmpApprovalMode());
         }
     }
 
@@ -510,7 +666,8 @@ public class SessionLifecycleManager {
                 + ", old epoch=" + oldEpoch));
     }
 
-    private void completeNewSessionBootstrap(ClaudeSession newSession, String workingDirectory, String successLogPrefix) {
+    private void completeNewSessionBootstrap(ClaudeSession newSession, String workingDirectory, String successLogPrefix,
+                                             Transition transition, long clearBarrierSeq) {
         host.clearPendingPermissionRequests();
         host.clearPermissionDecisionMemory();
         host.setSession(newSession);
@@ -518,14 +675,20 @@ public class SessionLifecycleManager {
         host.setupSessionCallbacks();
 
         newSession.setSessionInfo(null, workingDirectory);
+        acceptTransition(transition, clearBarrierSeq);
         LOG.info(successLogPrefix + workingDirectory + ", epoch=" + newSession.getRuntimeSessionEpoch());
-        fetchSlashCommandsOnStartup();
+        fetchSlashCommandsOnStartup(false);
 
         ApplicationManager.getApplication().invokeLater(() -> {
+            if (!isCurrentTransition(transition) || host.getSession() != newSession) { return; }
+            // Unsaved sessions both have a null id, so publish the new binding explicitly.
+            host.callJavaScript("notifySessionSupplierBindingChanged");
+            host.callJavaScript("onStreamEnd");
+            host.callJavaScript("showLoading", "false");
             // Release the frontend session transition guard so updateMessages works again.
             // Must come BEFORE updateStatus to ensure the guard is lifted before any
             // subsequent message updates arrive.
-            host.callJavaScript("historyLoadComplete");
+            host.callJavaScript("historyLoadComplete", "", JsUtils.escapeJs(transition.token()));
             host.callJavaScript("updateStatus",
                     JsUtils.escapeJs(ClaudeCodeGuiBundle.message("toast.newSessionCreatedReady")));
             resetTokenUsage();

@@ -117,3 +117,38 @@ test('buildClaudeAgentCommitOptions forwards the CLI path override only when set
     '/opt/claude',
   );
 });
+
+// ---------- thinking setting per model (#1949) ----------
+
+test('buildCommitAskRequest uses between_tools for Claude Sonnet 5.5', () => {
+  const request = buildCommitAskRequest('claude-sonnet-5-5', 'write a commit message');
+  assert.deepEqual(request.thinking, { type: 'between_tools' });
+  assert.equal(request.max_tokens, 2048);
+});
+
+test('buildCommitAskRequest omits thinking and lowers effort for Claude Opus 5.5', () => {
+  const request = buildCommitAskRequest('claude-opus-5-5', 'write a commit message');
+  assert.equal('thinking' in request, false);
+  assert.deepEqual(request.output_config, { effort: 'low' });
+  assert.ok(request.max_tokens >= 4096);
+});
+
+test('askClaudeNonStreaming retries without thinking when a relay rejects it', async () => {
+  const requests = [];
+  const client = {
+    messages: {
+      create: async (request) => {
+        requests.push(request);
+        if (request.thinking) {
+          const body = { type: 'error', error: { type: 'invalid_request_error', message: 'requires adaptive thinking; thinking.type="disabled" is not allowed' } };
+          throw Object.assign(new Error(`400 ${JSON.stringify(body)}`), { status: 400, error: body });
+        }
+        return { content: [{ type: 'text', text: 'feat: x' }] };
+      },
+    },
+  };
+  const text = await askClaudeNonStreaming(client, 'MiniMax-M3.1-Flash', 'write a commit message');
+  assert.equal(text, 'feat: x');
+  assert.equal(requests.length, 2);
+  assert.equal('thinking' in requests[1], false);
+});

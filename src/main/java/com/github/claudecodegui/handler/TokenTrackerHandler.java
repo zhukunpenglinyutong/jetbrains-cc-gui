@@ -29,6 +29,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * TokenTracker local-server bridge for the vendored usage dashboard.
@@ -53,7 +55,12 @@ public class TokenTrackerHandler {
      * Pinned npm package spec for the CLI install. The version is locked to
      * guard against supply-chain attacks; bump it manually when upgrading.
      */
-    private static final String TT_CLI_PACKAGE = "tokentracker-cli@0.87.3";
+    private static final String TT_CLI_PACKAGE = "tokentracker-cli@1.5.4";
+    private static final Pattern VERSION_PATTERN = Pattern.compile("(\\d+)\\.(\\d+)\\.(\\d+)");
+    /** Installed CLIs and running servers older than the pinned version are upgraded. */
+    private static final int[] TT_MIN_VERSION = parseVersion(TT_CLI_PACKAGE);
+    /** Error the webview answers by reinstalling the pinned CLI and calling ensure again. */
+    private static final String TT_CLI_OUTDATED_ERROR = "tokentracker_cli_outdated";
     /** Default port used by `tokentracker serve`. */
     private static final int TT_DEFAULT_PORT = 7680;
     /** Ports scanned when looking for a running server. */
@@ -64,6 +71,8 @@ public class TokenTrackerHandler {
     private static final int TT_ENSURE_PORT_LAST = 7690;
     /** Health/readiness endpoint used to detect a running server. */
     private static final String TT_USER_STATUS_PATH = "/functions/tokentracker-user-status";
+    /** Reports `serverVersion` (1.x) next to the local auth token. */
+    private static final String TT_LOCAL_AUTH_PATH = "/api/local-auth";
     /** Timeout for a single server probe. */
     private static final Duration TT_STATUS_TIMEOUT = Duration.ofSeconds(2);
     /** Timeout for a proxied dashboard request. */
@@ -78,6 +87,8 @@ public class TokenTrackerHandler {
 
     /** Port of the server we started or last found running. */
     private static volatile int rememberedPort = 0;
+    /** Set once an install ran this session, so an upgrade that did not take cannot loop. */
+    private static volatile boolean installAttempted = false;
 
     private final HandlerContext context;
 
@@ -110,6 +121,7 @@ public class TokenTrackerHandler {
     public void handleInstallCli(String content) {
         String requestId = parseRequestId(content);
         runAsync(requestId, () -> {
+            installAttempted = true;
             String npm = resolveNpmBin();
             List<String> command = new ArrayList<>();
             command.add(npm);
@@ -135,14 +147,34 @@ public class TokenTrackerHandler {
             // Serialize detect+spawn so concurrent ensure calls cannot race
             // into spawning multiple server instances.
             synchronized (TokenTrackerHandler.class) {
-                int runningPort = detectRunningServerPort();
-                if (runningPort > 0) {
-                    return serverReadyData(runningPort);
+                RunningServer running = detectRunningServer();
+                if (running != null && running.current) {
+                    return useServer(running.port);
                 }
 
                 CliStatus cli = detectCli();
-                if (!cli.installed || cli.binPath == null) {
-                    throw new TokenTrackerException("tokentracker_cli_not_installed");
+                boolean cliCurrent = cli.installed && isAtLeastMinVersion(cli.version);
+                if (!cliCurrent) {
+                    if (cli.installed && !installAttempted) {
+                        throw new TokenTrackerException(TT_CLI_OUTDATED_ERROR);
+                    }
+                    if (cli.installed) {
+                        LOG.warn("[TokenTrackerHandler] tokentracker-cli " + cli.version + " at " + cli.binPath
+                                + " is older than " + TT_CLI_PACKAGE + " after an install attempt; using it as is");
+                    }
+                    // No CLI, or the upgrade did not take: keep a running server rather than break the dashboard.
+                    if (running != null) {
+                        return useServer(running.port);
+                    }
+                    if (!cli.installed) {
+                        throw new TokenTrackerException("tokentracker_cli_not_installed");
+                    }
+                }
+
+                // On the old server's port, `serve` stops the outdated server itself (it cannot on
+                // Windows, where the new process exits and a free port is used instead).
+                if (running != null && startServer(cli.binPath, running.port, true)) {
+                    return useServer(running.port);
                 }
 
                 int port = findFreePort();
@@ -150,11 +182,10 @@ public class TokenTrackerHandler {
                     throw new TokenTrackerException(
                             "No free port for tokentracker server (" + TT_ENSURE_PORT_FIRST + "-" + TT_ENSURE_PORT_LAST + ")");
                 }
-
-                spawnServer(cli.binPath, port);
-                awaitServerReady(port);
-                rememberedPort = port;
-                return serverReadyData(port);
+                if (!startServer(cli.binPath, port, cliCurrent)) {
+                    throw new TokenTrackerException("tokentracker server exited before becoming ready on port " + port);
+                }
+                return useServer(port);
             }
         });
     }
@@ -247,6 +278,46 @@ public class TokenTrackerHandler {
             this.binPath = binPath;
             this.version = version;
         }
+    }
+
+    private static final class RunningServer {
+        final int port;
+        final boolean current;
+
+        RunningServer(int port, boolean current) {
+            this.port = port;
+            this.current = current;
+        }
+    }
+
+    /** Parse the first x.y.z in text (e.g. "v1.5.4", "tokentracker-cli@1.5.4"); null if none. */
+    static int[] parseVersion(String text) {
+        if (text == null) {
+            return null;
+        }
+        Matcher m = VERSION_PATTERN.matcher(text);
+        if (!m.find()) {
+            return null;
+        }
+        try {
+            return new int[] {Integer.parseInt(m.group(1)), Integer.parseInt(m.group(2)), Integer.parseInt(m.group(3))};
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /** True when version is at least the pinned version; unknown or unparseable versions are outdated. */
+    static boolean isAtLeastMinVersion(String version) {
+        int[] parsed = parseVersion(version);
+        if (parsed == null) {
+            return false;
+        }
+        for (int i = 0; i < 3; i++) {
+            if (parsed[i] != TT_MIN_VERSION[i]) {
+                return parsed[i] > TT_MIN_VERSION[i];
+            }
+        }
+        return true;
     }
 
     private CliStatus detectCli() {
@@ -399,18 +470,54 @@ public class TokenTrackerHandler {
     // Server lifecycle
     // ------------------------------------------------------------------
 
-    /** Probe remembered port first, then the scan range; return port or -1. */
-    private int detectRunningServerPort() {
-        if (rememberedPort > 0 && probeServerOnPort(rememberedPort)) {
-            return rememberedPort;
+    /**
+     * Probe the remembered port first, then the scan range. Prefer a server at
+     * the pinned version or newer; otherwise return the first outdated one.
+     */
+    private RunningServer detectRunningServer() {
+        Set<Integer> ports = new LinkedHashSet<>();
+        if (rememberedPort > 0) {
+            ports.add(rememberedPort);
         }
         for (int port = TT_STATUS_SCAN_FIRST; port <= TT_STATUS_SCAN_LAST; port++) {
-            if (probeServerOnPort(port)) {
-                rememberedPort = port;
-                return port;
+            ports.add(port);
+        }
+        RunningServer outdated = null;
+        for (int port : ports) {
+            if (!probeServerOnPort(port)) {
+                continue;
+            }
+            if (isAtLeastMinVersion(probeServerVersion(port))) {
+                return new RunningServer(port, true);
+            }
+            if (outdated == null) {
+                outdated = new RunningServer(port, false);
             }
         }
-        return -1;
+        return outdated;
+    }
+
+    /** `serverVersion` from /api/local-auth; null when absent (0.87.3 omits it) or unreachable. */
+    private String probeServerVersion(int port) {
+        try {
+            HttpClient client = HttpClient.newBuilder()
+                    .connectTimeout(TT_STATUS_TIMEOUT)
+                    .build();
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create("http://127.0.0.1:" + port + TT_LOCAL_AUTH_PATH))
+                    .timeout(TT_STATUS_TIMEOUT)
+                    .GET()
+                    .build();
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            if (response.statusCode() != 200) {
+                return null;
+            }
+            JsonObject body = JsonParser.parseString(response.body()).getAsJsonObject();
+            return body.has("serverVersion") && body.get("serverVersion").isJsonPrimitive()
+                    ? body.get("serverVersion").getAsString() : null;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     /** A server counts as running when the user-status endpoint answers HTTP 200. */
@@ -449,7 +556,7 @@ public class TokenTrackerHandler {
      * purpose so the server keeps running after this call (matching the
      * desktop client's behavior).
      */
-    private void spawnServer(String bin, int port) throws TokenTrackerException {
+    private Process spawnServer(String bin, int port) throws TokenTrackerException {
         AiDataProcessGate.ProcessPermit processPermit = null;
         try {
             processPermit = AiDataProcessGate.getInstance().acquireProcessPermit();
@@ -468,6 +575,7 @@ public class TokenTrackerHandler {
             processPermit = null;
             process.toHandle().onExit().thenRun(permit::close);
             LOG.info("[TokenTrackerHandler] Started tokentracker server on port " + port);
+            return process;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new TokenTrackerException("Interrupted while waiting to start tokentracker server");
@@ -480,11 +588,22 @@ public class TokenTrackerHandler {
         }
     }
 
-    private void awaitServerReady(int port) throws TokenTrackerException {
+    /**
+     * Spawn `serve` on port and wait until it answers. With requireCurrent the
+     * server must also report the pinned version or newer, so an outdated server
+     * still holding the port does not count. Returns false if the process exits first.
+     */
+    private boolean startServer(String bin, int port, boolean requireCurrent) throws TokenTrackerException {
+        Process process = spawnServer(bin, port);
         long deadline = System.nanoTime() + TT_READY_TIMEOUT.toNanos();
         while (System.nanoTime() < deadline) {
-            if (probeServerOnPort(port)) {
-                return;
+            if (probeServerOnPort(port) && (!requireCurrent || isAtLeastMinVersion(probeServerVersion(port)))) {
+                return true;
+            }
+            if (!process.isAlive()) {
+                LOG.info("[TokenTrackerHandler] tokentracker server on port " + port
+                        + " exited with code " + process.exitValue() + " before becoming ready");
+                return false;
             }
             try {
                 Thread.sleep(TT_READY_POLL_INTERVAL_MS);
@@ -503,7 +622,8 @@ public class TokenTrackerHandler {
     // Plumbing
     // ------------------------------------------------------------------
 
-    private JsonObject serverReadyData(int port) {
+    private JsonObject useServer(int port) {
+        rememberedPort = port;
         JsonObject data = new JsonObject();
         data.addProperty("running", true);
         data.addProperty("port", port);

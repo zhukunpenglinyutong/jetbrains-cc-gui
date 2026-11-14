@@ -37,5 +37,19 @@ describe('ProviderModelIcon', () => {
     const paths = container.querySelectorAll('path');
     expect(paths.length).toBe(1);
     expect(paths[0]?.getAttribute('d')).toContain('M14 16h36v8H40v32h-8V24h-6v22h-8V24h-4z');
+    // Colored variant fills the mark with the brand gradient, not a flat tint.
+    const gradient = container.querySelector('linearGradient');
+    expect(gradient).toBeTruthy();
+    expect(paths[0]?.getAttribute('fill')).toBe(`url(#${gradient?.getAttribute('id')})`);
+    expect(
+      Array.from(container.querySelectorAll('stop')).map((stop) => stop.getAttribute('stop-color')),
+    ).toEqual(['#ed4abf', '#9b4dff', '#5ad8e6']);
+  });
+
+  it('keeps the mono OMP mark on currentColor', () => {
+    const { container } = render(<ProviderModelIcon providerId="omp" size={16} />);
+
+    expect(container.querySelector('linearGradient')).toBeNull();
+    expect(container.querySelector('path')?.getAttribute('fill')).toBe('currentColor');
   });
 });

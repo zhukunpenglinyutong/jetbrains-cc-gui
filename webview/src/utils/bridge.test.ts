@@ -21,6 +21,17 @@ describe('bridge navigation helpers', () => {
     expect(sendBridgeEvent('get_ai_data_directory_status')).toBe(true);
   });
 
+  it('reports refused, absent, and throwing delivery while accepting legacy void bridges', () => {
+    window.sendToJava = vi.fn(() => false);
+    expect(sendBridgeEvent('get_hooks')).toBe(false);
+    window.sendToJava = undefined;
+    expect(sendBridgeEvent('get_hooks')).toBe(false);
+    window.sendToJava = vi.fn(() => { throw new Error('page replaced'); });
+    expect(sendBridgeEvent('get_hooks')).toBe(false);
+    window.sendToJava = vi.fn();
+    expect(sendBridgeEvent('get_hooks')).toBe(true);
+  });
+
   it('decodes percent-encoded navigation paths for openFile', () => {
     openFile('/Users/demo/my%20file.ts');
     openFile('/Users/demo/%C3%BCber.txt');

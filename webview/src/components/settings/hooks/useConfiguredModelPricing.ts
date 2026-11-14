@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { CodexCustomModel, ModelPricing } from '../../../types/provider';
 import { isValidModelPricing, STORAGE_KEYS } from '../../../types/provider';
 import type { ClaudeModelMapping } from '../../../utils/claudeModelMapping';
-import { readClaudeModelMapping } from '../../../utils/claudeModelMapping';
+import { readGlobalClaudeModelMapping } from '../../../utils/claudeModelMapping';
 import { sendBridgeEvent } from '../../../utils/bridge';
 
 function normalizeModelId(modelId: string): string {
@@ -133,7 +133,7 @@ export function useConfiguredClaudeModelPricing(customModels: CodexCustomModel[]
   }, []);
 
   const configuredModels = useMemo<CodexCustomModel[]>(() => {
-    const mappedModels = mappingValues(readClaudeModelMapping());
+    const mappedModels = mappingValues(readGlobalClaudeModelMapping());
     return mappedModels.map(modelId => ({
       id: modelId,
       label: modelId,

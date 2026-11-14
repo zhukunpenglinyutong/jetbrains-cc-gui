@@ -448,6 +448,7 @@ public class WebviewInitializer {
                     new WebviewAssetRequestHandler(),
                     createdBrowser.getCefBrowser()
             );
+            ExternalNavigationGuard.install(createdBrowser);
 
             // JCEF JS bridges must be created and registered before loadHTML,
             // because the window.sendToJava / shortcut / clipboard handlers
@@ -1606,6 +1607,8 @@ public class WebviewInitializer {
                 tabProvider,
                 tabModel,
                 SessionState.discoverUserDshPresetIds(),
+                session != null ? session.getReasoningEffort() : null,
+                session != null ? session.isClaudeUltracode() : null,
                 host.getDraftCacheKey());
     }
 

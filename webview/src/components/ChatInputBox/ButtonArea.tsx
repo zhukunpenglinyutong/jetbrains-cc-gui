@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { ButtonAreaProps, CodexFastMode, ModelInfo, PermissionMode, ReasoningEffort } from './types';
+import type { ButtonAreaProps, CodexFastMode, ModelInfo, OmpApprovalMode, PermissionMode, ReasoningEffort } from './types';
 import { DEFAULT_CLAUDE_MODEL_ID } from './types';
 import { ConfigSelect, ModeSelect, ModelConfigSelect, ProviderSelect } from './selectors';
 import { STORAGE_KEYS, validateCodexCustomModels } from '../../types/provider';
@@ -51,6 +51,9 @@ export const ButtonArea = ({
   codexNativeAutoReviewAvailable = true,
   reasoningEffort = 'high',
   dshPreset = '',
+  claudeUltracode = false,
+  onClaudeUltracodeChange,
+  ompApprovalMode = 'default',
   codexFastMode = 'normal',
   onSubmit,
   onStop,
@@ -60,6 +63,7 @@ export const ButtonArea = ({
   onReasoningChange,
   onCodexFastModeChange,
   onDshPresetChange,
+  onOmpApprovalModeChange,
   onEnhancePrompt,
   alwaysThinkingEnabled = false,
   onToggleThinking,
@@ -75,7 +79,8 @@ export const ButtonArea = ({
 }: ButtonAreaProps) => {
   const { t } = useTranslation();
   // const fileInputRef = useRef<HTMLInputElement>(null);
-  const { cliModels, cliModelsLoading, cliModelsError, cliDefaultModel, cliCatalogHasEntries, cliModelsReplaceBuiltIns, cliModelsLoaded, refreshCliModels } = useCliModels(currentProvider);
+  const { cliModels, cliModelsLoading, cliModelsError, cliDefaultModel, cliCatalogHasEntries, cliModelsReplaceBuiltIns,
+    cliModelsLoaded, cliReasoningCapabilitiesUnconfirmed, refreshCliModels } = useCliModels(currentProvider, 'session');
   // Dynamic omp roles (static smol/slow/plan fallback until loaded).
   const ompRoles = useOmpRoles();
 
@@ -234,6 +239,10 @@ export const ButtonArea = ({
     onDshPresetChange?.(preset);
   }, [onDshPresetChange]);
 
+  const handleOmpApprovalModeChange = useCallback((mode: OmpApprovalMode) => {
+    onOmpApprovalModeChange?.(mode);
+  }, [onOmpApprovalModeChange]);
+
   /**
    * Handle enhance prompt button click
    */
@@ -251,8 +260,10 @@ export const ButtonArea = ({
     selectedModel,
     permissionMode,
     reasoningEffort,
+    claudeUltracode,
     codexFastMode,
     dshPreset,
+    ompApprovalMode,
     selectedAgent?.id ?? '',
     cliModelsLoading ? 'loading' : 'ready',
   ].join('|');
@@ -299,6 +310,7 @@ export const ButtonArea = ({
           models={availableModels}
           currentProvider={currentProvider}
           loading={cliModelsLoading}
+          reasoningCapabilitiesUnconfirmed={cliReasoningCapabilitiesUnconfirmed}
           error={cliModelsError}
           onRetry={() => refreshCliModels(currentProvider)}
           onAddModel={onAddModel}
@@ -306,10 +318,14 @@ export const ButtonArea = ({
           onLongContextChange={onLongContextChange}
           reasoningEffort={reasoningEffort}
           onReasoningChange={handleReasoningChange}
+          claudeUltracode={claudeUltracode}
+          onClaudeUltracodeChange={onClaudeUltracodeChange}
           codexFastMode={codexFastMode}
           onCodexFastModeChange={handleCodexFastModeChange}
           dshPreset={dshPreset}
           onDshPresetChange={handleDshPresetChange}
+          ompApprovalMode={ompApprovalMode}
+          onOmpApprovalModeChange={handleOmpApprovalModeChange}
         />
       </div>
 
