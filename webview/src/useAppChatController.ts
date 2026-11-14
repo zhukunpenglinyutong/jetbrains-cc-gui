@@ -215,6 +215,9 @@ export const useAppChatController = ({
   // from useSessionManagement). The stable wrapper keeps beginSessionTransition's
   // useCallback from re-creating on every render.
   const clearMessageQueueRef = useRef<() => void>(() => {});
+  // Sent while a session switch was pending: aimed at the incoming session, so
+  // accepting the switch must not drop them along with the outgoing session's queue.
+  const transitionQueuedIdsRef = useRef(new Set<string>());
   const clearQueuedMessages = useCallback(() => {
     clearMessageQueueRef.current();
   }, []);
@@ -381,7 +384,7 @@ export const useAppChatController = ({
 
   // Point the session-transition indirection at the real clearQueue.
   useEffect(() => {
-    clearMessageQueueRef.current = clearQueue;
+    clearMessageQueueRef.current = () => clearQueue(item => transitionQueuedIdsRef.current.has(item.id));
   }, [clearQueue]);
 
   // handleSubmit with queue support (new session and local commands bypass loading check)
@@ -396,7 +399,7 @@ export const useAppChatController = ({
       return;
     }
     if (getSessionTransitionPending()) {
-      enqueueMessage(content, attachments);
+      transitionQueuedIdsRef.current.add(enqueueMessage(content, attachments));
       return;
     }
     // Local commands work even while loading

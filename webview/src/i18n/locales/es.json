@@ -109,6 +109,7 @@
     "codexUltraCapabilitiesLoading": "Comprobando la disponibilidad de Ultra. Vuelve a enviar cuando termine de cargar el modelo.",
     "codexUltraCapabilitiesUnavailable": "No se pudo verificar la disponibilidad de Ultra. Vuelve a cargar los modelos o elige otro nivel de esfuerzo.",
     "sessionTransitionTakingLonger": "El cambio de sesión está tardando más de lo esperado. Puedes intentar abrirla de nuevo; los mensajes en cola están pausados.",
+    "sessionTransitionInProgress": "Ya hay un cambio de sesión en curso. Espera un momento.",
     "sdkStatusLoading": "Checking SDK status...",
     "pasteImagePreparing": "Preparando imagen pegada...",
     "sdkStatusUnavailable": "No se pudo comprobar el estado del SDK.",

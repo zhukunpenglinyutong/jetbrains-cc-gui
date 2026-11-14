@@ -82,6 +82,13 @@ public class HistoryMessageInjector {
         return generation;
     }
 
+    /** Fence in-flight loads without discarding the reader the current session still pages with. */
+    void fencePendingCodexLoads() {
+        synchronized (sessionLoadGeneration) {
+            sessionLoadGeneration.incrementAndGet();
+        }
+    }
+
     void publishIfCurrent(long generation, Runnable publication) {
         synchronized (sessionLoadGeneration) {
             if (generation == sessionLoadGeneration.get()) {

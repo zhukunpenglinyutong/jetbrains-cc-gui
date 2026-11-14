@@ -454,6 +454,13 @@ public class ClaudeChatWindow {
             }
 
             @Override
+            public void clearReplacedHistory() {
+                if (historyHandler != null) {
+                    historyHandler.clearCodexHistory();
+                }
+            }
+
+            @Override
             public void setSlashCommandsFetched(boolean fetched) {
                 slashCommandsFetched = fetched;
             }

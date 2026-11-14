@@ -148,6 +148,7 @@
     "codexUltraCapabilitiesLoading": "Checking Ultra availability. Try sending again when model loading finishes.",
     "codexUltraCapabilitiesUnavailable": "Could not verify Ultra availability. Retry loading models or choose another effort.",
     "sessionTransitionTakingLonger": "The session change is taking longer than expected. You can try opening it again; queued messages are paused.",
+    "sessionTransitionInProgress": "A session change is already in progress. Please wait a moment.",
     "sdkStatusLoading": "Checking SDK status...",
     "pasteImagePreparing": "Preparing pasted image...",
     "sdkStatusUnavailable": "Could not check SDK status.",

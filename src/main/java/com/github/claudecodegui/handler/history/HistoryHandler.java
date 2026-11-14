@@ -83,8 +83,16 @@ public class HistoryHandler extends BaseMessageHandler {
         this.sessionLoadCallback = callback;
     }
 
-    /** Prevent a delayed history reader from publishing into a newer session transition. */
+    /**
+     * Prevent a delayed history reader from publishing into a newer session transition.
+     * The Codex page reader survives, since a refused transition keeps the current session.
+     */
     public void invalidatePendingLoads() {
+        historyMessageInjector.fencePendingCodexLoads();
+    }
+
+    /** Drop the previous session's Codex page reader once a replacement is committed. */
+    public void clearCodexHistory() {
         historyMessageInjector.invalidateCodexHistory();
     }
 

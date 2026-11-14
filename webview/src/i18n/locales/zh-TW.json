@@ -114,6 +114,7 @@
     "codexUltraCapabilitiesLoading": "正在確認 Ultra 是否可用。模型載入完成後請重試傳送。",
     "codexUltraCapabilitiesUnavailable": "無法確認 Ultra 是否可用。請重新載入模型或選擇其他推理強度。",
     "sessionTransitionTakingLonger": "切換對話耗時較長。您可以再次嘗試開啟；排隊的訊息已暫停傳送。",
+    "sessionTransitionInProgress": "正在切換對話，請稍候。",
     "sdkStatusLoading": "Checking SDK status...",
     "pasteImagePreparing": "正在準備貼上的圖片...",
     "sdkStatusUnavailable": "無法檢查 SDK 狀態。",

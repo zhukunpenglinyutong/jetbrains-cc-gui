@@ -30,8 +30,8 @@ export interface UseMessageQueueOptions {
 export interface UseMessageQueueReturn {
   /** Current queue */
   queue: QueuedMessage[];
-  /** Add message to queue */
-  enqueue: (content: string, attachments?: Attachment[]) => void;
+  /** Add message to queue; returns the new item's id */
+  enqueue: (content: string, attachments?: Attachment[]) => string;
   /** Remove message from queue by id */
   dequeue: (id: string) => void;
   /**
@@ -42,8 +42,8 @@ export interface UseMessageQueueReturn {
   dequeueForEdit: (id: string) => QueuedMessage | undefined;
   /** Read a queued message without removing it */
   peekQueuedMessage: (id: string) => QueuedMessage | undefined;
-  /** Clear entire queue */
-  clearQueue: () => void;
+  /** Clear the queue, keeping only items the optional predicate accepts */
+  clearQueue: (keep?: (item: QueuedMessage) => boolean) => void;
   /** Reorder the queue by an ordered list of ids (index 0 executes first) */
   reorder: (orderedIds: string[]) => void;
   /** Whether queue has items */
@@ -114,6 +114,7 @@ export function useMessageQueue({
       queuedAt: Date.now(),
     };
     commitQueue([...queueRef.current, newItem]);
+    return newItem.id;
   }, [generateId, commitQueue]);
 
   // Remove a message for editing: the caller gets its payload back so the
@@ -139,8 +140,8 @@ export function useMessageQueue({
   }, [dequeueForEdit]);
 
   // Clear entire queue
-  const clearQueue = useCallback(() => {
-    commitQueue([]);
+  const clearQueue = useCallback((keep?: (item: QueuedMessage) => boolean) => {
+    commitQueue(keep ? queueRef.current.filter(keep) : []);
   }, [commitQueue]);
 
   /**

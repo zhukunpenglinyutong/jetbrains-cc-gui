@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { AsyncStream } from '../../utils/async-stream.js';
-import { assertUltracodeSupported, applyNativeFlagSettings, createUltracodeQuery, withUltracodeSetting } from './ultracode.js';
+import { assertUltracodeSupported, applyNativeFlagSettings, createUltracodeQuery, supportsIndependentUltracode, withUltracodeSetting } from './ultracode.js';
 import { applyDynamicControls, buildRuntimeSignature, updateBackgroundTaskState } from './runtime-lifecycle.js';
 import { __testing } from './persistent-query-service.js';
 import { rememberRuntime, canDisposeIdleRuntime } from './runtime-registry.js';
@@ -260,5 +260,14 @@ test('Workflow preserves native plan/auto checks and explicit execution approval
   }
   for (const mode of ['acceptEdits']) {
     assert.equal((await createPreToolUseHook({ value: mode }, '/workspace')({ tool_name: 'Workflow' })).hookSpecificOutput.permissionDecision, 'ask');
+  }
+});
+
+test('the independent Ultracode toggle requires a 2.1.284 or later release', () => {
+  for (const version of ['2.1.284', '2.1.300 (Claude Code)', '2.1.1000', '2.2.0', '2.1.285-beta.1']) {
+    assert.equal(supportsIndependentUltracode(version), true, version);
+  }
+  for (const version of ['2.1.283', '2.1.284-beta.1', 'v2.1.300', '2.1', '', undefined]) {
+    assert.equal(supportsIndependentUltracode(version), false, String(version));
   }
 });

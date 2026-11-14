@@ -148,6 +148,7 @@
     "codexUltraCapabilitiesLoading": "正在确认 Ultra 是否可用。模型加载完成后请重试发送。",
     "codexUltraCapabilitiesUnavailable": "无法确认 Ultra 是否可用。请重新加载模型或选择其他推理强度。",
     "sessionTransitionTakingLonger": "切换会话耗时较长。您可以再次尝试打开；排队的消息已暂停发送。",
+    "sessionTransitionInProgress": "正在切换会话，请稍候。",
     "sdkStatusLoading": "正在检查 SDK 状态...",
     "pasteImagePreparing": "正在准备粘贴的图片...",
     "sdkStatusUnavailable": "无法检查 SDK 状态。",

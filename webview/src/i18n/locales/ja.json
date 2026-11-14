@@ -109,6 +109,7 @@
     "codexUltraCapabilitiesLoading": "Ultra が利用可能か確認中です。モデルの読み込みが完了したら、もう一度送信してください。",
     "codexUltraCapabilitiesUnavailable": "Ultra の利用可否を確認できませんでした。モデルを再読み込みするか、別の推論レベルを選択してください。",
     "sessionTransitionTakingLonger": "セッションの切り替えに時間がかかっています。もう一度開くことができます。待機中のメッセージの送信は一時停止しています。",
+    "sessionTransitionInProgress": "セッションの切り替え中です。しばらくお待ちください。",
     "sdkStatusLoading": "Checking SDK status...",
     "pasteImagePreparing": "貼り付けた画像を準備中...",
     "sdkStatusUnavailable": "SDK の状態を確認できませんでした。",

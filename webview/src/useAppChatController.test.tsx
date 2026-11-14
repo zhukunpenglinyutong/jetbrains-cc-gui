@@ -89,6 +89,21 @@ describe('session lifecycle through the registered bridge callbacks', () => {
     expect(result.current.ui.toasts.some(toast => toast.message === 'Cleanup failed')).toBe(true);
   });
 
+  it('drops the outgoing queue on acceptance but sends a message typed during the switch to the new session', () => {
+    const { result } = renderSessionController();
+    act(() => { window.showLoading?.('true'); window.onStreamStart?.(); });
+    act(() => result.current.controller.handleSubmit('typed for the old session'));
+    act(() => result.current.controller.handleSubmit('/new'));
+    const token = lastRequest('create_new_session').transitionToken;
+    act(() => { window.onStreamEnd?.(); window.showLoading?.('false'); });
+    act(() => result.current.controller.handleSubmit('typed after clicking new'));
+    expect(result.current.controller.messageQueue).toHaveLength(2);
+    act(() => { window.clearMessages?.(undefined, token); window.historyLoadComplete?.(0, token); });
+    expect(getSessionTransitionPending()).toBe(false);
+    expect(sentTurns()).toHaveLength(1);
+    expect(JSON.parse(sentTurns()[0].split(/:(.*)/s)[1])).toMatchObject({ text: 'typed after clicking new' });
+  });
+
   it('keeps a timed-out transaction pending and accepts its late clear after an early completion', () => {
     const { result } = renderSessionController();
     act(() => result.current.controller.handleSubmit('/new'));
@@ -171,6 +186,28 @@ describe('session lifecycle through the registered bridge callbacks', () => {
     expect(lastRequest('load_session')).toMatchObject({ sessionId: 'old-session', provider: 'claude' });
     expect(lastRequest('load_session').transitionToken).not.toBe(tokenA);
     expect(lastRequest('load_session').transitionToken).toBeTruthy();
+  });
+
+  it('explains a refused session request while another switch is still starting', () => {
+    const { result } = renderSessionController();
+    act(() => result.current.controller.handleSubmit('/new'));
+    act(() => result.current.controller.loadHistorySession('another-session'));
+    expect(vi.mocked(window.sendToJava!).mock.calls.some(([line]) => line.startsWith('load_session:'))).toBe(false);
+    expect(result.current.ui.toasts.some(toast => toast.message.includes('already in progress'))).toBe(true);
+  });
+
+  it('lets a new session supersede a current-session deletion that never reports, keeping the queue paused', () => {
+    const { result } = renderSessionController();
+    act(() => result.current.controller.deleteHistorySession('old-session'));
+    const heldToken = getSessionTransitionToken();
+    act(() => result.current.controller.handleSubmit('typed while deleting'));
+    act(() => result.current.controller.handleSubmit('/new'));
+    expect(vi.mocked(window.sendToJava!).mock.calls.some(([line]) => line.startsWith('create_new_session:'))).toBe(false);
+    act(() => vi.advanceTimersByTime(15_001));
+    expect(sentTurns()).toHaveLength(0);
+    act(() => result.current.controller.handleSubmit('/new'));
+    expect(lastRequest('create_new_session').transitionToken).not.toBe(heldToken);
+    expect(result.current.controller.messageQueue).toHaveLength(1);
   });
 
   it.each([true, false])('holds current-Claude deletion through its real outcome (success=%s)', success => {

@@ -109,6 +109,7 @@
     "codexUltraCapabilitiesLoading": "Ultra की उपलब्धता जाँची जा रही है। मॉडल लोड होने के बाद फिर से भेजें।",
     "codexUltraCapabilitiesUnavailable": "Ultra की उपलब्धता की पुष्टि नहीं हो सकी। मॉडल दोबारा लोड करें या दूसरा प्रयास स्तर चुनें।",
     "sessionTransitionTakingLonger": "सत्र बदलने में अपेक्षा से अधिक समय लग रहा है। आप इसे फिर से खोलने का प्रयास कर सकते हैं; कतार के संदेश रुके हुए हैं।",
+    "sessionTransitionInProgress": "सत्र बदलना पहले से जारी है। कृपया कुछ क्षण प्रतीक्षा करें।",
     "sdkStatusLoading": "Checking SDK status...",
     "pasteImagePreparing": "पेस्ट की गई छवि तैयार हो रही है...",
     "sdkStatusUnavailable": "SDK स्थिति की जांच नहीं हो सकी।",

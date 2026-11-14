@@ -10,14 +10,15 @@ export function withUltracodeSetting(settings, ultracode) {
 }
 
 export function supportsIndependentUltracode(version) {
-  const match = typeof version === 'string' && version.match(/^(\d+)\.(\d+)\.(\d+)(?:\D|$)/);
+  const match = typeof version === 'string' && version.match(/^(\d+)\.(\d+)\.(\d+)(\D|$)/);
   if (!match) return false;
   const actual = match.slice(1, 4).map(Number);
   const minimum = MIN_ULTRACODE_CLI_VERSION.split('.').map(Number);
   for (let i = 0; i < minimum.length; i++) {
     if (actual[i] !== minimum[i]) return actual[i] > minimum[i];
   }
-  return true;
+  // A pre-release of the minimum (2.1.284-beta.1) predates the release itself.
+  return match[4] !== '-';
 }
 
 /** Validate the running CLI, including user-configured executable overrides. */

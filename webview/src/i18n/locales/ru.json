@@ -109,6 +109,7 @@
     "codexUltraCapabilitiesLoading": "Проверяем доступность Ultra. Повторите отправку после загрузки модели.",
     "codexUltraCapabilitiesUnavailable": "Не удалось проверить доступность Ultra. Повторите загрузку моделей или выберите другой уровень усилий.",
     "sessionTransitionTakingLonger": "Смена сеанса занимает больше времени, чем ожидалось. Попробуйте открыть его снова; сообщения в очереди приостановлены.",
+    "sessionTransitionInProgress": "Смена сеанса уже выполняется. Подождите немного.",
     "sdkStatusLoading": "Проверка статуса SDK...",
     "pasteImagePreparing": "Подготовка вставленного изображения...",
     "sdkStatusUnavailable": "Не удалось проверить состояние SDK.",

@@ -615,6 +615,27 @@ public class HistoryMessageInjectorTest {
     }
 
     @Test
+    public void fencingPendingLoadsKeepsTheCurrentCodexPageCursorUntilReplacementCommits() throws Exception {
+        HistoryMessageInjector injector = new HistoryMessageInjector(null);
+        java.lang.reflect.Field cursor = HistoryMessageInjector.class.getDeclaredField("nativeHistoryCursor");
+        cursor.setAccessible(true);
+        cursor.set(injector, new com.google.gson.JsonPrimitive("page-2"));
+        long beforeTransition = injector.invalidateCodexHistory();
+        cursor.set(injector, new com.google.gson.JsonPrimitive("page-2"));
+
+        // A transition starts: in-flight loads are fenced, but a refused switch must still page.
+        injector.fencePendingCodexLoads();
+        java.util.concurrent.atomic.AtomicInteger publications = new java.util.concurrent.atomic.AtomicInteger();
+        injector.publishIfCurrent(beforeTransition, publications::incrementAndGet);
+        assertEquals(0, publications.get());
+        assertEquals(new com.google.gson.JsonPrimitive("page-2"), cursor.get(injector));
+
+        // The replacement commits: the old session's cursor goes away.
+        injector.invalidateCodexHistory();
+        assertNull(cursor.get(injector));
+    }
+
+    @Test
     public void queuedCodexSelectionCannotInterruptANewerGenerationOrBinding() {
         HandlerContext context = new HandlerContext(null, null, null, null, null);
         java.util.concurrent.atomic.AtomicInteger stops = new java.util.concurrent.atomic.AtomicInteger();

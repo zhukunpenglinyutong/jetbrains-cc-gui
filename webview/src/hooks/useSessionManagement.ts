@@ -141,7 +141,12 @@ export function useSessionManagement({
 
   const beginSessionTransition = useCallback((nextSessionId: string | null, nextTitle: string | null,
     applyTarget?: () => void, backendToken?: string, waitForDeletion = false) => {
-    if (getSessionTransitionPending() && !backendToken && !isSessionTransitionRetryable()) return false;
+    if (getSessionTransitionPending() && !backendToken && !isSessionTransitionRetryable()) {
+      addToast(t('chat.sessionTransitionInProgress', {
+        defaultValue: 'A session change is already in progress. Please wait a moment.',
+      }), 'info');
+      return false;
+    }
     window.__sessionTransitioning = true;
     window.__sessionTransitionToken = backendToken || createSessionTransitionToken();
     // Discard any deferred snapshot from a prior transition / outgoing session.
@@ -203,13 +208,12 @@ export function useSessionManagement({
       clearTimeout(transitionTimeoutRef.current);
       transitionTimeoutRef.current = null;
     }
-    // A deletion owns the writer barrier until its explicit outcome; a UI
-    // timer must never release queued writes while files are being removed.
+    // A deletion owns the writer barrier until its explicit outcome. Its timer
+    // only lets a new session supersede the hold; queued writes stay paused.
     if (waitForDeletion) {
       // This is only a writer hold; deletion has its own result callback and
       // does not issue a lifecycle Started acknowledgement.
       acknowledgeSessionTransition(window.__sessionTransitionToken);
-      return true;
     }
     const token = window.__sessionTransitionToken;
     transitionTimeoutRef.current = setTimeout(() => {

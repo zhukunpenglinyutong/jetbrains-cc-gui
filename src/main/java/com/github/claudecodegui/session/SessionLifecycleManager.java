@@ -78,6 +78,9 @@ public class SessionLifecycleManager {
         /** Cancel pending history reads without invalidating the currently displayed session. */
         default void invalidatePendingHistoryLoads() { }
 
+        /** Drop the replaced session's paged history state. */
+        default void clearReplacedHistory() { }
+
         void setSlashCommandsFetched(boolean fetched);
 
         void setFetchedSlashCommandsCount(int count);
@@ -85,7 +88,8 @@ public class SessionLifecycleManager {
 
     private final SessionHost host;
     private final Object transitionLock = new Object();
-    private long transitionGeneration;
+    // Written under transitionLock, read lock-free by isCurrentTransition.
+    private volatile long transitionGeneration;
 
     private record Transition(long generation, String token, ClaudeSession previous) { }
 
@@ -137,7 +141,7 @@ public class SessionLifecycleManager {
             newSession.setClaudeUltracode(previousUltracode);
             keepOmpApprovalMode(oldSession, newSession);
             LOG.info("Restored session state to new session: mode=" + previousPermissionMode
-                             + ", provider=" + previousProvider + ", model=" + previousModel);
+                             + ", provider=" + newSession.getProvider() + ", model=" + previousModel);
 
             completeNewSessionBootstrap(newSession, determineWorkingDirectory(),
                     "New session created successfully, working directory: ", transition, clearBarrierSeq);
@@ -334,10 +338,9 @@ public class SessionLifecycleManager {
         }
     }
 
+    /** Lock-free: EDT callbacks call this while a release may be shutting daemons down. */
     private boolean isCurrentTransition(Transition transition) {
-        synchronized (transitionLock) {
-            return transition.generation() == transitionGeneration && !host.isDisposed();
-        }
+        return transition.generation() == transitionGeneration && !host.isDisposed();
     }
 
     private CompletableFuture<Void> interruptTransition(Transition transition) {
@@ -347,13 +350,12 @@ public class SessionLifecycleManager {
         }
     }
 
+    /** Daemon shutdown can block for seconds, so it runs outside transitionLock; commit re-checks the generation. */
     private CompletableFuture<Void> releaseTransitionResources(Transition transition, String reason) {
-        synchronized (transitionLock) {
-            if (!isCurrentTransition(transition) || host.getSession() != transition.previous()) {
-                return CompletableFuture.completedFuture(null);
-            }
-            return releasePersistentProviderResources(transition.previous(), reason);
+        if (!isCurrentTransition(transition) || host.getSession() != transition.previous()) {
+            return CompletableFuture.completedFuture(null);
         }
+        return releasePersistentProviderResources(transition.previous(), reason);
     }
 
     private void commitTransition(Transition transition, LongConsumer replacement) {
@@ -362,6 +364,7 @@ public class SessionLifecycleManager {
                 return;
             }
             host.invalidateSessionCallbacks();
+            host.clearReplacedHistory();
             long clearBarrierSeq = host.getStreamCoalescer().resetStreamState();
             replacement.accept(clearBarrierSeq);
         }
