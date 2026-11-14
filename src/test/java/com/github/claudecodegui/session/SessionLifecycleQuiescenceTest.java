@@ -174,7 +174,7 @@ public class SessionLifecycleQuiescenceTest {
     private static SessionLifecycleManager manager(Host host) {
         return new SessionLifecycleManager(host) {
             @Override public String determineWorkingDirectory() { return "/fixture"; }
-            @Override public void fetchSlashCommandsOnStartup() { }
+            @Override public void fetchSlashCommandsOnStartup(boolean userRequested) { }
         };
     }
 

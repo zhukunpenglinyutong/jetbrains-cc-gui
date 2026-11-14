@@ -254,10 +254,11 @@ test('a send arriving during native interrupt waits for the stopped runtime to r
 });
 
 test('Workflow preserves native plan/auto checks and explicit execution approvals', async () => {
-  for (const mode of ['plan', 'auto']) {
+  // Default mode defers to the SDK, which applies the user's rules and then asks.
+  for (const mode of ['plan', 'auto', 'default']) {
     assert.deepEqual(await createPreToolUseHook({ value: mode }, '/workspace')({ tool_name: 'Workflow' }), { continue: true });
   }
-  for (const mode of ['default', 'acceptEdits']) {
+  for (const mode of ['acceptEdits']) {
     assert.equal((await createPreToolUseHook({ value: mode }, '/workspace')({ tool_name: 'Workflow' })).hookSpecificOutput.permissionDecision, 'ask');
   }
 });

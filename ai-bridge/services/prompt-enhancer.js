@@ -22,6 +22,7 @@ import {
   getCliUserAgent,
 } from '../config/api-config.js';
 import { resolveModelFromSettings, resolveSdkModelName } from '../utils/model-utils.js';
+import { buildAskThinkingFields, createWithThinkingFallback } from '../utils/ask-thinking.js';
 import { getRealHomeDir, isMainEntryModule } from '../utils/path-utils.js';
 import { getClaudeCliPathOverride } from '../utils/claude-cli-path.js';
 import { ensureAnthropicSdk } from './claude/message-utils.js';
@@ -407,15 +408,16 @@ export function emitContentDelta(text) {
 
 /**
  * Build the messages.stream() request for the Claude ask path.
- * thinking is disabled so reasoning models (e.g. DeepSeek via relay) do not
- * spend the token budget on `thinking` blocks and leave the text empty.
+ * Thinking is turned off where the model allows it, so reasoning models (e.g.
+ * DeepSeek via relay) do not spend the token budget on `thinking` blocks and
+ * leave the text empty (#1693). Models that reject `disabled` get the form they
+ * accept (#1949), see ask-thinking.js.
  * Exposed for tests.
  */
 export function buildEnhanceAskRequest(modelId, fullPrompt, systemPrompt, maxTokens) {
   const request = {
     model: modelId,
-    max_tokens: maxTokens,
-    thinking: { type: 'disabled' },
+    ...buildAskThinkingFields(modelId, maxTokens),
     messages: [{ role: 'user', content: fullPrompt }],
   };
   if (systemPrompt && String(systemPrompt).trim()) {
@@ -473,10 +475,13 @@ async function enhancePromptWithClaudeAsk(originalPrompt, systemPrompt, model, c
   // throws "Cannot read properties of undefined (reading 'push')" when an upstream omits
   // `content` from message_start (observed on OpenCode Go behind a local proxy). Iterating
   // the raw events only needs the deltas we care about, and ignores thinking blocks.
-  const stream = await client.messages.create({
-    ...buildEnhanceAskRequest(modelId, fullPrompt, systemPrompt, maxTokens),
-    stream: true,
-  });
+  const stream = await createWithThinkingFallback(
+    (request) => client.messages.create({ ...request, stream: true }),
+    buildEnhanceAskRequest(modelId, fullPrompt, systemPrompt, maxTokens),
+    {
+      onRetry: (err) => console.log(`[PromptEnhancer] ${modelId} rejected the thinking setting, retrying without it: ${String(err.message).slice(0, 200)}`),
+    },
+  );
 
   for await (const event of stream) {
     if (event.type === 'content_block_delta' && event.delta && event.delta.type === 'text_delta' && event.delta.text) {

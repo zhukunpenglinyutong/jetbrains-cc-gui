@@ -21,6 +21,8 @@ export interface LedgerOp {
   moveFrom?: string;
   patch?: string;
   oldStringKnown?: boolean;
+  /** Keep All fingerprint, numbered for repeats (see useFileChanges editOperationKey) */
+  editKey?: string;
   sourceId?: string;
   toolUseId?: string;
   filePath: string;
@@ -96,7 +98,7 @@ export function applySearchReplace(
   return content.slice(0, index) + newString + content.slice(index + oldString.length);
 }
 
-function isWriteTool(toolName: string): boolean {
+export function isWriteTool(toolName: string): boolean {
   return WRITE_TOOL_NAMES.has(normalizeToolName(toolName));
 }
 
@@ -319,6 +321,7 @@ export function buildSessionFileLedger(ops: LedgerOp[]): SessionFileLedgerEntry[
         ...(o.moveFrom ? { moveFrom: o.moveFrom } : {}),
         ...(o.patch ? { patch: o.patch } : {}),
         ...(o.oldStringKnown !== undefined ? { oldStringKnown: o.oldStringKnown } : {}),
+        ...(o.editKey ? { editKey: o.editKey } : {}),
       };
     });
 

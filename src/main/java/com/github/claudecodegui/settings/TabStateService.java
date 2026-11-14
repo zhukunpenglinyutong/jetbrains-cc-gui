@@ -204,6 +204,8 @@ public final class TabStateService implements PersistentStateComponent<TabStateS
         public String model;
         public String permissionMode;
         public String reasoningEffort;
+        /** OMP approval mode chosen in this tab; empty or null follows OMP's own setting. */
+        public String ompApprovalMode;
         public boolean unread;
         public boolean claudeUltracode;
 
@@ -216,6 +218,7 @@ public final class TabStateService implements PersistentStateComponent<TabStateS
             copy.model = this.model;
             copy.permissionMode = this.permissionMode;
             copy.reasoningEffort = this.reasoningEffort;
+            copy.ompApprovalMode = this.ompApprovalMode;
             copy.unread = this.unread;
             copy.claudeUltracode = this.claudeUltracode;
             return copy;

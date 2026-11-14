@@ -4,6 +4,7 @@ import com.github.claudecodegui.handler.core.BaseMessageHandler;
 import com.github.claudecodegui.handler.core.HandlerContext;
 
 import com.github.claudecodegui.bridge.EnvironmentConfigurator;
+import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.bridge.ProcessManager;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
@@ -19,7 +20,6 @@ import com.intellij.openapi.fileEditor.TextEditor;
 import com.intellij.openapi.vfs.VirtualFile;
 
 import java.io.File;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
@@ -543,9 +543,8 @@ public class PromptEnhancerHandler extends BaseMessageHandler {
             LOG.info("[PromptEnhancer] AI Bridge directory: " + bridgeDir.getAbsolutePath());
 
             // Build the command
-            List<String> command = new ArrayList<>();
-            command.add(nodeExecutable);
-            command.add(new File(bridgeDir, "services/prompt-enhancer.js").getAbsolutePath());
+            List<String> command = NodeDetector.buildNodeScriptCommand(
+                    nodeExecutable, new File(bridgeDir, "services/prompt-enhancer.js").getAbsolutePath());
             LOG.info("[PromptEnhancer] Executing command: " + String.join(" ", command));
 
             ProcessBuilder pb = new ProcessBuilder(command);

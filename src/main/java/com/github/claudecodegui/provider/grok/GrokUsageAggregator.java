@@ -28,13 +28,22 @@ public final class GrokUsageAggregator {
     private final GrokHistoryReader historyReader;
     private final GrokUsageLedger ledger;
 
+    /**
+     * Creates a Grok usage aggregator with the default history reader and usage ledger.
+     */
     public GrokUsageAggregator() {
         this(new GrokHistoryReader(), new GrokUsageLedger());
     }
 
+    /**
+     * Creates a Grok usage aggregator with the given history reader and optional usage ledger.
+     *
+     * @param historyReader Session history reader
+     * @param ledger Optional usage ledger, or null to disable ledger fallback
+     */
     public GrokUsageAggregator(GrokHistoryReader historyReader, GrokUsageLedger ledger) {
         this.historyReader = historyReader;
-        this.ledger = ledger != null ? ledger : new GrokUsageLedger();
+        this.ledger = ledger;
     }
 
     public static final class UsageData {
@@ -112,6 +121,13 @@ public final class GrokUsageAggregator {
         public boolean tokensFromLedger;
     }
 
+    /**
+     * Aggregates Grok session activity and token usage statistics for a project scope.
+     *
+     * @param projectPath Project directory path, or "all" for all projects
+     * @param cutoffTime Minimum session timestamp in milliseconds, or 0 for all time
+     * @return aggregated project usage statistics
+     */
     public ProjectStatistics getProjectStatistics(String projectPath, long cutoffTime) {
         ProjectStatistics stats = emptyStats(projectPath);
         try {
@@ -120,7 +136,8 @@ public final class GrokUsageAggregator {
                             ? historyReader.listAllSessions()
                             : historyReader.listSessionsForProject(projectPath);
 
-            Map<String, GrokUsageLedger.SessionTotals> ledgerBySession = ledger.aggregateBySession();
+            Map<String, GrokUsageLedger.SessionTotals> ledgerBySession =
+                    ledger != null ? ledger.aggregateBySession() : Map.of();
 
             List<SessionSummary> summaries = new ArrayList<>();
             for (GrokHistoryReader.SessionInfo info : history) {
@@ -134,14 +151,28 @@ public final class GrokUsageAggregator {
                 SessionSummary s = new SessionSummary();
                 s.sessionId = info.sessionId;
                 s.timestamp = ts;
-                s.model = "grok";
+                s.model = (info.model != null && !info.model.isBlank()) ? info.model : "grok";
                 s.summary = info.title;
                 s.cost = 0;
                 s.usage = new UsageData();
 
+                GrokSessionCompanionFiles.SessionUsageTotals diskTotals =
+                        historyReader.readSessionUsageTotals(info.sessionId, info.cwd);
                 GrokUsageLedger.SessionTotals lt = ledgerBySession.get(info.sessionId);
-                if (lt != null) {
+                if (diskTotals != null && diskTotals.totalTokens > 0) {
+                    s.usage.inputTokens = diskTotals.inputTokens;
+                    s.usage.outputTokens = diskTotals.outputTokens;
+                    s.usage.cacheReadTokens = diskTotals.cacheReadTokens;
+                    s.usage.cacheWriteTokens = diskTotals.cacheWriteTokens;
+                    s.usage.totalTokens = diskTotals.totalTokens;
+                    stats.tokensFromLedger = true;
+                    if (diskTotals.model != null && !diskTotals.model.isBlank()) {
+                        s.model = diskTotals.model;
+                    }
+                } else if (lt != null) {
                     s.usage.inputTokens = lt.inputTokens;
+                    s.usage.cacheReadTokens = lt.cacheReadTokens;
+                    s.usage.cacheWriteTokens = lt.cacheWriteTokens;
                     s.usage.outputTokens = lt.outputTokens;
                     s.usage.totalTokens = lt.totalTokens > 0
                             ? lt.totalTokens
@@ -169,7 +200,7 @@ public final class GrokUsageAggregator {
                 if (!ALL_PROJECTS.equals(projectPath) && projectPath != null && !projectPath.isBlank()) {
                     String cwd = lt.cwd != null ? GrokHistoryReader.normalizePath(lt.cwd) : "";
                     String project = GrokHistoryReader.normalizePath(projectPath);
-                    if (!cwd.isEmpty() && !cwd.equals(project) && !cwd.startsWith(project + "/")) {
+                    if (cwd.isEmpty() || (!cwd.equals(project) && !cwd.startsWith(project + "/"))) {
                         continue;
                     }
                 }
@@ -181,6 +212,8 @@ public final class GrokUsageAggregator {
                 s.cost = 0;
                 s.usage = new UsageData();
                 s.usage.inputTokens = lt.inputTokens;
+                s.usage.cacheReadTokens = lt.cacheReadTokens;
+                s.usage.cacheWriteTokens = lt.cacheWriteTokens;
                 s.usage.outputTokens = lt.outputTokens;
                 s.usage.totalTokens = lt.totalTokens > 0 ? lt.totalTokens : (lt.inputTokens + lt.outputTokens);
                 if (s.usage.totalTokens > 0) {
@@ -261,6 +294,8 @@ public final class GrokUsageAggregator {
             day.sessions++;
             day.usage.inputTokens += u.inputTokens;
             day.usage.outputTokens += u.outputTokens;
+            day.usage.cacheWriteTokens += u.cacheWriteTokens;
+            day.usage.cacheReadTokens += u.cacheReadTokens;
             day.usage.totalTokens += u.totalTokens > 0 ? u.totalTokens : (u.inputTokens + u.outputTokens);
             if (s.model != null && !day.modelsUsed.contains(s.model)) {
                 day.modelsUsed.add(s.model);
@@ -275,6 +310,8 @@ public final class GrokUsageAggregator {
             mu.sessionCount++;
             mu.inputTokens += u.inputTokens;
             mu.outputTokens += u.outputTokens;
+            mu.cacheCreationTokens += u.cacheWriteTokens;
+            mu.cacheReadTokens += u.cacheReadTokens;
             mu.totalTokens += u.totalTokens > 0 ? u.totalTokens : (u.inputTokens + u.outputTokens);
 
             if (s.timestamp >= currentWeekStart) {

@@ -7,8 +7,10 @@ import type { RewindRequest } from '../components/RewindDialog';
 import type { ContextUsageData } from '../components/ContextUsageDialog';
 import { openBrowserExternal, sendBridgeEvent } from '../utils/bridge';
 import { clearDialogDraft, type DialogDraftKind } from '../utils/dialogStateStorage';
+import { normalizeQuestions, withBlankOptionalAnswers } from '../components/AskUserQuestionDialog/answerState';
 import type { ToastMessage } from '../components/Toast';
 import { useCodexDeliveryRecovery, type SubmittedCodexAnswer } from './useCodexDeliveryRecovery';
+import { CODEX_EMPTY_FORM_ALLOW_LABEL, CODEX_EMPTY_FORM_QUESTION_ID } from './codexElicitation';
 
 const CLOSED_DIALOG_TOKEN_LIMIT = 256;
 
@@ -507,6 +509,16 @@ export function useDialogManagement({ t, addToast }: UseDialogManagementOptions)
           // system browser from the JCEF webview; route through the bridge.
           openBrowserExternal(elicitation.url);
         }
+        if (elicitation?.mode === 'form' && CODEX_EMPTY_FORM_QUESTION_ID in answers) {
+          const choice = answers[CODEX_EMPTY_FORM_QUESTION_ID];
+          const allowed = (Array.isArray(choice) ? choice[0] : choice) === CODEX_EMPTY_FORM_ALLOW_LABEL;
+          // Anything but an explicit Allow (including free text) is a denial.
+          // No _meta echo: Codex reads a string `persist` in the reply as "remember
+          // for the session" (tool calls) or "never suggest again" (tool suggestions).
+          return sendCodexQuestionResult(current, allowed
+            ? { action: 'accept', content: {} }
+            : { action: 'decline', content: null });
+        }
         const result: Record<string, unknown> = {
           action: elicitation?.mode === 'userVerification'
             && (Array.isArray(answers.__codex_user_verification__)
@@ -526,7 +538,7 @@ export function useDialogManagement({ t, addToast }: UseDialogManagementOptions)
     const payload = JSON.stringify({
       requestId,
       dialogToken: currentAskUserQuestionRequestRef.current?.dialogToken,
-      answers,
+      answers: withBlankOptionalAnswers(normalizeQuestions(current?.questions), answers),
     });
     rememberClosedDialog(closedAskUserQuestionTokensRef.current, currentAskUserQuestionRequestRef.current?.dialogToken);
     sendBridgeEvent('ask_user_question_response', payload);

@@ -16,9 +16,7 @@ import {
   useChatComputations,
 } from './hooks';
 import type { UseWindowCallbacksOptions, UseMessageSenderOptions } from './hooks';
-import {
-  CONTEXT_COMMANDS,
-} from './hooks/useMessageSender';
+import { isLocalContextCommand } from './hooks/useMessageSender';
 import { useCodexQuestionResponses } from './hooks/useCodexQuestionResponses';
 import { isCodexEffortIndependentCommand, parseCodexCommand } from './hooks/codexCommandDispatcher';
 import { isCodexUltraCapabilityUnconfirmed } from './utils/codexReasoningCapabilities';
@@ -55,6 +53,7 @@ export interface ChatControllerModelSlice {
   codexApprovalPreset: UseMessageSenderOptions['codexApprovalPreset'];
   codexSandboxSelection: UseMessageSenderOptions['codexSandboxSelection'];
   dshPreset: UseMessageSenderOptions['dshPreset'];
+  ompApprovalMode: UseMessageSenderOptions['ompApprovalMode'];
   longContextEnabled: UseMessageSenderOptions['longContextEnabled'];
   handleModeSelect: (mode: PermissionMode) => void;
   handleProviderSelect: (providerId: string) => void;
@@ -164,7 +163,7 @@ export const useAppChatController = ({
     selectedAgent, sdkStatusLoading, currentSdkInstalled,
     codexNativeAutoReviewAvailable,
     reasoningEffort, claudeUltracode, codexFastMode, codexCollaborationMode, codexApprovalPreset,
-    codexSandboxSelection, dshPreset, longContextEnabled,
+    codexSandboxSelection, dshPreset, ompApprovalMode, longContextEnabled,
     handleModeSelect, handleProviderSelect,
     currentProviderRef, syncActiveProviderModelMapping,
     setPermissionMode, setCurrentProvider,
@@ -309,7 +308,7 @@ export const useAppChatController = ({
     t, addToast,
     currentProvider, selectedModel, permissionMode, reasoningEffort, claudeUltracode, selectedAgent, codexFastMode,
     codexCollaborationMode, codexApprovalPreset, codexSandboxSelection,
-    codexNativeAutoReviewAvailable, dshPreset,
+    codexNativeAutoReviewAvailable, dshPreset, ompApprovalMode,
     sdkStatusLoading, currentSdkInstalled,
     sentAttachmentsRef, chatInputRef, messagesContainerRef,
     isUserAtBottomRef, userPausedRef, isStreamingRef,
@@ -416,8 +415,8 @@ export const useAppChatController = ({
         addToast(t('chat.planModeEnabled', { defaultValue: 'Plan mode enabled' }), 'info');
         return;
       }
-      // /context - handled locally even while loading
-      if (text.split(/\s+/)[0].toLowerCase() === '/context' || CONTEXT_COMMANDS.has(text.split(/\s+/)[0].toLowerCase())) {
+      // /context answered by the plugin works even while loading; OMP's own /context is an ordinary message
+      if (isLocalContextCommand(text, currentProvider)) {
         hookHandleSubmit(content, attachments);
         return;
       }

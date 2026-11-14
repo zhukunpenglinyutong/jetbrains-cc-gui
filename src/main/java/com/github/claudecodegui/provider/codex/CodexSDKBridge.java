@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
+import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.history.HistoryMessageInjector;
 import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.settings.CodemossSettingsService;
@@ -14,6 +15,7 @@ import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.SDKResult;
 import com.github.claudecodegui.provider.common.SessionHistoryNotFoundException;
 import com.github.claudecodegui.settings.ConfigPathManager;
+import com.github.claudecodegui.util.WslPathUtil;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
@@ -556,6 +558,38 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 nativeSettings);
     }
 
+    /**
+     * Converts a Windows or WSL UNC path to a Linux path when the serving node runs in WSL, so the
+     * Codex child process can open it. No-op for a native node. A path in another distro stays as it
+     * is: the same Linux path where the daemon runs may be a different project.
+     */
+    public String normalizePathForNode(String path) {
+        if (path == null || path.isEmpty() || !servingNodeRunsInWsl() || otherWslDistroOf(path) != null) {
+            return path;
+        }
+        return NodeDetector.convertToWslPath(path);
+    }
+
+    /** A live daemon keeps the node it started with until it restarts, whatever the setting says now. */
+    private boolean servingNodeRunsInWsl() {
+        DaemonBridge daemon = liveDaemon();
+        String launchedNode = daemon == null ? null : daemon.getLaunchedNodePath();
+        return NodeDetector.isWslPath(launchedNode != null ? launchedNode : this.nodeDetector.getCachedNodePath());
+    }
+
+    /** Returns the distro holding {@code path} when the live daemon runs Codex in a different one. */
+    private String otherWslDistroOf(String path) {
+        DaemonBridge daemon = liveDaemon();
+        String daemonDistro = daemon == null ? null : daemon.getWslDistro();
+        String pathDistro = WslPathUtil.uncDistroName(path);
+        return daemonDistro == null || pathDistro == null || daemonDistro.equalsIgnoreCase(pathDistro) ? null : pathDistro;
+    }
+
+    private DaemonBridge liveDaemon() {
+        DaemonBridge daemon = this.daemonCoordinator.getCurrentDaemonBridge();
+        return daemon != null && daemon.isAlive() ? daemon : null;
+    }
+
     private CompletableFuture<SDKResult> sendMessageViaAppServer(
             String channelId,
             String message,
@@ -606,6 +640,17 @@ public class CodexSDKBridge extends BaseSDKBridge {
                     callback.onError(error);
                     return streamedResult;
                 }
+                String otherDistro = servingNodeRunsInWsl() ? otherWslDistroOf(cwd) : null;
+                if (otherDistro != null) {
+                    String error = "This project is in the WSL distribution " + otherDistro
+                            + ", but Codex runs in " + daemon.getWslDistro()
+                            + ". Make it the default with: wsl --set-default " + otherDistro
+                            + ", then restart the IDE.";
+                    streamedResult.success = false;
+                    streamedResult.error = error;
+                    callback.onError(error);
+                    return streamedResult;
+                }
                 if (threadId != null && !threadId.trim().isEmpty()) {
                     CodexThreadOwnerRegistry.ClaimResult claim = CodexThreadOwnerRegistry.claim(
                             this.ownerScope, threadId, this.bridgeOwnerId);
@@ -626,7 +671,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
                                 ? UUID.randomUUID().toString() : clientMessageId,
                         message == null ? "" : message,
                         threadId,
-                        cwd,
+                        normalizePathForNode(cwd),
                         permissionMode,
                         model,
                         reasoningEffort,
@@ -928,7 +973,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 ? "codex" : channelId.trim();
         JsonObject params = new JsonObject();
         params.addProperty("channelId", safeChannelId);
-        params.addProperty("cwd", cwd == null ? "" : cwd);
+        params.addProperty("cwd", cwd == null ? "" : normalizePathForNode(cwd));
         params.addProperty("threadId", threadId == null ? "" : threadId);
         params.addProperty("planItemId", planItemId == null ? "" : planItemId);
         params.addProperty("planText", planText == null ? "" : planText);
@@ -1030,7 +1075,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 ? "codex" : channelId.trim();
         JsonObject params = new JsonObject();
         params.addProperty("channelId", safeChannelId);
-        params.addProperty("cwd", cwd == null ? "" : cwd);
+        params.addProperty("cwd", cwd == null ? "" : normalizePathForNode(cwd));
         params.addProperty("threadId", threadId == null ? "" : threadId);
         params.addProperty("sessionEpoch", this.runtimeSessionEpochs.computeIfAbsent(
                 safeChannelId, ignored -> UUID.randomUUID().toString()));
@@ -1186,7 +1231,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 ? "codex" : channelId.trim();
         JsonObject params = new JsonObject();
         params.addProperty("channelId", safeChannelId);
-        params.addProperty("cwd", cwd == null ? "" : cwd);
+        params.addProperty("cwd", cwd == null ? "" : normalizePathForNode(cwd));
         params.addProperty("threadId", threadId == null ? "" : threadId);
         if (releasing && onlyIfIdle) {
             params.addProperty("onlyIfIdle", true);
@@ -1248,7 +1293,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 ? "codex" : channelId.trim();
         JsonObject params = new JsonObject();
         params.addProperty("channelId", safeChannelId);
-        params.addProperty("cwd", cwd == null ? "" : cwd);
+        params.addProperty("cwd", cwd == null ? "" : normalizePathForNode(cwd));
         params.addProperty("threadId", threadId == null ? "" : threadId);
         params.addProperty("sessionEpoch", this.runtimeSessionEpochs.computeIfAbsent(
                 safeChannelId, ignored -> UUID.randomUUID().toString()));
@@ -1303,7 +1348,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 ? "codex" : channelId.trim();
         JsonObject params = new JsonObject();
         params.addProperty("channelId", safeChannelId);
-        params.addProperty("cwd", cwd == null ? "" : cwd);
+        params.addProperty("cwd", cwd == null ? "" : normalizePathForNode(cwd));
         String sessionEpoch = this.runtimeSessionEpochs.computeIfAbsent(
                 safeChannelId, ignored -> UUID.randomUUID().toString());
         params.addProperty("sessionEpoch", sessionEpoch);
@@ -1317,6 +1362,13 @@ public class CodexSDKBridge extends BaseSDKBridge {
         // codex-native-runtime-config.js). Only the auth mode and a provider
         // revision hash travel here, so a provider change rebuilds the runtime.
         params.addProperty("authMode", this.isCodexCliLoginActive() ? "cli_login" : "managed");
+        try {
+            new com.github.claudecodegui.settings.CodexSettingsManager(this.gson, Path.of(this.ownerScope))
+                    .prepareNativeConfig(this::isCodexRuntimeAccessAllowed);
+        } catch (Exception error) {
+            // Separating plugin aliases only removes a CLI warning; it must never block a turn.
+            LOG.warn("[Codex] Skipped plugin alias separation: " + error.getMessage());
+        }
         try {
             JsonObject provider = this.settingsService.getActiveCodexProvider();
             if (provider != null) {
@@ -1703,7 +1755,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 // Add to result array in Codex SDK format
                 JsonObject imageEntry = new JsonObject();
                 imageEntry.addProperty("type", "local_image");
-                imageEntry.addProperty("path", imagePath.toAbsolutePath().toString());
+                imageEntry.addProperty("path", normalizePathForNode(imagePath.toAbsolutePath().toString()));
                 result.add(imageEntry);
 
             } catch (Exception e) {
@@ -1781,8 +1833,12 @@ public class CodexSDKBridge extends BaseSDKBridge {
     }
 
     private static String resolveOwnerScope() {
-        String codexHome = System.getenv("CODEX_HOME");
-        return codexHome == null || codexHome.trim().isEmpty() ? "default" : codexHome.trim();
+        Path home = com.github.claudecodegui.util.CodexHomeResolver.resolve();
+        try {
+            return home.toRealPath().toString();
+        } catch (java.io.IOException error) {
+            return home.toString();
+        }
     }
 
     /**

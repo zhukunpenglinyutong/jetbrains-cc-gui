@@ -106,6 +106,7 @@ export interface ChatScreenProps {
   onClaudeUltracodeChange?: (enabled: boolean) => void;
   codexFastMode: ProviderState['codexFastMode'];
   dshPreset: ProviderState['dshPreset'];
+  ompApprovalMode: ProviderState['ompApprovalMode'];
   streamingEnabledSetting: ProviderState['streamingEnabledSetting'];
   sendShortcut: ProviderState['sendShortcut'];
   autoOpenFileEnabled: ProviderState['autoOpenFileEnabled'];
@@ -121,6 +122,7 @@ export interface ChatScreenProps {
   onReasoningChange: ProviderState['handleReasoningChange'];
   onCodexFastModeChange: ProviderState['handleCodexFastModeChange'];
   onDshPresetChange: ProviderState['handleDshPresetChange'];
+  onOmpApprovalModeChange: ProviderState['handleOmpApprovalModeChange'];
   onToggleThinking: ProviderState['handleToggleThinking'];
   onStreamingEnabledChange: ProviderState['handleStreamingEnabledChange'];
   onAutoOpenFileEnabledChange: ProviderState['handleAutoOpenFileEnabledChange'];
@@ -166,9 +168,9 @@ export const ChatScreen = ({
   codexNativeAutoReviewAvailable = true,
   sdkStatusLoading, sdkStatusError, onRetrySdkStatus, currentSdkInstalled,
   activeProviderConfig, claudeSettingsAlwaysThinkingEnabled,
-  reasoningEffort, claudeUltracode, onClaudeUltracodeChange, codexFastMode, dshPreset, streamingEnabledSetting, sendShortcut, autoOpenFileEnabled,
+  reasoningEffort, claudeUltracode, onClaudeUltracodeChange, codexFastMode, dshPreset, ompApprovalMode, streamingEnabledSetting, sendShortcut, autoOpenFileEnabled,
   longContextEnabled, usagePercentage, usageUsedTokens, usageMaxTokens,
-  onModeSelect, onModelSelect, onAgentSelect, onReasoningChange, onCodexFastModeChange, onDshPresetChange, onToggleThinking,
+  onModeSelect, onModelSelect, onAgentSelect, onReasoningChange, onCodexFastModeChange, onDshPresetChange, onOmpApprovalModeChange, onToggleThinking,
   onStreamingEnabledChange,
   onAutoOpenFileEnabledChange, onLongContextChange,
   messageQueue, onRemoveFromQueue, onEditFromQueue, onReorderQueue,
@@ -404,12 +406,14 @@ export const ChatScreen = ({
           onProviderSelect={onProviderSelect}
           reasoningEffort={reasoningEffort}
           dshPreset={dshPreset}
+          ompApprovalMode={ompApprovalMode}
           onReasoningChange={onReasoningChange}
           claudeUltracode={claudeUltracode}
           onClaudeUltracodeChange={onClaudeUltracodeChange}
           codexFastMode={codexFastMode}
           onCodexFastModeChange={onCodexFastModeChange}
           onDshPresetChange={onDshPresetChange}
+          onOmpApprovalModeChange={onOmpApprovalModeChange}
           onToggleThinking={onToggleThinking}
           streamingEnabled={streamingEnabledSetting}
           onStreamingEnabledChange={onStreamingEnabledChange}

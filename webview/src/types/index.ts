@@ -134,6 +134,8 @@ export interface TodoItem {
 }
 
 export interface HistorySessionSummary {
+  cwd?: string;
+  requiresCwdConfirmation?: boolean;
   sessionId: string;
   title: string;
   /** Running targets cannot be selected or deleted from history. */
@@ -157,6 +159,7 @@ export interface HistorySessionSummary {
 }
 
 export interface HistoryData {
+  provider?: string;
   success: boolean;
   error?: string;
   sessions?: HistorySessionSummary[];

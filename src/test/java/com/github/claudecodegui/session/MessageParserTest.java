@@ -119,4 +119,34 @@ public class MessageParserTest {
 
         assertNull(parser.parseServerMessage(raw));
     }
+
+    @Test
+    public void parseServerMessageSanitizesAppendedGrokRulesInUserContentAndRawBlocks() {
+        MessageParser parser = new MessageParser();
+
+        JsonObject textBlock = new JsonObject();
+        textBlock.addProperty("type", "text");
+        textBlock.addProperty("text", "hi\n\n## Global Grok Rules (~/.grok/grok-rules.md)\n\n- Rule 1");
+
+        JsonArray content = new JsonArray();
+        content.add(textBlock);
+
+        JsonObject message = new JsonObject();
+        message.add("content", content);
+
+        JsonObject raw = new JsonObject();
+        raw.addProperty("type", "user");
+        raw.add("message", message);
+
+        ClaudeSession.Message parsed = parser.parseServerMessage(raw);
+
+        assertNotNull(parsed);
+        assertEquals(ClaudeSession.Message.Type.USER, parsed.type);
+        assertEquals("hi", parsed.content);
+        String rawText = parsed.raw.getAsJsonObject("message")
+                .getAsJsonArray("content")
+                .get(0).getAsJsonObject()
+                .get("text").getAsString();
+        assertEquals("hi", rawText);
+    }
 }

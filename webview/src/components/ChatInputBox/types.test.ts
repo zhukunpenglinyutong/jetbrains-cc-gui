@@ -44,6 +44,13 @@ describe('normalizeClaudeModelId', () => {
     expect(normalizeClaudeModelId('claude-opus-4-6[1m]')).toBe('claude-opus-4-6');
   });
 
+  it('moves a saved built-in Fable 5 selection to Fable 5.2', () => {
+    expect(normalizeClaudeModelId('claude-fable-5')).toBe('claude-fable-5-2');
+    expect(normalizeClaudeModelId('claude-fable-5[1m]')).toBe('claude-fable-5-2');
+    // Fable 5 is still served, so a custom model with that id is sent as-is.
+    expect(normalizeClaudeModelId('claude-fable-5', new Set(['claude-fable-5']))).toBe('claude-fable-5');
+  });
+
   it('leaves current models untouched', () => {
     for (const model of CLAUDE_MODELS) {
       expect(normalizeClaudeModelId(model.id)).toBe(model.id);
@@ -76,6 +83,8 @@ describe('isRetiredClaudeModelId', () => {
   it('does not flag live, custom, or empty ids', () => {
     expect(isRetiredClaudeModelId('claude-opus-4-6')).toBe(false);
     expect(isRetiredClaudeModelId('claude-opus-5')).toBe(false);
+    // Dropped from the built-in list but still served: no "Retired" badge.
+    expect(isRetiredClaudeModelId('claude-fable-5')).toBe(false);
     expect(isRetiredClaudeModelId('qwen3.5-plus')).toBe(false);
     expect(isRetiredClaudeModelId('')).toBe(false);
     expect(isRetiredClaudeModelId(null)).toBe(false);

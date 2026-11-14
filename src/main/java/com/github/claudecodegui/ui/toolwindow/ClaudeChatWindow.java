@@ -543,7 +543,7 @@ public class ClaudeChatWindow {
             }
 
             persistTabSessionState();
-            chatWindowDelegate.refreshUnreadBadge();
+            chatWindowDelegate.refreshTabIndicator();
         }
     }
 
@@ -1642,6 +1642,7 @@ public class ClaudeChatWindow {
         target.setPermissionMode(source.getPermissionMode());
         target.setReasoningEffort(source.getReasoningEffort());
         target.setClaudeUltracode(source.isClaudeUltracode());
+        target.setOmpApprovalMode(source.getOmpApprovalMode());
     }
 
     public SessionLifecycleManager getSessionLifecycleManager() {
@@ -1684,6 +1685,7 @@ public class ClaudeChatWindow {
             session.setReasoningEffort(savedState.reasoningEffort);
         }
         session.setClaudeUltracode(savedState.claudeUltracode);
+        session.getState().setOmpApprovalMode(savedState.ompApprovalMode);
 
         boolean sameProject = TabSessionRestorePolicy.matchesProjectIdentity(
                 savedState,
@@ -2741,6 +2743,13 @@ public class ClaudeChatWindow {
                     }
 
                     @Override
+                    public void onTurnFailed() {
+                        if (!disposed && session == callbackSession) {
+                            chatWindowDelegate.onTurnFailed();
+                        }
+                    }
+
+                    @Override
                     public void callJavaScript(String functionName, String... args) {
                         ClaudeChatWindow.this.callJavaScript(functionName, args);
                     }
@@ -3256,6 +3265,7 @@ public class ClaudeChatWindow {
         snapshot.model = session.getModel();
         snapshot.permissionMode = session.getPermissionMode();
         snapshot.reasoningEffort = session.getReasoningEffort();
+        snapshot.ompApprovalMode = session.getState().getOmpApprovalMode();
         snapshot.unread = chatWindowDelegate.hasUnread();
         snapshot.claudeUltracode = session.isClaudeUltracode();
 

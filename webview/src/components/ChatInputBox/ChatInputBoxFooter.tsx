@@ -1,5 +1,5 @@
 import type { TFunction } from 'i18next';
-import type { CodexFastMode, DropdownItemData, DropdownPosition, PermissionMode, ReasoningEffort, SelectedAgent } from './types.js';
+import type { CodexFastMode, DropdownItemData, DropdownPosition, OmpApprovalMode, PermissionMode, ReasoningEffort, SelectedAgent } from './types.js';
 import type { TooltipState } from './hooks/useTooltip.js';
 import { ButtonArea } from './ButtonArea.js';
 import { CompletionDropdown } from './Dropdown/index.js';
@@ -30,6 +30,7 @@ export function ChatInputBoxFooter({
   onClaudeUltracodeChange,
   codexFastMode,
   dshPreset,
+  ompApprovalMode,
   onSubmit,
   onStop,
   onModeSelect,
@@ -38,6 +39,7 @@ export function ChatInputBoxFooter({
   onReasoningChange,
   onCodexFastModeChange,
   onDshPresetChange,
+  onOmpApprovalModeChange,
   onEnhancePrompt,
   alwaysThinkingEnabled,
   onToggleThinking,
@@ -73,6 +75,7 @@ export function ChatInputBoxFooter({
   onClaudeUltracodeChange?: (enabled: boolean) => void;
   codexFastMode?: CodexFastMode;
   dshPreset?: string;
+  ompApprovalMode?: OmpApprovalMode;
   onSubmit: () => void;
   onStop?: () => void;
   onModeSelect?: (mode: PermissionMode) => void;
@@ -81,6 +84,7 @@ export function ChatInputBoxFooter({
   onReasoningChange?: (effort: ReasoningEffort) => void;
   onCodexFastModeChange?: (mode: CodexFastMode) => void;
   onDshPresetChange?: (preset: string) => void;
+  onOmpApprovalModeChange?: (mode: OmpApprovalMode) => void;
   onEnhancePrompt: () => void;
   alwaysThinkingEnabled?: boolean;
   onToggleThinking?: (enabled: boolean) => void;
@@ -134,6 +138,7 @@ export function ChatInputBoxFooter({
         onClaudeUltracodeChange={onClaudeUltracodeChange}
         codexFastMode={codexFastMode}
         dshPreset={dshPreset}
+        ompApprovalMode={ompApprovalMode}
         onSubmit={onSubmit}
         onStop={onStop}
         onModeSelect={onModeSelect}
@@ -142,6 +147,7 @@ export function ChatInputBoxFooter({
         onReasoningChange={onReasoningChange}
         onCodexFastModeChange={onCodexFastModeChange}
         onDshPresetChange={onDshPresetChange}
+        onOmpApprovalModeChange={onOmpApprovalModeChange}
         onEnhancePrompt={onEnhancePrompt}
         alwaysThinkingEnabled={alwaysThinkingEnabled}
         onToggleThinking={onToggleThinking}

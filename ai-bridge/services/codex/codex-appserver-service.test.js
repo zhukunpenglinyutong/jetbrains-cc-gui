@@ -107,6 +107,66 @@ test('native configuration and guardian warnings remain visible without finishin
   } finally { await fixture.service.resetRuntime(); }
 });
 
+const OUTDATED_CLI_USER_AGENT = 'codemoss_intellij/0.159.0 (Mac OS 27.0.1; arm64) unknown (codemoss_intellij; 0.6.4)';
+
+async function completeSend({ service, getPeer }, threadId) {
+  const operation = service.enqueueOperation({ kind: 'send', threadId, markerPayload: { input: [] } });
+  await waitFor(() => operation.nativeTurnId, 1000, 'turn identity');
+  getPeer().notify({ method: 'turn/completed', params: { threadId: operation.threadId,
+    turn: { id: operation.nativeTurnId, status: 'completed' } } });
+  assert.equal((await operation.promise).outcome, 'completed');
+  return operation;
+}
+
+test('tells the first send about an outdated CLI and not the sends after it', async () => {
+  const fixture = makeService({ scenario: 'never-respond', peerOpts: { userAgent: OUTDATED_CLI_USER_AGENT } });
+  try {
+    const first = await completeSend(fixture);
+    await completeSend(fixture, first.threadId);
+    const warnings = eventsOf(fixture.events, 'nativeWarning');
+    assert.equal(warnings.length, 1);
+    assert.equal(warnings[0].payload.method, 'cliVersionOutdated');
+    assert.equal(warnings[0].payload.version, '0.159.0');
+    assert.equal(warnings[0].payload.minimumVersion, '0.160.0');
+    assert.match(warnings[0].payload.message, /Codex CLI 0\.159\.0 .*0\.160\.0/);
+  } finally { await fixture.service.resetRuntime(); }
+});
+
+test('keeps the outdated CLI notice for the first send when a read started the runtime', async () => {
+  // Java drops events for a channel with no callback, which is the case before the first send.
+  const fixture = makeService({ scenario: 'never-respond', peerOpts: { userAgent: OUTDATED_CLI_USER_AGENT } });
+  try {
+    await fixture.service.ensureRuntime();
+    assert.equal(eventsOf(fixture.events, 'nativeWarning').length, 0);
+    await completeSend(fixture);
+    assert.equal(eventsOf(fixture.events, 'nativeWarning').length, 1);
+  } finally { await fixture.service.resetRuntime(); }
+});
+
+test('repeats the outdated CLI notice for a new runtime, which may run a different CLI', async () => {
+  const fixture = makeService({ scenario: 'never-respond', peerOpts: { userAgent: OUTDATED_CLI_USER_AGENT } });
+  try {
+    await completeSend(fixture);
+    await fixture.service.resetRuntime();
+    await completeSend(fixture);
+    assert.equal(eventsOf(fixture.events, 'nativeWarning').length, 2);
+  } finally { await fixture.service.resetRuntime(); }
+});
+
+for (const [label, userAgent] of [
+  ['a CLI at the recommended minimum', 'codemoss_intellij/0.160.0 (Mac OS 27.0.1; arm64) unknown'],
+  ['a user agent without a release version', 'codex-test-peer/1.0'],
+  ['a local CLI build', 'codemoss_intellij/0.0.0 (Mac OS 27.0.1; arm64) unknown'],
+]) {
+  test(`stays quiet about the CLI version for ${label}`, async () => {
+    const fixture = makeService({ scenario: 'never-respond', peerOpts: { userAgent } });
+    try {
+      await completeSend(fixture);
+      assert.equal(eventsOf(fixture.events, 'nativeWarning').length, 0);
+    } finally { await fixture.service.resetRuntime(); }
+  });
+}
+
 test('idle deletion refuses an active turn and its queued successor without interrupting either', async () => {
   const { service, dispatchCounts } = makeService({ scenario: 'never-respond' });
   const first = service.enqueueOperation({ kind: 'send', markerPayload: { input: [] } });

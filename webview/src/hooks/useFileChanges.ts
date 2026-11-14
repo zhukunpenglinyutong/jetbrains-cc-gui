@@ -10,12 +10,19 @@ import {
 } from '../utils/toolConstants';
 import { normalizeToolInput } from '../utils/toolInputNormalization';
 import { readPatchFiles, readPatchOutcome } from '../utils/codexPatch';
+import {
+  isMcpToolCall,
+  patchFileInProject,
+  readPathInProject,
+  unwrapMcpArguments,
+} from '../utils/mcpFileToolInput';
 import { collectPatchLedger } from '../utils/patchLedger';
 import { PATCH_TOOL_NAMES } from '../utils/toolConstants';
-import { getToolLineInfo } from '../utils/toolPresentation';
+import { getToolLineInfo, isAbsolutePath } from '../utils/toolPresentation';
 import {
   buildSessionFileLedger,
   diffLineStats,
+  isWriteTool,
   ledgerEntriesToSummaries,
   sameLedgerOps,
   type LedgerOp,
@@ -49,6 +56,50 @@ function hashString(value: string): string {
 
 function getDiffCacheKey(oldString: string, newString: string): string {
   return `${oldString.length}:${newString.length}:${hashString(oldString)}:${hashString(newString)}`;
+}
+
+/**
+ * Content fingerprint of a single edit operation, used to recognise an operation
+ * the user has already acknowledged via Keep All (see useFileChangesManagement).
+ *
+ * Deliberately content-based rather than position-based: a session's transcript
+ * is rebuilt from the backend on every reload and is not isomorphic to the
+ * live-assembled array (the reloaded history can carry messages after the one
+ * that was last at Keep All time), so no message index or message identity can
+ * mark "everything up to here" reliably.
+ *
+ * Two byte-identical operations (an agent undoing a change and redoing it)
+ * share this fingerprint, so the ledger numbers repeats in transcript order
+ * (`<key>#1`, `<key>#2`, ...) before matching, and a redo made after Keep All
+ * stays visible. Transcript order survives a reload even where positions do not.
+ */
+export function editOperationKey(op: {
+  filePath: string;
+  toolName: string;
+  oldString: string;
+  newString: string;
+  replaceAll?: boolean;
+}): string {
+  const file = op.filePath ?? '';
+  const tool = op.toolName ?? '';
+  const oldString = op.oldString ?? '';
+  const newString = op.newString ?? '';
+  return [
+    file.length, hashString(file),
+    tool.length, hashString(tool),
+    oldString.length, hashString(oldString),
+    newString.length, hashString(newString),
+    op.replaceAll ? '1' : '0',
+  ].join(':');
+}
+
+/**
+ * Entry stored next to the edit fingerprints when Keep All acknowledges a
+ * finished subagent: its sidechain transcript loads lazily (only once its card
+ * is expanded), so edits it made may not be in the ledger to fingerprint yet.
+ */
+export function acknowledgedAgentKey(toolUseId: string): string {
+  return `agent:${toolUseId}`;
 }
 
 /**
@@ -92,7 +143,7 @@ function extractFilePath(input: Record<string, unknown>): string | null {
     ?? (typeof targetFileValue === 'string' ? targetFileValue : undefined)
     ?? (typeof targetFileValue2 === 'string' ? targetFileValue2 : undefined)
     ?? (typeof notebookPathValue === 'string' ? notebookPathValue : undefined)
-    ?? null
+    ?? readPathInProject(input)
   );
 }
 
@@ -193,6 +244,7 @@ function sameFileChangeSummaries(a: FileChangeSummary[], b: FileChangeSummary[])
         || p.lineEnd !== q.lineEnd
         || p.toolUseId !== q.toolUseId || p.fileChangeKind !== q.fileChangeKind || p.moveFrom !== q.moveFrom
         || p.patch !== q.patch || p.ledgerKey !== q.ledgerKey || p.oldStringKnown !== q.oldStringKnown
+        || p.editKey !== q.editKey
       ) {
         return false;
       }
@@ -211,19 +263,44 @@ interface FileToolInput {
   agentId: string;
 }
 
-function collectLedgerOpsFromToolUse(params: FileToolInput, out: LedgerOp[]): void {
-  const { sourceId, toolUseId, toolName, rawName, input, result, agentId } = params;
-  if (!isToolName(toolName, FILE_MODIFY_TOOL_NAMES)) return;
-  if (isToolName(toolName, PATCH_TOOL_NAMES)) {
-    const outcome = readPatchOutcome(input, result);
-    if (!outcome.isCompleted || outcome.isError || outcome.isUnknown) return;
-    for (const file of readPatchFiles(input)) {
-      out.push(...collectPatchLedger(file, { sourceId, toolUseId, agentId }));
-    }
-    return;
-  }
-  if (!isSuccessfulResult(result)) return;
+/**
+ * Undo of an "add" deletes the file, so only a create that refuses an existing
+ * path may claim one; an overwrite names none of the content it replaced.
+ */
+function collectCreatedFile(params: FileToolInput, input: Record<string, unknown>, out: LedgerOp[]): void {
+  const { sourceId, toolUseId, agentId } = params;
+  const filePath = extractFilePath(input);
+  if (!filePath) return;
+  const isNewFile = input.overwrite === undefined || input.overwrite === false;
+  out.push({
+    sourceId,
+    toolUseId,
+    agentId,
+    filePath,
+    toolName: 'write',
+    oldString: '',
+    newString: typeof input.text === 'string' ? input.text : '',
+    fileChangeKind: isNewFile ? 'add' : 'update',
+    ...(isNewFile ? {} : { oldStringKnown: false }),
+  });
+}
 
+function collectPatchOps(params: FileToolInput, input: Record<string, unknown>, out: LedgerOp[]): void {
+  const { sourceId, toolUseId, agentId, result } = params;
+  const outcome = readPatchOutcome(input, result);
+  if (!outcome.isCompleted || outcome.isError || outcome.isUnknown) return;
+  for (const file of readPatchFiles(input)) {
+    out.push(...collectPatchLedger(patchFileInProject(file, input.projectPath), { sourceId, toolUseId, agentId }));
+  }
+}
+
+function collectEditOps(
+  params: FileToolInput,
+  input: Record<string, unknown>,
+  keepEmptyWrite: boolean,
+  out: LedgerOp[],
+): void {
+  const { sourceId, toolUseId, toolName, rawName, agentId, result } = params;
   const normalized = normalizeToolInput(rawName ?? toolName, input) as Record<string, unknown>;
   const defaultPath = extractFilePath(normalized);
   const pairs = extractEditPairs(normalized);
@@ -232,7 +309,7 @@ function collectLedgerOpsFromToolUse(params: FileToolInput, out: LedgerOp[]): vo
   for (const pair of pairs) {
     const filePath = pair.filePath || defaultPath;
     if (!filePath) continue;
-    if (pair.oldString === '' && pair.newString === '') continue;
+    if (pair.oldString === '' && pair.newString === '' && !keepEmptyWrite) continue;
 
     out.push({
       sourceId,
@@ -246,6 +323,60 @@ function collectLedgerOpsFromToolUse(params: FileToolInput, out: LedgerOp[]): vo
       lineStart: lineInfo.start,
       lineEnd: lineInfo.end,
     });
+  }
+}
+
+/**
+ * An MCP edit is only reversible when the call fully states its effect; every
+ * other one stays listed but makes undo refuse. The kind keeps Undo and diff
+ * Reject on the same validated plan, and replaceAll stays unset because
+ * reversing it would also rewrite matching text that was already in the file.
+ */
+function toMcpEditOp(op: LedgerOp, input: Record<string, unknown>): LedgerOp {
+  const statesItsEffect = normalizeToolName(op.toolName) === 'replace_text_in_file'
+    && input.caseSensitive !== false && op.oldString !== '';
+  return {
+    ...op,
+    replaceAll: undefined,
+    fileChangeKind: 'update',
+    ...(statesItsEffect ? {} : { oldStringKnown: false }),
+  };
+}
+
+/** MCP paths start at the project root, while undo resolves relative ones against the session directory. */
+function refuseRelativeMcpUndo(op: LedgerOp): LedgerOp {
+  const pathsAreAbsolute = isAbsolutePath(op.filePath) && (!op.moveFrom || isAbsolutePath(op.moveFrom));
+  return pathsAreAbsolute ? op : { ...op, oldStringKnown: false };
+}
+
+function collectMcpOps(params: FileToolInput, out: LedgerOp[]): void {
+  const { toolName, result } = params;
+  const input = unwrapMcpArguments(params.input);
+  if (input.dryRun === true) return;
+  const ops: LedgerOp[] = [];
+  if (isToolName(toolName, PATCH_TOOL_NAMES)) {
+    collectPatchOps(params, input, ops);
+  } else if (isSuccessfulResult(result)) {
+    if (normalizeToolName(toolName) === 'create_new_file') {
+      collectCreatedFile(params, input, ops);
+    } else {
+      const edits: LedgerOp[] = [];
+      collectEditOps(params, input, isWriteTool(toolName), edits);
+      ops.push(...edits.map(op => toMcpEditOp(op, input)));
+    }
+  }
+  out.push(...ops.map(refuseRelativeMcpUndo));
+}
+
+function collectLedgerOpsFromToolUse(params: FileToolInput, out: LedgerOp[]): void {
+  const { toolName, rawName, input, result } = params;
+  if (!isToolName(toolName, FILE_MODIFY_TOOL_NAMES)) return;
+  if (isMcpToolCall(rawName ?? toolName, input)) {
+    collectMcpOps(params, out);
+  } else if (isToolName(toolName, PATCH_TOOL_NAMES)) {
+    collectPatchOps(params, input, out);
+  } else if (isSuccessfulResult(result)) {
+    collectEditOps(params, input, false, out);
   }
 }
 
@@ -292,17 +423,12 @@ function findToolResultInRawMessages(
 function collectFromSubagentHistories(
   out: FileToolInput[],
   subagentHistories: Record<string, SubagentHistoryResponse>,
-  allowedKeys: Set<string> | null,
+  acknowledged: Set<string> | undefined,
 ): void {
   for (const [key, history] of Object.entries(subagentHistories)) {
     if (!history?.success || !Array.isArray(history.messages)) continue;
-    if (allowedKeys && !allowedKeys.has(key)) {
-      if (!history.agentId || !allowedKeys.has(history.agentId)) {
-        if (!history.toolUseId || !allowedKeys.has(history.toolUseId)) {
-          continue;
-        }
-      }
-    }
+    if (acknowledged?.has(acknowledgedAgentKey(key))
+      || (history.toolUseId && acknowledged?.has(acknowledgedAgentKey(history.toolUseId)))) continue;
 
     const agentId =
       (typeof history.agentId === 'string' && history.agentId)
@@ -346,9 +472,10 @@ interface UseFileChangesParams {
   messages: ClaudeMessage[];
   getContentBlocks: (message: ClaudeMessage) => ClaudeContentBlock[];
   findToolResult: (toolUseId?: string, messageIndex?: number) => ToolResultBlock | null;
-  /** Start processing messages from this index (for Keep All feature) */
-  startFromIndex?: number;
+  /** Ledger keys the user already reviewed (codex) — dropped from the ledger */
   ignoredLedgerKeys?: string[];
+  /** Fingerprints of operations already acknowledged via Keep All — excluded from the ledger */
+  confirmedEditKeys?: Set<string>;
   /** Background agent sidechain transcripts — their Edit/Write tools must also count */
   subagentHistories?: Record<string, SubagentHistoryResponse>;
   /** Current chat tab session id — for cross-tab multi-agent marks */
@@ -403,19 +530,19 @@ export function useFileChanges({
   messages,
   getContentBlocks,
   findToolResult,
-  startFromIndex = 0,
   ignoredLedgerKeys,
+  confirmedEditKeys,
   subagentHistories,
   currentSessionId = null,
 }: UseFileChangesParams): FileChangeSummary[] {
+  // Two-stage memo (inputs → ops → summaries) with structural caching so that
+  // streaming text updates do not rebuild the ledger.
   const cache = useMemo(() => ({ inputs: [] as FileToolInput[], ops: [] as LedgerOp[] }),
-    [currentSessionId, startFromIndex]);
+    [currentSessionId]);
   const inputs = useMemo(() => {
     const collected: FileToolInput[] = [];
-    const agentKeysAfterBase = new Set<string>();
 
     messages.forEach((message, messageIndex) => {
-      if (messageIndex < startFromIndex) return;
       if (message.type !== 'assistant') return;
 
       const blocks = getContentBlocks(message);
@@ -426,10 +553,6 @@ export function useFileChanges({
 
         const rawName = block.name ?? '';
         const toolName = normalizeToolName(rawName);
-
-        if (isToolName(toolName, AGENT_TOOL_NAMES) && block.id) {
-          agentKeysAfterBase.add(block.id);
-        }
 
         if (!isToolName(toolName, FILE_MODIFY_TOOL_NAMES)) return;
 
@@ -453,14 +576,7 @@ export function useFileChanges({
     });
 
     if (subagentHistories && Object.keys(subagentHistories).length > 0) {
-      const allowedKeys = startFromIndex > 0 ? agentKeysAfterBase : null;
-      collectFromSubagentHistories(
-        collected,
-        subagentHistories,
-        allowedKeys && allowedKeys.size > 0
-          ? allowedKeys
-          : (startFromIndex > 0 ? agentKeysAfterBase : null),
-      );
+      collectFromSubagentHistories(collected, subagentHistories, confirmedEditKeys);
     }
 
     const unique = new Map<string | FileToolInput, FileToolInput>();
@@ -479,7 +595,7 @@ export function useFileChanges({
       cache.inputs = next;
     }
     return cache.inputs;
-  }, [messages, getContentBlocks, findToolResult, startFromIndex, subagentHistories, cache]);
+  }, [messages, getContentBlocks, findToolResult, subagentHistories, confirmedEditKeys, cache]);
 
   const ops = useMemo(() => {
     const collected: LedgerOp[] = [];
@@ -491,10 +607,21 @@ export function useFileChanges({
   }, [inputs, cache, ignoredLedgerKeys]);
 
   const base = useMemo(() => {
-    const entries = buildSessionFileLedger(ops);
+    // Operations the user already acknowledged via Keep All are dropped before
+    // the ledger is built, so the baseline for what remains is that moment.
+    const seen = new Map<string, number>();
+    const visibleOps: LedgerOp[] = [];
+    for (const op of ops) {
+      const key = editOperationKey(op);
+      const repeat = seen.get(key) ?? 0;
+      seen.set(key, repeat + 1);
+      const editKey = repeat === 0 ? key : `${key}#${repeat}`;
+      if (!confirmedEditKeys?.has(editKey)) visibleOps.push({ ...op, editKey });
+    }
+    const entries = buildSessionFileLedger(visibleOps);
     const summaries = ledgerEntriesToSummaries(entries);
     return { summaries };
-  }, [ops]);
+  }, [ops, confirmedEditKeys]);
 
   const [enriched, setEnriched] = useState<FileChangeSummary[]>(base.summaries);
   const recorded = useRef({

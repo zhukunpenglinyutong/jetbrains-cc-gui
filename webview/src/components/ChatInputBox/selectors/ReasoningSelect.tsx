@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { REASONING_LEVELS, type ReasoningEffort } from '../types';
-import { useReasoningEffortGuard } from '../reasoningUtils';
+import { useReasoningEffortGuard, type OmpReasoningCatalog } from '../reasoningUtils';
 import { useDropdownPosition } from '../../../hooks/useDropdownPosition';
 
 const RELATIVE_INLINE_BLOCK_STYLE: React.CSSProperties = { position: 'relative', display: 'inline-block' };
@@ -23,6 +23,7 @@ interface ReasoningSelectProps {
   onChange: (effort: ReasoningEffort) => void;
   disabled?: boolean;
   selectedModel?: string;
+  ompCatalog?: OmpReasoningCatalog;
   currentProvider?: string;
   supportedReasoningEfforts?: readonly string[];
   reasoningCapabilitiesUnconfirmed?: boolean;
@@ -46,6 +47,7 @@ export const ReasoningSelect = ({
   onChange,
   disabled,
   selectedModel,
+  ompCatalog,
   currentProvider,
   supportedReasoningEfforts,
   reasoningCapabilitiesUnconfirmed = false,
@@ -74,6 +76,7 @@ export const ReasoningSelect = ({
     onChange,
     selectedModel,
     currentProvider,
+    ompCatalog,
     supportedReasoningEfforts,
     reasoningCapabilitiesUnconfirmed,
   );

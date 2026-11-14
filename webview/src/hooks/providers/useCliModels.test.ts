@@ -29,7 +29,7 @@ describe('useCliModels', () => {
       const catalog = useCliModels('codex');
       const [effort, setEffort] = useState<ReasoningEffort>('ultra');
       const row = catalog.cliModels.find(model => model.id === 'native-model');
-      useReasoningEffortGuard(effort, setEffort, 'native-model', 'codex', row?.supportedReasoningEfforts,
+      useReasoningEffortGuard(effort, setEffort, 'native-model', 'codex', undefined, row?.supportedReasoningEfforts,
         catalog.cliReasoningCapabilitiesUnconfirmed);
       return { ...catalog, effort };
     });

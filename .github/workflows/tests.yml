@@ -6,12 +6,14 @@ name: Tests
 #   - Java unit tests (Linux)
 #   - WSL integration tests (Windows + WSL)
 # All jobs run in parallel and are intentionally independent of build.yml, so a
-# test failure can never block the Build Plugin job.
+# test failure can never block the Build Plugin job. build.yml calls this
+# workflow on tag pushes so a release is only published after tests pass.
 on:
   push:
     branches: [ '**' ]
   pull_request:
     branches: [ '**' ]
+  workflow_call:
 
 jobs:
   # ai-bridge tests use Node's built-in test runner (node:test). They are
@@ -141,7 +143,10 @@ jobs:
         shell: wsl-bash {0}
         run: |
           sudo apt-get update
-          sudo apt-get install -y nodejs
+          sudo apt-get install -y nodejs curl
+          # apt ships Node 12 here, which cannot load the bridge scripts the probe test runs.
+          curl -fsSL https://nodejs.org/dist/v22.12.0/node-v22.12.0-linux-x64.tar.gz | sudo tar -xz -C /usr/local --strip-components=1
+          node --version
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v5
@@ -155,4 +160,10 @@ jobs:
         run: npm ci
 
       - name: Run WSL integration tests
-        run: ./gradlew test --tests "com.github.claudecodegui.bridge.NodeDetectorWslTest"
+        run: >-
+          ./gradlew test --info
+          --tests "com.github.claudecodegui.bridge.NodeDetectorWslTest"
+          --tests "com.github.claudecodegui.bridge.EnvironmentConfiguratorPermissionTimeoutTest.configurePermissionEnvSetsWslenvWhenNodeIsWsl"
+          --tests "com.github.claudecodegui.cli.CliStatusDetectorCodexWslTest"
+          --tests "com.github.claudecodegui.handler.history.HistoryMessageInjectorTest.restoresLocalImageRecordedByCodexInWsl"
+          --tests "com.github.claudecodegui.provider.codex.CodexSDKBridgeWslCwdTest"

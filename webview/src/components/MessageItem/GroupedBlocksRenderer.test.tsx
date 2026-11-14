@@ -85,11 +85,11 @@ describe('GroupedBlocksRenderer shared CLI collapse preferences', () => {
       type: 'tool_use', id: `command-${index}`, name, input: { command: `echo ${index}` },
     }));
     const { container } = renderGroups(provider, blocks);
-    expect(container.querySelector('.bash-group-header')?.textContent).toContain('(5)');
-    expect(container.querySelector('.bash-group-timeline')).toBeNull();
+    expect(container.querySelector('.bash-group-count')?.textContent).toBe('5');
+    expect(container.querySelector('.bash-group-list')).toBeNull();
 
     act(() => bashGroupCollapsePreference.set(false));
-    expect(container.querySelectorAll('.bash-timeline-item')).toHaveLength(5);
+    expect(container.querySelectorAll('.bash-group-item')).toHaveLength(5);
   });
 
   it.each(providers)('uses an independent preference for %s file edit groups', (provider) => {
@@ -105,13 +105,13 @@ describe('GroupedBlocksRenderer shared CLI collapse preferences', () => {
       } },
     ];
     const { container, getByText } = renderGroups(provider, blocks);
-    expect(container.querySelectorAll('.bash-timeline-item')).toHaveLength(2);
+    expect(container.querySelectorAll('.bash-group-item')).toHaveLength(2);
     expect(container.querySelector('.file-list-container')).toBeNull();
 
     act(() => editGroupCollapsePreference.set(false));
     expect(container.querySelectorAll('.file-list-item')).toHaveLength(2);
     fireEvent.click(getByText('tools.editBatchTitle').closest('.task-header') as HTMLElement);
     expect(container.querySelector('.file-list-container')).toBeNull();
-    expect(container.querySelectorAll('.bash-timeline-item')).toHaveLength(2);
+    expect(container.querySelectorAll('.bash-group-item')).toHaveLength(2);
   });
 });

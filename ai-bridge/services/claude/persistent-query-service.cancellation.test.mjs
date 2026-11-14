@@ -4,6 +4,10 @@ import assert from 'node:assert/strict';
 import { __testing, sendMessagePersistent, sendMessageWithAttachmentsPersistent } from './persistent-query-service.js';
 import { createScriptedQuery, assistantText, RESULT_OK, settleReader } from './testing/scripted-query.js';
 
+// These tests swap in mock timers mid-turn; a stall timer armed before that
+// cannot be cleared by the mocked clearTimeout and would keep the process alive.
+process.env.CC_GUI_CLAUDE_STALL_TIMEOUT_MS = '0';
+
 function deferred() {
   let resolve;
   const promise = new Promise(done => { resolve = done; });

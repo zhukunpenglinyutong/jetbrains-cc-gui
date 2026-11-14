@@ -254,10 +254,6 @@ const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, current
     };
   }, [onDiscardAll, onUndoFile, t, currentSessionId, currentProvider]);
 
-  if (!expanded) {
-    return null;
-  }
-
   const renderPopoverContent = () => {
     switch (openPopover) {
       case 'todo':
@@ -281,82 +277,89 @@ const StatusPanel = ({ todos, fileChanges, subagents, subagentHistories, current
   };
 
   return (
-    <div className="status-panel" ref={popoverRef}>
-      {/* Tab Header */}
-      <div className="status-panel-tabs">
-        {/* Todo Tab */}
-        <div
-          className={`status-panel-tab ${openPopover === 'todo' ? 'active' : ''}`}
-          onClick={() => handleTabClick('todo')}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              handleTabClick('todo');
-            }
-          }}
-        >
-          <span className="codicon codicon-checklist" />
-          <span className="tab-label">
-            {t(currentProvider === 'codex' ? 'statusPanel.todoTab' : 'statusPanel.tasksTab')}
-          </span>
-          {hasTodos && (
-            <span className="tab-progress">
-              {completedCount}/{totalCount}
-            </span>
-          )}
-          {isStreaming && hasInProgressTodo && (
-            <span className="codicon codicon-loading status-panel-tab-loading" />
-          )}
-        </div>
+    <div className={`status-panel ${expanded ? 'expanded' : 'collapsed'}`} ref={popoverRef}>
+      {/* Collapsing wrapper: the tab header is the panel's only in-flow
+          content, so the grid row tracks its height while the popover stays
+          absolutely positioned (and unclipped) outside it. */}
+      <div className="status-panel-collapse" inert={!expanded} aria-hidden={!expanded}>
+        <div className="status-panel-collapse-inner">
+          {/* Tab Header */}
+          <div className="status-panel-tabs">
+            {/* Todo Tab */}
+            <div
+              className={`status-panel-tab ${openPopover === 'todo' ? 'active' : ''}`}
+              onClick={() => handleTabClick('todo')}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleTabClick('todo');
+                }
+              }}
+            >
+              <span className="codicon codicon-checklist" />
+              <span className="tab-label">
+                {t(currentProvider === 'codex' ? 'statusPanel.todoTab' : 'statusPanel.tasksTab')}
+              </span>
+              {hasTodos && (
+                <span className="tab-progress">
+                  {completedCount}/{totalCount}
+                </span>
+              )}
+              {isStreaming && hasInProgressTodo && (
+                <span className="codicon codicon-loading status-panel-tab-loading" />
+              )}
+            </div>
 
-        {/* Subagent Tab */}
-        <div
-          className={`status-panel-tab ${openPopover === 'subagent' ? 'active' : ''}`}
-          onClick={() => handleTabClick('subagent')}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              handleTabClick('subagent');
-            }
-          }}
-        >
-          <span className="codicon codicon-hubot" />
-          <span className="tab-label">{t('statusPanel.subagentTab')}</span>
-          {hasSubagents && (
-            <span className="tab-progress">
-              {subagentCompletedCount}/{subagentTotalCount}
-            </span>
-          )}
-          {isStreaming && hasRunningSubagent && (
-            <span className="codicon codicon-loading status-panel-tab-loading" />
-          )}
-        </div>
+            {/* Subagent Tab */}
+            <div
+              className={`status-panel-tab ${openPopover === 'subagent' ? 'active' : ''}`}
+              onClick={() => handleTabClick('subagent')}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleTabClick('subagent');
+                }
+              }}
+            >
+              <span className="codicon codicon-hubot" />
+              <span className="tab-label">{t('statusPanel.subagentTab')}</span>
+              {hasSubagents && (
+                <span className="tab-progress">
+                  {subagentCompletedCount}/{subagentTotalCount}
+                </span>
+              )}
+              {isStreaming && hasRunningSubagent && (
+                <span className="codicon codicon-loading status-panel-tab-loading" />
+              )}
+            </div>
 
-        {/* File Changes Tab */}
-        <div
-          className={`status-panel-tab ${openPopover === 'files' ? 'active' : ''}`}
-          onClick={() => handleTabClick('files')}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              handleTabClick('files');
-            }
-          }}
-        >
-          <span className="codicon codicon-edit" />
-          <span className="tab-label">{t('statusPanel.editsTab')}</span>
-          {hasFileChanges && (
-            <span className="tab-stats">
-              <span className="stat-additions">+{totalAdditions}</span>
-              <span className="stat-deletions">-{totalDeletions}</span>
-            </span>
-          )}
+            {/* File Changes Tab */}
+            <div
+              className={`status-panel-tab ${openPopover === 'files' ? 'active' : ''}`}
+              onClick={() => handleTabClick('files')}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleTabClick('files');
+                }
+              }}
+            >
+              <span className="codicon codicon-edit" />
+              <span className="tab-label">{t('statusPanel.editsTab')}</span>
+              {hasFileChanges && (
+                <span className="tab-stats">
+                  <span className="stat-additions">+{totalAdditions}</span>
+                  <span className="stat-deletions">-{totalDeletions}</span>
+                </span>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 

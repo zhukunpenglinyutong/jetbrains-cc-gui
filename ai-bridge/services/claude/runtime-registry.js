@@ -4,18 +4,23 @@ const anonymousRuntimesBySignature = new Map();
 
 let activeTurnRuntime = null;
 
+// Backstop for a protection leak (a turn counter, in-flight flag or background
+// task that is never cleared). A busy runtime is reclaimed only when it is older
+// than RUNTIME_MAX_ABSOLUTE_LIFETIME_MS AND has produced no CLI message for
+// RUNTIME_STUCK_SILENCE_MS. Age alone never interrupts work that is still
+// streaming: every CLI message refreshes lastUsedAt (see touchRuntime).
 const RUNTIME_MAX_ABSOLUTE_LIFETIME_MS = 6 * 60 * 60 * 1000;
+const RUNTIME_STUCK_SILENCE_MS = 2 * 60 * 60 * 1000;
 // Deliberately aggressive: an idle SDK subprocess is disposed after 60s and the
 // next message lazily respawns it with --resume. Active turns, in-flight CLI
-// output, and tracked background tasks are exempt (see canDisposeIdleRuntime).
-// Legacy task edges can be lost, so only authoritative task snapshots can keep
-// an otherwise idle runtime alive beyond the absolute lifetime backstop.
+// output, and tracked background tasks are exempt (see getRuntimeDisposalReason).
 const ANONYMOUS_RUNTIME_MAX_IDLE_MS = 60 * 1000;
 const SESSION_RUNTIME_MAX_IDLE_MS = 60 * 1000;
 const SESSION_CLEANUP_INTERVAL_MS = 15 * 1000;
 
 export {
   RUNTIME_MAX_ABSOLUTE_LIFETIME_MS,
+  RUNTIME_STUCK_SILENCE_MS,
   ANONYMOUS_RUNTIME_MAX_IDLE_MS,
   SESSION_RUNTIME_MAX_IDLE_MS,
   SESSION_CLEANUP_INTERVAL_MS
@@ -110,18 +115,43 @@ export function touchRuntime(runtime) {
   runtime.lastUsedAt = Date.now();
 }
 
-export function canDisposeIdleRuntime(runtime, now, maxIdleMs) {
-  if (!runtime || runtime.closed) return false;
+function isRuntimeBusy(runtime) {
+  return (runtime.activeTurnCount || 0) > 0
+    || !!runtime.cliTurnInFlight
+    || (runtime.backgroundTaskIds?.size || 0) > 0;
+}
+
+/**
+ * Why the idle sweep may dispose this runtime: 'idle', 'stuck', or null to keep it.
+ */
+export function getRuntimeDisposalReason(runtime, now, maxIdleMs) {
+  if (!runtime || runtime.closed) return null;
   // Stop owns its interrupt-before-close ordering and bounded wait. The idle
   // reaper must not start a competing close while that handshake is pending.
-  if (runtime.abortPromise || runtime.disposePromise) return false;
-  if ((runtime.activeTurnCount || 0) > 0) return false;
-  if (runtime.cliTurnInFlight) return false;
-  const overLifetime = now - runtime.createdAt > RUNTIME_MAX_ABSOLUTE_LIFETIME_MS;
-  if (overLifetime && !runtime.hasBackgroundTaskSnapshot) return true;
-  if ((runtime.backgroundTaskIds?.size || 0) > 0) return false;
-  if (overLifetime) return true;
-  return now - runtime.lastUsedAt > maxIdleMs;
+  if (runtime.abortPromise || runtime.disposePromise) return null;
+  const silentMs = now - runtime.lastUsedAt;
+  if (isRuntimeBusy(runtime)) {
+    // Native snapshots carry the complete live task set, so a silent native
+    // workflow is still running; only leak-prone turn flags and legacy edges get the stuck backstop.
+    const onlyNativeTasks = !(runtime.activeTurnCount > 0) && !runtime.cliTurnInFlight && runtime.hasBackgroundTaskSnapshot;
+    if (onlyNativeTasks) return null;
+    const pastLifetime = now - runtime.createdAt > RUNTIME_MAX_ABSOLUTE_LIFETIME_MS;
+    return pastLifetime && silentMs > RUNTIME_STUCK_SILENCE_MS ? 'stuck' : null;
+  }
+  return silentMs > maxIdleMs ? 'idle' : null;
+}
+
+export function canDisposeIdleRuntime(runtime, now, maxIdleMs) {
+  return getRuntimeDisposalReason(runtime, now, maxIdleMs) !== null;
+}
+
+function describeDisposal(reason, runtime, now) {
+  const silentSeconds = Math.round((now - runtime.lastUsedAt) / 1000);
+  if (reason === 'stuck') {
+    const ageSeconds = Math.round((now - runtime.createdAt) / 1000);
+    return 'stuck: busy, silent ' + silentSeconds + 's, age ' + ageSeconds + 's';
+  }
+  return 'idle ' + silentSeconds + 's';
 }
 
 export async function cleanupStaleAnonymousRuntimes(disposeFn, { waitForDisposal = true } = {}) {
@@ -135,8 +165,9 @@ export async function cleanupStaleAnonymousRuntimes(disposeFn, { waitForDisposal
       if (!runtime.disposePromise || runtime.disposeSettled) removeRuntime(runtime);
       continue;
     }
-    if (canDisposeIdleRuntime(runtime, now, ANONYMOUS_RUNTIME_MAX_IDLE_MS)) {
-      console.log(`[DAEMON] Disposing stale anonymous runtime (idle ${Math.round((now - runtime.lastUsedAt) / 1000)}s)`);
+    const reason = getRuntimeDisposalReason(runtime, now, ANONYMOUS_RUNTIME_MAX_IDLE_MS);
+    if (reason) {
+      console.log(`[DAEMON] Disposing stale anonymous runtime (${describeDisposal(reason, runtime, now)})`);
       disposals.push(Promise.resolve(disposeFn(runtime)));
     }
   }
@@ -152,8 +183,9 @@ export async function cleanupStaleSessionRuntimes(disposeFn, { waitForDisposal =
       if (!runtime.disposePromise || runtime.disposeSettled) removeRuntime(runtime);
       continue;
     }
-    if (canDisposeIdleRuntime(runtime, now, SESSION_RUNTIME_MAX_IDLE_MS)) {
-      console.log(`[DAEMON] Disposing stale session runtime ${sessionId} (idle ${Math.round((now - runtime.lastUsedAt) / 1000)}s)`);
+    const reason = getRuntimeDisposalReason(runtime, now, SESSION_RUNTIME_MAX_IDLE_MS);
+    if (reason) {
+      console.log(`[DAEMON] Disposing stale session runtime ${sessionId} (${describeDisposal(reason, runtime, now)})`);
       disposals.push(Promise.resolve(disposeFn(runtime)));
     }
   }

@@ -1,6 +1,15 @@
 package com.github.claudecodegui.session;
 
+import com.github.claudecodegui.provider.common.MarkerCliBridge;
+import com.github.claudecodegui.provider.common.MessageCallback;
+import com.github.claudecodegui.provider.common.SDKResult;
+import com.google.gson.Gson;
 import org.junit.Test;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -32,14 +41,14 @@ public class SessionSendServiceTest {
         SessionExecutionOwnership firstExecution = state.currentExecutionOwnership();
         state.setClaudeUltracode(false);
         var firstSend = service.sendMessageToProvider("channel", "first", null, null, "", null,
-                "default", "high", null, null, "first", null, true, firstOwner);
+                "default", "high", null, null, null, "first", null, true, firstOwner);
 
         Object nextOwner = state.beginTurn();
         state.setClaudeUltracode(true);
         service.sendMessageToProvider("channel", "stale launch", null, null, "", null,
-                "default", "high", null, null, "stale", null, true, firstOwner).join();
+                "default", "high", null, null, null, "stale", null, true, firstOwner).join();
         var nextSend = service.sendMessageToProvider("channel", "next", null, null, "", null,
-                "default", "high", null, null, "next", null, false, nextOwner);
+                "default", "high", null, null, null, "next", null, false, nextOwner);
         assertEquals(java.util.List.of(true, false), selections);
         SessionExecutionState.Snapshot pendingNextTurn = state.getExecutionSnapshot();
 
@@ -243,6 +252,84 @@ public class SessionSendServiceTest {
         assertEquals("low", SessionSendService.normalizeRequestedReasoningEffort(" low "));
         assertEquals("xhigh", SessionSendService.normalizeRequestedReasoningEffort("xhigh"));
         assertEquals("max", SessionSendService.normalizeRequestedReasoningEffort("max"));
+    }
+
+    @Test
+    public void cliReasoningEffortPassesEveryLevelToOmpAndForcesNothingWhenUnset() {
+        for (String level : new String[]{"low", "medium", "high", "xhigh", "max"}) {
+            assertEquals(level, SessionSendService.normalizeCliReasoningEffort("omp", level));
+        }
+        assertEquals("xhigh", SessionSendService.normalizeCliReasoningEffort("omp", " XHigh "));
+        // No --thinking flag: the level configured in OMP itself applies.
+        assertEquals("", SessionSendService.normalizeCliReasoningEffort("omp", null));
+        assertEquals("", SessionSendService.normalizeCliReasoningEffort("omp", "extreme"));
+    }
+
+    @Test
+    public void cliReasoningEffortKeepsThreeLevelsAndMediumDefaultForOtherCliProviders() {
+        assertEquals("high", SessionSendService.normalizeCliReasoningEffort("pi", "high"));
+        assertEquals("medium", SessionSendService.normalizeCliReasoningEffort("pi", "xhigh"));
+        assertEquals("medium", SessionSendService.normalizeCliReasoningEffort("kimi", null));
+    }
+
+    @Test
+    public void ompApprovalModeKeepsKnownModesAndTreatsEverythingElseAsOmpsOwnSetting() {
+        SessionState state = new SessionState();
+        assertEquals("", state.getOmpApprovalMode());
+
+        for (String mode : new String[]{"always-ask", "write", "yolo"}) {
+            state.setOmpApprovalMode(mode);
+            assertEquals(mode, state.getOmpApprovalMode());
+        }
+        // "default" is the webview's name for "pass no --approval-mode flag".
+        for (String mode : new String[]{"default", "", "bypassPermissions", "always-ask-cached", null}) {
+            state.setOmpApprovalMode("yolo");
+            state.setOmpApprovalMode(mode);
+            assertEquals("", state.getOmpApprovalMode());
+        }
+    }
+
+    @Test
+    public void ompApprovalModeTravelsWithItsMessageAndOtherwiseFollowsTheTab() {
+        SessionState state = new SessionState();
+        state.setProvider("omp");
+        state.setOmpApprovalMode("always-ask");
+        List<String> sentModes = new ArrayList<>();
+        MarkerCliBridge omp = new MarkerCliBridge(SessionSendServiceTest.class) {
+            @Override
+            protected String getProviderName() {
+                return "omp";
+            }
+
+            @Override
+            protected String getStdinEnvKey() {
+                return "OMP_USE_STDIN";
+            }
+
+            @Override
+            public CompletableFuture<SDKResult> sendMessage(String channelId, String message, String sessionId,
+                    String cwd, String model, String reasoningEffort, List<ClaudeSession.Attachment> attachments,
+                    String permissionMode, String dshPreset, String ompApprovalMode, Boolean thinking,
+                    MessageCallback callback) {
+                sentModes.add(ompApprovalMode);
+                return CompletableFuture.completedFuture(SDKResult.success("ok"));
+            }
+        };
+        SessionSendService sender = new SessionSendService(null, state, new SessionCallbackFacade(null),
+                new MessageParser(), new MessageMerger(), new Gson(), null, null,
+                Map.of("omp", omp), new SessionContextService(null), null, null);
+
+        // Quick Fix states no mode: the tab's choice applies, not OMP's own (usually full auto) setting.
+        sender.sendMessageToProvider("ch", "fix this", null, null, "", null, null, null, null, null,
+                null, null, null, state.beginTurn()).join();
+        // A message carries its own mode, whatever the tab held when the send started.
+        sender.sendMessageToProvider("ch", "go", null, null, "", null, null, null, null, null,
+                "yolo", null, null, state.beginTurn()).join();
+        // "" is the webview's Default: no flag, even though the previous message ran in full auto.
+        sender.sendMessageToProvider("ch", "again", null, null, "", null, null, null, null, null,
+                "", null, null, state.beginTurn()).join();
+
+        assertEquals(List.of("always-ask", "yolo", ""), sentModes);
     }
 
     @Test

@@ -16,6 +16,7 @@ public class ClaudeChatWindowSessionPreferencesTest {
         source.setPermissionMode("plan");
         source.setReasoningEffort("ultra");
         source.setClaudeUltracode(true);
+        source.setOmpApprovalMode("always-ask");
         source.setSessionId("existing-session");
         source.setCwd("C:/source-project");
 
@@ -30,6 +31,8 @@ public class ClaudeChatWindowSessionPreferencesTest {
         assertEquals("plan", target.getPermissionMode());
         assertEquals("ultra", target.getReasoningEffort());
         org.junit.Assert.assertTrue(target.isClaudeUltracode());
+        // A new tab that silently fell back to OMP's own setting would run without approvals.
+        assertEquals("always-ask", target.getOmpApprovalMode());
         assertEquals("new-session", target.getSessionId());
         assertEquals("C:/target-project", target.getCwd());
     }

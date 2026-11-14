@@ -476,6 +476,7 @@ interface Window {
   /**
    * Update status bar widget enabled state
    */
+  updateSessionGitRepositoryMatchingEnabled?: (json: string) => void;
   updateStatusBarWidgetEnabled?: (json: string) => void;
 
   /**
@@ -722,6 +723,10 @@ interface Window {
    * Update agents list
    */
   updateAgents?: (json: string) => void;
+  updateHooks?: (json: string) => void;
+  hookSourceResult?: (json: string) => void;
+  hookMutationResult?: (json: string) => void;
+  hookToggleResult?: (json: string) => void;
 
   /**
    * Agent operation result callback
@@ -1185,6 +1190,12 @@ interface Window {
 
   /** Buffers backend tab state when Java responds before React callbacks mount. */
   __pendingBackendTabState?: string;
+
+  /** Java's copy of this tab's OMP approval mode, pushed after every page (re)load. */
+  onOmpApprovalModeReceived?: (mode: string) => void;
+
+  /** Buffers the OMP approval mode when Java responds before the provider hook mounts. */
+  __pendingOmpApprovalMode?: string;
 
   // ============================================================================
   // Provider settings panel callbacks (registered by ProviderList)

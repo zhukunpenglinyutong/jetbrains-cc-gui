@@ -40,6 +40,7 @@ public class WebviewWatchdog {
     private volatile boolean resumePending;
     private volatile long lastResumeAtMs;
     private volatile long lastRafAtMs;
+    private volatile long rafTrustedSinceMs;
     private volatile String lastVisibility = null;
     private volatile Boolean lastHasFocus = null;
     private volatile int stallCount = 0;
@@ -224,18 +225,19 @@ public class WebviewWatchdog {
         try {
             JsonObject json = new Gson().fromJson(content, JsonObject.class);
             if (json != null) {
+                long reportedRafAtMs = now;
                 if (json.has("raf") && json.has("ts")) {
                     // Both values come from the client; comparing its wall clock to the Host's
                     // makes healthy remote pages look frozen when the clocks differ.
                     long renderAgeMs = Math.max(0L,
                             json.get("ts").getAsLong() - json.get("raf").getAsLong());
-                    lastRafAtMs = now - renderAgeMs;
-                } else {
-                    lastRafAtMs = now;
+                    reportedRafAtMs = now - renderAgeMs;
                 }
+                boolean wasHidden = lastVisibility != null && !"visible".equals(lastVisibility);
                 if (json.has("visibility")) {
                     lastVisibility = json.get("visibility").getAsString();
                 }
+                lastRafAtMs = effectiveRafAtMs(reportedRafAtMs, wasHidden, now);
                 if (json.has("focus")) {
                     lastHasFocus = json.get("focus").getAsBoolean();
                 }
@@ -245,6 +247,22 @@ public class WebviewWatchdog {
             lastRafAtMs = now;
         }
         return takePendingResume(now);
+    }
+
+    /**
+     * A hidden page does not run requestAnimationFrame, so its render age says nothing about
+     * health. Staleness only counts from the moment the page became visible: the first visible
+     * heartbeat can be sent before the first frame, carrying a render time from before the hide.
+     */
+    private long effectiveRafAtMs(long reportedRafAtMs, boolean wasHidden, long now) {
+        boolean visible = lastVisibility == null || "visible".equals(lastVisibility);
+        if (!visible) {
+            return now;
+        }
+        if (wasHidden) {
+            rafTrustedSinceMs = now;
+        }
+        return Math.max(reportedRafAtMs, rafTrustedSinceMs);
     }
 
     /**
@@ -269,6 +287,7 @@ public class WebviewWatchdog {
         long now = currentTimeMillis.getAsLong();
         lastHeartbeatAtMs = now;
         lastRafAtMs = now;
+        rafTrustedSinceMs = now;
         lastVisibility = null;
         lastHasFocus = null;
     }

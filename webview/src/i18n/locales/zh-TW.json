@@ -40,6 +40,11 @@
     "optional": "Optional"
   },
   "chat": {
+    "planUsage": {
+      "balanceLabel": "餘額：",
+      "balanceRemaining": "餘額：{{value}}",
+      "balanceDetail": "總額 {{total}} · 已用 {{used}}"
+    },
     "sendMessage": "給 {{provider}} 發送訊息",
     "createNewSession": "建立新會話",
     "confirmNewSession": "目前會話已有訊息，確定要建立新會話嗎？",
@@ -144,8 +149,7 @@
       "matchCase": "區分大小寫 (Alt+C)",
       "wholeWord": "全字符合 (Alt+W)",
       "regex": "正規表達式 (Alt+R)",
-      "invalidRegex": "正規表達式無效",
-      "openTooltip": "在對話中搜尋 (Cmd/Ctrl+F)"
+      "invalidRegex": "正規表達式無效"
     },
     "compactSummary": {
       "receivedTime": "記錄時間",
@@ -172,6 +176,7 @@
     "codexReviewStarted": "Codex 正在審查工作區變更",
     "codexDiffUsage": "請直接使用 /diff，無需參數",
     "codexApprovalsUsage": "請直接使用 /approvals，無需參數",
+    "codexCliOutdated": "Codex CLI {{version}} 版本較舊，部分模型和權限模式可能無法正常使用，請升級到 {{minimumVersion}} 或更高版本。",
     "codexSandboxConflict": "Codex 自動審查不能使用 danger-full-access 沙箱，請改用 workspace-write 或請求批准模式。",
     "continueRefiningPlan": "繼續完善此計畫：",
     "backgroundTasksRunning": "{{count}} 個背景工作正在執行",
@@ -262,6 +267,12 @@
         "warningUnavailable": "程式碼字體不可用，目前已回退到編輯器字體",
         "statusFollowEditor": "目前跟隨編輯器字體：{{font}}",
         "statusCustom": "目前使用自訂程式碼字體：{{font}}"
+      },
+      "sessionGitRepositoryMatching": {
+        "label": "依 Git 遠端儲存庫比對歷史工作階段",
+        "enabled": "啟用",
+        "disabled": "停用",
+        "hint": "顯示遠端主機、擁有者及儲存庫皆相同的 Codex 與 Claude Code 工作階段。無法讀取 Git 資訊時依工作目錄比對。"
       },
       "streaming": {
         "label": "Streaming",
@@ -562,16 +573,6 @@
           "importanceHint": "重要度越高，自動補全時越靠前"
         },
         "timeAgo": {
-          "yearsAgo_one": "{{count}} year ago",
-          "yearsAgo_other": "{{count}} years ago",
-          "monthsAgo_one": "{{count}} month ago",
-          "monthsAgo_other": "{{count}} months ago",
-          "daysAgo_one": "{{count}} day ago",
-          "daysAgo_other": "{{count}} days ago",
-          "hoursAgo_one": "{{count}} hour ago",
-          "hoursAgo_other": "{{count}} hours ago",
-          "minutesAgo_one": "{{count}} minute ago",
-          "minutesAgo_other": "{{count}} minutes ago",
           "justNow": "剛剛",
           "yearsAgo": "{{count}}年前",
           "monthsAgo": "{{count}}個月前",
@@ -1055,9 +1056,138 @@
       "source": "Source: {{source}}",
       "readOnlyTitle": "Read only",
       "readOnlyDesc": "Inspect files without writing to the workspace."
+    },
+    "hooks": {
+      "title": "Hooks 管理",
+      "description": "檢視並安全編輯 Codex 和 Claude Code Hooks。",
+      "refresh": "重新整理",
+      "provider": "提供者",
+      "scope": "範圍",
+      "all": "全部",
+      "allProviders": "所有提供者",
+      "allScopes": "所有範圍",
+      "global": "使用者級",
+      "project": "專案級",
+      "projectLocal": "專案級（本機覆寫）",
+      "search": "搜尋 Hooks",
+      "searchPlaceholder": "搜尋事件、命令或路徑",
+      "noMatches": "沒有符合篩選條件的 Hook。",
+      "toggleUnavailable": "確認各提供者的執行語意前，無法個別啟用或停用。",
+      "enabled": "已啟用",
+      "disabled": "已停用",
+      "enable": "啟用 Hook",
+      "disable": "停用 Hook",
+      "managedToggleHint": "由 CC GUI 管理的開關，保留原始設定並可還原。",
+      "nativeToggleHint": "修改 Codex 使用者級啟用偏好；執行仍受信任、功能設定與原則控制。",
+      "toggleFailed": "Hook 切換失敗",
+      "loading": "正在掃描 Hook 位置…",
+      "empty": "未發現 Hook。",
+      "valid": "格式已辨識",
+      "validationWarning": "需要檢查",
+      "matcher": "比對條件",
+      "noCommand": "未提供命令",
+      "readOnly": "唯讀",
+      "viewSource": "檢視原始檔",
+      "editSource": "編輯原始檔",
+      "sourcePreview": "Hook 原始檔預覽",
+      "sourceTab": "原始碼",
+      "detailsTab": "詳細資料",
+      "viewMode": "Hook 檢視",
+      "loadingSource": "正在載入原始檔…",
+      "sourceEditor": "Hook 原始檔編輯器",
+      "affectedFile": "受影響的檔案",
+      "backupDirectory": "備份目錄",
+      "latestBackup": "還原本次編輯工作階段的上次備份",
+      "lastModified": "最後修改時間",
+      "event": "事件",
+      "format": "格式",
+      "revision": "修訂版本",
+      "command": "命令",
+      "validationIssues": "驗證問題",
+      "providerFields": "提供者專屬欄位",
+      "noProviderFields": "無提供者專屬欄位",
+      "none": "無",
+      "reviewChanges": "檢查修改",
+      "hideChanges": "收起差異",
+      "noChanges": "沒有需要儲存的修改",
+      "technicalInfo": "技術資訊",
+      "moreActions": "更多操作",
+      "conflictTitle": "原始檔已被外部修改",
+      "conflictDescription": "重新載入外部版本，或保留草稿並同步最新修訂版本。",
+      "reloadExternal": "重新載入外部版本",
+      "keepDraft": "保留草稿並同步",
+      "discardDraft": "放棄草稿",
+      "discardChangesTitle": "放棄尚未儲存的修改？",
+      "discardChangesMessage": "關閉編輯器後將無法復原尚未儲存的修改。",
+      "backupOnSave": "儲存前會建立備份",
+      "save": "儲存",
+      "saving": "正在儲存…",
+      "restore": "還原本次編輯工作階段的上次備份",
+      "saveFailed": "儲存失敗",
+      "sourceLoadFailed": "重新讀取原始檔失敗",
+      "noPreview": "暫無預覽。",
+      "sourceNotice": "{{count}} 個 Hook 來源需要檢查；受影響項目的操作已受限。",
+      "sharedProjectWarning": "專案設定可能被提交並影響其他使用者，分享前請檢查檔案差異。",
+      "bridgeUnavailable": "與 IDE 的連線無法使用，請重新開啟設定頁。",
+      "sourceTimeout": "讀取逾時，請重新載入原始檔後再編輯。",
+      "mutationTimeout": "等待確認逾時；修改可能已儲存，請重新整理後再試。",
+      "mutationConfirmedLate": "已收到延遲的儲存確認。草稿已保留，請重新載入原始檔以同步。",
+      "issues": {
+        "COMMAND_MISSING": "缺少命令",
+        "TYPE_MISSING": "缺少類型",
+        "HOOKS_NOT_OBJECT": "hooks 必須是物件",
+        "SETTINGS_NOT_OBJECT": "設定必須是物件",
+        "INVALID_JSON": "JSON 無效",
+        "HOOK_ENTRY_NOT_OBJECT": "Hook 項目必須是物件",
+        "INVALID_TOML": "TOML 無效",
+        "CODEX_HOOKS_NOT_TABLE": "Codex hooks 必須是設定表",
+        "CODEX_HOOK_EVENT_NOT_ARRAY": "Hook 事件必須是陣列",
+        "CODEX_HOOK_ENTRY_NOT_TABLE": "Hook 項目必須是設定表",
+        "CODEX_ENABLED_INVALID": "啟用欄位無效",
+        "CODEX_MATCHER_INVALID": "比對條件無效",
+        "CODEX_COMMANDS_INVALID": "缺少有效命令或 MCP 工具",
+        "CODEX_HOOKS_FEATURE_DISABLED": "Hooks 功能已停用",
+        "READ_FAILED": "讀取失敗",
+        "CODEX_EVENT_UNSUPPORTED": "已驗證的格式不支援此事件",
+        "CODEX_HANDLER_UNSUPPORTED": "已驗證的格式不支援此處理器類型",
+        "CODEX_HOOK_FILE_FIELDS_INVALID": "Hook 檔案欄位無效",
+        "CODEX_STATE_INLINE_UNSUPPORTED": "無法安全編輯內嵌狀態，請使用狀態設定表。",
+        "LINKED_SOURCE_READ_ONLY": "連結檔案為唯讀，請直接編輯原始檔案。",
+        "HOOK_SOURCE_UNAVAILABLE": "來源檔案無法使用。"
+      },
+      "sharedToggleTitle": "確認修改共用專案設定",
+      "sharedToggleMessage": "此操作會修改共用的 .claude/settings.json，可能影響其他協作者。已停用 Hook 的復原記錄僅保存在本機。",
+      "confirmSharedToggle": "修改共用設定",
+      "sensitiveSourceWarning": "此檔案可能含有憑證及其他敏感設定。準備編輯時再點擊檢視。",
+      "revealSource": "檢視設定內容",
+      "errors": {
+        "HOOK_SHARED_CONFIRMATION_REQUIRED": "請先確認修改共用專案設定。",
+        "HOOK_CATALOG_TIMEOUT": "Hooks 重新整理逾時，請重新整理後再修改其他 Hook。",
+        "HOOK_REVISION_CONFLICT": "檔案已在此頁面之外被修改，請重新整理後重試。",
+        "HOOK_RESTORE_CONFLICT": "無法還原：檔案中該事件已不是清單。請先修正檔案再重試。",
+        "HOOK_TOGGLE_LOCKED": "此檔案正有其他修改在進行，請稍後重試。",
+        "HOOK_TOGGLE_LOCK_FAILED": "無法為本次修改鎖定檔案。",
+        "HOOK_FILE_LOCKED": "此檔案正有其他修改在進行，請稍後重試。",
+        "HOOK_NOT_FOUND": "檔案中已沒有這個 Hook，請重新整理清單。",
+        "HOOK_NOT_DISABLED": "這個 Hook 並未停用，請重新整理清單。",
+        "HOOK_ALREADY_DISABLED": "這個 Hook 已經停用，請重新整理清單。",
+        "HOOK_STATE_WRITE_FAILED": "無法儲存停用紀錄，已盡量復原對檔案的修改。",
+        "HOOK_TOGGLE_FAILED": "無法修改這個 Hook。",
+        "INVALID_HOOK_PATH": "此檔案不能在這裡修改。連結檔案和不在已知位置的檔案為唯讀。",
+        "INVALID_BACKUP_PATH": "備份檔案無法使用。",
+        "SOURCE_TOO_LARGE": "檔案超過 128 KB，無法在這裡編輯。",
+        "INVALID_REQUEST": "請求無效，請重新整理頁面後重試。",
+        "WRITE_FAILED": "檔案儲存失敗。",
+        "RESTORE_FAILED": "備份還原失敗。",
+        "UNSUPPORTED_HOOK_PROVIDER": "這類 Hook 不能在這裡修改。",
+        "UNKNOWN_ERROR": "未知錯誤。"
+      }
     }
   },
   "history": {
+    "confirmDirectoryTitle": "在另一個目錄中開啟工作階段？",
+    "confirmDirectoryMessage": "指令與檔案修改將在下方目錄中執行。",
+    "executionDirectory": "執行目錄",
     "title": "歷史會話",
     "sessionDeleted": "會話已刪除",
     "confirmDelete": "確認刪除",
@@ -1169,6 +1299,7 @@
     "codexDeliveryUnconfirmed": "Codex 尚未確認收到你的選擇（{{error}}）。它可能仍會生效，請不要重複作答；如果對話沒有繼續，請點擊停止後重新傳送。"
   },
   "askUserQuestion": {
+    "ompTitle": "OMP 有一些問題想問你",
     "title": "Claude 有一些問題想問你",
     "progress": "問題 {{current}} / {{total}}",
     "multiSelectHint": "可以選擇多個選項",
@@ -1562,6 +1693,12 @@
     "bashGroupCompleted": "completed",
     "bashGroupAllCompleted": "All Completed",
     "bashGroupFailed": "failed",
+    "bashGroupCopyCommand": "複製命令",
+    "bashGroupCopyOutput": "複製輸出",
+    "bashGroupOutput": "輸出",
+    "bashGroupOutputFailed": "執行失敗",
+    "bashGroupRunning": "執行中…",
+    "bashGroupNoOutput": "（無輸出）",
     "reportFindings": {
       "title": "審查發現",
       "findingsCount_one": "{{count}} 項發現",
@@ -1826,13 +1963,13 @@
         "label": "Haiku 4.5",
         "description": "Haiku 4.5 · 速度最快，適合快速回覆"
       },
+      "fable52": {
+        "label": "Fable 5.2",
+        "description": "Fable 5.2 · 最強大 · Mythos 級"
+      },
       "fable51": {
         "label": "Fable 5.1",
-        "description": "Fable 5.1 · 最強大 · Mythos 級"
-      },
-      "fable5": {
-        "label": "Fable 5",
-        "description": "Fable 5 · 保留的前代 Fable 模型"
+        "description": "Fable 5.1 · 保留的前代 Fable 模型"
       }
     },
     "longContext": {
@@ -1887,6 +2024,7 @@
     "effort": "思考強度",
     "speed": "速度",
     "preset": "預設組合",
+    "approvals": "審核",
     "model": "模型",
     "ultracode": {
       "label": "Ultracode",
@@ -2017,11 +2155,6 @@
     },
     "omp": {
       "label": "OMP CLI"
-    },
-    "beta": {
-      "badge": "Beta",
-      "title": "Beta 功能",
-      "message": "此功能仍處於 Beta 階段。如果遇到使用 Bug，請及時回饋給作者。"
     },
     "dsh": {
       "label": "DeepSeek Harness"
@@ -2167,6 +2300,25 @@
     "fast": {
       "label": "Fast",
       "description": "Codex 快速回應模式（會產生額外消耗）"
+    }
+  },
+  "ompApprovals": {
+    "title": "選擇 OMP 審核模式",
+    "default": {
+      "label": "預設",
+      "description": "未設定時完全自動（OMP 的 tools.approvalMode）"
+    },
+    "alwaysAsk": {
+      "label": "詢問",
+      "description": "編輯與指令執行前都會詢問"
+    },
+    "write": {
+      "label": "自動核准編輯",
+      "description": "僅在執行指令前詢問"
+    },
+    "yolo": {
+      "label": "完全自動",
+      "description": "從不詢問"
     }
   },
   "dshPresets": {
@@ -2326,6 +2478,25 @@
         }
       }
     },
+    "claudeCodeWindowsTooOld": {
+      "title": "目前的 Windows 版本無法啟動 Claude Code",
+      "intro": "Windows 阻止了 Claude Code 啟動，因為找不到它需要的系統函式（錯誤 0xC0000139）。這通常表示 Windows 版本過舊：Claude Code 2.1.118 及更新版本使用 ClosePseudoConsole，需要 Windows 10 1809 或 Windows Server 2019。",
+      "reason": "Windows 在載入程式時就拒絕了它，此時 Claude Code 還沒有執行，所以更換模型、供應商或權限設定都沒有幫助。",
+      "solutions": {
+        "updateWindows": {
+          "title": "方案一：升級 Windows",
+          "step0": "升級到 Windows 10 1809 或更新版本，或 Windows Server 2019 或更新版本。這些版本包含缺少的函式。"
+        },
+        "useOlderSdk": {
+          "title": "方案二：切換到舊版 SDK",
+          "step0": "在「相依性管理」中將 SDK 版本切換到 v0.2.112 或更早版本。較新的模型可能不接受這個舊版本。如果模型要求較新的 Claude Code，請改用其他模型或升級 Windows，因為更新 SDK 會讓這個錯誤再次出現。"
+        },
+        "checkCustomCli": {
+          "title": "方案三：檢查自訂的 Claude CLI",
+          "step0": "如果設定了「Claude CLI 路徑（覆寫）」，外掛會執行該程式而不是 SDK，切換 SDK 不會有任何效果。請清空該路徑，或改為指向舊版 Claude Code。如果 Windows 已是最新版本，請先檢查這一項。"
+        }
+      }
+    },
     "spawnEbusy": {
       "title": "spawn EBUSY — 子處理程序啟動失敗",
       "intro": "此錯誤通常由 Node.js 版本不相容或 SDK 安裝不完整引起，按以下兩個方向排查通常可解決：",
@@ -2339,6 +2510,22 @@
           "title": "方案二：用 npm 官方源重新安裝最新版 SDK",
           "step0": "1. 切換到 npm 官方源（淘寶源可能未同步最新版本，請勿使用淘寶源安裝）：",
           "step1": "2. 開啟「相依性管理」重新安裝最新版 SDK："
+        }
+      }
+    },
+    "codexCliVersionTooOld": {
+      "title": "Codex CLI 版本過低，不支援目前的權限模式",
+      "intro": "全自動和自動審批模式會用到自動審查器設定。目前的 Codex CLI 不認識這個設定並拒絕了請求，所以這則訊息沒有被處理。",
+      "reason": "外掛使用本機識別到的 Codex CLI，更新外掛不會同時更新 CLI。如果更新後仍然報錯，可能是 PATH 上還有一個更舊的 codex 排在前面。",
+      "solutions": {
+        "updateCodexCli": {
+          "title": "方案一：按官方說明安裝或更新 CLI",
+          "step0": "1. 開啟官方說明，選擇適合目前執行環境的獨立安裝器、npm 或 Homebrew。更新時沿用原安裝管道，不要對獨立安裝版執行 npm 解除安裝：",
+          "step1": "2. 在新終端機中確認版本已經更新，然後重新啟動 IDE，讓外掛換用新的 CLI："
+        },
+        "useDefaultMode": {
+          "title": "方案二：暫時切換權限模式",
+          "step0": "切換到預設模式。這個模式不使用自動審查器，可以在更新 CLI 之前繼續工作。如果仍然報錯，請按方案一更新 CLI。"
         }
       }
     },
