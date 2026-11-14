@@ -102,6 +102,38 @@ describe('useClaudePlanUsage', () => {
     expect(w.sendToJava).toHaveBeenLastCalledWith(expect.stringMatching(/^get_claude_plan_usage:\d+$/));
   });
 
+  it('re-polls on the first switch after a remount (back from the settings view)', () => {
+    installRuntimeProviderDispatchers();
+    w.sendToJava = vi.fn();
+    const first = renderHook(() => useClaudePlanUsage('claude'));
+    act(() => {
+      w.updateActiveProvider?.(JSON.stringify({ id: 'provider-a', isActive: true }));
+    });
+    first.unmount();
+
+    renderHook(() => useClaudePlanUsage('claude'));
+    expect(w.sendToJava).toHaveBeenCalledTimes(2);
+    act(() => {
+      w.updateActiveProvider?.(JSON.stringify({ id: 'provider-b', isActive: true }));
+    });
+    expect(w.sendToJava).toHaveBeenCalledTimes(3);
+  });
+
+  it('re-polls on the first switch after the engine changes to claude', () => {
+    installRuntimeProviderDispatchers();
+    w.sendToJava = vi.fn();
+    const { rerender } = renderHook(({ p }) => useClaudePlanUsage(p), { initialProps: { p: 'codex' } });
+    act(() => {
+      w.updateActiveProvider?.(JSON.stringify({ id: 'provider-a', isActive: true }));
+    });
+    rerender({ p: 'claude' });
+    expect(w.sendToJava).toHaveBeenCalledTimes(1);
+    act(() => {
+      w.updateActiveProvider?.(JSON.stringify({ id: 'provider-b', isActive: true }));
+    });
+    expect(w.sendToJava).toHaveBeenCalledTimes(2);
+  });
+
   it('does not blink the indicator on the bootstrap first push after data arrived', () => {
     installRuntimeProviderDispatchers();
     w.sendToJava = vi.fn();

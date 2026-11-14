@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { parseCapacityPayload, type PlanUsageSnapshot } from '../utils/planUsagePace';
-import { subscribeActiveProvider } from '../utils/runtimeProviderCapabilities';
+import { getLastActiveProviderJson, subscribeActiveProvider } from '../utils/runtimeProviderCapabilities';
 
 export type ClaudePlanUsageState = {
   status: 'idle' | 'loading' | 'ready' | 'unavailable';
@@ -112,6 +112,7 @@ export function useClaudePlanUsage(currentProvider: string) {
       activeProviderIdRef.current = null;
       return;
     }
+    activeProviderIdRef.current = providerIdOf(getLastActiveProviderJson());
     const unsubscribe = subscribeActiveProvider((json) => {
       try {
         const provider = JSON.parse(json) as { id?: string };
@@ -142,3 +143,13 @@ export function useClaudePlanUsage(currentProvider: string) {
 }
 
 export type UseClaudePlanUsageReturn = ReturnType<typeof useClaudePlanUsage>;
+
+function providerIdOf(json: string | null): string | null {
+  if (!json) return null;
+  try {
+    const id = (JSON.parse(json) as { id?: unknown } | null)?.id;
+    return typeof id === 'string' && id ? id : null;
+  } catch {
+    return null;
+  }
+}

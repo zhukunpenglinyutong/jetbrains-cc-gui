@@ -40,6 +40,19 @@ public class OpenRouterUsageVendorTest {
     }
 
     @Test
+    public void parseBalance_resettingLimitUsesThePeriodUsage() {
+        JsonObject body = JsonParser.parseString(
+                "{\"data\":{\"limit_remaining\":7,\"limit\":10,\"limit_reset\":\"monthly\","
+                        + "\"usage\":57,\"usage_monthly\":3}}")
+                .getAsJsonObject();
+
+        RelayUsageJson.Balance balance = vendor.parseBalance(body, "openrouter.ai");
+
+        assertEquals(7.0, balance.remaining(), 0.001);
+        assertEquals(3.0, balance.used(), 0.001);
+    }
+
+    @Test
     public void parseBalance_unlimitedKeyHasNoLimitRemainingAndRendersNothing() {
         // limit_remaining is null when the key has no spend limit; usage alone
         // is not a balance, so nothing is rendered.

@@ -2,6 +2,8 @@ package com.github.claudecodegui.provider.claude.usage;
 
 import com.google.gson.JsonObject;
 
+import java.util.Locale;
+
 /**
  * OpenRouter prepaid credits via the openrouter.ai anthropic-compat backend.
  *
@@ -48,7 +50,12 @@ public final class OpenRouterUsageVendor extends BalanceUsageVendor {
         if (remaining == null || !Double.isFinite(remaining)) {
             return null;
         }
-        Double used = RelayUsageJson.asDouble(data, "usage");
+        // A resetting limit counts only the current period's spend, so pair it with
+        // usage_daily/weekly/monthly; lifetime usage would exceed the limit.
+        String reset = RelayUsageJson.asString(data, "limit_reset");
+        Double used = reset == null || reset.isBlank()
+                ? RelayUsageJson.asDouble(data, "usage")
+                : RelayUsageJson.asDouble(data, "usage_" + reset.trim().toLowerCase(Locale.ROOT));
         if (used != null && !Double.isFinite(used)) {
             used = null;
         }
