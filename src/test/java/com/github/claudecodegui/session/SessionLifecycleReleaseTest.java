@@ -49,16 +49,16 @@ public class SessionLifecycleReleaseTest {
         try {
             manager.createNewSession();
             assertSame(previous, host.session);
-            assertFalse(host.scriptNames.contains("window.notifySessionSupplierBindingChanged"));
+            assertFalse(host.scriptNames.contains("notifySessionSupplierBindingChanged"));
             bridge.release.complete(new JsonObject());
             assertNotSame(previous, host.session);
             assertSame(host.session, host.context.getSession());
             for (Runnable callback : List.copyOf(uiCalls)) {
                 callback.run();
             }
-            assertTrue(host.scriptNames.contains("window.notifySessionSupplierBindingChanged"));
+            assertTrue(host.scriptNames.contains("notifySessionSupplierBindingChanged"));
             assertEquals(0, host.bindingArgumentCount);
-            assertTrue(host.scriptNames.indexOf("window.notifySessionSupplierBindingChanged") < host.scriptNames.indexOf("historyLoadComplete"));
+            assertTrue(host.scriptNames.indexOf("notifySessionSupplierBindingChanged") < host.scriptNames.indexOf("historyLoadComplete"));
         } finally {
             host.coalescer.dispose();
             bridge.cleanupAllProcesses();
@@ -190,7 +190,7 @@ public class SessionLifecycleReleaseTest {
         /** Replaces JCEF delivery while exercising the lifecycle manager. */
         @Override public void callJavaScript(String functionName, String... args) {
             this.scriptNames.add(functionName);
-            if ("window.notifySessionSupplierBindingChanged".equals(functionName)) {
+            if ("notifySessionSupplierBindingChanged".equals(functionName)) {
                 this.bindingArgumentCount = args.length;
             }
         }

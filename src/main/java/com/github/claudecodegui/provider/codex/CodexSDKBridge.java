@@ -1369,7 +1369,7 @@ public class CodexSDKBridge extends BaseSDKBridge {
         String supplierId = sessionSupplierResolver.get();
         if (supplierId != null) {
             params.addProperty("supplierId", supplierId);
-            params.addProperty("codexHome", this.ownerScope.toString());
+            // The daemon owns the native environment, including WSL path normalization.
             return;
         }
         // Managed credentials never travel per request: the daemon resolves them

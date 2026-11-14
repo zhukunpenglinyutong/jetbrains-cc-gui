@@ -161,7 +161,7 @@ test('inline cloud settings clear global endpoints, headers, auth bypasses and f
     const settingsConfig = { env: { [`CLAUDE_CODE_USE_${cloud}`]: '1' } };
     const supplier = buildSessionClaudeConfig('cloud', {
       config: { claude: { providers: { cloud: { settingsConfig } } } },
-      baseEnv: { ...globalEnv },
+      baseEnv: Object.fromEntries(Object.entries(globalEnv).filter(([key]) => !key.startsWith('AWS_'))),
     });
     const override = buildSessionClaudeSettingsOverride(supplier, { env: {} }, { globalSettings: { env: globalEnv } });
     const effective = { ...globalEnv, ...override.env };
@@ -175,4 +175,24 @@ test('inline cloud settings clear global endpoints, headers, auth bypasses and f
       'x-fixture: bound-only');
   }
   assert.deepEqual(globalEnv, before);
+});
+
+test('inline cloud settings preserve shell AWS values while explicit supplier values win', () => {
+  const baseEnv = { AWS_REGION: 'shell-region', AWS_PROFILE: 'shell-profile', AWS_DEFAULT_REGION: 'shell-default' };
+  const globalSettings = { env: { AWS_REGION: 'global-region', AWS_PROFILE: 'global-profile',
+    AWS_DEFAULT_REGION: 'global-default', AWS_ENDPOINT_URL_FUTURE_SERVICE: 'https://global.example.invalid' } };
+  for (const explicit of [false, true]) {
+    const settingsConfig = { env: { CLAUDE_CODE_USE_BEDROCK: '1', ...(explicit ? { AWS_REGION: 'supplier-region',
+      AWS_PROFILE: 'supplier-profile', AWS_DEFAULT_REGION: '' } : {}) } };
+    const supplier = buildSessionClaudeConfig('cloud', {
+      config: { claude: { providers: { cloud: { settingsConfig } } } }, baseEnv,
+    });
+    const override = buildSessionClaudeSettingsOverride(supplier, { env: {} }, { globalSettings });
+    assert.equal(override.env.AWS_REGION, explicit ? 'supplier-region' : 'shell-region');
+    assert.equal(override.env.AWS_PROFILE, explicit ? 'supplier-profile' : 'shell-profile');
+    assert.equal(override.env.AWS_DEFAULT_REGION, explicit ? '' : 'shell-default');
+    assert.equal(override.env.AWS_ENDPOINT_URL_FUTURE_SERVICE, '');
+  }
+  assert.equal(baseEnv.AWS_REGION, 'shell-region');
+  assert.equal(globalSettings.env.AWS_REGION, 'global-region');
 });

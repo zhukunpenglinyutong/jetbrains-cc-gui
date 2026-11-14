@@ -56,7 +56,7 @@ public class CodexSDKBridgeWslCwdTest {
                 assertNotNull(method, params);
                 assertTrue(method, params.has("supplierId"));
                 assertEquals(method, "fixture-supplier", params.get("supplierId").getAsString());
-                assertTrue(method, params.has("codexHome"));
+                assertFalse("The daemon must retain its native home for " + method, params.has("codexHome"));
             }
         } finally {
             bridge.cleanupAllProcesses();

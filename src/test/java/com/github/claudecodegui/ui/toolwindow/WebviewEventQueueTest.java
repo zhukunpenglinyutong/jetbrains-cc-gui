@@ -27,7 +27,7 @@ public class WebviewEventQueueTest {
     public void newSessionNotificationBatchesParseAndExecuteInLifecycleOrder() throws Exception {
         Object browser = new Object();
         String script = WebviewEventQueue.buildBatchScript(List.of(
-                new WebviewEventQueue.JsCall<>(browser, 1, "window.notifySessionSupplierBindingChanged", new String[0], null),
+                new WebviewEventQueue.JsCall<>(browser, 1, "notifySessionSupplierBindingChanged", new String[0], null),
                 new WebviewEventQueue.JsCall<>(browser, 1, "historyLoadComplete", new String[0], null),
                 new WebviewEventQueue.JsCall<>(browser, 1, "updateStatus", new String[]{"ready"}, null)));
         String harness = """
@@ -52,6 +52,29 @@ public class WebviewEventQueueTest {
             assertEquals(output, 0, process.exitValue());
         } finally {
             process.destroyForcibly();
+        }
+    }
+
+    @Test
+    public void supplierBindingSurvivesLifecycleQueuePressureInOrder() {
+        AtomicReference<Object> browser = new AtomicReference<>(new Object());
+        List<Runnable> scheduled = new ArrayList<>();
+        List<String> scripts = new ArrayList<>();
+        WebviewEventQueue<Object> queue = newQueue(browser, new AtomicBoolean(), scheduled, scripts);
+        try {
+            for (int i = 0; i < 256; i++) {
+                assertTrue(queue.enqueue("onTaskEvent", "task-" + i));
+            }
+            assertTrue(queue.enqueue("notifySessionSupplierBindingChanged"));
+            assertTrue(queue.enqueue("historyLoadComplete"));
+            while (!scheduled.isEmpty()) {
+                scheduled.remove(0).run();
+            }
+            String delivered = String.join("\n", scripts);
+            assertTrue(delivered.contains("window.notifySessionSupplierBindingChanged()"));
+            assertTrue(delivered.indexOf("window.notifySessionSupplierBindingChanged()") < delivered.indexOf("window.historyLoadComplete()"));
+        } finally {
+            queue.dispose();
         }
     }
 

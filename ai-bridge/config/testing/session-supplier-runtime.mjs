@@ -17,11 +17,11 @@ process.stdout._originalStdoutWrite = chunk => {
 const codex = await import('../../services/codex/persistent-codex-service.js');
 const configPath = join(getCodemossDir(), 'config.json');
 const config = JSON.parse(readFileSync(configPath, 'utf8'));
-const sharedHistory = join(process.env.USERPROFILE || process.env.HOME, '.codex');
-codex.setCodexPristineBaseEnv({ ...process.env, CODEX_HOME: sharedHistory });
+const sharedHistory = process.env.CODEX_HOME || join(process.env.USERPROFILE || process.env.HOME, '.codex');
+codex.setCodexPristineBaseEnv({ ...process.env });
 const options = { titleDependencies: { enabled: async () => false } };
 const request = (channelId, supplierId) => ({ channelId, supplierId, cwd: process.cwd(), sessionEpoch: `epoch-${channelId}`,
-  codexHome: sharedHistory, message: 'fixture routing', model: 'fixture-model',
+  message: 'fixture routing', model: 'fixture-model',
   codexCommandPrefix: [process.execPath, resolve('ai-bridge/services/codex/testing/codex-stdio-peer.js'), '--scenario', 'session-supplier'] });
 const diagnostics = channel => events.filter(event => event.channelId === channel && event.kind === 'itemCompleted'
   && event.payload.item.type === 'agentMessage').map(event => JSON.parse(event.payload.item.text));
@@ -53,8 +53,8 @@ try {
   assert.equal(diagnostics('fixture-b').at(-1).credentialHash, hash('fixture-b'));
   assert.equal(diagnostics('fixture-a').at(-1).model, 'a-codex-model');
   assert.equal(diagnostics('fixture-b').at(-1).model, 'b-codex-model');
-  assert.equal(diagnostics('fixture-a').at(-1).codexHome, sharedHistory);
-  assert.equal(diagnostics('fixture-b').at(-1).codexHome, sharedHistory);
+  assert.equal(diagnostics('fixture-a').at(-1).codexHome, process.env.CODEX_HOME);
+  assert.equal(diagnostics('fixture-b').at(-1).codexHome, process.env.CODEX_HOME);
   const nativeHomeBefore = readFileSync(join(sharedHistory, 'config.toml'), 'utf8');
   const authBefore = readFileSync(join(sharedHistory, 'auth.json'), 'utf8');
 

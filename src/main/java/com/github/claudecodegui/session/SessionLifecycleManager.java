@@ -594,7 +594,7 @@ public class SessionLifecycleManager {
                 return;
             }
             // Unsaved sessions both have a null id, so publish the new binding explicitly.
-            host.callJavaScript("window.notifySessionSupplierBindingChanged");
+                host.callJavaScript("notifySessionSupplierBindingChanged");
             // Release the frontend session transition guard so updateMessages works again.
             // Must come BEFORE updateStatus to ensure the guard is lifted before any
             // subsequent message updates arrive.

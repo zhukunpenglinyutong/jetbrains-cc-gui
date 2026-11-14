@@ -77,7 +77,7 @@ export function buildSessionClaudeSettingsOverride(supplier, override, { globalS
   // SDK additions, without copying any of that profile's credential values.
   for (const key of Object.keys(object(inherited?.env) ? inherited.env : {})) {
     if (/^(ANTHROPIC_|CLAUDE_CODE_USE_|CLAUDE_CODE_SKIP_|AWS_|GOOGLE_|GCLOUD_|CLOUD_ML_)/i.test(key)) {
-      env[key] = supplier.settings.env[key] ?? '';
+      env[key] = supplier.settings.env[key] ?? supplier.env[key] ?? '';
     }
   }
   for (const [key, value] of Object.entries(supplier.settings.env)) {
