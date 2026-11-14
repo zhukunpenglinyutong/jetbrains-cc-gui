@@ -84,8 +84,26 @@ test('native supplier processes send, cold-resume and switch suppliers without g
     const runtime = buildCodexNativeRuntime({ ...(supplier ?? { authMode: 'cli_login' }), baseEnv });
     const service = new CodexAppServerService({ launchOptions: {
       cwd, nativeConfig: runtime.config, modelProvider: runtime.modelProvider,
-    }, clientFactory: ({ nativeConfig = runtime.config, modelProvider = runtime.modelProvider } = {}) =>
-      new CodexAppServerClient({ command, cwd, env: runtime.env, nativeConfig, modelProvider }) });
+    }, clientFactory: async ({ nativeConfig = runtime.config, modelProvider = runtime.modelProvider } = {}) => {
+      const client = new CodexAppServerClient({ command, cwd, env: runtime.env, nativeConfig, modelProvider });
+      try {
+        await client.ensureInitialized();
+        const actual = await client.request('config/read', { includeLayers: true, cwd });
+        const userLayer = actual.layers?.find(layer => layer.name?.type === 'user');
+        // On Windows, HOME/USERPROFILE alone may not isolate the native profile.
+        // Verify the native home and loopback route before starting any thread.
+        assert.ok(userLayer?.name?.file, 'The native CLI must report its fixture configuration layer');
+        assert.equal(realpathSync(userLayer.name.file), realpathSync(join(home, 'config.toml')),
+          'The native CLI must use the isolated fixture home');
+        assert.equal(actual.config?.model_providers?.[modelProvider ?? 'OpenAI']?.base_url,
+          `${endpoint}/${supplierId ?? 'global'}/v1`, 'Model requests must stay on the fixture server');
+        return client;
+      } catch (error) {
+        client.close();
+        await client.waitForExit();
+        throw error;
+      }
+    } });
     services.push(service);
     return service;
   };
@@ -118,6 +136,9 @@ test('native supplier processes send, cold-resume and switch suppliers without g
   }
   const legacy = createService(null);
   assert.equal((await send(legacy)).outcome, 'completed');
+  assert.equal(requests.length, 6);
+  assert.equal(requests.at(-1).path, '/global/v1/responses');
+  assert.equal(requests.at(-1).authorization, 'Bearer fixture-global-key');
   const legacyThreadId = legacy.rootThreadId;
   await legacy.resetRuntime();
   const migrated = createService('a');
