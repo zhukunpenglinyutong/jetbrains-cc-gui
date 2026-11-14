@@ -88,6 +88,9 @@ public class CodexMessageHandlerTest {
         int streamEndCount = 0;
         int stateChangeCount = 0;
         int messageUpdateCount = 0;
+        int usageUpdateCount = 0;
+        int lastUsedTokens = 0;
+        int lastMaxTokens = 0;
         boolean lastLoading = false;
         boolean lastBusy = false;
         String lastStateError;
@@ -109,7 +112,12 @@ public class CodexMessageHandlerTest {
 
         @Override
         public void onUsageUpdate(int usedTokens, int maxTokens) {
+            // Merged from both sides of the upstream merge: the PR's list-based
+            // recording and upstream's counter/last-value recording.
             usageUpdates.add(new int[]{usedTokens, maxTokens});
+            usageUpdateCount++;
+            lastUsedTokens = usedTokens;
+            lastMaxTokens = maxTokens;
         }
 
         @Override
@@ -809,6 +817,70 @@ public class CodexMessageHandlerTest {
                 callback.lastMessages.get(callback.lastMessages.size() - 1).type);
         assertFalse(state.isBusy());
         assertFalse(state.isLoading());
+    }
+
+    @Test
+    public void usageMessageStampsUsageOnLastAssistantAndPushesContextRing() {
+        SessionState state = new SessionState();
+
+        CallbackHandler callbackHandler = new CallbackHandler();
+        RecordingCallback callback = new RecordingCallback();
+        callbackHandler.setCallback(callback);
+
+        CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
+        handler.onMessage("assistant", "{\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"done\"}]}}");
+        handler.onMessage("usage", "{\"input_tokens\":1347,\"cache_read_input_tokens\":34816,"
+                + "\"output_tokens\":15,\"total_tokens\":36178}");
+
+        assertEquals(1, callback.usageUpdateCount);
+        assertEquals(36163, callback.lastUsedTokens);
+        assertEquals(200000, callback.lastMaxTokens);
+
+        Message message = state.getMessages().get(0);
+        assertTrue(message.raw.has("usage"));
+        JsonObject usage = message.raw.getAsJsonObject("usage");
+        assertEquals(1347, usage.get("input_tokens").getAsInt());
+        assertEquals(15, usage.get("output_tokens").getAsInt());
+        assertEquals(36178, usage.get("total_tokens").getAsInt());
+        assertEquals(34816, usage.get("cache_read_input_tokens").getAsInt());
+    }
+
+    @Test
+    public void usageMessageWithInvalidJsonDoesNotCrashOrPush() {
+        SessionState state = new SessionState();
+
+        CallbackHandler callbackHandler = new CallbackHandler();
+        RecordingCallback callback = new RecordingCallback();
+        callbackHandler.setCallback(callback);
+
+        CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
+        handler.onMessage("assistant", "{\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"done\"}]}}");
+        // The assistant message itself triggers one message update; the invalid
+        // usage payload must not add another one or any usage push.
+        int messageUpdatesBeforeUsage = callback.messageUpdateCount;
+        handler.onMessage("usage", "not-json");
+
+        assertEquals(0, callback.usageUpdateCount);
+        assertEquals(messageUpdatesBeforeUsage, callback.messageUpdateCount);
+        Message message = state.getMessages().get(0);
+        assertFalse(message.raw.has("usage"));
+    }
+
+    @Test
+    public void rawUsageWithoutSnakeCaseFiguresDoesNotPushAZeroRing() {
+        SessionState state = new SessionState();
+        state.setProvider("pi");
+
+        CallbackHandler callbackHandler = new CallbackHandler();
+        RecordingCallback callback = new RecordingCallback();
+        callbackHandler.setCallback(callback);
+
+        CodexMessageHandler handler = new CodexMessageHandler(state, callbackHandler);
+        handler.onMessage("assistant", "{\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"done\"}]}}");
+        handler.onMessage("usage", "{\"input\":1200,\"output\":30,\"cacheRead\":800,\"totalTokens\":2030}");
+
+        assertEquals(0, callback.usageUpdateCount);
+        assertFalse(state.getMessages().get(0).raw.has("usage"));
     }
 
     /** Native controls keep the failure in the transcript without requesting a second status toast. */
