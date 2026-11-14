@@ -3,6 +3,13 @@ import { createElement } from 'react';
 import { Modal } from 'antd';
 import { sendBridgeEvent } from '../../../utils/bridge';
 import type { AskUserQuestionRequest, Question } from '../../../components/AskUserQuestionDialog';
+import {
+  CODEX_EMPTY_FORM_ALLOW_LABEL,
+  CODEX_EMPTY_FORM_DENY_LABEL,
+  CODEX_EMPTY_FORM_QUESTION_ID,
+  isEmptyFormSchema,
+  isToolSuggestion,
+} from '../../codexElicitation';
 
 type PermissionCallbacks = Pick<UseWindowCallbacksOptions,
   | 'openPermissionDialog' | 'openAskUserQuestionDialog' | 'openPlanApprovalDialog'
@@ -144,6 +151,23 @@ function buildMcpQuestionRequest(
   let questions = mode === 'form'
     ? schemaQuestions(nativeRequest, serverName)
     : [];
+  // A form with no fields (MCP tool-call approvals) is a pure allow/deny prompt.
+  if (mode === 'form' && questions.length === 0 && isEmptyFormSchema(requestedSchema) && !isToolSuggestion(meta)) {
+    questions = [{
+      id: CODEX_EMPTY_FORM_QUESTION_ID,
+      question: typeof nativeRequest.message === 'string' && nativeRequest.message
+        ? nativeRequest.message
+        : 'Do you want to allow this MCP request?',
+      header: serverName ?? 'MCP server',
+      options: [
+        { label: CODEX_EMPTY_FORM_ALLOW_LABEL, description: 'Allow the MCP request.' },
+        { label: CODEX_EMPTY_FORM_DENY_LABEL, description: 'Deny the MCP request.' },
+      ],
+      multiSelect: false,
+      required: true,
+      choiceOnly: true,
+    }];
+  }
   if (mode === 'url') {
     questions = [{
       id: '__codex_url__',
@@ -271,6 +295,10 @@ export function registerPermissionCallbacks(options: PermissionCallbacks, getTra
           if (isFallbackModelMetadataWarning(method, event.payload.message)) {
             return;
           }
+          // API deprecations are addressed to client developers; users cannot act on them.
+          if (method === 'deprecationNotice') {
+            return;
+          }
           if (method === 'cliVersionOutdated') {
             const { message, version, minimumVersion } = event.payload;
             // Stays true until the CLI changes, so a new runtime on this channel does not repeat it.
@@ -281,7 +309,7 @@ export function registerPermissionCallbacks(options: PermissionCallbacks, getTra
             options.addToast(t?.('chat.codexCliOutdated', { defaultValue: message, version, minimumVersion }) ?? message, 'warning');
             return;
           }
-          if (method === 'configWarning' || method === 'deprecationNotice') {
+          if (method === 'configWarning') {
             // Startup and thread loading can repeat the same notice. Other warnings stay independent.
             const key = JSON.stringify([event.channelId, event.sessionEpoch, event.runtimeBackend, event.payload.message]);
             const now = Date.now();
@@ -293,19 +321,12 @@ export function registerPermissionCallbacks(options: PermissionCallbacks, getTra
               const oldest = recentConfigurationWarnings.keys().next().value;
               if (oldest !== undefined) recentConfigurationWarnings.delete(oldest);
             }
-          }
-          if (method === 'configWarning' || method === 'deprecationNotice') {
             const diagnostic = event.payload.message;
-            const isConfiguration = method === 'configWarning';
-            options.addToast(isConfiguration
-              ? translate('askUserQuestion.configWarning', 'Codex reported a configuration warning. Review the details.')
-              : translate('askUserQuestion.apiDeprecationWarning', 'Codex reported an API compatibility notice. Review the details.'), 'warning', {
+            options.addToast(translate('askUserQuestion.configWarning', 'Codex reported a configuration warning. Review the details.'), 'warning', {
               label: translate('askUserQuestion.warningDetails', 'View details'),
               onClick: () => Modal.warning({
                 zIndex: 12000,
-                title: isConfiguration
-                  ? translate('askUserQuestion.configWarningTitle', 'Codex configuration warning')
-                  : translate('askUserQuestion.apiDeprecationTitle', 'Codex API compatibility notice'),
+                title: translate('askUserQuestion.configWarningTitle', 'Codex configuration warning'),
                 content: createElement('pre', {
                   style: { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: '60vh', overflow: 'auto' },
                 }, diagnostic),

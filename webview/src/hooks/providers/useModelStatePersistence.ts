@@ -30,7 +30,7 @@ import {
 } from '../modelProviderStateHelpers';
 
 const STORAGE_KEY = 'model-selection-state';
-const REASONING_VALUES = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
+const REASONING_VALUES = ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'] as const;
 const CODEX_FAST_MODE_VALUES = ['normal', 'fast'] as const;
 
 const getCustomModels = (key: string): { id: string }[] => {
@@ -89,6 +89,7 @@ export interface UseModelStatePersistenceOptions {
   setPermissionMode: (value: PermissionMode) => void;
   setLongContextEnabled: (value: boolean) => void;
   setReasoningEffort: (value: ReasoningEffort) => void;
+  setClaudeUltracode?: (value: boolean) => void;
   setCodexFastMode: (value: CodexFastMode) => void;
   setDshPreset: (value: string) => void;
   setCodexCollaborationMode?: (value: CodexCollaborationMode) => void;
@@ -119,6 +120,7 @@ export interface UseModelStatePersistenceOptions {
   dshPermissionMode: PermissionMode;
   longContextEnabled: boolean;
   reasoningEffort: ReasoningEffort;
+  claudeUltracode?: boolean;
   codexFastMode: CodexFastMode;
   dshPreset: string;
   codexCollaborationMode?: CodexCollaborationMode;
@@ -163,6 +165,7 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
     setPermissionMode,
     setLongContextEnabled,
     setReasoningEffort,
+    setClaudeUltracode,
     setCodexFastMode,
     setDshPreset,
     setCodexCollaborationMode,
@@ -192,6 +195,7 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
     dshPermissionMode,
     longContextEnabled,
     reasoningEffort,
+    claudeUltracode = false,
     codexFastMode,
     dshPreset,
     codexCollaborationMode = 'default',
@@ -389,6 +393,9 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
         if (isReasoningEffort(state.reasoningEffort)) {
           setReasoningEffort(state.reasoningEffort);
         }
+        if (typeof state.claudeUltracode === 'boolean') {
+          setClaudeUltracode?.(state.claudeUltracode);
+        }
         if (isCodexFastMode(state.codexFastMode)) {
           restoredCodexFastMode = state.codexFastMode;
           setCodexFastMode(restoredCodexFastMode);
@@ -467,6 +474,15 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
         setCodexApprovalPreset?.(restoredCodexSettings.approvalPreset);
         setCodexSandboxSelection?.(restoredCodexSettings.sandboxSelection);
         setCodexSandboxSource?.(restoredCodexSettings.sandboxSource);
+      }
+
+      // An explicit tab effort overrides shared preferences. A new Java tab has
+      // null effort and inherits the last-used preference (or the hook default).
+      if (isReasoningEffort(window.__INITIAL_TAB_REASONING_EFFORT__)) {
+        setReasoningEffort(window.__INITIAL_TAB_REASONING_EFFORT__);
+      }
+      if (typeof window.__INITIAL_TAB_CLAUDE_ULTRACODE__ === 'boolean') {
+        setClaudeUltracode?.(window.__INITIAL_TAB_CLAUDE_ULTRACODE__);
       }
 
       // Reconcile omp mode⇔model pairs saved by builds before the two were
@@ -637,6 +653,7 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
           dshPermissionMode,
           longContextEnabled,
           reasoningEffort,
+          claudeUltracode,
           codexFastMode,
           dshPreset,
           codexCollaborationMode,
@@ -679,6 +696,7 @@ export function useModelStatePersistence(options: UseModelStatePersistenceOption
     dshPermissionMode,
     longContextEnabled,
     reasoningEffort,
+    claudeUltracode,
     codexFastMode,
     dshPreset,
     codexCollaborationMode,

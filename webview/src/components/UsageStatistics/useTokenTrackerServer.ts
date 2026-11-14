@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { isTokenTrackerBridgeAvailable, ttEnsureServer, ttInstallCli } from './tokentrackerBridge';
+import {
+  isTokenTrackerBridgeAvailable,
+  ttEnsureServer,
+  ttInstallCli,
+  type TtServerStatus,
+} from './tokentrackerBridge';
 
 /**
  * TokenTracker 本地服务状态机（移植自 desktop-cc-gui 的同名 hook，Tauri 调用
@@ -8,6 +13,7 @@ import { isTokenTrackerBridgeAvailable, ttEnsureServer, ttInstallCli } from './t
  *
  *   checking ─→ ensure ─┬─ 服务已在运行 / 启动成功 ─→ ready
  *                       ├─ ensure 报 not_installed ─→ guide
+ *                       ├─ ensure 报 outdated ──────→ installing（自动升级）─→ 再 ensure
  *                       └─ ensure 其他失败 ──────────→ error
  *
  * 不做单独的 CLI detect：服务可能已被其他客户端（桌面端等）启动，此时无需
@@ -27,6 +33,24 @@ export type TokenTrackerServerState =
   | { status: 'error'; message: string };
 
 const CLI_NOT_INSTALLED_ERROR = 'tokentracker_cli_not_installed';
+const CLI_OUTDATED_ERROR = 'tokentracker_cli_outdated';
+
+const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
+
+/**
+ * ensure；若 Java 报 CLI 版本过旧，则安装固定版本后再 ensure 一次。
+ * 升级失败不致命：Java 每个 IDE 会话只报一次 outdated，之后回退到旧 CLI / 旧服务，不会循环。
+ */
+export async function ensureServerWithUpgrade(onUpgrade: () => void): Promise<TtServerStatus> {
+  try {
+    return await ttEnsureServer();
+  } catch (error) {
+    if (!errorMessage(error).includes(CLI_OUTDATED_ERROR)) throw error;
+    onUpgrade();
+    await ttInstallCli().catch(() => undefined);
+    return ttEnsureServer();
+  }
+}
 
 /**
  * vite dev 浏览器预览时 /tt-dev 代理的目标端口。
@@ -44,12 +68,14 @@ export function useTokenTrackerServer() {
   const runEnsure = useCallback(async (generation: number) => {
     setState({ status: 'starting' });
     try {
-      const server = await ttEnsureServer();
+      const server = await ensureServerWithUpgrade(() => {
+        if (generationRef.current === generation) setState({ status: 'installing' });
+      });
       if (generationRef.current !== generation) return;
       setState({ status: 'ready', port: server.port });
     } catch (error) {
       if (generationRef.current !== generation) return;
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorMessage(error);
       if (message.includes(CLI_NOT_INSTALLED_ERROR)) {
         setState({ status: 'guide' });
       } else {
@@ -85,7 +111,7 @@ export function useTokenTrackerServer() {
       })
       .catch((error) => {
         if (generationRef.current !== generation) return;
-        setState({ status: 'error', message: error instanceof Error ? error.message : String(error) });
+        setState({ status: 'error', message: errorMessage(error) });
       });
   }, [runEnsure]);
 

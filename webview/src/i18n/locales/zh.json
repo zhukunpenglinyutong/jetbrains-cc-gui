@@ -1,4 +1,10 @@
 {
+  "sessionSupplier": {
+    "label": "供应商",
+    "choose": "请选择供应商",
+    "nextTurn": "下一轮生效",
+    "unavailable": "供应商不可用，请重新打开菜单重试或选择其他供应商。"
+  },
   "startupHistory": {
     "unloaded": "该恢复会话的历史消息尚未加载。",
     "loading": "正在加载会话历史…",
@@ -100,6 +106,9 @@
     "usagePercentage": "上下文: {{percentage}}",
     "planUsage": {
       "title": "Claude 额度详情",
+      "balanceLabel": "余额：",
+      "balanceRemaining": "余额：{{value}}",
+      "balanceDetail": "总额 {{total}} · 已用 {{used}}",
       "grokTitle": "Grok 额度详情",
       "staleIdle": "这是上次读取的额度，下次使用 Grok 时会自动刷新",
       "loading": "正在获取额度…",
@@ -142,6 +151,10 @@
     "localProject": "本项目",
     "disabled": "已停用",
     "sdkNotInstalled": "{{provider}} SDK 尚未安装，请先安装 SDK 才能开始对话",
+    "codexUltraCapabilitiesLoading": "正在确认 Ultra 是否可用。模型加载完成后请重试发送。",
+    "codexUltraCapabilitiesUnavailable": "无法确认 Ultra 是否可用。请重新加载模型或选择其他推理强度。",
+    "sessionTransitionTakingLonger": "切换会话耗时较长。您可以再次尝试打开；排队的消息已暂停发送。",
+    "sessionTransitionInProgress": "正在切换会话，请稍候。",
     "sdkStatusLoading": "正在检查 SDK 状态...",
     "pasteImagePreparing": "正在准备粘贴的图片...",
     "sdkStatusUnavailable": "无法检查 SDK 状态。",
@@ -179,8 +192,7 @@
       "matchCase": "区分大小写 (Alt+C)",
       "wholeWord": "全词匹配 (Alt+W)",
       "regex": "正则表达式 (Alt+R)",
-      "invalidRegex": "正则无效",
-      "openTooltip": "在对话中搜索 (Cmd/Ctrl+F)"
+      "invalidRegex": "正则无效"
     },
     "compactSummary": {
       "receivedTime": "记录时间",
@@ -209,7 +221,11 @@
     "codexApprovalsUsage": "请直接使用 /approvals，无需参数",
     "codexCliOutdated": "Codex CLI {{version}} 版本较旧，部分模型和权限模式可能无法正常使用，请升级到 {{minimumVersion}} 或更高版本。",
     "codexSandboxConflict": "Codex 自动审查不能使用 danger-full-access 沙箱，请改用 workspace-write 或请求批准模式。",
-    "continueRefiningPlan": "继续完善此计划："
+    "continueRefiningPlan": "继续完善此计划：",
+    "backgroundTasksRunning": "{{count}} 个后台任务正在运行",
+    "backgroundTasksRunning_one": "{{count}} 个后台任务正在运行",
+    "backgroundTasksRunning_other": "{{count}} 个后台任务正在运行",
+    "stopBackgroundTasks": "停止后台任务"
   },
   "settings": {
     "title": "设置",
@@ -592,6 +608,12 @@
         "disabled": "已关闭",
         "hint": "开启后，在提交对话框中显示「AI 生成提交信息」按钮。关闭后隐藏该按钮。"
       },
+      "sessionGitRepositoryMatching": {
+        "label": "按 Git 远端仓库匹配历史会话",
+        "enabled": "启用",
+        "disabled": "禁用",
+        "hint": "显示远端主机、所有者及仓库都相同的 Codex 和 Claude Code 会话。无法读取 Git 信息时按工作目录匹配。"
+      },
       "statusBarWidget": {
         "label": "状态栏信息展示",
         "enabled": "已开启",
@@ -939,6 +961,132 @@
     "agents": "Agents",
     "agentsDesc": "管理和配置AI代理",
     "skills": "Skills",
+    "hooks": {
+      "enabled": "已启用",
+      "disabled": "已禁用",
+      "enable": "启用 Hook",
+      "disable": "禁用 Hook",
+      "managedToggleHint": "由 CCGUI 托管的开关，会保留原始配置并支持恢复。",
+      "nativeToggleHint": "修改 Codex 用户级启用偏好；实际执行仍受信任、功能开关和策略控制。",
+      "toggleFailed": "Hook 启停失败",
+      "title": "Hooks 管理",
+      "description": "查看并安全编辑 Codex 和 Claude Code Hooks。",
+      "refresh": "刷新",
+      "provider": "Provider",
+      "scope": "范围",
+      "all": "全部",
+      "allProviders": "全部 Provider",
+      "allScopes": "全部范围",
+      "global": "用户级",
+      "project": "项目级",
+      "projectLocal": "项目级（本地覆盖）",
+      "search": "搜索 Hooks",
+      "searchPlaceholder": "搜索事件、命令或路径",
+      "noMatches": "没有符合筛选条件的 Hooks。",
+      "toggleUnavailable": "在确认各 Provider 的运行语义前，暂不提供单条 Hook 的启用/禁用操作。",
+      "loading": "正在扫描 hooks...",
+      "empty": "未发现 hooks。",
+      "valid": "格式已识别",
+      "validationWarning": "需要检查",
+      "matcher": "匹配器",
+      "noCommand": "未提供命令",
+      "readOnly": "只读",
+      "viewSource": "查看源文件",
+      "editSource": "编辑源文件",
+      "sourcePreview": "Hook 源文件预览",
+      "sourceTab": "源码",
+      "detailsTab": "详情",
+      "viewMode": "Hook 查看方式",
+      "loadingSource": "正在加载源文件...",
+      "sourceEditor": "Hook 源文件编辑器",
+      "affectedFile": "影响文件",
+      "backupDirectory": "备份目录",
+      "latestBackup": "恢复本次编辑会话的上次备份",
+      "lastModified": "最后修改时间",
+      "event": "事件",
+      "format": "格式",
+      "revision": "版本标识",
+      "command": "命令",
+      "validationIssues": "校验问题",
+      "providerFields": "Provider 扩展字段",
+      "noProviderFields": "无 Provider 扩展字段",
+      "none": "无",
+      "reviewChanges": "审查修改",
+      "hideChanges": "收起差异",
+      "noChanges": "没有需要保存的修改",
+      "technicalInfo": "技术信息",
+      "moreActions": "更多操作",
+      "conflictTitle": "Hook 源文件已被外部修改",
+      "conflictDescription": "可重新加载外部版本，或在保留草稿的同时同步最新 revision 后再次保存。",
+      "reloadExternal": "重新加载外部版本",
+      "keepDraft": "保留草稿并同步",
+      "discardDraft": "放弃草稿",
+      "discardChangesTitle": "放弃未保存的修改？",
+      "discardChangesMessage": "当前修改尚未保存，关闭编辑器后将无法恢复。",
+      "backupOnSave": "保存前会创建备份",
+      "save": "保存",
+      "saving": "保存中...",
+      "restore": "恢复本次编辑会话的上次备份",
+      "saveFailed": "保存失败",
+      "sourceLoadFailed": "重新读取源文件失败",
+      "noPreview": "暂无预览。",
+      "sourceNotice": "{{count}} 个 Hook 来源需要检查；受影响条目已限制编辑或启停。",
+      "issues": {
+        "COMMAND_MISSING": "缺少命令",
+        "TYPE_MISSING": "缺少类型",
+        "HOOKS_NOT_OBJECT": "hooks 必须是对象",
+        "SETTINGS_NOT_OBJECT": "settings 必须是对象",
+        "INVALID_JSON": "JSON 无效",
+        "HOOK_ENTRY_NOT_OBJECT": "Hook 项不是对象",
+        "INVALID_TOML": "TOML 格式无效",
+        "CODEX_HOOKS_NOT_TABLE": "Codex hooks 必须是配置表",
+        "CODEX_HOOK_EVENT_NOT_ARRAY": "Codex Hook 事件必须是表数组",
+        "CODEX_HOOK_ENTRY_NOT_TABLE": "Codex Hook 条目必须是配置表",
+        "CODEX_ENABLED_INVALID": "Codex Hook enabled 字段缺失或无效",
+        "CODEX_MATCHER_INVALID": "Codex Hook matcher 字段无效",
+        "CODEX_COMMANDS_INVALID": "Hook 处理器缺少有效命令或 MCP 工具",
+        "CODEX_HOOKS_FEATURE_DISABLED": "Codex hooks 功能开关未启用",
+        "READ_FAILED": "读取失败",
+        "CODEX_EVENT_UNSUPPORTED": "已校验的 Codex 格式不支持此事件",
+        "CODEX_HANDLER_UNSUPPORTED": "已校验的 Codex 格式不支持此处理器类型",
+        "CODEX_HOOK_FILE_FIELDS_INVALID": "Hook 文件字段无效",
+        "CODEX_STATE_INLINE_UNSUPPORTED": "无法安全编辑内联状态，请使用状态配置表",
+        "LINKED_SOURCE_READ_ONLY": "链接文件为只读，请直接编辑原始文件。",
+        "HOOK_SOURCE_UNAVAILABLE": "源文件不可用。"
+      },
+      "sharedProjectWarning": "项目配置可能被提交并影响其他用户。分享前请检查文件差异。",
+      "bridgeUnavailable": "与 IDE 的连接不可用，请重新打开设置页后重试。",
+      "sourceTimeout": "读取超时，请重新加载源文件后再编辑。",
+      "mutationTimeout": "等待确认超时；修改可能已经保存，请刷新后再重试。",
+      "mutationConfirmedLate": "已收到延迟的保存确认。草稿已保留，请重新加载源文件以同步。",
+      "sharedToggleTitle": "确认修改共享项目配置",
+      "sharedToggleMessage": "此操作会修改共享的 .claude/settings.json，可能影响其他协作者。已停用 Hook 的恢复记录仅保存在本机。",
+      "confirmSharedToggle": "修改共享配置",
+      "sensitiveSourceWarning": "此文件可能含有凭证和其他敏感配置。准备编辑时再点击查看。",
+      "revealSource": "查看配置内容",
+      "errors": {
+        "HOOK_SHARED_CONFIRMATION_REQUIRED": "请先确认修改共享项目配置。",
+        "HOOK_CATALOG_TIMEOUT": "Hooks 刷新超时，请刷新后再修改其他 Hook。",
+        "HOOK_REVISION_CONFLICT": "文件已在此页面之外被修改，请刷新后重试。",
+        "HOOK_RESTORE_CONFLICT": "无法恢复：文件中该事件已不是列表。请先修正文件再重试。",
+        "HOOK_TOGGLE_LOCKED": "该文件正有其他修改在进行，请稍后重试。",
+        "HOOK_TOGGLE_LOCK_FAILED": "无法为本次修改锁定文件。",
+        "HOOK_FILE_LOCKED": "该文件正有其他修改在进行，请稍后重试。",
+        "HOOK_NOT_FOUND": "文件中已没有这个 Hook，请刷新列表。",
+        "HOOK_NOT_DISABLED": "这个 Hook 并未停用，请刷新列表。",
+        "HOOK_ALREADY_DISABLED": "这个 Hook 已经停用，请刷新列表。",
+        "HOOK_STATE_WRITE_FAILED": "无法保存停用记录，已尽量撤销对文件的修改。",
+        "HOOK_TOGGLE_FAILED": "无法修改这个 Hook。",
+        "INVALID_HOOK_PATH": "此文件不能在这里修改。链接文件和不在已知位置的文件为只读。",
+        "INVALID_BACKUP_PATH": "备份文件不可用。",
+        "SOURCE_TOO_LARGE": "文件超过 128 KB，无法在这里编辑。",
+        "INVALID_REQUEST": "请求无效，请刷新页面后重试。",
+        "WRITE_FAILED": "文件保存失败。",
+        "RESTORE_FAILED": "备份恢复失败。",
+        "UNSUPPORTED_HOOK_PROVIDER": "这类 Hook 不能在这里修改。",
+        "UNKNOWN_ERROR": "未知错误。"
+      }
+    },
     "skillsDesc": "管理和配置技能模块",
     "other": {
       "title": "其他设置",
@@ -966,16 +1114,6 @@
           "importanceHint": "重要度越高，自动补全时越靠前"
         },
         "timeAgo": {
-          "yearsAgo_one": "{{count}} year ago",
-          "yearsAgo_other": "{{count}} years ago",
-          "monthsAgo_one": "{{count}} month ago",
-          "monthsAgo_other": "{{count}} months ago",
-          "daysAgo_one": "{{count}} day ago",
-          "daysAgo_other": "{{count}} days ago",
-          "hoursAgo_one": "{{count}} hour ago",
-          "hoursAgo_other": "{{count}} hours ago",
-          "minutesAgo_one": "{{count}} minute ago",
-          "minutesAgo_other": "{{count}} minutes ago",
           "justNow": "刚刚",
           "yearsAgo": "{{count}}年前",
           "monthsAgo": "{{count}}个月前",
@@ -1465,6 +1603,9 @@
     }
   },
   "history": {
+    "confirmDirectoryTitle": "在另一个目录中打开会话？",
+    "confirmDirectoryMessage": "命令和文件修改将在下方目录中执行。",
+    "executionDirectory": "运行目录",
     "title": "历史会话",
     "sessionDeleted": "会话已删除",
     "confirmDelete": "确认删除",
@@ -1576,10 +1717,9 @@
     "codexDeliveryUnconfirmed": "Codex 还没有确认收到你的选择（{{error}}）。它可能仍会生效，请不要重复作答；如果对话没有继续，请点击停止后重新发送。"
   },
   "askUserQuestion": {
+    "ompTitle": "OMP 有一些问题想问你",
     "configWarning": "Codex 部分配置可能未生效，请查看兼容提示详情。",
     "configWarningTitle": "Codex 配置兼容提示",
-    "apiDeprecationWarning": "Codex 返回接口兼容提示，可查看详情。",
-    "apiDeprecationTitle": "Codex 接口兼容提示",
     "warningDetails": "查看详情",
     "title": "Claude 有一些问题想问你",
     "progress": "问题 {{current}} / {{total}}",
@@ -1632,7 +1772,8 @@
     "invalidJsonConfig": "配置 JSON 格式错误，请修正后再保存",
     "providerAdded": "供应商添加成功",
     "providerUpdated": "供应商更新成功",
-    "providerDeleted": "供应商删除成功"
+    "providerDeleted": "供应商删除成功",
+    "codexSettingsDispatchFailed": "无法将 Codex 设置发送到 IDE，请重新打开对话后重试。"
   },
   "config": {
     "clickToCopy": "点击复制",
@@ -1731,8 +1872,23 @@
   },
   "mcp": {
     "nativeToolCount": "{{count}} 个工具",
-    "nativeRuntime": {"notStarted": "尚未启动", "starting": "连接中", "connected": "已连接", "authenticationRequired": "需要认证", "failed": "连接失败", "cancelled": "已取消", "disabled": "已禁用", "unknown": "连接状态未知"},
-    "nativeAuth": {"unsupported": "OAuth 不适用", "notLoggedIn": "OAuth 尚未登录", "bearerToken": "令牌认证", "oAuth": "OAuth 已登录", "unknown": "认证状态未知"},
+    "nativeRuntime": {
+      "notStarted": "尚未启动",
+      "starting": "连接中",
+      "connected": "已连接",
+      "authenticationRequired": "需要认证",
+      "failed": "连接失败",
+      "cancelled": "已取消",
+      "disabled": "已禁用",
+      "unknown": "连接状态未知"
+    },
+    "nativeAuth": {
+      "unsupported": "OAuth 不适用",
+      "notLoggedIn": "OAuth 尚未登录",
+      "bearerToken": "令牌认证",
+      "oAuth": "OAuth 已登录",
+      "unknown": "认证状态未知"
+    },
     "title": "MCP 服务器",
     "whatIsMcp": "什么是 MCP?",
     "refreshStatus": "刷新服务器状态",
@@ -1981,6 +2137,12 @@
     "bashGroupCompleted": "完成",
     "bashGroupAllCompleted": "全部完成",
     "bashGroupFailed": "失败",
+    "bashGroupCopyCommand": "复制命令",
+    "bashGroupCopyOutput": "复制输出",
+    "bashGroupOutput": "输出",
+    "bashGroupOutputFailed": "执行失败",
+    "bashGroupRunning": "运行中…",
+    "bashGroupNoOutput": "（无输出）",
     "updatePlan": "更新计划",
     "applyPatch": "应用补丁",
     "reportFindings": {
@@ -2027,6 +2189,7 @@
       "loading": "正在加载 Agent 进程…",
       "unavailable": "本次会话未生成进程日志（需要会话 ID）。",
       "reportGenerated": "已生成结构化分析报告",
+      "historyTruncated": "历史记录已缩短，省略了 {{count}} 条记录。初始任务和最近活动仍保留。",
       "unitMs": "毫秒",
       "unitS": "秒",
       "unitTools": "个工具",
@@ -2275,13 +2438,13 @@
         "label": "Haiku 4.5",
         "description": "Haiku 速度最快，适合快速答复"
       },
+      "fable52": {
+        "label": "Fable 5.2",
+        "description": "Fable 5.2 · 最强大 · Mythos 级"
+      },
       "fable51": {
         "label": "Fable 5.1",
-        "description": "Fable 5.1 · 最强大 · Mythos 级"
-      },
-      "fable5": {
-        "label": "Fable 5",
-        "description": "Fable 5 · 保留的前代 Fable 模型"
+        "description": "Fable 5.1 · 保留的前代 Fable 模型"
       }
     },
     "codex": {
@@ -2336,7 +2499,12 @@
     "effort": "思考强度",
     "speed": "速度",
     "preset": "预设",
-    "model": "模型"
+    "approvals": "审批",
+    "model": "模型",
+    "ultracode": {
+      "label": "Ultracode",
+      "description": "Claude 原生工作流，自动委派子任务，保留当前推理强度。"
+    }
   },
   "modes": {
     "default": {
@@ -2465,11 +2633,6 @@
     "omp": {
       "label": "OMP CLI"
     },
-    "beta": {
-      "badge": "Beta",
-      "title": "Beta 功能",
-      "message": "此功能仍处于 Beta 阶段。如果遇到使用 Bug，请及时反馈给作者。"
-    },
     "dsh": {
       "label": "DeepSeek Harness"
     },
@@ -2583,6 +2746,10 @@
     "max": {
       "label": "max",
       "description": "最大推理深度"
+    },
+    "ultra": {
+      "label": "Ultra",
+      "description": "最高推理深度，自动委派子任务"
     }
   },
   "errorBoundary": {
@@ -2648,6 +2815,25 @@
     "fast": {
       "label": "Fast",
       "description": "Codex快速响应模式（会产生额外消耗）"
+    }
+  },
+  "ompApprovals": {
+    "title": "选择 OMP 审批模式",
+    "default": {
+      "label": "默认",
+      "description": "未设置时完全自动（OMP 的 tools.approvalMode）"
+    },
+    "alwaysAsk": {
+      "label": "询问",
+      "description": "编辑和命令执行前都会询问"
+    },
+    "write": {
+      "label": "自动批准编辑",
+      "description": "仅在执行命令前询问"
+    },
+    "yolo": {
+      "label": "完全自动",
+      "description": "从不询问"
     }
   },
   "dshPresets": {

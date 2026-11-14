@@ -82,6 +82,8 @@ export function useModelDropdownLayout({
 interface UseModelSelectHandlersArgs {
   isOpen: boolean;
   inline: boolean;
+  /** Currently selected model id; re-picking it in an inline list keeps the popover open. */
+  value: string;
   currentProvider: string;
   recalculate: () => void;
   onChange: (modelId: string) => void;
@@ -98,6 +100,7 @@ interface UseModelSelectHandlersArgs {
 export function useModelSelectHandlers({
   isOpen,
   inline,
+  value,
   currentProvider,
   recalculate,
   onChange,
@@ -128,14 +131,15 @@ export function useModelSelectHandlers({
   }, [isOpen, recalculate, setIsOpen, setSearchQuery]);
 
   /**
-   * Select model
+   * Select model. Switching closes the menu; an inline list re-picking the
+   * current model stays open so the user can still adjust the other rows.
    */
   const handleSelect = useCallback((modelId: string) => {
     onChange(modelId);
-    if (inline) return;
+    if (inline && modelId === value) return;
     resetSearchAndClose();
     onClose?.();
-  }, [inline, onChange, onClose, resetSearchAndClose]);
+  }, [inline, value, onChange, onClose, resetSearchAndClose]);
 
   const handleTogglePin = useCallback((e: React.MouseEvent, modelId: string) => {
     e.stopPropagation();

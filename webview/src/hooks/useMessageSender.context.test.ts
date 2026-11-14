@@ -1,8 +1,11 @@
 import { updateClaudeModelCapabilities } from '../utils/claudeModelCapabilities';
 import { act, renderHook } from '@testing-library/react';
-import { useMessageSender } from './useMessageSender';
+import { useLayoutEffect, useState } from 'react';
+import { isLocalContextCommand, useMessageSender } from './useMessageSender';
 import type { UseMessageSenderOptions } from './useMessageSender';
 import { writeClaudeModelMapping } from '../utils/claudeModelMapping';
+import { updateCodexReasoningCapabilities } from '../utils/codexReasoningCapabilities';
+import { useMessageQueue } from './useMessageQueue';
 
 describe('useMessageSender - /context command', () => {
   const t = ((key: string, opts?: any) => opts?.defaultValue ?? key) as any;
@@ -50,8 +53,117 @@ describe('useMessageSender - /context command', () => {
 
   beforeEach(() => {
     updateClaudeModelCapabilities([]);
+    updateCodexReasoningCapabilities([], true);
     localStorage.clear();
     window.sendToJava = vi.fn();
+  });
+
+  it.each([false, true])('captures explicit Claude Ultracode=%s without changing effort in both send paths', claudeUltracode => {
+    for (const attachments of [undefined, [{ id: 'a', fileName: 'a.txt', mediaType: 'text/plain', data: 'aGk=' }]]) {
+      window.sendToJava = vi.fn();
+      const { result, unmount } = renderHook(() => useMessageSender(createOptions({ claudeUltracode, reasoningEffort: 'low' })));
+      act(() => result.current.handleSubmit('hello', attachments));
+      expect(getBridgePayload(attachments ? 'send_message_with_attachments' : 'send_message'))
+        .toMatchObject({ claudeUltracode, reasoningEffort: 'low' });
+      unmount();
+    }
+  });
+
+  it('sends native Ultra only to Codex even before the provider-change guard runs', () => {
+    updateCodexReasoningCapabilities([{ id: 'gpt-6-astra', supportedReasoningEfforts: ['high', 'ultra'] }]);
+    const { result, rerender } = renderHook(({ currentProvider }) => useMessageSender(createOptions({
+      currentProvider, selectedModel: currentProvider === 'codex' ? 'gpt-6-astra' : 'claude-opus-5', reasoningEffort: 'ultra',
+    })), { initialProps: { currentProvider: 'codex' } });
+    act(() => result.current.handleSubmit('hello'));
+    expect(getBridgePayload('send_message').reasoningEffort).toBe('ultra');
+    expect(getBridgePayload('send_message')).not.toHaveProperty('claudeUltracode');
+    window.sendToJava = vi.fn();
+    rerender({ currentProvider: 'claude' });
+    act(() => result.current.handleSubmit('hello'));
+    expect(getBridgePayload('send_message').reasoningEffort).toBe('high');
+  });
+
+  it.each([false, true])('uses settled native capabilities before the picker has reconciled Ultra (attachments: %s)', withAttachments => {
+    const { result } = renderHook(() => useMessageSender(createOptions({
+      currentProvider: 'codex', selectedModel: 'custom-model', reasoningEffort: 'ultra',
+    })));
+    act(() => {
+      updateCodexReasoningCapabilities([]);
+      // Deliberately use the old render's callback before any effect can run.
+      result.current.handleSubmit('keep this submission', withAttachments
+        ? [{ id: 'a', fileName: 'a.txt', mediaType: 'text/plain', data: 'aGk=' }] : undefined);
+    });
+    expect(getBridgePayload(withAttachments ? 'send_message_with_attachments' : 'send_message').reasoningEffort).toBe('high');
+  });
+
+  it('defers an unconfirmed Ultra send without starting a turn', () => {
+    const options = createOptions({ currentProvider: 'codex', selectedModel: 'native-model', reasoningEffort: 'ultra' });
+    const { result } = renderHook(() => useMessageSender(options));
+    act(() => result.current.handleSubmit('keep this submission'));
+    expect(window.sendToJava).not.toHaveBeenCalled();
+    expect(options.setMessages).not.toHaveBeenCalled();
+    expect(options.setLoading).not.toHaveBeenCalled();
+    expect(options.addToast).toHaveBeenCalledWith(expect.stringContaining('Checking Ultra availability'), 'info');
+    expect(result.current.reasoningCapabilitiesUnconfirmed).toBe(true);
+  });
+
+  it('retains queued attachments while Ultra is unconfirmed, then sends after native confirmation', () => {
+    const attachments = [{ id: 'a', fileName: 'a.txt', mediaType: 'text/plain', data: 'aGk=' }];
+    const { result } = renderHook(() => {
+      const sender = useMessageSender(createOptions({ currentProvider: 'codex', selectedModel: 'native-model', reasoningEffort: 'ultra' }));
+      return useMessageQueue({ isLoading: sender.reasoningCapabilitiesUnconfirmed, onExecute: sender.handleSubmit });
+    });
+    act(() => result.current.enqueue('queued submission', attachments));
+    expect(result.current.queue).toHaveLength(1);
+    expect(window.sendToJava).not.toHaveBeenCalled();
+    act(() => updateCodexReasoningCapabilities([{ id: 'native-model', supportedReasoningEfforts: ['high', 'ultra'] }]));
+    expect(result.current.queue).toHaveLength(0);
+    expect(getBridgePayload('send_message_with_attachments')).toMatchObject({
+      text: 'queued submission', reasoningEffort: 'ultra',
+      attachments: [{ fileName: 'a.txt', mediaType: 'text/plain', data: 'aGk=' }],
+    });
+  });
+
+  it('retains queued work when capabilities invalidate after render but before the drain effect', () => {
+    updateCodexReasoningCapabilities([{ id: 'native-model', supportedReasoningEfforts: ['high', 'ultra'] }]);
+    const attachments = [{ id: 'race-file', fileName: 'notes.txt', mediaType: 'text/plain', data: 'aGk=' }];
+    const options = createOptions({ currentProvider: 'codex', selectedModel: 'native-model', reasoningEffort: 'ultra' });
+    const { result } = renderHook(() => {
+      const [invalidate, setInvalidate] = useState(false);
+      const sender = useMessageSender(options);
+      useLayoutEffect(() => {
+        if (invalidate) updateCodexReasoningCapabilities([], true);
+      }, [invalidate]);
+      const queue = useMessageQueue({ isLoading: sender.reasoningCapabilitiesUnconfirmed,
+        onExecute: sender.handleSubmit, retryKey: sender.queueRetryKey });
+      return { queue, setInvalidate };
+    });
+    act(() => {
+      result.current.queue.enqueue('survive the drain race', attachments);
+      result.current.setInvalidate(true);
+    });
+    expect(result.current.queue.queue).toHaveLength(1);
+    expect(result.current.queue.queue[0]).toMatchObject({ content: 'survive the drain race', attachments });
+    expect(options.setMessages).not.toHaveBeenCalled();
+    expect(window.sendToJava).not.toHaveBeenCalled();
+    act(() => updateCodexReasoningCapabilities([{ id: 'native-model', supportedReasoningEfforts: ['high', 'ultra'] }]));
+    expect(result.current.queue.queue).toHaveLength(0);
+    expect(getBridgePayload('send_message_with_attachments')).toMatchObject({ text: 'survive the drain race', reasoningEffort: 'ultra' });
+    expect(vi.mocked(window.sendToJava!).mock.calls.filter(([line]) => line.startsWith('send_message_with_attachments:'))).toHaveLength(1);
+  });
+
+  it('retains a refused bridge dispatch without leaving a duplicate optimistic user bubble', () => {
+    delete window.sendToJava;
+    const options = createOptions();
+    const { result } = renderHook(() => {
+      const [messages, setMessages] = useState<import('../types').ClaudeMessage[]>([]);
+      const sender = useMessageSender({ ...options, setMessages });
+      const queue = useMessageQueue({ isLoading: false, onExecute: sender.handleSubmit, retryKey: sender.queueRetryKey });
+      return { queue, messages };
+    });
+    act(() => result.current.queue.enqueue('keep my refused message'));
+    expect(result.current.queue.queue.map(item => item.content)).toEqual(['keep my refused message']);
+    expect(result.current.messages).toEqual([]);
   });
 
   it.each([false, true])('rechecks route capability before sending (attachments: %s)', attachments => {
@@ -86,6 +198,22 @@ describe('useMessageSender - /context command', () => {
       expect(getBridgePayload('send_message').reasoningEffort).toBe(effort);
       unmount();
     }
+  });
+
+  it('passes the stored OMP effort through so omp picks the nearest level itself', () => {
+    const { result } = renderHook(() => useMessageSender(createOptions({
+      currentProvider: 'omp', selectedModel: 'omp-model', reasoningEffort: 'max',
+    })));
+    act(() => result.current.handleSubmit('hello'));
+    expect(getBridgePayload('send_message').reasoningEffort).toBe('max');
+  });
+
+  it('sends a stored Codex Ultra effort to OMP as max, the level its picker shows', () => {
+    const { result } = renderHook(() => useMessageSender(createOptions({
+      currentProvider: 'omp', selectedModel: 'omp-model', reasoningEffort: 'ultra',
+    })));
+    act(() => result.current.handleSubmit('hello'));
+    expect(getBridgePayload('send_message').reasoningEffort).toBe('max');
   });
 
   it.each([false, true])('ends a refused Codex message dispatch without sending a text fallback (attachments: %s)', withAttachments => {
@@ -448,5 +576,49 @@ describe('useMessageSender - /context command', () => {
 
     const payload = getBridgePayload('send_message_with_attachments');
     expect(payload.reasoningEffort).toBe('low');
+  });
+
+  it.each([false, true])('sends ompApprovalMode for omp and never for claude (attachments: %s)', (withAttachments) => {
+    const attachments = withAttachments
+      ? [{ id: 'a', fileName: 'a.txt', mediaType: 'text/plain', data: 'aGk=' }]
+      : undefined;
+    const event = withAttachments ? 'send_message_with_attachments' : 'send_message';
+
+    const omp = renderHook(() => useMessageSender(createOptions({
+      currentProvider: 'omp', selectedModel: 'auto', ompApprovalMode: 'write',
+    })));
+    act(() => omp.result.current.handleSubmit('hello', attachments));
+    expect(getBridgePayload(event).ompApprovalMode).toBe('write');
+    omp.unmount();
+
+    window.sendToJava = vi.fn();
+    const claude = renderHook(() => useMessageSender(createOptions({ ompApprovalMode: 'write' })));
+    act(() => claude.result.current.handleSubmit('hello', attachments));
+    expect(getBridgePayload(event)).not.toHaveProperty('ompApprovalMode');
+  });
+
+  it.each(['/context', '/plugins list'])('sends %s to OMP, which implements it itself', (command) => {
+    const addToast = vi.fn();
+    const openContextUsageDialog = vi.fn();
+    const { result } = renderHook(() => useMessageSender(createOptions({
+      currentProvider: 'omp', selectedModel: 'auto', addToast, openContextUsageDialog,
+    })));
+
+    act(() => result.current.handleSubmit(command));
+
+    expect(getBridgePayload('send_message').text).toBe(command);
+    expect(addToast).not.toHaveBeenCalled();
+    expect(openContextUsageDialog).not.toHaveBeenCalled();
+  });
+
+  it('answers /context locally for Claude and Codex, never for OMP', () => {
+    expect(isLocalContextCommand('/context', 'omp')).toBe(false);
+    expect(isLocalContextCommand('/context', 'claude')).toBe(true);
+    expect(isLocalContextCommand('/CONTEXT now', 'codex')).toBe(true);
+  });
+
+  it('does not treat other text as the local /context command', () => {
+    expect(isLocalContextCommand('context', 'claude')).toBe(false);
+    expect(isLocalContextCommand('/compact', 'claude')).toBe(false);
   });
 });

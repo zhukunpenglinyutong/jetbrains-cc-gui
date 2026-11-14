@@ -4,7 +4,7 @@ import i18n from '../../../i18n/config';
 import { debugError, debugLog, debugWarn } from '../../../utils/debug.js';
 
 /**
- * Local command list (commands to be filtered out)
+ * Claude SDK commands that cannot work inside the plugin and are filtered out
  */
 const HIDDEN_COMMANDS = new Set([
   '/cost',
@@ -242,13 +242,13 @@ function requestRefresh(): boolean {
   return true;
 }
 
-function isHiddenCommand(name: string): boolean {
+function isHiddenCommand(name: string, hidden: ReadonlySet<string>): boolean {
   const normalized = name.startsWith('/') ? name : `/${name}`;
-  if (HIDDEN_COMMANDS.has(normalized)) return true;
+  if (hidden.has(normalized)) return true;
   // Hide SDK-returned /clear (use local version instead)
   if (NEW_SESSION_COMMAND_ALIASES.has(normalized)) return true;
   const baseName = normalized.split(' ')[0];
-  return HIDDEN_COMMANDS.has(baseName) || NEW_SESSION_COMMAND_ALIASES.has(baseName);
+  return hidden.has(baseName) || NEW_SESSION_COMMAND_ALIASES.has(baseName);
 }
 
 function getCategoryFromCommand(name: string): string {
@@ -268,8 +268,8 @@ function formatCommandDescription(description: string, source?: string): string 
   return `${description} ${suffix}`;
 }
 
-function filterCommands(commands: CommandItem[], query: string): CommandItem[] {
-  const visibleCommands = commands.filter(cmd => !isHiddenCommand(cmd.label));
+function filterCommands(commands: CommandItem[], query: string, hidden: ReadonlySet<string>): CommandItem[] {
+  const visibleCommands = commands.filter(cmd => !isHiddenCommand(cmd.label, hidden));
   const localCommands = getLocalNewSessionCommands();
   const merged = [...localCommands, ...visibleCommands];
 
@@ -285,7 +285,8 @@ function filterCommands(commands: CommandItem[], query: string): CommandItem[] {
 
 export async function slashCommandProvider(
   query: string,
-  signal: AbortSignal
+  signal: AbortSignal,
+  hidden: ReadonlySet<string> = HIDDEN_COMMANDS
 ): Promise<CommandItem[]> {
   if (signal.aborted) {
     throw new DOMException('Aborted', 'AbortError');
@@ -308,7 +309,7 @@ export async function slashCommandProvider(
   }
 
   if (loadingState === 'success') {
-    return filterCommands(cachedSdkCommands, query);
+    return filterCommands(cachedSdkCommands, query, hidden);
   }
 
   if (retryCount >= MAX_RETRY_COUNT) {
@@ -326,6 +327,17 @@ export async function slashCommandProvider(
     description: retryCount > 0 ? i18n.t('chat.retrying', { count: retryCount, max: MAX_RETRY_COUNT }) : i18n.t('chat.pleaseWait'),
     category: 'system',
   }];
+}
+
+const NO_HIDDEN_COMMANDS: ReadonlySet<string> = new Set();
+
+/**
+ * Slash commands for the OMP provider. OMP's catalog only lists commands that
+ * run over its RPC mode (its `/todo` among them), so the Claude-oriented hidden
+ * list does not apply. The session-reset aliases stay local as for everyone.
+ */
+export function ompCommandProvider(query: string, signal: AbortSignal): Promise<CommandItem[]> {
+  return slashCommandProvider(query, signal, NO_HIDDEN_COMMANDS);
 }
 
 export function commandToDropdownItem(command: CommandItem): DropdownItemData {

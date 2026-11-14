@@ -31,6 +31,7 @@ import { runCliStreaming } from '../utils/cli-spawn.js';
 import { safePromptArg } from '../utils/marker-protocol.js';
 import { getRealHomeDir } from '../utils/path-utils.js';
 import { runAcpTurn } from './grok/grok-acp-client.js';
+import { shouldUseStdinPrompt } from './minimax/message-service.js';
 import { buildGrokEnv, resolveEffectiveGrokAuth } from './grok/grok-utils.js';
 
 export const CLI_ASK_PROVIDERS = ['grok', 'kimi', 'opencode', 'pi', 'omp', 'minimax', 'zcode'];
@@ -201,12 +202,14 @@ async function collectFromStreamingCli({
   onLine,
   onDelta,
   shouldTerminate,
+  stdinData,
 }) {
   let text = '';
   let streamError = '';
   const result = await runCliStreaming({
     bin,
     args,
+    stdinData,
     cwd,
     env: buildCliEnv(),
     label,
@@ -475,8 +478,11 @@ async function askOmp(prompt, { model, cwd, onDelta } = {}) {
  * instruction. The CLI keeps running after the final `exec.result` line —
  * `shouldTerminate` ends the process tree there.
  */
-async function askMiniMax(prompt, { model, cwd, onDelta } = {}) {
-  const bin = resolveMiniMaxCliPath();
+/**
+ * mcode argv for a one-shot ask. On Windows the `.cmd` launcher runs through cmd.exe, which
+ * cuts the command line at the first newline, so the prompt goes on stdin as in chat.
+ */
+export function buildMiniMaxAskInvocation(prompt, { model, workCwd }, platform = process.platform) {
   const args = [
     'exec',
     '--output-format', 'stream-json',
@@ -484,15 +490,26 @@ async function askMiniMax(prompt, { model, cwd, onDelta } = {}) {
   ];
   const modelFlag = resolveModelFlag(model);
   if (modelFlag) args.push('--model', modelFlag);
-  const workCwd = buildWorkCwd(cwd);
   args.push('--cwd', workCwd);
+  if (shouldUseStdinPrompt(prompt, platform)) {
+    args.push('--input', '-', '--input-format', 'text');
+    return { args, stdinData: prompt };
+  }
   args.push(safePromptArg(prompt));
+  return { args, stdinData: undefined };
+}
+
+async function askMiniMax(prompt, { model, cwd, onDelta } = {}) {
+  const bin = resolveMiniMaxCliPath();
+  const workCwd = buildWorkCwd(cwd);
+  const { args, stdinData } = buildMiniMaxAskInvocation(prompt, { model, workCwd });
 
   let sawExecResult = false;
   let resultAnswer = '';
   return collectFromStreamingCli({
     bin,
     args,
+    stdinData,
     cwd: workCwd,
     label: 'MiniMax',
     onDelta,

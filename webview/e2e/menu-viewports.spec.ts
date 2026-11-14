@@ -121,6 +121,15 @@ async function installBridgeMocks(page: Page, customModels = [LONG_MODEL]) {
       if (message.startsWith('get_node_processes:')) respond('updateNodeProcesses', processSnapshot);
       if (message.startsWith('get_providers:')) respond('updateProviders', claudeProviders);
       if (message.startsWith('get_codex_providers:')) respond('updateCodexProviders', codexProviders);
+      if (message.startsWith('get_session_suppliers:')) {
+        const request = JSON.parse(message.slice('get_session_suppliers:'.length));
+        const providers = request.provider === 'codex' ? codexProviders : claudeProviders;
+        respond('onSessionSuppliers', { ...request, sessionId: null, bindingToken: 'viewport-binding',
+          supplierId: providers[0].id, activeSupplierId: providers[0].id,
+          suppliers: providers.map(provider => ({ id: provider.id, name: provider.name, available: true })),
+          modelCatalog: { models, defaultModel: null, replaceBuiltInOptions: false },
+        });
+      }
     };
   }, {
     processSnapshot: NODE_PROCESS_SNAPSHOT,
@@ -306,7 +315,7 @@ test('tabbing from a pointer-opened provider menu continues through the toolbar'
   }
 });
 
-test('confirming a beta provider with Enter keeps the menu closed', async ({ page }) => {
+test('confirming a provider with Enter keeps the menu closed', async ({ page }) => {
   await page.goto('/');
   const providerButton = page.locator('.button-area-left .selector-button').nth(1);
   await providerButton.focus();
@@ -315,13 +324,10 @@ test('confirming a beta provider with Enter keeps the menu closed', async ({ pag
   await page.keyboard.press('ArrowDown');
   await expect(page.locator('[data-provider-id="grok"]')).toBeFocused();
   await page.keyboard.press('Enter');
-  const confirm = page.locator('.alert-dialog .confirm-button');
-  await expect(confirm).toBeFocused();
-  await page.keyboard.press('Enter');
 
-  await expect(page.locator('.alert-dialog')).toHaveCount(0);
   await expect(page.locator('.button-area').first()).toHaveAttribute('data-provider', 'grok');
   await expect(providerButton).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('.provider-dropdown')).toHaveCount(0);
   await expect(providerButton).toBeFocused();
 });
 

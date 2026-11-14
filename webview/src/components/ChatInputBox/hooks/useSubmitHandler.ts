@@ -1,7 +1,9 @@
 import { useCallback } from 'react';
-import type { Attachment } from '../types.js';
+import type { Attachment, ReasoningEffort } from '../types.js';
 import type { Dispatch, SetStateAction } from 'react';
-import { parseCodexCommand } from '../../../hooks/codexCommandDispatcher';
+import { isCodexEffortIndependentCommand, parseCodexCommand } from '../../../hooks/codexCommandDispatcher';
+import { getCodexReasoningCapabilities, isCodexUltraCapabilityUnconfirmed } from '../../../utils/codexReasoningCapabilities';
+import { getSessionTransitionPending } from '../../../utils/sessionTransitionState';
 
 interface CompletionLike {
   close: () => void;
@@ -13,6 +15,8 @@ export interface UseSubmitHandlerOptions {
   sdkStatusLoading: boolean;
   sdkInstalled: boolean;
   currentProvider: string;
+  selectedModel?: string;
+  reasoningEffort?: ReasoningEffort;
   clearInput: () => void;
   /** Invalidate text content cache to force fresh DOM read on submit */
   invalidateCache: () => void;
@@ -50,6 +54,8 @@ export function useSubmitHandler({
   sdkStatusLoading,
   sdkInstalled,
   currentProvider,
+  selectedModel = '',
+  reasoningEffort = 'high',
   clearInput,
   invalidateCache,
   externalAttachments,
@@ -106,6 +112,20 @@ export function useSubmitHandler({
     }
 
     if (!cleanContent && attachments.length === 0) return;
+    // A session swap is not accepted until Java has stopped/released the old
+    // session. Keep the draft intact during that decision.
+    if (getSessionTransitionPending()) return;
+
+    if (currentProvider === 'codex' && !isCodexEffortIndependentCommand(command)
+        && isCodexUltraCapabilityUnconfirmed(selectedModel, reasoningEffort)) {
+      addToast?.(t(getCodexReasoningCapabilities().status === 'unavailable'
+        ? 'chat.codexUltraCapabilitiesUnavailable' : 'chat.codexUltraCapabilitiesLoading', {
+        defaultValue: getCodexReasoningCapabilities().status === 'unavailable'
+          ? 'Could not verify Ultra availability. Retry loading models or choose another effort.'
+          : 'Checking Ultra availability. Try sending again when model loading finishes.',
+      }), 'info');
+      return;
+    }
 
     // Close completions
     fileCompletion.close();
@@ -140,6 +160,8 @@ export function useSubmitHandler({
     sdkStatusLoading,
     sdkInstalled,
     currentProvider,
+    selectedModel,
+    reasoningEffort,
     clearInput,
     externalAttachments,
     setInternalAttachments,

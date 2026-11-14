@@ -1,5 +1,7 @@
 package com.github.claudecodegui.provider.claude;
 
+import com.github.claudecodegui.settings.CodemossSettingsService;
+import com.github.claudecodegui.settings.ProviderManager;
 import com.google.gson.JsonObject;
 import org.junit.After;
 import org.junit.Test;
@@ -7,6 +9,7 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 public class ClaudePlanUsageServiceTest {
@@ -160,5 +163,22 @@ public class ClaudePlanUsageServiceTest {
         assertFalse(payload.get("present").getAsBoolean());
         assertTrue(payload.get("unavailable").getAsBoolean());
         assertEquals("claude", payload.get("provider").getAsString());
+    }
+
+    @Test
+    public void relaySettings_followTheConversationSupplier() throws Exception {
+        JsonObject global = new JsonObject();
+        global.addProperty("marker", "global");
+        CodemossSettingsService settings = new CodemossSettingsService() {
+            @Override
+            public JsonObject readClaudeSettings() {
+                return global;
+            }
+        };
+        // A conversation on CLI login must not show the relay balance of the global provider.
+        assertNull(ClaudePlanUsageService.relaySettingsFor(settings, ProviderManager.CLI_LOGIN_PROVIDER_ID));
+        assertSame(global, ClaudePlanUsageService.relaySettingsFor(settings, null));
+        assertSame(global, ClaudePlanUsageService.relaySettingsFor(settings, ProviderManager.LOCAL_SETTINGS_PROVIDER_ID));
+        assertNull(ClaudePlanUsageService.relaySettingsFor(null, "any"));
     }
 }

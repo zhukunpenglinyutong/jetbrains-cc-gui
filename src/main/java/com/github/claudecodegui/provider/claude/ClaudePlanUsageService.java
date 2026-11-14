@@ -3,6 +3,8 @@ package com.github.claudecodegui.provider.claude;
 import com.github.claudecodegui.provider.claude.usage.RelayUsageJson;
 import com.github.claudecodegui.provider.claude.usage.RelayUsageRegistry;
 import com.github.claudecodegui.settings.CodemossSettingsService;
+import com.github.claudecodegui.settings.ProviderManager;
+import com.github.claudecodegui.settings.SessionSupplierCatalog;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
@@ -71,13 +73,23 @@ public final class ClaudePlanUsageService {
      * disk on each call, so edits to {@code settings.json} are picked up.
      */
     public static JsonObject resolvePlanUsagePayload(CodemossSettingsService settingsService) {
-        return resolvePlanUsagePayload(settingsService, System.currentTimeMillis());
+        return resolvePlanUsagePayload(settingsService, null, System.currentTimeMillis());
+    }
+
+    /** Same as above, for the supplier the conversation is bound to (null = global settings). */
+    public static JsonObject resolvePlanUsagePayload(CodemossSettingsService settingsService, String supplierId) {
+        return resolvePlanUsagePayload(settingsService, supplierId, System.currentTimeMillis());
     }
 
     static JsonObject resolvePlanUsagePayload(CodemossSettingsService settingsService, long nowMs) {
+        return resolvePlanUsagePayload(settingsService, null, nowMs);
+    }
+
+    static JsonObject resolvePlanUsagePayload(CodemossSettingsService settingsService, String supplierId, long nowMs) {
         try {
-            if (settingsService != null) {
-                JsonObject relay = RelayUsageRegistry.resolve(settingsService.readClaudeSettings(), nowMs);
+            JsonObject settings = relaySettingsFor(settingsService, supplierId);
+            if (settings != null) {
+                JsonObject relay = RelayUsageRegistry.resolve(settings, nowMs);
                 if (relay != null) {
                     return relay;
                 }
@@ -93,6 +105,17 @@ public final class ClaudePlanUsageService {
             return cached.deepCopy();
         }
         return unavailable("Claude usage unavailable");
+    }
+
+    /**
+     * Settings whose relay vendor describes this conversation's balance. CLI login talks to
+     * Anthropic directly, so the global provider's relay must not be probed for it.
+     */
+    static JsonObject relaySettingsFor(CodemossSettingsService settingsService, String supplierId) throws java.io.IOException {
+        if (settingsService == null || ProviderManager.CLI_LOGIN_PROVIDER_ID.equals(supplierId)) {
+            return null;
+        }
+        return SessionSupplierCatalog.claudeSettings(settingsService, supplierId);
     }
 
     /**

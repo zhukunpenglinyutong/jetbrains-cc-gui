@@ -182,7 +182,7 @@ public class SessionExecutionSettlementTest {
         @Override
         public CompletableFuture<SDKResult> sendMessage(String channelId, String message, String sessionId, String cwd,
                 String model, String reasoningEffort, List<ClaudeSession.Attachment> attachments, String permissionMode,
-                String dshPreset, Boolean thinking, MessageCallback callback) {
+                String dshPreset, String ompApprovalMode, Boolean thinking, MessageCallback callback) {
             return CompletableFuture.completedFuture(result);
         }
     }

@@ -55,7 +55,7 @@ export const AppChatArea = (props: AppChatAreaProps) => {
           ? { display: 'flex', flex: 1, minHeight: 0, flexDirection: 'column', overflow: 'hidden' }
           : { display: 'none' }}
       >
-        <ChatScreen {...chatScreenProps} />
+        <ChatScreen {...chatScreenProps} codexTurnActive={codexTurnActive} />
       </div>
       {currentView === 'history' && (
         <HistoryView

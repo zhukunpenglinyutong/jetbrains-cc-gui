@@ -38,7 +38,7 @@ function makeService({
     channelId: 'channel-test',
     stopBudgetMs: 400,
     ...serviceOpts,
-    clientFactory: () => {
+    clientFactory: (launch = {}) => {
       const clientToPeer = new PassThrough();
       const peerToClient = new PassThrough();
       const peerStderr = new PassThrough();
@@ -66,6 +66,8 @@ function makeService({
         command: ['in-process-peer'],
         contextSupportProbe: async () => true,
         ...clientOpts,
+        ...(launch.modelProvider && launch.nativeConfig
+          ? { modelProvider: launch.modelProvider, nativeConfig: launch.nativeConfig } : {}),
         spawnFn: () => ({
           stdin: clientToPeer,
           stdout: peerToClient,
@@ -86,6 +88,120 @@ function makeService({
 function eventsOf(events, kind) {
   return events.filter((event) => event.kind === kind);
 }
+
+function legacyProviderFixture({ rejectedError = null, beforeReplacement = null } = {}) {
+  const nativeConfig = { model_providers: { codemoss_session: { name: 'Selected supplier',
+    base_url: 'https://bound.example.invalid/v1', wire_api: 'responses', env_key: 'CODEX_API_KEY' } } };
+  const fixture = makeService({ serviceOpts: { launchOptions: { nativeConfig, modelProvider: 'codemoss_session' } } });
+  const factory = fixture.service.clientFactory;
+  const clients = [];
+  const resumes = [];
+  fixture.service.clientFactory = async options => {
+    if (options.modelProvider === 'OpenAI') await beforeReplacement?.();
+    const client = factory(options);
+    clients.push({ client, options });
+    const request = client.request.bind(client);
+    client.request = async (method, params, ...rest) => {
+      if (method === 'thread/resume') {
+        resumes.push(structuredClone(params));
+        if (options.modelProvider !== 'OpenAI') {
+          throw rejectedError ?? new ClassifiedError('RPC_ERROR', 'This chat uses OpenAI, but the current provider differs', {
+            method, rpcCode: -32600, data: { type: 'modelProviderMismatch',
+              modelProvider: 'OpenAI', currentModelProvider: 'codemoss_session' },
+          });
+        }
+      }
+      return request(method, params, ...rest);
+    };
+    return client;
+  };
+  return { ...fixture, clients, resumes, nativeConfig };
+}
+
+test('a legacy provider resume shared by preconnect and send keeps the thread and sends exactly once', async () => {
+  const fixture = legacyProviderFixture();
+  const { service, clients, resumes, nativeConfig, dispatchCounts } = fixture;
+  const beforeConfig = structuredClone(nativeConfig);
+  try {
+    await service.ensureRuntime();
+    const preconnect = service.preconnect({ threadId: THREAD_ID });
+    const send = service.send({ threadId: THREAD_ID, input: [] });
+    await preconnect;
+    assert.equal((await send).outcome, 'completed');
+    assert.equal(resumes.length, 2);
+    assert.equal(clients.length, 2);
+    assert.equal(clients[0].client.closeRequested, true);
+    assert.equal(clients[1].options.modelProvider, 'OpenAI');
+    assert.deepEqual(clients[1].options.nativeConfig.model_providers.OpenAI, nativeConfig.model_providers.codemoss_session);
+    assert.deepEqual(nativeConfig, beforeConfig);
+    assert.equal(service.rootThreadId, THREAD_ID);
+    assert.equal(service.bootstrapInFlight, false);
+    assert.equal(dispatchCounts.get('thread/start') ?? 0, 0);
+    assert.equal(dispatchCounts.get('turn/start'), 1);
+    assert.equal(eventsOf(fixture.events, 'operationDone').length, 1);
+    await service.resetRuntime();
+    await service.preconnect({ threadId: THREAD_ID });
+    assert.equal(clients.length, 3);
+    assert.equal(clients[2].options.modelProvider, 'OpenAI', 'cold startup retains the native history alias');
+    assert.equal(resumes.length, 3, 'cold restore does not repeat the rejected provider');
+    assert.equal((await service.send({ threadId: THREAD_ID, input: [] })).outcome, 'completed');
+    assert.equal(dispatchCounts.get('turn/start'), 2);
+  } finally { await service.resetRuntime(); }
+});
+
+test('reset while preparing a legacy provider replacement cannot resurrect the runtime or send a turn', async () => {
+  let release;
+  let preparing = false;
+  const gate = new Promise(resolve => { release = resolve; });
+  const fixture = legacyProviderFixture({ beforeReplacement: async () => { preparing = true; await gate; } });
+  try {
+    const connecting = fixture.service.preconnect({ threadId: THREAD_ID });
+    const rejected = assert.rejects(connecting, /runtime changed during provider recovery/);
+    await waitFor(() => preparing, 1000, 'provider replacement preparation');
+    await fixture.service.resetRuntime();
+    release();
+    await rejected;
+    assert.equal(fixture.clients.at(-1).client.closeRequested, true);
+    assert.equal(fixture.clients.at(-1).client.child, null, 'released replacement never spawns');
+    assert.equal(fixture.service.state, 'stopped');
+    assert.equal(fixture.dispatchCounts.get('turn/start') ?? 0, 0);
+  } finally { release(); await fixture.service.resetRuntime(); }
+});
+
+test('cancelling a shared send allows the legacy preconnect to recover without sending the cancelled message', async () => {
+  let release;
+  let preparing = false;
+  const gate = new Promise(resolve => { release = resolve; });
+  const fixture = legacyProviderFixture({ beforeReplacement: async () => { preparing = true; await gate; } });
+  const { service } = fixture;
+  try {
+    await service.ensureRuntime();
+    const connecting = service.preconnect({ threadId: THREAD_ID });
+    const operation = service.enqueueOperation({ kind: 'send', threadId: THREAD_ID, markerPayload: { input: [] } });
+    await waitFor(() => preparing && service.bootstrapInFlight, 1000, 'shared provider recovery');
+    await service.stopOperation(operation.clientOperationId);
+    release();
+    await connecting;
+    assert.equal((await operation.promise).outcome, 'cancelled');
+    assert.equal(service.rootThreadId, THREAD_ID);
+    assert.equal(service.bootstrapInFlight, false);
+    assert.equal(fixture.dispatchCounts.get('turn/start') ?? 0, 0);
+    assert.equal((await service.send({ threadId: THREAD_ID, input: [] })).outcome, 'completed');
+  } finally { release(); await service.resetRuntime(); }
+});
+
+test('text-only provider errors are preserved without guessing a replacement or replaying work', async () => {
+  const failure = new ClassifiedError('RPC_ERROR', 'This chat uses OpenAI, but the current provider differs', {
+    method: 'thread/resume', rpcCode: -32600,
+  });
+  const fixture = legacyProviderFixture({ rejectedError: failure });
+  try {
+    await assert.rejects(fixture.service.preconnect({ threadId: THREAD_ID }), error => error.cause === failure);
+    assert.equal(fixture.clients.length, 1);
+    assert.equal(fixture.resumes.length, 1);
+    assert.equal(fixture.dispatchCounts.get('turn/start') ?? 0, 0);
+  } finally { await fixture.service.resetRuntime(); }
+});
 
 test('native configuration and guardian warnings remain visible without finishing a running turn', async () => {
   const fixture = makeService({ scenario: 'never-respond' });
@@ -540,6 +656,82 @@ test('history, foreign-thread and unstructured text items cannot become actionab
       item: { ...fixture.params.item, id: 'historical-question' } } });
     assert.equal(eventsOf(fixture.events, 'interactionRequested').length, 1);
   } finally { await fixture.service.resetRuntime(); }
+});
+
+test('Ultra reaches the native turn unchanged and a later ordinary turn clears it without restarting', async () => {
+  const { service, dispatched } = makeService();
+  try {
+    const settings = { model: 'gpt-6-astra', effort: 'ultra', approvalPolicy: 'on-request',
+      sandbox: 'workspace-write', collaborationMode: { mode: 'default', settings: {
+        model: 'gpt-6-astra', reasoning_effort: 'ultra', developer_instructions: null,
+      } } };
+    const first = service.send({ input: [{ type: 'text', text: 'review independent modules' }], settings });
+    settings.effort = 'high';
+    settings.collaborationMode.settings.reasoning_effort = 'high';
+    const second = service.send({ input: [{ type: 'text', text: 'follow up' }], settings });
+    assert.equal((await first).outcome, 'completed');
+    assert.equal((await second).outcome, 'completed');
+    const turns = dispatched.filter(entry => entry.method === 'turn/start').map(entry => entry.params);
+    assert.deepEqual(turns.map(turn => turn.effort), ['ultra', 'high']);
+    assert.deepEqual(turns.map(turn => turn.collaborationMode.settings.reasoning_effort), ['ultra', 'high']);
+    assert.deepEqual(turns.map(turn => turn.input[0].text), ['review independent modules', 'follow up']);
+    assert.ok(turns.every(turn => turn.approvalPolicy === 'on-request' && turn.sandboxPolicy.type === 'workspaceWrite'));
+    assert.equal(dispatched.filter(entry => entry.method === 'thread/start').length, 1);
+    assert.equal(dispatched.filter(entry => entry.method === 'initialize').length, 1);
+  } finally { await service.resetRuntime(); }
+});
+
+test('Ultra fan-out exposes every native child and keeps concurrent approvals and terminals isolated', async () => {
+  const markers = [];
+  const { service, events, getPeer, dispatched } = makeService({ scenario: 'reverse-approval',
+    serviceOpts: { emitMarker: (_operation, marker) => markers.push(marker) } });
+  const childCount = 80;
+  try {
+    const pending = service.send({ input: [{ type: 'text', text: 'delegate the review' }],
+      settings: { model: 'gpt-6-astra', effort: 'ultra' } });
+    await waitFor(() => eventsOf(events, 'interactionRequested').length === 1);
+    const peer = getPeer();
+    const operation = service.operations.get(service.activeOperationId);
+    const root = service.rootThreadId;
+    peer.scenario = { ...peer.scenario, async onThreadRead(params, ctx) {
+      ctx.reply(ctx.currentId, { thread: { id: params.threadId, parentThreadId: root } });
+    } };
+    for (let index = 0; index < childCount; index += 1) {
+      const childId = `ultra-child-${index}`;
+      peer.notify({ method: 'item/started', params: { threadId: root, turnId: operation.nativeTurnId,
+        item: { id: `activity-${index}`, type: 'subAgentActivity', kind: 'started',
+          agentThreadId: childId, agentPath: `/root/reviewer_${index}`, model: 'gpt-6-astra', reasoningEffort: 'ultra' } } });
+      peer.notify({ method: 'turn/started', params: { threadId: childId, turn: { id: `child-turn-${index}` } } });
+      peer.serverRequest(`child-approval-${index}`, 'item/commandExecution/requestApproval', {
+        threadId: childId, turnId: `child-turn-${index}`, itemId: `command-${index}`, command: 'git status',
+      });
+    }
+    await waitFor(() => eventsOf(events, 'interactionRequested').length === childCount + 1);
+    const activities = markers.filter(marker => typeof marker === 'string' && marker.startsWith('[MESSAGE] '))
+      .map(marker => JSON.parse(marker.slice('[MESSAGE] '.length)))
+      .filter(message => message.codexItemType === 'subAgentActivity');
+    assert.equal(activities.length, childCount, 'started children are visible before their work completes');
+    assert.equal(new Set(activities.map(message => message.message.content[0].input.agentThreadId)).size, childCount);
+    const approvals = eventsOf(events, 'interactionRequested').filter(event => event.threadId !== root);
+    assert.equal(approvals.length, childCount);
+    assert.ok(approvals.every(event => event.rootThreadId === root && event.clientOperationId == null));
+    for (const [index, approval] of approvals.entries()) {
+      assert.equal(service.respondInteraction(approval.payload.rpcId, { decision: index % 2 ? 'accept' : 'decline' }), true);
+      peer.notify({ method: 'turn/completed', params: { threadId: approval.threadId,
+        turn: { id: approval.turnId, status: index % 2 ? 'completed' : 'interrupted' } } });
+    }
+    assert.equal(service.busy, true, 'child terminals cannot finish the root operation');
+    assert.equal(eventsOf(events, 'operationDone').length, 0);
+    service.stopOperation(operation.clientOperationId);
+    await waitFor(() => dispatched.some(entry => entry.method === 'turn/interrupt'));
+    const interrupts = dispatched.filter(entry => entry.method === 'turn/interrupt');
+    assert.deepEqual(interrupts.map(entry => entry.params), [{ threadId: root, turnId: operation.nativeTurnId }],
+      'native root interruption owns cancellation, without independent plugin orchestration');
+    peer.notify({ method: 'turn/completed', params: { threadId: root,
+      turn: { id: operation.nativeTurnId, status: 'interrupted' } } });
+    assert.equal((await pending).outcome, 'interrupted');
+    assert.equal(eventsOf(events, 'operationDone').length, 1);
+  } finally { await service.resetRuntime(); }
 });
 
 test('editor context stays operation-scoped and separate from native user input', async () => {
@@ -1955,7 +2147,9 @@ test('preconnect and send share closing retries and start the user turn only onc
 test('closing retries preserve their original provider parameters until the idle rebuild', async () => {
   const { service, getClient, dispatchCounts } = makeService({ serviceOpts: {
     runtimeFingerprint: 'original',
-    launchOptions: { nativeConfig: { model: 'original-model' }, modelProvider: 'original-provider', developerInstructions: 'original role' },
+    launchOptions: { nativeConfig: { model: 'original-model', model_providers: {
+      'original-provider': { name: 'Original fixture', wire_api: 'responses' },
+    } }, modelProvider: 'original-provider', developerInstructions: 'original role' },
   } });
   const resumes = [];
   try {
@@ -1972,7 +2166,9 @@ test('closing retries preserve their original provider parameters until the idle
     const sending = service.send({ threadId: THREAD_ID, input: [{ type: 'text', text: 'finish with the original provider' }] });
     await waitFor(() => resumes.length === 1);
     const rebuild = service.notifyLaunchConfigChange({
-      nativeConfig: { model: 'replacement-model' }, modelProvider: 'replacement-provider', developerInstructions: 'replacement role',
+      nativeConfig: { model: 'replacement-model', model_providers: {
+        'replacement-provider': { name: 'Replacement fixture', wire_api: 'responses' },
+      } }, modelProvider: 'replacement-provider', developerInstructions: 'replacement role',
     }, 'replacement');
     assert.equal(rebuild.rebuild, 'deferred');
     assert.equal((await sending).outcome, 'completed');

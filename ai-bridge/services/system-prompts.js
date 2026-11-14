@@ -30,6 +30,41 @@ function sanitizePromptValue(value) {
   return str;
 }
 
+/** Compact per-turn facts; durable role/OS instructions stay in the system prompt. */
+function buildTurnIDEContextPrompt(openedFiles) {
+  if (!openedFiles || typeof openedFiles !== 'object') return '';
+  const { active, selection, others, isWorkspace, workspaceRoot, subprojects, modules, activeSubproject } = openedFiles;
+  const lines = [];
+  if (typeof active === 'string' && active.trim()) lines.push(`Active file: ${sanitizePromptValue(active)}`);
+  if (typeof selection?.selectedText === 'string' && selection.selectedText) {
+    const text = selection.selectedText;
+    // Selected source can itself contain Markdown fences. Preserve it exactly.
+    const longestFence = (text.match(/`+/g) || []).reduce((longest, run) => Math.max(longest, run.length), 2);
+    const fence = '`'.repeat(longestFence + 1);
+    lines.push(`Selection, lines ${sanitizePromptValue(selection.startLine) || '?'}-${sanitizePromptValue(selection.endLine) || '?'}:`,
+      fence, text, fence);
+  }
+  const otherPaths = Array.isArray(others) ? others.filter(path => typeof path === 'string' && path.trim()) : [];
+  if (otherPaths.length) lines.push('Other open files:', ...otherPaths.map(path => `- ${sanitizePromptValue(path)}`));
+  if (isWorkspace || workspaceRoot) lines.push(`Workspace${workspaceRoot ? `: ${sanitizePromptValue(workspaceRoot)}` : ': multiple projects'}`);
+  if (Array.isArray(subprojects)) {
+    for (const project of subprojects) {
+      if (!project || typeof project !== 'object') continue;
+      lines.push(`Subproject: ${sanitizePromptValue(project.name) || 'unknown'}${project.type ? ` (${sanitizePromptValue(project.type)})` : ''}`
+        + `${project.loaded === false ? ' [not loaded]' : ''}${project.path ? `: ${sanitizePromptValue(project.path)}` : ''}`);
+    }
+  }
+  if (activeSubproject) lines.push(`Active subproject: ${sanitizePromptValue(activeSubproject)}`);
+  if (Array.isArray(modules) && modules.length) {
+    const names = modules.map(module => sanitizePromptValue(module?.name)).filter(Boolean);
+    if (names.length) lines.push(`Modules: ${names.join(', ')}`);
+  }
+  return lines.length ? [
+    "The user's explicit request takes priority. Use selected code, then the active file, to resolve ambiguous references; other files are supporting context.",
+    ...lines,
+  ].join('\n') : '';
+}
+
 /**
  * Build the IDE context system prompt.
  *
@@ -219,6 +254,7 @@ function buildIDEContextPrompt(openedFiles, agentPrompt = null) {
  */
 export {
   buildIDEContextPrompt,
+  buildTurnIDEContextPrompt,
   sanitizePromptValue,
   // Additional prompt building functions can be added here in the future
   // e.g.: buildErrorContextPrompt, buildDebugContextPrompt, etc.

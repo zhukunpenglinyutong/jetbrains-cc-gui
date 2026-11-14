@@ -63,7 +63,8 @@ export async function generateCodexText({
           ...(runtime.env.CODEX_HOME || launchBaseEnv.CODEX_HOME
             ? { CODEX_HOME: runtime.env.CODEX_HOME || launchBaseEnv.CODEX_HOME } : {}) },
       }, nativeEnvironmentDependencies);
-      return clientFactory({ command: resolution.command, cwd, env, sensitiveEnvNames });
+      return clientFactory({ command: resolution.command, cwd, env, sensitiveEnvNames,
+        nativeConfig: runtime.config, modelProvider: runtime.modelProvider });
     },
     launchOptions: { cwd, nativeConfig: runtime.config, modelProvider: runtime.modelProvider },
     emitMarker: (_operation, marker) => {

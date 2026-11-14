@@ -79,10 +79,12 @@ export const EDIT_TOOLS = new Set([
   'Rename',         // Rename files
 ]);
 
-// EXECUTION tools: always require permission (except bypassPermissions mode)
+// EXECUTION tools: acceptEdits mode always asks for these (see permission-mode.js). In default
+// mode they follow the SDK's own rules unless the project ships rules that could approve them:
+// the CLI launches a sub-agent without asking, and the sub-agent's tools still ask.
 export const EXECUTION_TOOLS = new Set([
   'Bash',           // Execute shell commands
-  'Agent',          // Launch sub-agents (agent has own permission checks but launch needs approval)
+  'Agent',          // Launch sub-agents
 ]);
 
 // Re-export IPC functions for consumers that import from permission-handler

@@ -21,6 +21,22 @@ import static org.junit.Assert.assertTrue;
 public class ModelProviderHandlerTest {
 
     @Test
+    public void workflowSettingAcceptsExplicitFalseWithoutChangingEffort() {
+        HandlerContext context = createHandlerContext();
+        ClaudeSession session = new ClaudeSession(null, null, null, null);
+        context.setSession(session);
+        session.setReasoningEffort("high");
+        ModelProviderHandler handler = new ModelProviderHandler(context, null);
+        handler.handleSetClaudeUltracode("true");
+        assertTrue(session.isClaudeUltracode());
+        handler.handleSetClaudeUltracode("\"false\"");
+        assertTrue(session.isClaudeUltracode());
+        handler.handleSetClaudeUltracode("false");
+        assertFalse(session.isClaudeUltracode());
+        assertEquals("high", session.getReasoningEffort());
+    }
+
+    @Test
     public void shouldUseMainModelAsFallbackWhenFamilyMappingIsMissing() {
         JsonObject env = new JsonObject();
         env.addProperty("ANTHROPIC_MODEL", "glm-4.7");
@@ -153,6 +169,17 @@ public class ModelProviderHandlerTest {
     }
 
     @Test
+    public void shouldKeepExpectedContextLimitsForVisibleMiniMaxModels() {
+        // MiniMax context windows come from ~/.minimax/config.yaml limit.context.
+        assertEquals(400_000, ModelProviderHandler.getModelContextLimit("minimax/MiniMax-M3"));
+        assertEquals(400_000, ModelProviderHandler.getModelContextLimit("MiniMax-M3"));
+        assertEquals(200_000, ModelProviderHandler.getModelContextLimit("minimax/MiniMax-M2.7"));
+        assertEquals(200_000, ModelProviderHandler.getModelContextLimit("MiniMax-M2.7"));
+        assertEquals(200_000, ModelProviderHandler.getModelContextLimit("minimax/MiniMax-M2.7-highspeed"));
+        assertEquals(200_000, ModelProviderHandler.getModelContextLimit("MiniMax-M2.7-highspeed"));
+    }
+
+    @Test
     public void shouldReturnCorrectContextLimitsForClaudeModels() {
         // Base IDs without [1m] suffix - 200k context by default
         assertTrue(ModelProviderHandler.MODEL_CONTEXT_LIMITS.containsKey("claude-opus-5-5"));
@@ -165,6 +192,8 @@ public class ModelProviderHandlerTest {
         assertTrue(ModelProviderHandler.MODEL_CONTEXT_LIMITS.containsKey("claude-sonnet-5[1m]"));
         assertEquals(200_000, ModelProviderHandler.getModelContextLimit("claude-opus-5-5"));
         assertEquals(200_000, ModelProviderHandler.getModelContextLimit("claude-opus-5"));
+        assertEquals(200_000, ModelProviderHandler.getModelContextLimit("claude-fable-5-2"));
+        assertEquals(200_000, ModelProviderHandler.getModelContextLimit("claude-fable-5-1"));
         assertEquals(200_000, ModelProviderHandler.getModelContextLimit("claude-fable-5"));
         assertEquals(200_000, ModelProviderHandler.getModelContextLimit("claude-sonnet-5-5"));
         assertEquals(200_000, ModelProviderHandler.getModelContextLimit("claude-sonnet-5"));
@@ -175,6 +204,8 @@ public class ModelProviderHandlerTest {
         // IDs with [1m] suffix - 1M context
         assertEquals(1_000_000, ModelProviderHandler.getModelContextLimit("claude-opus-5-5[1m]"));
         assertEquals(1_000_000, ModelProviderHandler.getModelContextLimit("claude-opus-5[1m]"));
+        assertEquals(1_000_000, ModelProviderHandler.getModelContextLimit("claude-fable-5-2[1m]"));
+        assertEquals(1_000_000, ModelProviderHandler.getModelContextLimit("claude-fable-5-1[1m]"));
         assertEquals(1_000_000, ModelProviderHandler.getModelContextLimit("claude-fable-5[1m]"));
         assertEquals(1_000_000, ModelProviderHandler.getModelContextLimit("claude-sonnet-5-5[1m]"));
         assertEquals(1_000_000, ModelProviderHandler.getModelContextLimit("claude-sonnet-5[1m]"));

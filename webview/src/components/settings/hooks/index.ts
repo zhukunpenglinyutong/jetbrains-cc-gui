@@ -23,6 +23,9 @@ export type {
   DeleteAgentConfirmState,
 } from './useAgentManagement';
 
+export { useHookManagement } from './useHookManagement';
+export type { UseHookManagementReturn } from './useHookManagement';
+
 export { usePromptManagement } from './usePromptManagement';
 export type {
   UsePromptManagementOptions,

@@ -106,6 +106,10 @@
     "localProject": "ローカル",
     "disabled": "無効",
     "sdkNotInstalled": "{{provider}} SDKがインストールされていません。チャットを開始するにはSDKをインストールしてください。",
+    "codexUltraCapabilitiesLoading": "Ultra が利用可能か確認中です。モデルの読み込みが完了したら、もう一度送信してください。",
+    "codexUltraCapabilitiesUnavailable": "Ultra の利用可否を確認できませんでした。モデルを再読み込みするか、別の推論レベルを選択してください。",
+    "sessionTransitionTakingLonger": "セッションの切り替えに時間がかかっています。もう一度開くことができます。待機中のメッセージの送信は一時停止しています。",
+    "sessionTransitionInProgress": "セッションの切り替え中です。しばらくお待ちください。",
     "sdkStatusLoading": "Checking SDK status...",
     "pasteImagePreparing": "貼り付けた画像を準備中...",
     "sdkStatusUnavailable": "SDK の状態を確認できませんでした。",
@@ -141,8 +145,7 @@
       "matchCase": "大文字と小文字を区別 (Alt+C)",
       "wholeWord": "単語単位で検索 (Alt+W)",
       "regex": "正規表現 (Alt+R)",
-      "invalidRegex": "無効な正規表現",
-      "openTooltip": "会話内を検索 (Cmd/Ctrl+F)"
+      "invalidRegex": "無効な正規表現"
     },
     "compactSummary": {
       "receivedTime": "記録時刻",
@@ -171,7 +174,16 @@
     "codexApprovalsUsage": "Use /approvals without arguments",
     "codexCliOutdated": "Codex CLI {{version}} は古いバージョンです。一部のモデルや権限モードが正しく動作しない場合があります。{{minimumVersion}} 以降に更新してください。",
     "codexSandboxConflict": "Codex automatic review cannot use danger-full-access. Choose workspace-write or request approval.",
-    "continueRefiningPlan": "このプランの改善を続ける："
+    "continueRefiningPlan": "このプランの改善を続ける：",
+    "backgroundTasksRunning": "{{count}} 件のバックグラウンドタスクを実行中",
+    "backgroundTasksRunning_one": "{{count}} 件のバックグラウンドタスクを実行中",
+    "backgroundTasksRunning_other": "{{count}} 件のバックグラウンドタスクを実行中",
+    "stopBackgroundTasks": "バックグラウンドタスクを停止",
+    "planUsage": {
+      "balanceLabel": "残高：",
+      "balanceRemaining": "残高：{{value}}",
+      "balanceDetail": "合計 {{total}} · 使用済み {{used}}"
+    }
   },
   "settings": {
     "title": "設定",
@@ -399,6 +411,12 @@
         "enabled": "有効",
         "disabled": "無効",
         "hint": "無効にすると、メッセージが存在するセッションで新規作成を選択した際、確認ダイアログを表示せず直接新規セッションを作成します。"
+      },
+      "sessionGitRepositoryMatching": {
+        "label": "Git リモートリポジトリでセッションを照合",
+        "enabled": "有効",
+        "disabled": "無効",
+        "hint": "正規化したリモートホスト、オーナー、リポジトリが同じ他のディレクトリの Codex と Claude Code の履歴も表示します。Git 情報を取得できない場合は作業ディレクトリで照合します。"
       }
     },
     "providers": "プロバイダー管理",
@@ -544,16 +562,6 @@
           "importanceHint": "重要度が高いほど、自動補完で優先されます"
         },
         "timeAgo": {
-          "yearsAgo_one": "{{count}} year ago",
-          "yearsAgo_other": "{{count}} years ago",
-          "monthsAgo_one": "{{count}} month ago",
-          "monthsAgo_other": "{{count}} months ago",
-          "daysAgo_one": "{{count}} day ago",
-          "daysAgo_other": "{{count}} days ago",
-          "hoursAgo_one": "{{count}} hour ago",
-          "hoursAgo_other": "{{count}} hours ago",
-          "minutesAgo_one": "{{count}} minute ago",
-          "minutesAgo_other": "{{count}} minutes ago",
           "justNow": "たった今",
           "yearsAgo": "{{count}}年前",
           "monthsAgo": "{{count}}ヶ月前",
@@ -1013,6 +1021,132 @@
       "source": "Source: {{source}}",
       "readOnlyTitle": "Read only",
       "readOnlyDesc": "Inspect files without writing to the workspace."
+    },
+    "hooks": {
+      "title": "Hooks",
+      "description": "Codex と Claude Code のフックを確認し、安全に編集します。",
+      "refresh": "更新",
+      "provider": "プロバイダー",
+      "scope": "範囲",
+      "all": "すべて",
+      "allProviders": "すべてのプロバイダー",
+      "allScopes": "すべての範囲",
+      "global": "ユーザー",
+      "project": "プロジェクト",
+      "projectLocal": "プロジェクト（ローカル上書き）",
+      "search": "Hooks を検索",
+      "searchPlaceholder": "イベント、コマンド、パスを検索",
+      "noMatches": "条件に一致する Hook はありません。",
+      "toggleUnavailable": "実行時の動作が確認されるまで個別の切り替えは使えません。",
+      "enabled": "有効",
+      "disabled": "無効",
+      "enable": "Hook を有効にする",
+      "disable": "Hook を無効にする",
+      "managedToggleHint": "CC GUI が管理する切り替えです。元の設定を保持し復元できます。",
+      "nativeToggleHint": "Codex のユーザー設定を変更します。実行には信頼、機能設定、ポリシーも適用されます。",
+      "toggleFailed": "Hook の切り替えに失敗しました",
+      "loading": "Hook の場所を検索中…",
+      "empty": "Hook が見つかりませんでした。",
+      "valid": "形式を認識しました",
+      "validationWarning": "確認が必要",
+      "matcher": "マッチャー",
+      "noCommand": "コマンドなし",
+      "readOnly": "読み取り専用",
+      "viewSource": "ソースを表示",
+      "editSource": "ソースを編集",
+      "sourcePreview": "Hook ソースのプレビュー",
+      "sourceTab": "ソース",
+      "detailsTab": "詳細",
+      "viewMode": "Hook の表示",
+      "loadingSource": "ソースを読み込み中…",
+      "sourceEditor": "Hook ソースエディター",
+      "affectedFile": "対象ファイル",
+      "backupDirectory": "バックアップ先",
+      "latestBackup": "この編集セッションの直前のバックアップを復元",
+      "lastModified": "最終更新",
+      "event": "イベント",
+      "format": "形式",
+      "revision": "リビジョン",
+      "command": "コマンド",
+      "validationIssues": "検証の問題",
+      "providerFields": "プロバイダー固有の項目",
+      "noProviderFields": "固有の項目はありません",
+      "none": "なし",
+      "reviewChanges": "変更を確認",
+      "hideChanges": "差分を隠す",
+      "noChanges": "保存する変更はありません",
+      "technicalInfo": "技術情報",
+      "moreActions": "その他の操作",
+      "conflictTitle": "ソースが外部で変更されました",
+      "conflictDescription": "外部の内容を再読み込みするか、下書きを保持して最新のリビジョンに同期してください。",
+      "reloadExternal": "外部の内容を再読み込み",
+      "keepDraft": "下書きを保持して同期",
+      "discardDraft": "下書きを破棄",
+      "discardChangesTitle": "未保存の変更を破棄しますか？",
+      "discardChangesMessage": "変更は保存されていません。閉じると復元できません。",
+      "backupOnSave": "保存前にバックアップを作成します",
+      "save": "保存",
+      "saving": "保存中…",
+      "restore": "この編集セッションの直前のバックアップを復元",
+      "saveFailed": "保存に失敗しました",
+      "sourceLoadFailed": "ソースの再読み込みに失敗しました",
+      "noPreview": "プレビューはありません。",
+      "sourceNotice": "{{count}} 件のソースは確認が必要です。該当項目の操作は制限されています。",
+      "sharedProjectWarning": "プロジェクト設定はコミットされ他の利用者に影響する場合があります。共有前に差分を確認してください。",
+      "bridgeUnavailable": "IDE への接続がありません。設定画面を開き直してください。",
+      "sourceTimeout": "読み込みがタイムアウトしました。編集前に再読み込みしてください。",
+      "mutationTimeout": "確認がタイムアウトしました。保存済みの場合があるため再試行前に更新してください。",
+      "mutationConfirmedLate": "遅れた保存確認を受信しました。下書きは保持しました。ソースを再読み込みしてください。",
+      "issues": {
+        "COMMAND_MISSING": "コマンドがありません",
+        "TYPE_MISSING": "種類がありません",
+        "HOOKS_NOT_OBJECT": "hooks はオブジェクトである必要があります",
+        "SETTINGS_NOT_OBJECT": "設定はオブジェクトである必要があります",
+        "INVALID_JSON": "無効な JSON",
+        "HOOK_ENTRY_NOT_OBJECT": "Hook はオブジェクトである必要があります",
+        "INVALID_TOML": "無効な TOML",
+        "CODEX_HOOKS_NOT_TABLE": "Codex hooks はテーブルが必要です",
+        "CODEX_HOOK_EVENT_NOT_ARRAY": "Hook イベントには配列が必要です",
+        "CODEX_HOOK_ENTRY_NOT_TABLE": "Hook エントリにはテーブルが必要です",
+        "CODEX_ENABLED_INVALID": "有効設定が無効です",
+        "CODEX_MATCHER_INVALID": "マッチャーが無効です",
+        "CODEX_COMMANDS_INVALID": "有効なコマンドまたは MCP ツールがありません",
+        "CODEX_HOOKS_FEATURE_DISABLED": "Hooks 機能が無効です",
+        "READ_FAILED": "読み込みに失敗しました",
+        "CODEX_EVENT_UNSUPPORTED": "確認済み形式で非対応のイベントです",
+        "CODEX_HANDLER_UNSUPPORTED": "確認済み形式で非対応の処理種類です",
+        "CODEX_HOOK_FILE_FIELDS_INVALID": "Hook ファイルの項目が無効です",
+        "CODEX_STATE_INLINE_UNSUPPORTED": "インライン状態は安全に編集できません。状態テーブルを使用してください。",
+        "LINKED_SOURCE_READ_ONLY": "リンクファイルは読み取り専用です。元のファイルを直接編集してください。",
+        "HOOK_SOURCE_UNAVAILABLE": "ソースファイルを利用できません。"
+      },
+      "sharedToggleTitle": "共有プロジェクト設定の変更を確認",
+      "sharedToggleMessage": "共有の .claude/settings.json を変更します。他の共同作業者に影響する場合があります。無効化したフックの復元情報はこの端末だけに保存されます。",
+      "confirmSharedToggle": "共有設定を変更",
+      "sensitiveSourceWarning": "認証情報などの機密設定が含まれる場合があります。編集する準備ができてから表示してください。",
+      "revealSource": "設定を表示",
+      "errors": {
+        "HOOK_SHARED_CONFIRMATION_REQUIRED": "共有プロジェクト設定の変更を先に確認してください。",
+        "HOOK_CATALOG_TIMEOUT": "フックの更新がタイムアウトしました。他のフックを変更する前に更新してください。",
+        "HOOK_REVISION_CONFLICT": "このページの外でファイルが変更されました。更新してから再試行してください。",
+        "HOOK_RESTORE_CONFLICT": "復元できません。ファイル内のこのイベントがリストではなくなっています。ファイルを修正してから再試行してください。",
+        "HOOK_TOGGLE_LOCKED": "このファイルには別の変更が進行中です。しばらくしてから再試行してください。",
+        "HOOK_TOGGLE_LOCK_FAILED": "この変更のためにファイルをロックできませんでした。",
+        "HOOK_FILE_LOCKED": "このファイルには別の変更が進行中です。しばらくしてから再試行してください。",
+        "HOOK_NOT_FOUND": "この Hook はファイルにもうありません。一覧を更新してください。",
+        "HOOK_NOT_DISABLED": "この Hook は無効になっていません。一覧を更新してください。",
+        "HOOK_ALREADY_DISABLED": "この Hook はすでに無効です。一覧を更新してください。",
+        "HOOK_STATE_WRITE_FAILED": "無効化の記録を保存できませんでした。ファイルの変更は可能な範囲で元に戻しました。",
+        "HOOK_TOGGLE_FAILED": "この Hook を変更できませんでした。",
+        "INVALID_HOOK_PATH": "このファイルはここでは変更できません。リンクファイルや既知の場所以外のファイルは読み取り専用です。",
+        "INVALID_BACKUP_PATH": "バックアップファイルを利用できません。",
+        "SOURCE_TOO_LARGE": "ファイルが 128 KB を超えているため、ここでは編集できません。",
+        "INVALID_REQUEST": "リクエストが無効です。ページを更新して再試行してください。",
+        "WRITE_FAILED": "ファイルを保存できませんでした。",
+        "RESTORE_FAILED": "バックアップを復元できませんでした。",
+        "UNSUPPORTED_HOOK_PROVIDER": "この種類の Hook はここでは変更できません。",
+        "UNKNOWN_ERROR": "不明なエラーです。"
+      }
     }
   },
   "history": {
@@ -1094,7 +1228,10 @@
     },
     "loadMore": "Load more",
     "sessionInUse": "使用中のセッションは削除できません。",
-    "deleteFailed": "セッションを削除できませんでした。もう一度お試しください。"
+    "deleteFailed": "セッションを削除できませんでした。もう一度お試しください。",
+    "confirmDirectoryTitle": "別のディレクトリでセッションを開きますか？",
+    "confirmDirectoryMessage": "コマンドとファイルの変更は下記のディレクトリで実行されます。",
+    "executionDirectory": "実行ディレクトリ"
   },
   "permission": {
     "dialogTitle": "権限リクエスト",
@@ -1126,7 +1263,15 @@
     "codexDeliveryFailed": "Codex があなたの選択を受け取れませんでした（{{error}}）。会話が進まない場合は、停止してからもう一度送信してください。",
     "codexDeliveryUnconfirmed": "Codex はまだあなたの選択の受け取りを確認していません（{{error}}）。選択はまだ反映される可能性があるため、もう一度回答しないでください。会話が進まない場合は、停止してからもう一度送信してください。"
   },
+  "modelConfig": {
+    "approvals": "承認",
+    "ultracode": {
+      "label": "Ultracode",
+      "description": "タスクを自動委任する Claude のネイティブワークフロー。選択した推論強度を保持します。"
+    }
+  },
   "askUserQuestion": {
+    "ompTitle": "OMP からいくつか質問があります",
     "title": "Claudeからの質問があります",
     "progress": "質問 {{current}} / {{total}}",
     "multiSelectHint": "複数のオプションを選択できます",
@@ -1177,7 +1322,8 @@
     "invalidJsonConfig": "無効なJSON設定形式",
     "providerAdded": "プロバイダーを追加しました",
     "providerUpdated": "プロバイダーを更新しました",
-    "providerDeleted": "プロバイダーを削除しました"
+    "providerDeleted": "プロバイダーを削除しました",
+    "codexSettingsDispatchFailed": "Codex の設定を IDE に送信できません。チャットを開き直して、もう一度お試しください。"
   },
   "config": {
     "clickToCopy": "クリックしてコピー",
@@ -1517,6 +1663,12 @@
     "bashGroupCompleted": "completed",
     "bashGroupAllCompleted": "All Completed",
     "bashGroupFailed": "failed",
+    "bashGroupCopyCommand": "コマンドをコピー",
+    "bashGroupCopyOutput": "出力をコピー",
+    "bashGroupOutput": "出力",
+    "bashGroupOutputFailed": "失敗",
+    "bashGroupRunning": "実行中…",
+    "bashGroupNoOutput": "（出力なし）",
     "reportFindings": {
       "title": "レビュー指摘",
       "findingsCount_one": "{{count}} 件の指摘",
@@ -1562,6 +1714,7 @@
       "loading": "エージェントプロセスを読み込み中…",
       "unavailable": "セッションに id ができるまでプロセスログは利用できません。",
       "reportGenerated": "構造化分析レポートを生成しました",
+      "historyTruncated": "履歴を短縮し、{{count}} 件の記録を省略しました。最初のタスクと最近のアクティビティは保持されています。",
       "unitMs": "ミリ秒",
       "unitS": "秒",
       "unitTools": "ツール",
@@ -1786,13 +1939,13 @@
         "label": "Haiku 4.5",
         "description": "Haiku 4.5 · 迅速な回答に最速"
       },
+      "fable52": {
+        "label": "Fable 5.2",
+        "description": "Fable 5.2 · 最も強力 · Mythosクラス"
+      },
       "fable51": {
         "label": "Fable 5.1",
-        "description": "Fable 5.1 · 最も強力 · Mythosクラス"
-      },
-      "fable5": {
-        "label": "Fable 5",
-        "description": "Fable 5 · 前世代の Fable モデル"
+        "description": "Fable 5.1 · 前世代の Fable モデル"
       }
     },
     "codex": {
@@ -1901,6 +2054,25 @@
       "label": "Full Auto",
       "tooltip": "Codex approval_policy=never – runs commands and writes files without prompting (workspace sandbox still enforced).",
       "description": "Hands-off mode. Codex executes edits and shell commands immediately."
+    }
+  },
+  "ompApprovals": {
+    "title": "OMP の承認モードを選択",
+    "default": {
+      "label": "デフォルト",
+      "description": "未設定ならフルオート（OMP の tools.approvalMode）"
+    },
+    "alwaysAsk": {
+      "label": "確認する",
+      "description": "編集とコマンドの実行前に確認します"
+    },
+    "write": {
+      "label": "編集を自動承認",
+      "description": "コマンドの実行前のみ確認します"
+    },
+    "yolo": {
+      "label": "フルオート",
+      "description": "確認しません"
     }
   },
   "ompModes": {
@@ -2021,6 +2193,10 @@
     "xhigh": {
       "label": "最大",
       "description": "最大の推論深度"
+    },
+    "ultra": {
+      "label": "Ultra",
+      "description": "最大の推論深度と自動タスク委任"
     }
   },
   "errorBoundary": {
@@ -2284,5 +2460,11 @@
       "executing": "Executing…",
       "adjust": "Continue adjusting"
     }
+  },
+  "sessionSupplier": {
+    "label": "プロバイダー",
+    "choose": "プロバイダーを選択",
+    "nextTurn": "次のターンから適用",
+    "unavailable": "プロバイダーを利用できません。メニューを開き直して再試行するか、別のプロバイダーを選択してください。"
   }
 }

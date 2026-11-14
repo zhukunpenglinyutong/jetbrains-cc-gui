@@ -160,6 +160,16 @@ public class HistoryDeleteServiceTest {
     }
 
     @Test
+    public void deletingAnIdleClaudeSessionContinuesAfterNoOpStopAcknowledgment() {
+        RecordingClaudeSession session = new RecordingClaudeSession("session-1", "claude");
+        AtomicBoolean deletionStarted = new AtomicBoolean();
+        HistoryDeleteService.quiesceActiveSessionForDeletion(session, List.of("session-1"), "claude")
+                .thenRun(() -> deletionStarted.set(true)).join();
+        assertTrue(session.interrupted);
+        assertTrue(deletionStarted.get());
+    }
+
+    @Test
     public void failedQuiesceDoesNotStartDeletionContinuation() {
         RecordingClaudeSession matching = new RecordingClaudeSession("session-1", "claude") {
             @Override

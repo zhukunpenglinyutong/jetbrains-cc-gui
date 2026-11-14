@@ -6,14 +6,13 @@
  *                   "cost": {} } ] }
  */
 
-import { spawnSync } from 'child_process';
 import { homedir } from 'os';
 import {
   commonCliBinDirs,
   enrichPathWithBinDirs,
-  isWindowsCmdShim,
   resolveOmpCliPath,
 } from '../../utils/cli-path.js';
+import { spawnCliSync } from '../../utils/cli-spawn.js';
 
 function stripAnsi(input) {
   return String(input || '').replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, '');
@@ -33,8 +32,10 @@ function formatCtx(contextWindow) {
  * Parse `omp models --json` stdout into model entries.
  * Tolerates missing fields: entries without a string `selector` are skipped,
  * missing context/reasoning/input fields just omit that description segment.
+ * A model's `thinking` list (the levels `--thinking` accepts for it) is passed
+ * on as `supportedReasoningEfforts` so the effort selector offers those only.
  * @param {string} stdout
- * @returns {{ id: string, label: string, description?: string }[]}
+ * @returns {{ id: string, label: string, description?: string, supportedReasoningEfforts?: string[] }[]}
  */
 export function parseOmpModelsJson(stdout) {
   const parsed = JSON.parse(stripAnsi(stdout));
@@ -53,11 +54,20 @@ export function parseOmpModelsJson(stdout) {
     if (ctx) details.push(`ctx ${ctx}`);
     if (entry.reasoning === true) details.push('thinking');
     if (Array.isArray(entry.input) && entry.input.includes('image')) details.push('vision');
-    models.push({
+    const model = {
       id,
       label: id,
       description: details.length > 0 ? details.join(' · ') : id,
-    });
+    };
+    const efforts = Array.isArray(entry.thinking)
+      ? entry.thinking.filter((level) => typeof level === 'string' && level)
+      : [];
+    if (efforts.length > 0) model.supportedReasoningEfforts = efforts;
+    // Session files do not record the window, so restored sessions look it up from this list.
+    if (typeof entry.contextWindow === 'number' && Number.isFinite(entry.contextWindow) && entry.contextWindow > 0) {
+      model.contextWindow = entry.contextWindow;
+    }
+    models.push(model);
   }
   return models;
 }
@@ -89,13 +99,11 @@ export function parseOmpRolesJson(stdout) {
  */
 function fetchOmpRoles(bin, env) {
   try {
-    const result = spawnSync(bin, ['config', 'get', 'modelRoles', '--json'], {
+    const result = spawnCliSync(bin, ['config', 'get', 'modelRoles', '--json'], {
       encoding: 'utf8',
       env,
       timeout: 15_000,
       maxBuffer: 1024 * 1024,
-      // Windows npm `.cmd` shims require a shell to spawn.
-      shell: isWindowsCmdShim(bin),
     });
     if (!result || result.error || result.status !== 0) return [];
     return parseOmpRolesJson(result.stdout || '');
@@ -114,13 +122,11 @@ export function listModels() {
 
   let result;
   try {
-    result = spawnSync(bin, ['models', '--json'], {
+    result = spawnCliSync(bin, ['models', '--json'], {
       encoding: 'utf8',
       env,
       timeout: 45_000,
       maxBuffer: 8 * 1024 * 1024,
-      // Windows npm `.cmd` shims require a shell to spawn.
-      shell: isWindowsCmdShim(bin),
     });
   } catch (error) {
     console.log(JSON.stringify({

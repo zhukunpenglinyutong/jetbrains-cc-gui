@@ -4,13 +4,19 @@ import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.provider.common.MarkerCliBridge;
+import com.github.claudecodegui.provider.zcode.ZcodeSDKBridge;
 import com.google.gson.JsonObject;
+import com.intellij.openapi.application.Application;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.ui.jcef.JBCefBrowser;
 import org.junit.Test;
 
 import java.util.Map;
 import java.util.List;
+import java.util.ArrayList;
+import java.lang.reflect.Field;
+import java.lang.reflect.Proxy;
 import java.util.concurrent.CompletableFuture;
 
 import static org.junit.Assert.assertFalse;
@@ -21,6 +27,47 @@ import static org.junit.Assert.assertTrue;
 
 /** Verifies history switching waits for the previous native writer to finish releasing. */
 public class SessionLifecycleReleaseTest {
+    /** Null transcript ids still require a new supplier binding after the old writer drains. */
+    @Test
+    public void newUnsavedSessionPublishesItsBindingAfterInstallation() {
+        HoldingReleaseBridge bridge = new HoldingReleaseBridge();
+        Host host = new Host(bridge);
+        host.session.setSessionInfo(null, "/fixture");
+        ClaudeSession previous = host.session;
+        SessionLifecycleManager manager = new SessionLifecycleManager(host) {
+            @Override public String determineWorkingDirectory() { return "/fixture"; }
+            @Override public void fetchSlashCommandsOnStartup(boolean userRequested) { }
+        };
+        Application previousApplication = ApplicationManager.getApplication();
+        List<Runnable> uiCalls = new ArrayList<>();
+        Application application = (Application) Proxy.newProxyInstance(Application.class.getClassLoader(),
+                new Class<?>[]{Application.class}, (proxy, method, arguments) -> {
+                    if ("invokeLater".equals(method.getName())) {
+                        uiCalls.add((Runnable) arguments[0]);
+                    }
+                    return method.getReturnType() == boolean.class ? false : null;
+                });
+        ApplicationManager.setApplication(application);
+        try {
+            manager.createNewSession();
+            assertSame(previous, host.session);
+            assertFalse(host.scriptNames.contains("notifySessionSupplierBindingChanged"));
+            bridge.release.complete(new JsonObject());
+            assertNotSame(previous, host.session);
+            assertSame(host.session, host.context.getSession());
+            for (Runnable callback : List.copyOf(uiCalls)) {
+                callback.run();
+            }
+            assertTrue(host.scriptNames.contains("notifySessionSupplierBindingChanged"));
+            assertEquals(0, host.bindingArgumentCount);
+            assertTrue(host.scriptNames.indexOf("notifySessionSupplierBindingChanged") < host.scriptNames.indexOf("historyLoadComplete"));
+        } finally {
+            host.coalescer.dispose();
+            bridge.cleanupAllProcesses();
+            ApplicationManager.setApplication(previousApplication);
+        }
+    }
+
     /** Restored chats share a default channel only after the preceding writer has drained. */
     @Test
     public void historyRestoreDoesNotReuseTheChannelDuringAnUnfinishedRelease() {
@@ -51,6 +98,25 @@ public class SessionLifecycleReleaseTest {
             assertNotSame(previous, host.session);
             assertEquals("next-root", host.session.getSessionId());
             assertEquals(previous.getChannelId(), host.session.getChannelId());
+        } finally {
+            host.coalescer.dispose();
+            bridge.cleanupAllProcesses();
+        }
+    }
+
+    /** A restored ZCode chat keeps its bridge, so its messages are not routed to Claude. */
+    @Test
+    public void historyRestoreKeepsTheZcodeBridge() throws Exception {
+        HoldingReleaseBridge bridge = new HoldingReleaseBridge();
+        Host host = new Host(bridge);
+        host.zcodeBridge = new ZcodeSDKBridge();
+        try {
+            new SessionLifecycleManager(host).loadHistorySession("next-root", "/fixture", "zcode", "glm-5");
+            bridge.release.complete(new JsonObject());
+            assertEquals("next-root", host.session.getSessionId());
+            Field field = ClaudeSession.class.getDeclaredField("zcodeSDKBridge");
+            field.setAccessible(true);
+            assertSame(host.zcodeBridge, field.get(host.session));
         } finally {
             host.coalescer.dispose();
             bridge.cleanupAllProcesses();
@@ -101,6 +167,9 @@ public class SessionLifecycleReleaseTest {
         private final HandlerContext context;
         private final StreamMessageCoalescer coalescer;
         private ClaudeSession session;
+        private final List<String> scriptNames = new ArrayList<>();
+        private int bindingArgumentCount = -1;
+        private ZcodeSDKBridge zcodeBridge;
 
         private Host(HoldingReleaseBridge bridge) {
             this.bridge = bridge;
@@ -126,6 +195,8 @@ public class SessionLifecycleReleaseTest {
         @Override public ClaudeSDKBridge getClaudeSDKBridge() { return null; }
         /** Routes native teardown to the held acknowledgement. */
         @Override public CodexSDKBridge getCodexSDKBridge() { return this.bridge; }
+        /** Supplies the ZCode bridge only when a test opts in. */
+        @Override public ZcodeSDKBridge getZcodeSDKBridge() { return this.zcodeBridge; }
         /** Excludes unrelated CLI lifecycles from the fixture. */
         @Override public Map<String, MarkerCliBridge> getCliBridges() { return Map.of(); }
         /** Exposes the logical session that currently owns the channel. */
@@ -141,7 +212,12 @@ public class SessionLifecycleReleaseTest {
         /** Keeps decisions local to the isolated fixture. */
         @Override public void clearPermissionDecisionMemory() { }
         /** Replaces JCEF delivery while exercising the lifecycle manager. */
-        @Override public void callJavaScript(String functionName, String... args) { }
+        @Override public void callJavaScript(String functionName, String... args) {
+            this.scriptNames.add(functionName);
+            if ("notifySessionSupplierBindingChanged".equals(functionName)) {
+                this.bindingArgumentCount = args.length;
+            }
+        }
         /** Keeps the destination available during release ordering. */
         @Override public boolean isDisposed() { return false; }
         /** Avoids constructing a real JCEF browser. */

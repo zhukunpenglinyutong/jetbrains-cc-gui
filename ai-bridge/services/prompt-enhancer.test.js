@@ -404,3 +404,18 @@ test('buildEnhanceAskRequest trims and attaches a non-empty system prompt', () =
   // Blank / non-string system prompts must not produce an empty system field.
   assert.equal('system' in buildEnhanceAskRequest('m', 'p', '   ', 512), false);
 });
+
+// ---------- thinking setting per model (#1949) ----------
+
+test('buildEnhanceAskRequest uses between_tools for Claude Sonnet 5.5', () => {
+  const request = buildEnhanceAskRequest('claude-sonnet-5-5', 'Improve this prompt', null, 1024);
+  assert.deepEqual(request.thinking, { type: 'between_tools' });
+  assert.equal(request.max_tokens, 1024);
+});
+
+test('buildEnhanceAskRequest omits thinking and lowers effort for Claude Opus 5.5', () => {
+  const request = buildEnhanceAskRequest('claude-opus-5-5', 'Improve this prompt', null, 1024);
+  assert.equal('thinking' in request, false);
+  assert.deepEqual(request.output_config, { effort: 'low' });
+  assert.ok(request.max_tokens >= 4096);
+});
