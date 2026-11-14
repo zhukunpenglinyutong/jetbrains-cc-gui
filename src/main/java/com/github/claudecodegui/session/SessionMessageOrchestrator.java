@@ -20,6 +20,8 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BooleanSupplier;
 
@@ -30,6 +32,18 @@ public class SessionMessageOrchestrator {
 
     private static final Logger LOG = Logger.getInstance(SessionMessageOrchestrator.class);
     private static final int MAX_UUID_SYNC_RETRIES = 3;
+
+    /**
+     * Delay before retrying a Claude reload that the live-narrative guard
+     * rejected because the transcript on disk had not caught up yet.
+     */
+    private static final long LIVE_NARRATIVE_RETRY_DELAY_MS = 1500;
+
+    /**
+     * Bound on automatic retries for one outward load request, so a writer that
+     * never catches up cannot keep re-reading the transcript.
+     */
+    private static final int LIVE_NARRATIVE_MAX_RETRIES = 2;
 
     public interface SessionHistoryAccess {
         List<JsonObject> getProviderSessionMessages(String provider, String sessionId, String cwd);
@@ -95,6 +109,74 @@ public class SessionMessageOrchestrator {
         }
     }
 
+    /**
+     * Whether another retry is still allowed for the current outward load.
+     *
+     * @param attempt attempts already scheduled, 1-based
+     * @return true when the attempt is within the configured bound
+     */
+    static boolean shouldScheduleLiveNarrativeRetry(int attempt) {
+        return attempt <= LIVE_NARRATIVE_MAX_RETRIES;
+    }
+
+    /**
+     * Whether a scheduled retry may run now.
+     *
+     * @param currentSessionId   session currently displayed
+     * @param requestedSessionId session the retry belongs to
+     * @param busy               whether a turn is in flight
+     * @param loading            whether a history load is in flight
+     * @return true when the retry targets the displayed session and nothing else is running
+     */
+    static boolean shouldRunLiveNarrativeRetry(String currentSessionId, String requestedSessionId,
+                                               boolean busy, boolean loading) {
+        return requestedSessionId != null
+                && Objects.equals(currentSessionId, requestedSessionId)
+                && !busy
+                && !loading;
+    }
+
+    /**
+     * Retry a reload once the CLI has had time to flush the follow-up turn to
+     * JSONL.
+     *
+     * <p>The live-narrative guard is right to reject a transcript that does not
+     * cover what is already on screen, but a rejection used to end the reload
+     * for good. The frontend can drop a live inter-turn event (streaming or
+     * session-switch guards), and this reload is its only fallback, so retry a
+     * bounded number of times and let the fallback heal itself.</p>
+     *
+     * @param requestedSessionId session whose reload was rejected
+     */
+    private void scheduleLiveNarrativeRetry(String requestedSessionId) {
+        int attempt = liveNarrativeRetryAttempt.incrementAndGet();
+        if (!shouldScheduleLiveNarrativeRetry(attempt)) {
+            LOG.info("[History] Giving up on live-narrative reload retry for sessionId=" + requestedSessionId);
+            return;
+        }
+        LOG.info("[History] Scheduling live-narrative reload retry " + attempt
+                + " in " + LIVE_NARRATIVE_RETRY_DELAY_MS + "ms for sessionId=" + requestedSessionId);
+        CompletableFuture.delayedExecutor(LIVE_NARRATIVE_RETRY_DELAY_MS, TimeUnit.MILLISECONDS)
+                .execute(() -> retryLiveNarrativeLoad(requestedSessionId));
+    }
+
+    /**
+     * Run a scheduled live-narrative retry when the session is still idle.
+     *
+     * @param requestedSessionId session the retry belongs to
+     */
+    private void retryLiveNarrativeLoad(String requestedSessionId) {
+        if (!shouldRunLiveNarrativeRetry(state.getSessionId(), requestedSessionId,
+                state.isBusy(), state.isLoading())) {
+            // The user moved on, or a newer turn/load is in flight. Its own
+            // completion (or the next session_updated) can recover; do not
+            // stack another load on top.
+            LOG.info("[History] Skipping live-narrative reload retry; session changed or busy");
+            return;
+        }
+        loadFromServer(() -> false, true, true);
+    }
+
     @FunctionalInterface
     public interface UsageDisplay {
         void show(int usedTokens, int maxTokens);
@@ -107,6 +189,8 @@ public class SessionMessageOrchestrator {
     private final UsageDisplay usageDisplay;
     private final long initialUuidSyncDelayMs;
     private final long uuidRetryDelayMs;
+    /** Retry attempts for the current outward load; reset by every non-retry entry. */
+    private final AtomicInteger liveNarrativeRetryAttempt = new AtomicInteger();
 
     // Claude history pagination state
     private volatile int claudeHistoryFromTurn = 0;
@@ -249,6 +333,15 @@ public class SessionMessageOrchestrator {
 
     private CompletableFuture<Void> loadFromServer(HistoryLoadCancellation cancellation,
                                                     boolean updateSharedLoadingState) {
+        return loadFromServer(cancellation, updateSharedLoadingState, false);
+    }
+
+    private CompletableFuture<Void> loadFromServer(HistoryLoadCancellation cancellation,
+                                                    boolean updateSharedLoadingState,
+                                                    boolean retry) {
+        if (!retry) {
+            liveNarrativeRetryAttempt.set(0);
+        }
         String requestedSessionId = state.getSessionId();
         if (requestedSessionId == null) {
             return CompletableFuture.completedFuture(null);
@@ -331,6 +424,7 @@ public class SessionMessageOrchestrator {
                     if ("claude".equals(requestedProvider)
                             && !historyKeepsLiveNarrative(loadedMessages, currentMessages, alignedAnchorIndex)) {
                         LOG.warn("Ignoring history result that has not persisted the live narrative");
+                        scheduleLiveNarrativeRetry(requestedSessionId);
                         requireRestoreCommit(updateSharedLoadingState);
                         return;
                     }
