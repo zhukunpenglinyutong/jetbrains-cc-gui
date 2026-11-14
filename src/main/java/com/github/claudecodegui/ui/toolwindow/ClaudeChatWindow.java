@@ -2918,6 +2918,12 @@ public class ClaudeChatWindow {
                     if (interTurnSession.appendInterTurnMessage(interTurnRaw)) {
                         interTurnAdapter.onInterTurnMessage(
                                 buildInterTurnMessagePayload(interTurnSessionId, interTurnRaw));
+                    } else {
+                        // The follow-up's own session_updated reload runs before this send's
+                        // stream starts and can read the transcript before the question is
+                        // written, so reload again once the turn is idle.
+                        deferredReload.defer(interTurnSessionId);
+                        scheduleDeferredReloadSafetyDrain();
                     }
                 }
             };
@@ -2980,8 +2986,10 @@ public class ClaudeChatWindow {
      *       path already drained it): stop polling.</li>
      *   <li>{@code RECHECK_LATER} — still parked but a stream or its final
      *       snapshot is active: reloading now would race the stream or clear the
-     *       live state before the snapshot is queued, so wait and re-check.</li>
-     *   <li>{@code DRAIN} — parked and the stream is idle: the safe point to
+     *       live state before the snapshot is queued, so wait and re-check. A
+     *       busy session counts too: a send waiting for the CLI to go quiet has
+     *       no stream yet, and a non-streaming turn never starts one.</li>
+     *   <li>{@code DRAIN} — parked and the turn is idle: the safe point to
      *       drain, even though no onStreamEnded edge arrived for this defer.</li>
      * </ul>
      */
@@ -2991,12 +2999,13 @@ public class ClaudeChatWindow {
             boolean disposed,
             boolean hasPending,
             boolean streamActive,
-            boolean snapshotBuildPending
+            boolean snapshotBuildPending,
+            boolean busy
     ) {
         if (disposed || !hasPending) {
             return SafetyDrainAction.DONE;
         }
-        return streamActive || snapshotBuildPending
+        return streamActive || snapshotBuildPending || busy
                 ? SafetyDrainAction.RECHECK_LATER : SafetyDrainAction.DRAIN;
     }
 
@@ -3041,11 +3050,13 @@ public class ClaudeChatWindow {
     private void deferredReloadSafetyTick() {
         boolean streamActive = streamCoalescer != null && streamCoalescer.isStreamActive();
         boolean snapshotBuildPending = streamCoalescer != null && streamCoalescer.isSnapshotBuildPending();
+        ClaudeSession current = session;
         switch (decideDeferredReloadSafety(
                 disposed,
                 deferredReload.hasPending(),
                 streamActive,
-                snapshotBuildPending)) {
+                snapshotBuildPending,
+                current != null && current.isBusy())) {
             case DRAIN:
                 LOG.info("[ClaudeChatWindow] safety-draining deferred reload (no stream-end edge followed the defer)");
                 drainDeferredReload();

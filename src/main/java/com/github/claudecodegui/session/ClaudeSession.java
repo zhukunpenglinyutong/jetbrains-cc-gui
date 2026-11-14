@@ -463,7 +463,7 @@ public class ClaudeSession {
         synchronized (sessionState.getMessageStateLock()) {
             // A send publishes its question under this lock before the daemon waits
             // for the CLI to go quiet, so later follow-up rows would land below it.
-            // The deferred session_updated reload restores them in transcript order.
+            // ClaudeChatWindow reloads them in transcript order once the turn is idle.
             if (sessionState.isBusy()) {
                 return false;
             }
