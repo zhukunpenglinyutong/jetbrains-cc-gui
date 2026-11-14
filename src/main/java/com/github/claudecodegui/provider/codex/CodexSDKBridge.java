@@ -1377,6 +1377,14 @@ public class CodexSDKBridge extends BaseSDKBridge {
     }
 
     private void captureRuntimeConfiguration(JsonObject params) {
+        // Bound conversations read the same native config.toml, so separate plugin aliases first.
+        try {
+            new com.github.claudecodegui.settings.CodexSettingsManager(this.gson, Path.of(this.ownerScope))
+                    .prepareNativeConfig(this::isCodexRuntimeAccessAllowed);
+        } catch (Exception error) {
+            // Separating plugin aliases only removes a CLI warning; it must never block a turn.
+            LOG.warn("[Codex] Skipped plugin alias separation: " + error.getMessage());
+        }
         String supplierId = sessionSupplierResolver.get();
         if (supplierId != null) {
             params.addProperty("supplierId", supplierId);
@@ -1388,13 +1396,6 @@ public class CodexSDKBridge extends BaseSDKBridge {
         // codex-native-runtime-config.js). Only the auth mode and a provider
         // revision hash travel here, so a provider change rebuilds the runtime.
         params.addProperty("authMode", this.isCodexCliLoginActive() ? "cli_login" : "managed");
-        try {
-            new com.github.claudecodegui.settings.CodexSettingsManager(this.gson, Path.of(this.ownerScope))
-                    .prepareNativeConfig(this::isCodexRuntimeAccessAllowed);
-        } catch (Exception error) {
-            // Separating plugin aliases only removes a CLI warning; it must never block a turn.
-            LOG.warn("[Codex] Skipped plugin alias separation: " + error.getMessage());
-        }
         try {
             JsonObject provider = this.settingsService.getActiveCodexProvider();
             if (provider != null) {
