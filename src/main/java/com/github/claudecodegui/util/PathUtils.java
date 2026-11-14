@@ -151,8 +151,35 @@ public class PathUtils {
         return cwd;
     }
 
+    /**
+     * Whether a request's working directory stays inside the project, following symlinks.
+     *
+     * <p>A blank cwd is not inside: the bridge then picks a directory of its own (an environment
+     * project path, its process cwd or the home directory) that nobody checked. A null or empty
+     * project base cannot contain anything, so every cwd is outside it. Both paths must be in the
+     * IDE's form: compare before converting the cwd for a WSL Node, not after. Unlike
+     * {@link #guardWorkingDirectory(String, String)}, which clamps lexically, this also resolves
+     * both paths so a symlink inside the project that points elsewhere does not pass.
+     */
+    public static boolean isWorkingDirectoryInsideProject(String cwd, String projectBase) {
+        if (projectBase == null || projectBase.isEmpty()) {
+            return false;
+        }
+        if (!isValidWorkingDirectory(cwd)) {
+            return false;
+        }
+        String base = normalizeAbsolute(projectBase);
+        String normalizedCwd = normalizeAbsolute(cwd);
+        if (base == null || base.isEmpty() || normalizedCwd == null || !isWithinOrEqual(normalizedCwd, base)) {
+            return false;
+        }
+        String realBase = normalizeAbsolute(realPath(base));
+        String realCwd = normalizeAbsolute(realPath(normalizedCwd));
+        return realBase != null && realCwd != null && isWithinOrEqual(realCwd, realBase);
+    }
+
     /** Non-null, non-empty, and not one of the sentinel strings the webview sends for "no cwd". */
-    private static boolean isValidWorkingDirectory(String cwd) {
+    public static boolean isValidWorkingDirectory(String cwd) {
         return cwd != null && !cwd.isEmpty() && !"undefined".equals(cwd) && !"null".equals(cwd);
     }
 
@@ -161,7 +188,10 @@ public class PathUtils {
         if (path.equals(base)) {
             return true;
         }
-        String prefix = base.endsWith(File.separator) ? base : base + File.separator;
+        // normalizeAbsolute keeps WSL UNC paths in their //wsl.localhost/... form, with forward
+        // slashes on every platform, so their children are separated by '/', not File.separator.
+        String separator = isWslUncPath(base) ? "/" : File.separator;
+        String prefix = base.endsWith(separator) ? base : base + separator;
         return path.startsWith(prefix);
     }
 

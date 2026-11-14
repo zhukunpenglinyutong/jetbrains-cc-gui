@@ -190,7 +190,8 @@ export function buildRuntimeSignature(options, systemPromptAppend, streamingEnab
     // Full Auto rebuilds the runtime with the correct launch flag. The other modes
     // (default/plan/acceptEdits/auto) need no launch flag and keep applying live via
     // setPermissionMode, so they intentionally do NOT change the signature.
-    bypassPermissions: options.permissionMode === 'bypassPermissions'
+    bypassPermissions: options.permissionMode === 'bypassPermissions',
+    settingSources: options.settingSources || []
   };
   return JSON.stringify(material);
 }
@@ -333,6 +334,9 @@ async function createRuntime(requestContext, callbacks) {
     sessionId: requestContext.requestedSessionId || null,
     runtimeSessionEpoch: requestContext.runtimeSessionEpoch || null,
     runtimeSignature: requestContext.runtimeSignature,
+    // Which settings this runtime's CLI loaded at spawn. The /context fast path compares it
+    // with the request's trust because it reuses runtimes without building a signature.
+    settingSources: [...(requestContext.options?.settingSources || [])],
     currentModel: requestContext.sdkModelName || null,
     modelId: requestContext.modelId || null, // Original model ID, may contain [1m] suffix
     currentResolvedModel: requestContext.resolvedModelId || null,

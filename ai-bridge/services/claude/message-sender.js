@@ -45,6 +45,7 @@ import {
   prepareAssistantSnapshotBlock,
 } from './stream-delta-normalizer.js';
 import { generateSessionTitle } from '../session-title-service.js';
+import { projectTrustFor, settingSourcesFor } from './project-trust.js';
 import { getClaudeCliPathOverride } from '../../utils/claude-cli-path.js';
 import { buildSessionClaudeConfig, buildSessionClaudeSettingsOverride } from '../../config/session-supplier.js';
 import { createUltracodeQuery, withUltracodeSetting } from './ultracode.js';
@@ -77,7 +78,7 @@ function resolveThinkingConfig(settings) {
 /**
  * Build query options object shared by both send functions.
  */
-function buildQueryOptions({ workingDirectory, permissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines, mcpServers, modelId, settingsEnv, resolvedModelId, ultracode, childEnv }) {
+function buildQueryOptions({ workingDirectory, permissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines, mcpServers, modelId, settingsEnv, resolvedModelId, ultracode, childEnv, projectTrusted }) {
   const claudeCliOverride = getClaudeCliPathOverride();
   return {
     cwd: workingDirectory,
@@ -94,7 +95,7 @@ function buildQueryOptions({ workingDirectory, permissionMode, sdkModelName, max
     ),
     canUseTool,
     hooks: { PreToolUse: [{ hooks: [preToolUseHook] }] },
-    settingSources: ['user', 'project', 'local'],
+    settingSources: settingSourcesFor(projectTrusted),
     // bypassPermissions requires this flag per SDK contract (sdk.d.ts: "Must be set to
     // true when using permissionMode: 'bypassPermissions'"). Without it a future SDK
     // version could silently drop bypass and change permission behavior.
@@ -481,7 +482,7 @@ function handleSendError(error, streamState, sdkStderrLines) {
   console.error('[SEND_ERROR]', JSON.stringify(payload));
 }
 
-export const __testing = { handleSendError };
+export const __testing = { handleSendError, buildQueryOptions };
 
 // ========== Exported send functions ==========
 
@@ -496,7 +497,7 @@ export const __testing = { handleSendError };
  * @param {string} agentPrompt - Agent prompt (optional)
  * @param {boolean} streaming - Whether to enable streaming (optional, defaults to config value)
  */
-export async function sendMessage(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null, openedFiles = null, agentPrompt = null, streaming = null, disableThinking = false, reasoningEffort = null, ultracode = undefined, supplierId = null) {
+export async function sendMessage(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null, openedFiles = null, agentPrompt = null, streaming = null, disableThinking = false, reasoningEffort = null, ultracode = undefined, supplierId = null, projectTrusted = false) {
   console.log('[DIAG] ========== sendMessage() START ==========');
   console.log('[DIAG] params:', { msgLen: message ? message.length : 0, resumeSessionId: resumeSessionId || '(new)', cwd, permissionMode, model });
 
@@ -536,8 +537,9 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
     console.log('[DEBUG] Config:', { effectivePermissionMode, alwaysThinkingEnabled, maxThinkingTokens, streamingEnabled, reasoningEffort: normalizedReasoningEffort });
 
     const preToolUseHook = createPreToolUseHook(effectivePermissionMode, workingDirectory);
-    const mcpServers = await loadMcpServersConfigAsRecord(workingDirectory);
-    const options = buildQueryOptions({ workingDirectory, permissionMode: effectivePermissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines, mcpServers, modelId: model, settingsEnv: settings?.env, resolvedModelId: resolvedModel, ultracode, childEnv: supplier?.env });
+    const trusted = projectTrustFor(projectTrusted, cwd, workingDirectory);
+    const mcpServers = await loadMcpServersConfigAsRecord(workingDirectory, trusted);
+    const options = buildQueryOptions({ workingDirectory, permissionMode: effectivePermissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines, mcpServers, modelId: model, settingsEnv: settings?.env, resolvedModelId: resolvedModel, ultracode, childEnv: supplier?.env, projectTrusted: trusted });
     options.settings = buildSessionClaudeSettingsOverride(supplier, options.settings);
 
     if (normalizedReasoningEffort) {
@@ -620,8 +622,9 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
     streamingEnabled = streamingParam != null ? streamingParam : (settings?.streamingEnabled ?? false);
     console.log('[DEBUG] (withAttachments) Config:', { normalizedPermissionMode, alwaysThinkingEnabled, maxThinkingTokens, streamingEnabled, reasoningEffort });
 
-    const mcpServers = await loadMcpServersConfigAsRecord(workingDirectory);
-    const options = buildQueryOptions({ workingDirectory, permissionMode: normalizedPermissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines, mcpServers, modelId: model, settingsEnv: settings?.env, resolvedModelId: resolvedAttachModel, ultracode: stdinData?.ultracode, childEnv: supplier?.env });
+    const trusted = projectTrustFor(stdinData?.projectTrusted, cwd, workingDirectory);
+    const mcpServers = await loadMcpServersConfigAsRecord(workingDirectory, trusted);
+    const options = buildQueryOptions({ workingDirectory, permissionMode: normalizedPermissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines, mcpServers, modelId: model, settingsEnv: settings?.env, resolvedModelId: resolvedAttachModel, ultracode: stdinData?.ultracode, childEnv: supplier?.env, projectTrusted: trusted });
     options.settings = buildSessionClaudeSettingsOverride(supplier, options.settings);
 
     if (reasoningEffort) {

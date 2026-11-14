@@ -61,26 +61,6 @@ class ClaudeProcessInvoker {
         this.streamAdapter = streamAdapter;
     }
 
-    CompletableFuture<SDKResult> sendMessage(
-            String channelId,
-            String message,
-            String sessionId,
-            String runtimeSessionEpoch,
-            String cwd,
-            List<ClaudeSession.Attachment> attachments,
-            String permissionMode,
-            String model,
-            JsonObject openedFiles,
-            String agentPrompt,
-            Boolean streaming,
-            Boolean disableThinking,
-            String reasoningEffort,
-            MessageCallback callback
-    ) {
-        return sendMessage(channelId, message, sessionId, runtimeSessionEpoch, cwd,
-                attachments, permissionMode, model, openedFiles, agentPrompt, streaming,
-                disableThinking, reasoningEffort, false, callback);
-    }
 
     CompletableFuture<SDKResult> sendMessage(
             String channelId,
@@ -97,6 +77,7 @@ class ClaudeProcessInvoker {
             Boolean disableThinking,
             String reasoningEffort,
             boolean ultracode,
+            boolean projectTrusted,
             MessageCallback callback
     ) {
         AtomicBoolean errorAlreadyReported = new AtomicBoolean(false);
@@ -136,7 +117,8 @@ class ClaudeProcessInvoker {
                         streaming,
                         disableThinking,
                         reasoningEffort,
-                        ultracode
+                        ultracode,
+                        projectTrusted
                 );
                 stdinInput.addProperty("executionScope", callback.executionScope());
                 String stdinJson = gson.toJson(stdinInput);

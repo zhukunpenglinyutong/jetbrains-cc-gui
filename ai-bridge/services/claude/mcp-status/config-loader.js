@@ -53,15 +53,20 @@ function expandEnvPlaceholders(value, projectEnv, userEnv) {
  * matching the resolution order Claude Code uses for .mcp.json placeholders.
  * Files that are missing, unparseable, or have no env section produce {}.
  *
+ * The project file lives in the repository, so it is only read when the IDE
+ * trusts the project. Otherwise a repo could redirect the user's own MCP
+ * servers by overriding the ${VAR} values in their ~/.claude.json config.
+ *
  * @param {string} cwd - Current working directory (project root)
+ * @param {boolean} projectTrusted - Whether the IDE trusts the project
  * @returns {Promise<{projectEnv: Object, userEnv: Object}>} env maps
  */
-async function loadEnvExpansionSources(cwd) {
+async function loadEnvExpansionSources(cwd, projectTrusted) {
   const projectEnv = {};
   const userEnv = {};
 
   const sources = [
-    { label: 'project settings.local.json', file: cwd ? join(cwd, '.claude', 'settings.local.json') : null, into: projectEnv },
+    { label: 'project settings.local.json', file: cwd && projectTrusted === true ? join(cwd, '.claude', 'settings.local.json') : null, into: projectEnv },
     { label: 'user settings.json', file: join(getRealHomeDir(), '.claude', 'settings.json'), into: userEnv }
   ];
 
@@ -165,9 +170,10 @@ function validateConfigStructure(config) {
  * Parse the server list and disabled list from the MCP configuration file
  * Extracts shared logic used by both loadMcpServersConfig and loadAllMcpServersInfo
  * @param {string} cwd - Current working directory (used for project detection)
+ * @param {boolean} projectTrusted - Whether the IDE trusts the project (gates repo-local env)
  * @returns {Promise<{mcpServers: Object, disabledServers: Set<string>} | null>} Parse result, or null on failure
  */
-async function parseMcpConfig(cwd = null) {
+async function parseMcpConfig(cwd = null, projectTrusted = false) {
   const claudeJsonPath = join(getRealHomeDir(), '.claude.json');
 
   if (!existsSync(claudeJsonPath)) {
@@ -241,7 +247,7 @@ async function parseMcpConfig(cwd = null) {
   // Expand ${VAR} placeholders in server env values (e.g. from
   // .claude/settings.local.json) so spawned servers receive real values,
   // matching Claude Code's behaviour for the same config (#1722).
-  const { projectEnv, userEnv } = await loadEnvExpansionSources(cwd);
+  const { projectEnv, userEnv } = await loadEnvExpansionSources(cwd, projectTrusted);
   mcpServers = expandMcpServersEnv(mcpServers, projectEnv, userEnv);
 
   return { mcpServers, disabledServers };
@@ -253,11 +259,12 @@ async function parseMcpConfig(cwd = null) {
  * 1. Global config - uses the global mcpServers
  * 2. Project config - uses project-specific mcpServers
  * @param {string} cwd - Current working directory (used for project detection)
+ * @param {boolean} projectTrusted - Whether the IDE trusts the project
  * @returns {Promise<Array<{name: string, config: Object}>>} List of enabled MCP servers
  */
-export async function loadMcpServersConfig(cwd = null) {
+export async function loadMcpServersConfig(cwd = null, projectTrusted = false) {
   try {
-    const parsed = await parseMcpConfig(cwd);
+    const parsed = await parseMcpConfig(cwd, projectTrusted);
     if (!parsed) return [];
 
     const { mcpServers, disabledServers } = parsed;
@@ -291,10 +298,11 @@ export async function loadMcpServersConfig(cwd = null) {
  * field from SDK options entirely.
  *
  * @param {string} cwd - Current working directory (used for project detection)
+ * @param {boolean} projectTrusted - Whether the IDE trusts the project
  * @returns {Promise<Record<string, Object> | null>}
  */
-export async function loadMcpServersConfigAsRecord(cwd = null) {
-  const list = await loadMcpServersConfig(cwd);
+export async function loadMcpServersConfigAsRecord(cwd = null, projectTrusted = false) {
+  const list = await loadMcpServersConfig(cwd, projectTrusted);
   if (list.length === 0) return null;
   return Object.fromEntries(list.map(({ name, config }) => [name, config]));
 }
@@ -303,13 +311,14 @@ export async function loadMcpServersConfigAsRecord(cwd = null) {
  * Load all MCP server info (including disabled and invalid ones)
  * Merges global and project-level mcpServers to stay consistent with the server list seen by the Java side
  * @param {string} cwd - Current working directory
+ * @param {boolean} projectTrusted - Whether the IDE trusts the project
  * @returns {Promise<{enabled: Array, disabled: Array<string>, invalid: Array<{name: string, reason: string}>}>}
  */
-export async function loadAllMcpServersInfo(cwd = null) {
+export async function loadAllMcpServersInfo(cwd = null, projectTrusted = false) {
   const result = { enabled: [], disabled: [], invalid: [] };
 
   try {
-    const parsed = await parseMcpConfig(cwd);
+    const parsed = await parseMcpConfig(cwd, projectTrusted);
     if (!parsed) return result;
 
     const { mcpServers, disabledServers } = parsed;
@@ -326,7 +335,7 @@ export async function loadAllMcpServersInfo(cwd = null) {
     // If cwd is specified, global servers may have been overridden by project config.
     // Read the global config separately to pick up servers that only exist globally.
     if (cwd) {
-      const globalParsed = await parseMcpConfig(null);
+      const globalParsed = await parseMcpConfig(null, projectTrusted);
       if (globalParsed) {
         for (const [serverName, serverConfig] of Object.entries(globalParsed.mcpServers)) {
           if (processedNames.has(serverName)) continue; // Already covered by project config, skip

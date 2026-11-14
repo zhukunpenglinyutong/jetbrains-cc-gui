@@ -65,6 +65,7 @@ import {
   processToolResultMessages,
   shouldOutputMessage,
 } from './stream-event-processor.js';
+import { projectTrustFor, settingSourcesFor } from './project-trust.js';
 import { resolveStallTimeoutMs, takeWithStallTimeout, trackToolActivity } from './turn-stall-watchdog.js';
 import { generateSessionTitle } from '../session-title-service.js';
 import { getClaudeCliPathOverride } from '../../utils/claude-cli-path.js';
@@ -168,7 +169,7 @@ function resolveRequestModelState(modelId, settingsEnv) {
   };
 }
 
-function buildQueryOptions(workingDirectory, sdkModelName, permissionMode, maxThinkingTokens, reasoningEffort, streamingEnabled, systemPromptAppend, requestedSessionId, mcpServers, modelId, settingsEnv, resolvedModelId, ultracode, childEnv) {
+function buildQueryOptions(workingDirectory, sdkModelName, permissionMode, maxThinkingTokens, reasoningEffort, streamingEnabled, systemPromptAppend, requestedSessionId, mcpServers, modelId, settingsEnv, resolvedModelId, ultracode, childEnv, projectTrusted) {
   const claudeCliOverride = getClaudeCliPathOverride();
   return {
     cwd: workingDirectory,
@@ -187,7 +188,7 @@ function buildQueryOptions(workingDirectory, sdkModelName, permissionMode, maxTh
       )
     ),
     canUseTool,
-    settingSources: ['user', 'project', 'local'],
+    settingSources: settingSourcesFor(projectTrusted),
     // bypassPermissions requires this flag per SDK contract (sdk.d.ts: "Must be set to
     // true when using permissionMode: 'bypassPermissions'"). Without it a future SDK
     // version could silently drop bypass and change permission behavior.
@@ -258,12 +259,13 @@ async function buildRequestContext(params, withAttachments, overrides = {}) {
   const maxThinkingTokens = resolveThinkingTokens(params, settings);
   const systemPromptAppend = buildSystemPromptAppend(params);
 
-  const mcpServers = await loadMcpServersConfigAsRecord(workingDirectory);
+  const projectTrusted = projectTrustFor(params.projectTrusted, params.cwd, workingDirectory);
+  const mcpServers = await loadMcpServersConfigAsRecord(workingDirectory, projectTrusted);
 
   const options = buildQueryOptions(
     workingDirectory, sdkModelName, permissionMode,
     maxThinkingTokens, reasoningEffort, streamingEnabled, systemPromptAppend, requestedSessionId,
-    mcpServers, modelId, settings?.env, resolvedModelId, params.ultracode, supplier?.env
+    mcpServers, modelId, settings?.env, resolvedModelId, params.ultracode, supplier?.env, projectTrusted
   );
   options.settings = buildSessionClaudeSettingsOverride(supplier, options.settings);
 
@@ -619,6 +621,25 @@ function shouldRecreateRuntimeForModel(runtime, modelId) {
   const contextWindowChanged = requestedHas1M !== runtimeHas1M;
   const runtimeModelUnknown = !!modelId && !runtimeModelId;
   return contextWindowChanged || runtimeModelUnknown;
+}
+
+/**
+ * Whether an existing runtime loaded different setting sources than this request may load.
+ *
+ * The send path rebuilds such a runtime through the runtime signature. The /context fast path
+ * skips buildRequestContext, so it compares the trust here: otherwise a runtime started while
+ * the project was trusted would keep its project MCP servers after the trust is revoked.
+ *
+ * @param {object|null} runtime - The runtime the fast path would reuse.
+ * @param {object} params - The context usage request ({ cwd, projectTrusted }).
+ * @returns {boolean} True if the runtime must be disposed and recreated.
+ */
+function shouldRecreateRuntimeForTrust(runtime, params) {
+  if (!runtime || runtime.closed) return false;
+  const workingDirectory = selectWorkingDirectory(params?.cwd || null);
+  const requested = settingSourcesFor(projectTrustFor(params?.projectTrusted, params?.cwd, workingDirectory));
+  const current = Array.isArray(runtime.settingSources) ? runtime.settingSources : [];
+  return requested.length !== current.length || requested.some((source, index) => source !== current[index]);
 }
 
 /**
@@ -997,7 +1018,9 @@ export async function getContextUsagePersistent(params = {}) {
     const settings = active ? null : supplier?.settings ?? loadClaudeSettings();
     const { resolvedModelId } = resolveRequestModelState(modelId, settings?.env);
     const targetModel = resolvedModelId || modelId || null;
-    const mustRecreate = !active && shouldRecreateRuntimeForModel(runtime, modelId);
+    // A trust change during a running turn is applied by the send path once the turn ends.
+    const mustRecreate = !active && (shouldRecreateRuntimeForModel(runtime, modelId)
+      || shouldRecreateRuntimeForTrust(runtime, safeParams));
 
     if (!active && (!runtime || runtime.closed || mustRecreate || !runtimeMatchesSupplier(runtime, supplier))) {
       if (mustRecreate && runtime && !runtime.closed) {

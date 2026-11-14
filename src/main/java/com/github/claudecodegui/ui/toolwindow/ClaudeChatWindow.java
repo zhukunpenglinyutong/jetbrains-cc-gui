@@ -40,7 +40,13 @@ import com.github.claudecodegui.ui.detached.DetachedWindowManager;
 import com.github.claudecodegui.util.HtmlLoader;
 import com.github.claudecodegui.util.JBCefBrowserFactory;
 import com.github.claudecodegui.util.JsUtils;
+import com.github.claudecodegui.util.ProjectTrust;
 import com.github.claudecodegui.util.ThemeConfigService;
+import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
+import com.intellij.notification.Notification;
+import com.intellij.notification.NotificationAction;
+import com.intellij.notification.NotificationGroupManager;
+import com.intellij.notification.NotificationType;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -242,6 +248,32 @@ public class ClaudeChatWindow {
         this(project, false);
     }
 
+    private static void showUntrustedProjectNotice(Project project) {
+        Notification notification = NotificationGroupManager.getInstance()
+                .getNotificationGroup("CC GUI Notifications")
+                .createNotification(ClaudeCodeGuiBundle.message("notification.untrustedProject.claudeSettings"),
+                        NotificationType.WARNING);
+        if (ProjectTrust.canRequestTrust()) {
+            notification.addAction(NotificationAction.createSimpleExpiring(
+                    ClaudeCodeGuiBundle.message("notification.untrustedProject.trustAction"),
+                    () -> ProjectTrust.requestTrust(
+                            project,
+                            ClaudeCodeGuiBundle.message("notification.untrustedProject.dialogTitle"),
+                            ClaudeCodeGuiBundle.message("notification.untrustedProject.dialogMessage"),
+                            ClaudeCodeGuiBundle.message("notification.untrustedProject.dialogTrust"),
+                            ClaudeCodeGuiBundle.message("notification.untrustedProject.dialogDistrust"))));
+        }
+        notification.notify(project);
+    }
+
+    private static void showOutsideWorkingDirectoryNotice(Project project) {
+        NotificationGroupManager.getInstance()
+                .getNotificationGroup("CC GUI Notifications")
+                .createNotification(ClaudeCodeGuiBundle.message("notification.untrustedWorkingDirectory.claudeSettings"),
+                        NotificationType.WARNING)
+                .notify(project);
+    }
+
     public ClaudeChatWindow(Project project, boolean skipRegister) {
         this(project, skipRegister, true);
     }
@@ -250,6 +282,10 @@ public class ClaudeChatWindow {
     public ClaudeChatWindow(Project project, boolean skipRegister, boolean initializeWebview) {
         this.project = project;
         this.claudeSDKBridge = new ClaudeSDKBridge();
+        this.claudeSDKBridge.setProjectTrustSupplier(
+                cwd -> ProjectTrust.isTrustedForClaude(project, cwd,
+                        ClaudeChatWindow::showUntrustedProjectNotice,
+                        ClaudeChatWindow::showOutsideWorkingDirectoryNotice));
         this.codexSDKBridge = new CodexSDKBridge();
         this.grokSDKBridge = new GrokSDKBridge();
         this.zcodeSDKBridge = new ZcodeSDKBridge();
