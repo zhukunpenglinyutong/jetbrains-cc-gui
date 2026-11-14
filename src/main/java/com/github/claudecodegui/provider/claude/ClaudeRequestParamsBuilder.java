@@ -47,6 +47,26 @@ class ClaudeRequestParamsBuilder {
             Boolean disableThinking,
             String reasoningEffort
     ) {
+        return buildSendParams(message, sessionId, runtimeSessionEpoch, cwd, permissionMode,
+                model, attachments, openedFiles, agentPrompt, streaming, disableThinking,
+                reasoningEffort, false);
+    }
+
+    JsonObject buildSendParams(
+            String message,
+            String sessionId,
+            String runtimeSessionEpoch,
+            String cwd,
+            String permissionMode,
+            String model,
+            List<ClaudeSession.Attachment> attachments,
+            JsonObject openedFiles,
+            String agentPrompt,
+            Boolean streaming,
+            Boolean disableThinking,
+            String reasoningEffort,
+            boolean ultracode
+    ) {
         JsonObject params = new JsonObject();
         addSessionSupplier(params);
         params.addProperty("message", message);
@@ -73,7 +93,10 @@ class ClaudeRequestParamsBuilder {
         if (disableThinking != null && disableThinking) {
             params.addProperty("disableThinking", true);
         }
-        if (reasoningEffort != null && !reasoningEffort.trim().isEmpty()) {
+        // Explicit false clears a previously enabled native workflow mode.
+        params.addProperty("ultracode", ultracode);
+        if (reasoningEffort != null && !reasoningEffort.trim().isEmpty()
+                && !"ultra".equals(reasoningEffort.trim())) {
             params.addProperty("reasoningEffort", reasoningEffort);
         }
 

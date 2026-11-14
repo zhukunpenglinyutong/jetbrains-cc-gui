@@ -23,7 +23,7 @@ public class SessionSupplierBindingTest {
     public void restoringATabPreservesAnExplicitSupplierBeforePublishingItsIdentity() {
         ClaudeSession session = new ClaudeSession(null, null, null, java.util.Map.of());
         session.getState().setSupplierId("claude", "global-default");
-        session.setSessionInfo("restored-history", null, "saved-supplier");
+        session.setSessionInfo("restored-history", null, null, "saved-supplier");
         assertEquals("saved-supplier", session.getState().getSupplierId("claude"));
         assertEquals("restored-history", session.getSessionId());
     }

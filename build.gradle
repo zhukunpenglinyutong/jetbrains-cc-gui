@@ -195,6 +195,11 @@ sourceSets {
     }
 }
 
+tasks.withType(Test).configureEach {
+    // Configuration fixtures must never inherit the host CLI data directory.
+    environment 'CODEX_HOME', ''
+}
+
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
     // Ensure consistent source/target compatibility

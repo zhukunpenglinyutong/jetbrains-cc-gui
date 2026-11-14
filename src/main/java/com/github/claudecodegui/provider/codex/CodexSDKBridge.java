@@ -1100,12 +1100,23 @@ public class CodexSDKBridge extends BaseSDKBridge {
         if (requestParams != null) {
             params.add("params", requestParams.deepCopy());
         }
-        boolean transcriptRead = "codex.readHistoryPage".equals(method) || "codex.readSubagent".equals(method)
-                || "codex.countThreadMessages".equals(method);
-        long timeoutMs = transcriptRead ? 120_000L : 30_000L;
+        long timeoutMs = readOnlyTimeoutMillis(method, requestParams);
         return CompletableFuture.supplyAsync(() -> this.appServerRequestExecutor
                 .sendReadOnlyCommand(daemon, method, params, timeoutMs),
                 CodexAppServerRequestExecutor.turnWaitExecutor());
+    }
+
+    static long readOnlyTimeoutMillis(String method, JsonObject requestParams) {
+        // Status polls need a short RPC deadline too: cancelling a CompletableFuture
+        // does not interrupt supplyAsync's worker waiting on the native response.
+        if ("codex.readSubagent".equals(method) && requestParams != null
+                && requestParams.has("includeHistory") && requestParams.get("includeHistory").isJsonPrimitive()
+                && !requestParams.get("includeHistory").getAsBoolean()) {
+            return 8_000L;
+        }
+        boolean transcriptRead = "codex.readHistoryPage".equals(method) || "codex.readSubagent".equals(method)
+                || "codex.countThreadMessages".equals(method);
+        return transcriptRead ? 120_000L : 30_000L;
     }
 
     /**
@@ -1377,6 +1388,13 @@ public class CodexSDKBridge extends BaseSDKBridge {
         // codex-native-runtime-config.js). Only the auth mode and a provider
         // revision hash travel here, so a provider change rebuilds the runtime.
         params.addProperty("authMode", this.isCodexCliLoginActive() ? "cli_login" : "managed");
+        try {
+            new com.github.claudecodegui.settings.CodexSettingsManager(this.gson, Path.of(this.ownerScope))
+                    .prepareNativeConfig(this::isCodexRuntimeAccessAllowed);
+        } catch (Exception error) {
+            // Separating plugin aliases only removes a CLI warning; it must never block a turn.
+            LOG.warn("[Codex] Skipped plugin alias separation: " + error.getMessage());
+        }
         try {
             JsonObject provider = this.settingsService.getActiveCodexProvider();
             if (provider != null) {
@@ -1841,8 +1859,12 @@ public class CodexSDKBridge extends BaseSDKBridge {
     }
 
     private static String resolveOwnerScope() {
-        String codexHome = System.getenv("CODEX_HOME");
-        return codexHome == null || codexHome.trim().isEmpty() ? "default" : codexHome.trim();
+        Path home = com.github.claudecodegui.util.CodexHomeResolver.resolve();
+        try {
+            return home.toRealPath().toString();
+        } catch (java.io.IOException error) {
+            return home.toString();
+        }
     }
 
     /**

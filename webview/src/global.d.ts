@@ -87,7 +87,7 @@ interface Window {
    * post-reset updateSequence) advances __minAcceptedUpdateSequence so stale
    * in-flight updateMessages from the previous session are rejected.
    */
-  clearMessages?: (barrierSequence?: string | number) => void;
+  clearMessages?: (barrierSequence?: string | number, transitionToken?: string) => void;
 
   /**
    * Add error message
@@ -156,11 +156,15 @@ interface Window {
    * History load complete callback - invoked when history messages finish loading.
    * Triggers Markdown re-rendering to fix incorrect rendering on first history load.
    */
-  historyLoadComplete?: (expectedMessageCount?: string | number) => void;
+  historyLoadComplete?: (expectedMessageCount?: string | number, transitionToken?: string) => void;
+  /** A rejected session transition preserves the existing binding and draft/queue. */
+  sessionTransitionFailed?: (error: string, transitionToken?: string) => void;
+  /** IDE-initiated transitions pause frontend sends before stopping the old session. */
+  sessionTransitionStarted?: (nextSessionId: string, nextTitle: string, transitionToken?: string) => void;
   updateStartupHistoryLoadState?: (json: string) => void;
   __pendingStartupHistoryLoadState?: string;
   /** Early history completion buffered before React installs the real callback. */
-  __pendingHistoryLoadComplete?: { expectedMessageCount?: string | number };
+  __pendingHistoryLoadComplete?: { expectedMessageCount?: string | number; transitionToken?: string };
   /** Number of messages in the latest full backend snapshot accepted by this page. */
   __lastAcceptedMessageCount?: number;
   /** Restored-history snapshot size that still needs a React commit acknowledgment. */
@@ -225,7 +229,7 @@ interface Window {
   /**
    * Set current session ID (for rewind feature)
    */
-  setSessionId?: (sessionId: string) => void;
+  setSessionId?: (sessionId: string, transitionToken?: string) => void;
 
   /**
    * Add toast notification (called from backend)
@@ -719,6 +723,10 @@ interface Window {
    * Update agents list
    */
   updateAgents?: (json: string) => void;
+  updateHooks?: (json: string) => void;
+  hookSourceResult?: (json: string) => void;
+  hookMutationResult?: (json: string) => void;
+  hookToggleResult?: (json: string) => void;
 
   /**
    * Agent operation result callback
@@ -1152,6 +1160,12 @@ interface Window {
    * __INITIAL_TAB_PROVIDER__. Empty / unset means no backend preference.
    */
   __INITIAL_TAB_MODEL__?: string;
+
+  /** Explicit per-tab effort; null or unset inherits the last-used preference. */
+  __INITIAL_TAB_REASONING_EFFORT__?: string | null;
+
+  /** Native Claude workflow preference for this tab, including explicit off. */
+  __INITIAL_TAB_CLAUDE_ULTRACODE__?: boolean;
 
   /** User-installed DSH agent preset ids discovered from the DSH home. */
   __INITIAL_DSH_PRESETS__?: string[];

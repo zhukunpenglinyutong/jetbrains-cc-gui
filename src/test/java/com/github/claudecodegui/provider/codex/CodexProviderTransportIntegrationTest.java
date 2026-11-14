@@ -34,6 +34,38 @@ public class CodexProviderTransportIntegrationTest {
     public TemporaryFolder folder = new TemporaryFolder();
 
     @Test
+    public void nativeOperationMigratesPluginAliasesAndBacksUpTheOriginalBeforeDispatch() throws Exception {
+        try (Fixture fixture = this.fixture("early-notification")) {
+            Path home = Path.of(fixture.scope);
+            String original = "# Keep this original before migration.\nmodel = \"test-model\"\n"
+                    + "[model_aliases]\n\"test-model\" = \"vendor/test-model\"\n";
+            Files.writeString(home.resolve("config.toml"), original);
+            JsonObject result = fixture.bridge.compactCodex("fixture", fixture.cwd.toString(), "th-test-root-0001", fixture.callback)
+                    .get(15, TimeUnit.SECONDS);
+            assertFalse(result.toString(), result.has("error"));
+            assertEquals(original, Files.readString(home.resolve("config.toml.pre-cli-migration.bak")));
+            assertFalse(Files.readString(home.resolve("config.toml")).contains("model_aliases"));
+            assertTrue(Files.readString(home.resolve("config.toml.ccgui")).contains("vendor/test-model"));
+        }
+    }
+
+    @Test
+    public void unreadablePluginAliasesDoNotBlockNativeOperations() throws Exception {
+        try (Fixture fixture = this.fixture("early-notification")) {
+            Path home = Path.of(fixture.scope);
+            String config = "model = \"test-model\"\n";
+            String broken = "model_aliases = [\n";
+            Files.writeString(home.resolve("config.toml"), config);
+            Files.writeString(home.resolve("config.toml.ccgui"), broken);
+            JsonObject result = fixture.bridge.compactCodex("fixture", fixture.cwd.toString(), "th-test-root-0001", fixture.callback)
+                    .get(15, TimeUnit.SECONDS);
+            assertFalse(result.toString(), result.has("error"));
+            assertEquals(config, Files.readString(home.resolve("config.toml")));
+            assertEquals(broken, Files.readString(home.resolve("config.toml.ccgui")));
+        }
+    }
+
+    @Test
     public void concurrentPageAnswersDispatchOnlyOneNativeDecision() throws Exception {
         try (Fixture fixture = fixture("async-question")) {
             CompletableFuture<SDKResult> send = fixture.send();

@@ -1,5 +1,6 @@
 package com.github.claudecodegui.provider.claude;
 
+import com.github.claudecodegui.util.PluginIdeContext;
 import com.github.claudecodegui.util.PathUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonParser;
@@ -233,7 +234,11 @@ class ClaudeHistorySearchService {
                     if (line.trim().isEmpty()) { continue; }
 
                     try {
-                        ClaudeHistoryReader.ConversationMessage msg = gson.fromJson(line, ClaudeHistoryReader.ConversationMessage.class);
+                        com.google.gson.JsonObject raw = gson.fromJson(line, com.google.gson.JsonObject.class);
+                        if (raw != null && raw.has("type") && "user".equals(raw.get("type").getAsString())) {
+                            raw = PluginIdeContext.visibleMessage(raw);
+                        }
+                        ClaudeHistoryReader.ConversationMessage msg = gson.fromJson(raw, ClaudeHistoryReader.ConversationMessage.class);
                         if (msg != null) {
                             messages.add(msg);
                         }

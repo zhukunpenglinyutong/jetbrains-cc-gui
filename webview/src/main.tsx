@@ -522,8 +522,8 @@ if (typeof window !== 'undefined' && !window.updateMessages) {
 // message count is distinguishable from no pending callback.
 if (typeof window !== 'undefined' && !window.historyLoadComplete) {
   debugLog('[Main] Pre-registering historyLoadComplete placeholder');
-  window.historyLoadComplete = (expectedMessageCount?: string | number) => {
-    window.__pendingHistoryLoadComplete = { expectedMessageCount };
+  window.historyLoadComplete = (expectedMessageCount?: string | number, transitionToken?: string) => {
+    window.__pendingHistoryLoadComplete = { expectedMessageCount, transitionToken };
   };
 }
 

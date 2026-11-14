@@ -182,17 +182,26 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
     /** Publishes a session identity or an empty ID after transcript expiry. */
     @Override
     public void onSessionIdReceived(String sessionId) {
+        onSessionIdReceived(sessionId, null);
+    }
+
+    @Override
+    public void onSessionIdReceived(String sessionId, String transitionToken) {
         if (this.isInactive() || sessionId == null) {
             return;
         }
         sessionId = sessionId.trim();
         // Atomic check-and-record: concurrent emissions of the same id are
         // forwarded exactly once.
-        if (sessionId.equals(lastSessionId.getAndSet(sessionId))) {
+        if (sessionId.equals(lastSessionId.getAndSet(sessionId)) && transitionToken == null) {
             return;
         }
         LOG.info("Session ID: " + sessionId);
-        jsTarget.callJavaScript("setSessionId", JsUtils.escapeJs(sessionId));
+        if (transitionToken == null) {
+            jsTarget.callJavaScript("setSessionId", JsUtils.escapeJs(sessionId));
+        } else {
+            jsTarget.callJavaScript("setSessionId", JsUtils.escapeJs(sessionId), JsUtils.escapeJs(transitionToken));
+        }
     }
 
     @Override

@@ -37,9 +37,12 @@ public class MessageJsonConverter {
             JsonObject msgObj = new JsonObject();
             msgObj.addProperty("type", msg.type.toString().toLowerCase());
             msgObj.addProperty("timestamp", msg.timestamp);
-            msgObj.addProperty("content", truncateErrorContent(msg.content != null ? msg.content : ""));
+            boolean userMessage = msg.type == ClaudeSession.Message.Type.USER;
+            String content = msg.content != null ? msg.content : "";
+            msgObj.addProperty("content", truncateErrorContent(userMessage
+                    ? PluginIdeContext.visibleText(content, msg.raw) : content));
             if (msg.raw != null) {
-                msgObj.add("raw", truncateRawForTransport(msg.raw));
+                msgObj.add("raw", truncateRawForTransport(msg.raw, userMessage));
             }
             messagesArray.add(msgObj);
         }
@@ -81,7 +84,12 @@ public class MessageJsonConverter {
      * Handles tool_result and error text blocks.
      */
     public static JsonObject truncateRawForTransport(JsonObject raw) {
-        JsonObject transport = buildTransportRaw(raw);
+        return truncateRawForTransport(raw, raw.has("type")
+                && new JsonPrimitive("user").equals(raw.get("type")));
+    }
+
+    private static JsonObject truncateRawForTransport(JsonObject raw, boolean userMessage) {
+        JsonObject transport = buildTransportRaw(userMessage ? PluginIdeContext.visibleMessage(raw) : raw);
         JsonElement contentEl = findContentElement(transport);
 
         if (contentEl == null) {

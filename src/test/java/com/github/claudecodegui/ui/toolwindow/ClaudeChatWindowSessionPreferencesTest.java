@@ -14,7 +14,8 @@ public class ClaudeChatWindowSessionPreferencesTest {
         source.setProvider("codex");
         source.setModel("gpt-5.6-sol");
         source.setPermissionMode("plan");
-        source.setReasoningEffort("xhigh");
+        source.setReasoningEffort("ultra");
+        source.setClaudeUltracode(true);
         source.setOmpApprovalMode("always-ask");
         source.setSessionId("existing-session");
         source.setCwd("C:/source-project");
@@ -28,7 +29,8 @@ public class ClaudeChatWindowSessionPreferencesTest {
         assertEquals("codex", target.getProvider());
         assertEquals("gpt-5.6-sol", target.getModel());
         assertEquals("plan", target.getPermissionMode());
-        assertEquals("xhigh", target.getReasoningEffort());
+        assertEquals("ultra", target.getReasoningEffort());
+        org.junit.Assert.assertTrue(target.isClaudeUltracode());
         // A new tab that silently fell back to OMP's own setting would run without approvals.
         assertEquals("always-ask", target.getOmpApprovalMode());
         assertEquals("new-session", target.getSessionId());
@@ -45,10 +47,12 @@ public class ClaudeChatWindowSessionPreferencesTest {
         SessionState target = new SessionState();
         target.setModel("stale-model");
         target.setReasoningEffort("high");
+        target.setClaudeUltracode(true);
 
         ClaudeChatWindow.copySessionPreferences(source, target);
 
         assertNull(target.getModel());
         assertNull(target.getReasoningEffort());
+        org.junit.Assert.assertFalse(target.isClaudeUltracode());
     }
 }

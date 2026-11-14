@@ -126,6 +126,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     selectedClaudeModel, setSelectedClaudeModel,
     claudePermissionMode, setClaudePermissionMode,
     longContextEnabled, setLongContextEnabled,
+    claudeUltracode, setClaudeUltracode,
     setClaudeSettingsAlwaysThinkingEnabled,
   } = claude;
   const {
@@ -224,6 +225,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     setPermissionMode,
     setLongContextEnabled,
     setReasoningEffort,
+    setClaudeUltracode,
     setCodexFastMode,
     setDshPreset,
     setCodexCollaborationMode,
@@ -253,6 +255,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     dshPermissionMode,
     longContextEnabled,
     reasoningEffort,
+    claudeUltracode,
     codexFastMode,
     dshPreset,
     codexCollaborationMode,

@@ -30,6 +30,7 @@ interface ModelConfigSelectProps {
   models?: ModelInfo[];
   currentProvider?: string;
   loading?: boolean;
+  reasoningCapabilitiesUnconfirmed?: boolean;
   error?: string | null;
   onRetry?: () => void;
   onAddModel?: () => void;
@@ -37,6 +38,8 @@ interface ModelConfigSelectProps {
   onLongContextChange?: (enabled: boolean) => void;
   reasoningEffort?: ReasoningEffort;
   onReasoningChange?: (effort: ReasoningEffort) => void;
+  claudeUltracode?: boolean;
+  onClaudeUltracodeChange?: (enabled: boolean) => void;
   codexFastMode?: CodexFastMode;
   onCodexFastModeChange?: (mode: CodexFastMode) => void;
   dshPreset?: string;
@@ -57,6 +60,7 @@ export const ModelConfigSelect = ({
   models = AVAILABLE_MODELS,
   currentProvider = 'claude',
   loading = false,
+  reasoningCapabilitiesUnconfirmed = false,
   error = null,
   onRetry,
   onAddModel,
@@ -64,6 +68,8 @@ export const ModelConfigSelect = ({
   onLongContextChange,
   reasoningEffort = 'high',
   onReasoningChange,
+  claudeUltracode = false,
+  onClaudeUltracodeChange,
   codexFastMode = 'normal',
   onCodexFastModeChange,
   dshPreset = '',
@@ -99,6 +105,7 @@ export const ModelConfigSelect = ({
     onReasoningChange?.(effort);
   }, [onReasoningChange]);
 
+  const currentModel = useCurrentModel(models, selectedModel, currentProvider);
   const ompRoles = useOmpRoles();
   const ompCatalog = useMemo<OmpReasoningCatalog>(() => ({ models, roles: ompRoles }), [models, ompRoles]);
 
@@ -108,10 +115,12 @@ export const ModelConfigSelect = ({
     selectedModel,
     currentProvider,
     ompCatalog,
+    currentModel?.supportedReasoningEfforts,
+    reasoningCapabilitiesUnconfirmed,
   );
 
   const modelMapping = readClaudeModelMapping();
-  const currentModel = useCurrentModel(models, selectedModel, currentProvider);
+  const showUltracode = currentProvider === 'claude' && !!onClaudeUltracodeChange;
   const {
     show1MContext,
     showContextRow,
@@ -146,6 +155,7 @@ export const ModelConfigSelect = ({
     modelMapping,
     longContextEnabled,
     codexFastMode,
+    claudeUltracode,
     dshPreset,
     ompApprovalMode,
     show1MContext,
@@ -153,6 +163,7 @@ export const ModelConfigSelect = ({
     showSpeed,
     showPreset,
     showApproval,
+    showUltracode,
     currentLevel,
   });
 
@@ -203,7 +214,7 @@ export const ModelConfigSelect = ({
       window.addEventListener('resize', mainRecalculate);
       return () => window.removeEventListener('resize', mainRecalculate);
     }
-  }, [isOpen, mainRecalculate, showEffortRow, showSpeed, showPreset, showApproval, showContextRow]);
+  }, [isOpen, mainRecalculate, showEffortRow, showSpeed, showPreset, showApproval, showContextRow, showUltracode]);
 
   return (
     <div style={WRAPPER_STYLE}>
@@ -234,7 +245,10 @@ export const ModelConfigSelect = ({
           onAddModel={onAddModel}
           longContextEnabled={longContextEnabled}
           onLongContextChange={onLongContextChange}
-          showDivider={showDivider}
+          showDivider={showDivider || showUltracode}
+          showUltracode={showUltracode}
+          claudeUltracode={claudeUltracode}
+          onClaudeUltracodeChange={onClaudeUltracodeChange}
           showContextRow={showContextRow}
           contextSupported={contextSupported}
           showSpeed={showSpeed}
@@ -250,6 +264,8 @@ export const ModelConfigSelect = ({
           onOmpApprovalModeChange={onOmpApprovalModeChange}
           ompApprovalLabel={ompApprovalLabel}
           showEffortRow={showEffortRow}
+          supportedReasoningEfforts={currentModel?.supportedReasoningEfforts}
+          reasoningCapabilitiesUnconfirmed={reasoningCapabilitiesUnconfirmed}
           reasoningEffort={reasoningEffort}
           onReasoningChange={handleReasoningChange}
           ompCatalog={ompCatalog}
