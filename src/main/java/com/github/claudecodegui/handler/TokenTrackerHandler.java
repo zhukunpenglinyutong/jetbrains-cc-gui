@@ -24,6 +24,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -189,6 +190,18 @@ public class TokenTrackerHandler {
         });
     }
 
+    /** Only the tokentracker functions and local-auth; dot segments (plain or %2e) would escape the prefix. */
+    static boolean isAllowedProxyPath(String path) {
+        if (path == null) {
+            return false;
+        }
+        String pathOnly = path.split("\\?")[0];
+        if (pathOnly.contains("..") || pathOnly.toLowerCase(Locale.ROOT).contains("%2e")) {
+            return false;
+        }
+        return pathOnly.startsWith("/functions/tokentracker-") || pathOnly.equals("/api/local-auth");
+    }
+
     /** tt_proxy → raw response body text (JSON), or error containing "HTTP <status>" */
     public void handleProxy(String content) {
         String requestId = parseRequestId(content);
@@ -207,8 +220,7 @@ public class TokenTrackerHandler {
             String body = payload.has("body") && !payload.get("body").isJsonNull()
                     ? payload.get("body").getAsString() : null;
 
-            String pathOnly = path.split("\\?")[0];
-            if (!(pathOnly.startsWith("/functions/tokentracker-") || pathOnly.equals("/api/local-auth"))) {
+            if (!isAllowedProxyPath(path)) {
                 throw new TokenTrackerException("tokentracker proxy path not allowed: " + path);
             }
             String upperMethod = method.trim().toUpperCase();
