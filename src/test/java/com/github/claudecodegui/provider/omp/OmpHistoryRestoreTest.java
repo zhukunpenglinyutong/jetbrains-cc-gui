@@ -385,14 +385,6 @@ public class OmpHistoryRestoreTest {
     }
 
     @Test
-    public void plainPathsFollowTheHostRules() {
-        boolean windowsHost = File.separatorChar == '\\';
-        for (String path : new String[]{"notes.md", "/abs/a.ts", "/c/a", "C:\\a\\b.txt", "@/abs/a"}) {
-            assertEquals(path, OmpToolMapper.isPlainPath(path, windowsHost), OmpToolMapper.isPlainPath(path));
-        }
-    }
-
-    @Test
     public void windowsPathRulesApplyOnlyToWindowsSessionsOnAWindowsHost() {
         assertFalse(OmpToolMapper.usesWindowsPathRules("/home/u/project", true));
         assertTrue(OmpToolMapper.usesWindowsPathRules("C:\\work\\project", true));

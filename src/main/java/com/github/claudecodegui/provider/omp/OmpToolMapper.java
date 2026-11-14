@@ -310,16 +310,6 @@ final class OmpToolMapper {
     }
 
     /**
-     * Whether omp writes to {@code path} exactly as written (resolved against the session
-     * directory, {@code ~} and {@code ~/} against home). Every other form is rewritten by omp
-     * first ({@code @...}, {@code :...}, {@code ~name}, {@code [path#TAG]}, {@code archive:member}, ...),
-     * so where it lands is only known from the result.
-     */
-    static boolean isPlainPath(String path) {
-        return isPlainPath(path, File.separatorChar == '\\');
-    }
-
-    /**
      * Whether omp applied Windows path rules in a session. On a Windows host a POSIX session
      * directory means omp ran in WSL, where it writes POSIX paths as given; OmpHistoryReader
      * reads the session's {@code ~} the same way. Without a session directory the host decides.
@@ -329,9 +319,14 @@ final class OmpToolMapper {
     }
 
     /**
-     * {@link #isPlainPath(String)} with the host's rules given explicitly. On Windows omp turns
-     * {@code /c/...} into a drive path, and any other leading slash is drive-relative, so no path
-     * starting with {@code /} is written as given there.
+     * Whether omp writes to {@code path} exactly as written (resolved against the session
+     * directory, {@code ~} and {@code ~/} against home). Every other form is rewritten by omp
+     * first ({@code @...}, {@code :...}, {@code ~name}, {@code [path#TAG]}, {@code archive:member}, ...),
+     * so where it lands is only known from the result.
+     *
+     * <p>{@code windows} selects omp's Windows rules (see {@link #usesWindowsPathRules}). On
+     * Windows omp turns {@code /c/...} into a drive path, and any other leading slash is
+     * drive-relative, so no path starting with {@code /} is written as given there.
      */
     static boolean isPlainPath(String path, boolean windows) {
         if (path == null || path.isEmpty() || !path.equals(path.strip())) {
