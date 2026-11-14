@@ -442,10 +442,12 @@ public class ClaudeSession {
      * {@code "[tool_result]"} marker row the frontend already understands.</p>
      *
      * @param raw the SDK message object forwarded by the daemon
+     * @return false when a user turn already owns the tail, so the caller must
+     *         not forward the row either
      */
-    public void appendInterTurnMessage(JsonObject raw) {
+    public boolean appendInterTurnMessage(JsonObject raw) {
         if (raw == null) {
-            return;
+            return true;
         }
         Message parsed;
         try {
@@ -455,23 +457,30 @@ public class ClaudeSession {
             // forwards the same payload to the webview immediately after this
             // call, so throwing here would drop the live message entirely.
             LOG.debug("[ClaudeSession] Skipping unparseable inter-turn message", e);
-            return;
+            return true;
         }
-        if (parsed == null) {
-            return;
-        }
-        String uuid = rawUuid(parsed);
         SessionState sessionState = state;
         synchronized (sessionState.getMessageStateLock()) {
+            // A send publishes its question under this lock before the daemon waits
+            // for the CLI to go quiet, so later follow-up rows would land below it.
+            // The deferred session_updated reload restores them in transcript order.
+            if (sessionState.isBusy()) {
+                return false;
+            }
+            if (parsed == null) {
+                return true;
+            }
+            String uuid = rawUuid(parsed);
             if (uuid != null) {
                 for (Message existing : sessionState.getMessagesReference()) {
                     if (uuid.equals(rawUuid(existing))) {
-                        return;
+                        return true;
                     }
                 }
             }
             sessionState.addMessage(parsed);
         }
+        return true;
     }
 
     /**

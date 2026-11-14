@@ -2915,9 +2915,10 @@ public class ClaudeChatWindow {
                     // shorter and preserveLatestMessagesOnShrink misaligns its
                     // positional tail. MessageParser applies the same filters a
                     // history read would (placeholder, sidechain, command tags).
-                    interTurnSession.appendInterTurnMessage(interTurnRaw);
-                    interTurnAdapter.onInterTurnMessage(
-                            buildInterTurnMessagePayload(interTurnSessionId, interTurnRaw));
+                    if (interTurnSession.appendInterTurnMessage(interTurnRaw)) {
+                        interTurnAdapter.onInterTurnMessage(
+                                buildInterTurnMessagePayload(interTurnSessionId, interTurnRaw));
+                    }
                 }
             };
             this.claudeSDKBridge.addDaemonEventListener(this.titleEventListener);
