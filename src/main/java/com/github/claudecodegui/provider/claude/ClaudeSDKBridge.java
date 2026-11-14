@@ -25,6 +25,19 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public class ClaudeSDKBridge extends BaseSDKBridge {
 
+    // Native turns can wait for hours. Keep their blocking waits and Stop control
+    // off the shared ForkJoinPool so low-core hosts can always interrupt a turn.
+    private static final java.util.concurrent.ExecutorService CLAUDE_EXECUTOR =
+            java.util.concurrent.Executors.newCachedThreadPool(task -> {
+                Thread thread = new Thread(task, "ClaudeBridge-worker");
+                thread.setDaemon(true);
+                return thread;
+            });
+
+    public static java.util.concurrent.Executor claudeExecutor() {
+        return CLAUDE_EXECUTOR;
+    }
+
     private final ClaudeStreamAdapter streamAdapter;
     private final ClaudeRequestParamsBuilder requestParamsBuilder;
     private final ClaudeJsonOutputExtractor jsonOutputExtractor;
@@ -73,6 +86,14 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
         this.daemonRequestExecutor = new ClaudeDaemonRequestExecutor(
                 LOG, requestParamsBuilder, streamAdapter, jsonOutputExtractor
         );
+    }
+
+    public void setProjectTrustSupplier(java.util.function.Predicate<String> projectTrust) {
+        requestParamsBuilder.setProjectTrust(projectTrust);
+    }
+
+    public void setSessionSupplierResolver(java.util.function.Supplier<String> resolver) {
+        this.requestParamsBuilder.setSessionSupplierResolver(resolver);
     }
 
     /**
@@ -124,7 +145,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
      * Prewarm daemon asynchronously to reduce first-message latency.
      */
     public void prewarmDaemonAsync(String cwd, String runtimeSessionEpoch) {
-        daemonCoordinator.prewarmDaemonAsync(normalizeCwdForNode(cwd), runtimeSessionEpoch, null);
+        prewarmDaemonAsync(cwd, runtimeSessionEpoch, null);
     }
 
     /**
@@ -136,7 +157,9 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
      * @param sessionId The historical session ID to resume
      */
     public void prewarmDaemonAsync(String cwd, String runtimeSessionEpoch, String sessionId) {
-        daemonCoordinator.prewarmDaemonAsync(normalizeCwdForNode(cwd), runtimeSessionEpoch, sessionId);
+        ClaudeRequestParamsBuilder.RequestCwd requestCwd = resolveRequestCwd(cwd);
+        daemonCoordinator.prewarmDaemonAsync(requestCwd.nodeCwd(), runtimeSessionEpoch, sessionId,
+                requestCwd.projectTrusted());
     }
 
     public void resetPersistentRuntime(String runtimeSessionEpoch) {
@@ -166,6 +189,32 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
         }
         // Also try per-process interrupt (covers per-process fallback mode)
         super.interruptChannel(channelId);
+    }
+
+    /** Stops the captured native runtime, including workflows running between foreground turns. */
+    public void interruptChannel(String channelId, String sessionId, String runtimeSessionEpoch) {
+        DaemonBridge db = daemonCoordinator.getCurrentDaemonBridge();
+        try {
+            if (db != null && db.isAlive()) {
+                JsonObject params = new JsonObject();
+                params.addProperty("sessionId", sessionId);
+                params.addProperty("runtimeSessionEpoch", runtimeSessionEpoch);
+                Boolean acknowledged = db.sendCommand("claude.abortTurn", params, new DaemonBridge.DaemonOutputCallback() {
+                    @Override public void onLine(String line) { }
+                    @Override public void onStderr(String text) { }
+                    @Override public void onError(String error) { LOG.warn("[ClaudeSDKBridge] Abort failed: " + error); }
+                    @Override public void onComplete(boolean success) { }
+                }).orTimeout(10, java.util.concurrent.TimeUnit.SECONDS).join();
+                // An already-retired runtime is a successful control no-op. The original
+                // send's terminal event, not this control Boolean, proves cancellation.
+                if (!Boolean.TRUE.equals(acknowledged)) {
+                    throw new IllegalStateException("Claude runtime could not be interrupted");
+                }
+            }
+        } finally {
+            // Per-process fallback retains its channel-scoped process ownership.
+            super.interruptChannel(channelId);
+        }
     }
 
     // ============================================================================
@@ -413,14 +462,38 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             String reasoningEffort,
             MessageCallback callback
     ) {
-        String normalizedCwd = normalizeCwdForNode(cwd);
+        return sendMessage(channelId, message, sessionId, runtimeSessionEpoch, cwd, attachments,
+                permissionMode, model, openedFiles, agentPrompt, streaming, disableThinking,
+                reasoningEffort, false, callback);
+    }
+
+    public CompletableFuture<SDKResult> sendMessage(
+            String channelId,
+            String message,
+            String sessionId,
+            String runtimeSessionEpoch,
+            String cwd,
+            List<ClaudeSession.Attachment> attachments,
+            String permissionMode,
+            String model,
+            JsonObject openedFiles,
+            String agentPrompt,
+            Boolean streaming,
+            Boolean disableThinking,
+            String reasoningEffort,
+            boolean ultracode,
+            MessageCallback callback
+    ) {
+        ClaudeRequestParamsBuilder.RequestCwd requestCwd = resolveRequestCwd(cwd);
+        String normalizedCwd = requestCwd.nodeCwd();
+        boolean projectTrusted = requestCwd.projectTrusted();
 
         // Try daemon mode first (avoids per-request Node.js process spawning)
         DaemonBridge db = daemonCoordinator.getDaemonBridge();
         if (db != null) {
             return sendMessageViaDaemon(db, channelId, message, sessionId, runtimeSessionEpoch, normalizedCwd,
                     attachments, permissionMode, model, openedFiles, agentPrompt,
-                    streaming, disableThinking, reasoningEffort, callback);
+                    streaming, disableThinking, reasoningEffort, ultracode, projectTrusted, callback);
         }
 
         // Fallback: per-process mode (spawns a new Node.js process per request)
@@ -439,6 +512,8 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 streaming,
                 disableThinking,
                 reasoningEffort,
+                ultracode,
+                projectTrusted,
                 callback
         );
     }
@@ -475,21 +550,23 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
      * Get MCP server connection status.
      */
     public CompletableFuture<List<JsonObject>> getMcpServerStatus(String cwd) {
-        return mcpQueryService.getMcpServerStatus(normalizeCwdForNode(cwd));
+        ClaudeRequestParamsBuilder.RequestCwd requestCwd = resolveRequestCwd(cwd);
+        return mcpQueryService.getMcpServerStatus(requestCwd.nodeCwd(), requestCwd.projectTrusted());
     }
 
     /**
      * Get MCP server tools list.
      */
     public CompletableFuture<JsonObject> getMcpServerTools(String serverId) {
-        return mcpQueryService.getMcpServerTools(serverId, null);
+        return mcpQueryService.getMcpServerTools(serverId, null, false);
     }
 
     /**
      * Get MCP server tools list with working directory for project-specific config resolution.
      */
     public CompletableFuture<JsonObject> getMcpServerTools(String serverId, String cwd) {
-        return mcpQueryService.getMcpServerTools(serverId, normalizeCwdForNode(cwd));
+        ClaudeRequestParamsBuilder.RequestCwd requestCwd = resolveRequestCwd(cwd);
+        return mcpQueryService.getMcpServerTools(serverId, requestCwd.nodeCwd(), requestCwd.projectTrusted());
     }
 
     // ============================================================================
@@ -535,16 +612,9 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             return CompletableFuture.completedFuture(error);
         }
 
-        JsonObject params = new JsonObject();
-        if (sessionId != null && !sessionId.isEmpty()) {
-            params.addProperty("sessionId", sessionId);
-        }
-        if (cwd != null && !cwd.isEmpty()) {
-            params.addProperty("cwd", cwd);
-        }
-        if (model != null && !model.isEmpty()) {
-            params.addProperty("model", model);
-        }
+        ClaudeRequestParamsBuilder.RequestCwd requestCwd = resolveRequestCwd(cwd);
+        JsonObject params = buildContextUsageParams(sessionId, requestCwd, model);
+        this.requestParamsBuilder.addSessionSupplier(params);
 
         AtomicReference<JsonObject> resultRef = new AtomicReference<>();
         CompletableFuture<JsonObject> resultFuture = new CompletableFuture<>();
@@ -739,6 +809,8 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             Boolean streaming,
             Boolean disableThinking,
             String reasoningEffort,
+            boolean ultracode,
+            boolean projectTrusted,
             MessageCallback callback
     ) {
         return daemonRequestExecutor.sendMessageViaDaemon(
@@ -756,8 +828,31 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 streaming,
                 disableThinking,
                 reasoningEffort,
+                ultracode,
+                projectTrusted,
                 callback
         );
+    }
+
+    /** The cwd Node runs in, with trust decided on the IDE's form of the same path. */
+    private ClaudeRequestParamsBuilder.RequestCwd resolveRequestCwd(String cwd) {
+        return requestParamsBuilder.resolveRequestCwd(cwd, this::normalizeCwdForNode);
+    }
+
+    static JsonObject buildContextUsageParams(String sessionId, ClaudeRequestParamsBuilder.RequestCwd requestCwd, String model) {
+        JsonObject params = new JsonObject();
+        if (sessionId != null && !sessionId.isEmpty()) {
+            params.addProperty("sessionId", sessionId);
+        }
+        String nodeCwd = requestCwd.nodeCwd();
+        if (nodeCwd != null && !nodeCwd.isEmpty()) {
+            params.addProperty("cwd", nodeCwd);
+        }
+        if (model != null && !model.isEmpty()) {
+            params.addProperty("model", model);
+        }
+        params.addProperty("projectTrusted", requestCwd.projectTrusted());
+        return params;
     }
 
     /**

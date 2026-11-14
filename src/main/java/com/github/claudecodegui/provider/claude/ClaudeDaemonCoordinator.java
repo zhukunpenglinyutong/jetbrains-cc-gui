@@ -194,11 +194,23 @@ class ClaudeDaemonCoordinator {
         }
     }
 
-    void prewarmDaemonAsync(String cwd, String runtimeSessionEpoch) {
-        prewarmDaemonAsync(cwd, runtimeSessionEpoch, null);
+    static JsonObject buildPreconnectParams(String cwd, String sessionId, String runtimeSessionEpoch, boolean projectTrusted) {
+        JsonObject params = new JsonObject();
+        params.addProperty("cwd", cwd != null ? cwd : "");
+        params.addProperty("sessionId", sessionId != null ? sessionId : "");
+        params.addProperty("runtimeSessionEpoch", runtimeSessionEpoch != null ? runtimeSessionEpoch : "");
+        params.addProperty("permissionMode", "");
+        params.addProperty("model", "");
+        params.addProperty("streaming", true);
+        params.addProperty("projectTrusted", projectTrusted);
+        return params;
     }
 
-    void prewarmDaemonAsync(String cwd, String runtimeSessionEpoch, String sessionId) {
+    void prewarmDaemonAsync(String cwd, String runtimeSessionEpoch, boolean projectTrusted) {
+        prewarmDaemonAsync(cwd, runtimeSessionEpoch, null, projectTrusted);
+    }
+
+    void prewarmDaemonAsync(String cwd, String runtimeSessionEpoch, String sessionId, boolean projectTrusted) {
         CompletableFuture<?> previous = prewarmFuture;
         if (previous != null && !previous.isDone()) {
             previous.cancel(true);
@@ -220,13 +232,7 @@ class ClaudeDaemonCoordinator {
                     return;
                 }
 
-                JsonObject params = new JsonObject();
-                params.addProperty("cwd", cwd != null ? cwd : "");
-                params.addProperty("sessionId", sessionId != null ? sessionId : "");
-                params.addProperty("runtimeSessionEpoch", runtimeSessionEpoch != null ? runtimeSessionEpoch : "");
-                params.addProperty("permissionMode", "");
-                params.addProperty("model", "");
-                params.addProperty("streaming", true);
+                JsonObject params = buildPreconnectParams(cwd, sessionId, runtimeSessionEpoch, projectTrusted);
                 params.add("env", ClaudeBridgeUtils.buildDaemonEnv(cwd));
 
                 CompletableFuture<Boolean> preconnectFuture = daemon.sendCommand(

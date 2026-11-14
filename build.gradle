@@ -34,6 +34,12 @@ checkstyle {
     sourceSets = [project.sourceSets.main]
 }
 
+// The default 512m worker heap runs out on the full main source set (OutOfMemoryError
+// surfaces as "Error was thrown while processing <random file>").
+tasks.withType(Checkstyle).configureEach {
+    maxHeapSize = '1g'
+}
+
 // sourceSets above unhooks checkstyleTest from the check lifecycle; disabling the
 // task as well makes an explicit `gradlew checkstyleTest` a SKIPPED no-op instead
 // of a failure.
@@ -44,7 +50,7 @@ tasks.named('checkstyleTest') {
 group = 'com.github.idea-claude-code-gui'
 // Keep this line as a plain literal: webview/scripts/extract-version.mjs matches it
 // with /^version\s*=\s*'(.+)'$/ to generate the webview's APP_VERSION.
-version = '0.6.5'
+version = '0.6.6'
 
 // Local-only override for custom builds (e.g. distribution flavors). Put
 // plugin.version=... in the gitignored local.properties (or pass -Pplugin.version=...)
@@ -193,6 +199,11 @@ sourceSets {
             }
         }
     }
+}
+
+tasks.withType(Test).configureEach {
+    // Configuration fixtures must never inherit the host CLI data directory.
+    environment 'CODEX_HOME', ''
 }
 
 tasks.withType(JavaCompile).configureEach {

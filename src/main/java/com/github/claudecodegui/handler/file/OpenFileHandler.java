@@ -797,6 +797,12 @@ class OpenFileHandler {
         LineInfo lineInfo = parseLineInfo(filePath);
         String actualPath = lineInfo.actualPath();
 
+        // Hover must not touch other machines: on Windows any access to \\host\share
+        // (including the fallback's toRealPath) sends the user's NTLM credentials there.
+        if (PlatformUtils.isWindows() && PathUtils.isRemoteUncPath(actualPath)) {
+            return null;
+        }
+
         if (actualPath.contains(".." + File.separator) || actualPath.contains("../") || actualPath.contains("..\\")) {
             return buildFallbackDisplayPath(actualPath);
         }

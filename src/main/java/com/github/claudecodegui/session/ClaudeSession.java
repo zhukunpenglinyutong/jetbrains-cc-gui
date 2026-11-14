@@ -7,6 +7,9 @@ import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.provider.grok.GrokSDKBridge;
 import com.github.claudecodegui.provider.common.MarkerCliBridge;
 import com.github.claudecodegui.provider.zcode.ZcodeSDKBridge;
+import com.github.claudecodegui.settings.CodemossSettingsService;
+import com.github.claudecodegui.settings.SessionSupplierCatalog;
+import com.github.claudecodegui.settings.SessionSupplierStateService;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
@@ -116,6 +119,10 @@ public class ClaudeSession {
 
         /** Publishes an identity, or an empty string when a missing transcript retires it. */
         void onSessionIdReceived(String sessionId);
+
+        default void onSessionIdReceived(String sessionId, String transitionToken) {
+            onSessionIdReceived(sessionId);
+        }
 
         void onPermissionRequested(PermissionRequest request);
 
@@ -237,6 +244,9 @@ public class ClaudeSession {
 
         // Initialize managers
         this.state = new com.github.claudecodegui.session.SessionState();
+        if (project != null) {
+            initializeSupplierDefaults();
+        }
         this.messageParser = new com.github.claudecodegui.session.MessageParser();
         this.messageMerger = new com.github.claudecodegui.session.MessageMerger();
         this.contextCollector = new com.github.claudecodegui.session.EditorContextCollector(project);
@@ -436,7 +446,28 @@ public class ClaudeSession {
      * @param cwd restored working directory
      */
     public void setSessionInfo(String sessionId, String cwd) {
+        setSessionInfo(sessionId, cwd, null);
+    }
+
+    /** Correlates restored identity with the history transition that accepted it. */
+    public void setSessionInfo(String sessionId, String cwd, String transitionToken) {
+        setSessionInfo(sessionId, cwd, transitionToken, null);
+    }
+
+    /** Restore an explicit tab binding before publishing the restored session identity. */
+    public void setSessionInfo(String sessionId, String cwd, String transitionToken, String restoredSupplierId) {
         synchronized (this.state.getMessageStateLock()) {
+            if (restoredSupplierId != null && SessionSupplierCatalog.supports(state.getProvider())) {
+                state.setSupplierId(state.getProvider(), restoredSupplierId);
+            } else if (project != null && sessionId != null && SessionSupplierCatalog.supports(state.getProvider())) {
+                SessionSupplierStateService bindings = SessionSupplierStateService.getInstance();
+                String savedSupplier = bindings == null ? null : bindings.getSupplier(state.getProvider(), sessionId);
+                if (savedSupplier != null) {
+                    state.setSupplierId(state.getProvider(), savedSupplier);
+                } else if (!Objects.equals(sessionId, state.getSessionId())) {
+                    state.setSupplierId(state.getProvider(), SessionSupplierCatalog.defaultId(new CodemossSettingsService(), state.getProvider()));
+                }
+            }
             if ("codex".equals(this.state.getProvider())
                     && !Objects.equals(sessionId, this.state.getSessionId())) {
                 // Codex history reuses this facade. Retire the old receiver and
@@ -456,7 +487,7 @@ public class ClaudeSession {
                 if ("codex".equals(this.state.getProvider()) && this.state.getChannelId() == null) {
                     this.state.setChannelId("codex");
                 }
-                this.callbackFacade.notifySessionIdReceived(sessionId);
+                this.callbackFacade.notifySessionIdReceived(sessionId, transitionToken);
             }
             if (cwd != null) {
                 this.setCwd(cwd);
@@ -654,7 +685,7 @@ public class ClaudeSession {
             String clientMessageId
     ) {
         return send(input, null, agentPrompt, fileTagPaths, requestedPermissionMode,
-                requestedReasoningEffort, requestedCodexFastMode, requestedDshPreset, clientMessageId, null);
+                requestedReasoningEffort, requestedCodexFastMode, requestedDshPreset, null, clientMessageId, null);
     }
 
     /**
@@ -667,6 +698,7 @@ public class ClaudeSession {
      * @param requestedReasoningEffort requested reasoning effort
      * @param requestedCodexFastMode requested Codex service tier
      * @param requestedDshPreset requested DSH preset
+     * @param requestedOmpApprovalMode OMP approval mode of this message, or null when none is stated
      * @param clientMessageId frontend submission identity
      * @param nativeCodexSettings filtered native Codex settings
      * @return future completed after the provider turn
@@ -679,12 +711,24 @@ public class ClaudeSession {
             String requestedReasoningEffort,
             String requestedCodexFastMode,
             String requestedDshPreset,
+            String requestedOmpApprovalMode,
             String clientMessageId,
             JsonObject nativeCodexSettings
     ) {
         return send(input, null, agentPrompt, fileTagPaths, requestedPermissionMode,
                 requestedReasoningEffort, requestedCodexFastMode, requestedDshPreset,
-                clientMessageId, nativeCodexSettings);
+                requestedOmpApprovalMode, clientMessageId, nativeCodexSettings);
+    }
+
+    public CompletableFuture<Void> send(
+            String input, String agentPrompt, List<String> fileTagPaths,
+            String requestedPermissionMode, String requestedReasoningEffort,
+            String requestedCodexFastMode, String requestedDshPreset, String clientMessageId,
+            JsonObject nativeCodexSettings, Boolean requestedClaudeUltracode
+    ) {
+        return send(input, null, agentPrompt, fileTagPaths, requestedPermissionMode,
+                requestedReasoningEffort, requestedCodexFastMode, requestedDshPreset,
+                null, clientMessageId, nativeCodexSettings, requestedClaudeUltracode);
     }
 
     /**
@@ -801,7 +845,7 @@ public class ClaudeSession {
     ) {
         return send(input, attachments, agentPrompt, fileTagPaths, requestedPermissionMode,
                 requestedReasoningEffort, requestedCodexFastMode, requestedDshPreset,
-                requestedClientMessageId, null);
+                null, requestedClientMessageId, null);
     }
 
     /**
@@ -815,6 +859,7 @@ public class ClaudeSession {
      * @param requestedReasoningEffort requested reasoning effort
      * @param requestedCodexFastMode requested Codex service tier
      * @param requestedDshPreset requested DSH preset
+     * @param requestedOmpApprovalMode OMP approval mode of this message, or null when none is stated
      * @param requestedClientMessageId frontend submission identity
      * @param nativeCodexSettings filtered native Codex settings
      * @return future completed after the provider turn
@@ -828,10 +873,32 @@ public class ClaudeSession {
             String requestedReasoningEffort,
             String requestedCodexFastMode,
             String requestedDshPreset,
+            String requestedOmpApprovalMode,
             String requestedClientMessageId,
             JsonObject nativeCodexSettings
     ) {
+        return send(input, attachments, agentPrompt, fileTagPaths, requestedPermissionMode,
+                requestedReasoningEffort, requestedCodexFastMode, requestedDshPreset,
+                requestedOmpApprovalMode, requestedClientMessageId, nativeCodexSettings, null);
+    }
+
+    /** Sends a turn with the Claude workflow mode captured at submission time. */
+    public CompletableFuture<Void> send(
+            String input,
+            List<Attachment> attachments,
+            String agentPrompt,
+            List<String> fileTagPaths,
+            String requestedPermissionMode,
+            String requestedReasoningEffort,
+            String requestedCodexFastMode,
+            String requestedDshPreset,
+            String requestedOmpApprovalMode,
+            String requestedClientMessageId,
+            JsonObject nativeCodexSettings,
+            Boolean requestedClaudeUltracode
+    ) {
         lastTurnStartedAtMillis = System.currentTimeMillis();
+        initializeSupplierDefaults();
         // Reset the manual-interrupt flag at the start of a new turn so that
         // a fresh send is not mistaken for a user-initiated stop.
         manuallyInterrupted = false;
@@ -851,6 +918,8 @@ public class ClaudeSession {
         final String finalRequestedReasoningEffort = requestedReasoningEffort;
         final String finalRequestedCodexFastMode = requestedCodexFastMode;
         final String finalRequestedDshPreset = requestedDshPreset;
+        final boolean finalClaudeUltracode = requestedClaudeUltracode != null
+                ? requestedClaudeUltracode : state.isClaudeUltracode();
 
         CompletableFuture<String> launch = launchClaude();
         if (execution != null) {
@@ -874,8 +943,10 @@ public class ClaudeSession {
                             finalRequestedReasoningEffort,
                             finalRequestedCodexFastMode,
                             finalRequestedDshPreset,
+                            requestedOmpApprovalMode,
                             clientMessageId,
                             nativeCodexSettings,
+                            finalClaudeUltracode,
                             turnOwner
                     )
             ).thenCompose(v -> state.isCurrentTurn(turnOwner)
@@ -900,6 +971,15 @@ public class ClaudeSession {
         return messageOrchestrator.syncUserMessageUuidsAfterSend();
     }
 
+    private void initializeSupplierDefaults() {
+        CodemossSettingsService settings = new CodemossSettingsService();
+        for (String engine : List.of("claude", "codex")) {
+            if (state.getSupplierId(engine) == null) {
+                state.setSupplierId(engine, SessionSupplierCatalog.defaultId(settings, engine));
+            }
+        }
+    }
+
     /**
      * Interrupt the current execution.
      */
@@ -910,6 +990,7 @@ public class ClaudeSession {
         String channelId;
         Object turnOwner;
         String runtimeSessionEpoch;
+        String sessionId;
         SessionExecutionState.Turn executionTurn;
         synchronized (state.getMessageStateLock()) {
             manuallyInterrupted = true;
@@ -917,6 +998,7 @@ public class ClaudeSession {
             channelId = state.getChannelId();
             turnOwner = state.getTurnOwner();
             runtimeSessionEpoch = state.getRuntimeSessionEpoch();
+            sessionId = state.getSessionId();
             executionTurn = state.executionTurnForOwner(turnOwner);
             if (channelId == null) {
                 state.getExecutionState().activity(executionTurn, SessionExecutionState.Phase.UNKNOWN);
@@ -927,7 +1009,7 @@ public class ClaudeSession {
 
         return CompletableFuture.runAsync(() -> {
             try {
-                this.providerRouter.interruptChannel(provider, channelId);
+                this.providerRouter.interruptChannel(provider, channelId, sessionId, runtimeSessionEpoch);
                 synchronized (this.state.getMessageStateLock()) {
                     if (!this.isCurrentChannel(provider, channelId) || !this.state.isCurrentTurn(turnOwner)
                             || !Objects.equals(runtimeSessionEpoch, this.state.getRuntimeSessionEpoch())) {
@@ -955,7 +1037,9 @@ public class ClaudeSession {
                 }
                 throw new CompletionException(e);
             }
-        }, "codex".equals(provider) ? CodexSDKBridge.codexControlExecutor() : java.util.concurrent.ForkJoinPool.commonPool());
+        }, "codex".equals(provider) ? CodexSDKBridge.codexControlExecutor()
+                : "claude".equals(provider) ? ClaudeSDKBridge.claudeExecutor()
+                : java.util.concurrent.ForkJoinPool.commonPool());
     }
 
     private boolean isCurrentChannel(String provider, String channelId) {
@@ -1134,6 +1218,14 @@ public class ClaudeSession {
      */
     public String getReasoningEffort() {
         return state.getReasoningEffort();
+    }
+
+    public boolean isClaudeUltracode() {
+        return state.isClaudeUltracode();
+    }
+
+    public void setClaudeUltracode(boolean enabled) {
+        state.setClaudeUltracode(enabled);
     }
 
     /**

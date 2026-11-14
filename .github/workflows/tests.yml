@@ -6,12 +6,14 @@ name: Tests
 #   - Java unit tests (Linux)
 #   - WSL integration tests (Windows + WSL)
 # All jobs run in parallel and are intentionally independent of build.yml, so a
-# test failure can never block the Build Plugin job.
+# test failure can never block the Build Plugin job. build.yml calls this
+# workflow on tag pushes so a release is only published after tests pass.
 on:
   push:
     branches: [ '**' ]
   pull_request:
     branches: [ '**' ]
+  workflow_call:
 
 jobs:
   # ai-bridge tests use Node's built-in test runner (node:test). They are

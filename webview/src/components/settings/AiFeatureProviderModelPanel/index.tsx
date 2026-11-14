@@ -6,7 +6,7 @@ import { resolveProviderModels } from '../../ChatInputBox/resolveProviderModels'
 import { usePluginModels } from '../hooks/usePluginModels';
 import { useCliModels } from '../../../hooks/providers/useCliModels';
 import { STORAGE_KEYS } from '../../../types/provider';
-import { readClaudeModelMapping } from '../../../utils/claudeModelMapping';
+import { readGlobalClaudeModelMapping } from '../../../utils/claudeModelMapping';
 import type { AiFeatureConfig, AiFeatureProvider } from '../../../types/aiFeatureConfig';
 import { AI_FEATURE_PROVIDERS, isAiFeatureProvider } from '../../../types/aiFeatureConfig';
 import { type SelectOption } from './FeatureSelect';
@@ -60,9 +60,9 @@ const AiFeatureProviderModelPanel = ({
   // this panel so they stay identical by construction.
   const claudeCustomModels = usePluginModels(STORAGE_KEYS.CLAUDE_CUSTOM_MODELS).models;
   const codexCustomModels = usePluginModels(STORAGE_KEYS.CODEX_CUSTOM_MODELS).models;
-  const [claudeMapping, setClaudeMapping] = useState(readClaudeModelMapping);
+  const [claudeMapping, setClaudeMapping] = useState(readGlobalClaudeModelMapping);
   useEffect(() => {
-    const refresh = () => setClaudeMapping(readClaudeModelMapping());
+    const refresh = () => setClaudeMapping(readGlobalClaudeModelMapping());
     const onStorage = (event: StorageEvent) => {
       if (event.key === STORAGE_KEYS.CLAUDE_MODEL_MAPPING || event.key === null) refresh();
     };

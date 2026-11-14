@@ -106,6 +106,10 @@
     "localProject": "Локальный",
     "disabled": "Отключено",
     "sdkNotInstalled": "SDK {{provider}} не установлен. Установите SDK для начала работы.",
+    "codexUltraCapabilitiesLoading": "Проверяем доступность Ultra. Повторите отправку после загрузки модели.",
+    "codexUltraCapabilitiesUnavailable": "Не удалось проверить доступность Ultra. Повторите загрузку моделей или выберите другой уровень усилий.",
+    "sessionTransitionTakingLonger": "Смена сеанса занимает больше времени, чем ожидалось. Попробуйте открыть его снова; сообщения в очереди приостановлены.",
+    "sessionTransitionInProgress": "Смена сеанса уже выполняется. Подождите немного.",
     "sdkStatusLoading": "Проверка статуса SDK...",
     "pasteImagePreparing": "Подготовка вставленного изображения...",
     "sdkStatusUnavailable": "Не удалось проверить состояние SDK.",
@@ -170,7 +174,16 @@
     "codexApprovalsUsage": "Use /approvals without arguments",
     "codexCliOutdated": "Codex CLI {{version}} устарел: некоторые модели и режимы разрешений могут работать неправильно. Обновите его до версии {{minimumVersion}} или новее.",
     "codexSandboxConflict": "Codex automatic review cannot use danger-full-access. Choose workspace-write or request approval.",
-    "continueRefiningPlan": "Продолжить доработку этого плана:"
+    "continueRefiningPlan": "Продолжить доработку этого плана:",
+    "backgroundTasksRunning": "Фоновых задач выполняется: {{count}}",
+    "backgroundTasksRunning_one": "Выполняется {{count}} фоновая задача",
+    "backgroundTasksRunning_other": "Фоновых задач выполняется: {{count}}",
+    "stopBackgroundTasks": "Остановить фоновые задачи",
+    "planUsage": {
+      "balanceLabel": "Баланс: ",
+      "balanceRemaining": "Баланс: {{value}}",
+      "balanceDetail": "Всего {{total}} · Использовано {{used}}"
+    }
   },
   "settings": {
     "title": "Настройки",
@@ -398,6 +411,12 @@
         "enabled": "Включено",
         "disabled": "Отключено",
         "hint": "При отключении создание нового чата в существующем диалоге будет происходить напрямую, без подтверждения."
+      },
+      "sessionGitRepositoryMatching": {
+        "label": "Сопоставлять сессии по удалённому Git-репозиторию",
+        "enabled": "Включено",
+        "disabled": "Выключено",
+        "hint": "Показывать историю Codex и Claude Code из других каталогов с тем же нормализованным удалённым хостом, владельцем и репозиторием. Если данные Git недоступны, сопоставление идёт по рабочему каталогу."
       }
     },
     "providers": "Управление провайдерами",
@@ -1019,6 +1038,132 @@
       "source": "Source: {{source}}",
       "readOnlyTitle": "Read only",
       "readOnlyDesc": "Inspect files without writing to the workspace."
+    },
+    "hooks": {
+      "title": "Hooks",
+      "description": "Просматривайте и безопасно редактируйте хуки Codex и Claude Code.",
+      "refresh": "Обновить",
+      "provider": "Провайдер",
+      "scope": "Область",
+      "all": "Все",
+      "allProviders": "Все провайдеры",
+      "allScopes": "Все области",
+      "global": "Пользователь",
+      "project": "Проект",
+      "projectLocal": "Проект (локальное переопределение)",
+      "search": "Поиск хуков",
+      "searchPlaceholder": "События, команды или пути",
+      "noMatches": "Нет хуков, соответствующих фильтрам.",
+      "toggleUnavailable": "Индивидуальное переключение недоступно до проверки поведения провайдера.",
+      "enabled": "Включён",
+      "disabled": "Выключен",
+      "enable": "Включить хук",
+      "disable": "Выключить хук",
+      "managedToggleHint": "Переключатель CC GUI сохраняет исходную конфигурацию для восстановления.",
+      "nativeToggleHint": "Меняет пользовательскую настройку Codex. Выполнение также зависит от доверия, функций и политик.",
+      "toggleFailed": "Не удалось переключить хук",
+      "loading": "Поиск хуков…",
+      "empty": "Хуки не найдены.",
+      "valid": "Формат распознан",
+      "validationWarning": "Нужна проверка",
+      "matcher": "Условие совпадения",
+      "noCommand": "Нет команды",
+      "readOnly": "Только чтение",
+      "viewSource": "Показать источник",
+      "editSource": "Изменить источник",
+      "sourcePreview": "Предпросмотр источника",
+      "sourceTab": "Источник",
+      "detailsTab": "Сведения",
+      "viewMode": "Вид хуков",
+      "loadingSource": "Загрузка источника…",
+      "sourceEditor": "Редактор источника",
+      "affectedFile": "Затронутый файл",
+      "backupDirectory": "Каталог резервных копий",
+      "latestBackup": "Восстановить последнюю копию текущего сеанса редактирования",
+      "lastModified": "Последнее изменение",
+      "event": "Событие",
+      "format": "Формат",
+      "revision": "Ревизия",
+      "command": "Команда",
+      "validationIssues": "Ошибки проверки",
+      "providerFields": "Поля провайдера",
+      "noProviderFields": "Нет дополнительных полей",
+      "none": "Нет",
+      "reviewChanges": "Проверить изменения",
+      "hideChanges": "Скрыть изменения",
+      "noChanges": "Нет изменений для сохранения",
+      "technicalInfo": "Технические сведения",
+      "moreActions": "Другие действия",
+      "conflictTitle": "Источник изменён вне CC GUI",
+      "conflictDescription": "Загрузите внешнюю версию или сохраните черновик и синхронизируйте последнюю ревизию.",
+      "reloadExternal": "Загрузить внешнюю версию",
+      "keepDraft": "Сохранить черновик и синхронизировать",
+      "discardDraft": "Удалить черновик",
+      "discardChangesTitle": "Удалить несохранённые изменения?",
+      "discardChangesMessage": "Несохранённые изменения будут потеряны при закрытии.",
+      "backupOnSave": "Перед сохранением создаётся резервная копия",
+      "save": "Сохранить",
+      "saving": "Сохранение…",
+      "restore": "Восстановить последнюю копию текущего сеанса редактирования",
+      "saveFailed": "Ошибка сохранения",
+      "sourceLoadFailed": "Ошибка загрузки источника",
+      "noPreview": "Нет предпросмотра.",
+      "sourceNotice": "Нужна проверка {{count}} источников; операции с ними ограничены.",
+      "sharedProjectWarning": "Конфигурация проекта может попасть в коммит и повлиять на других. Проверьте изменения перед отправкой.",
+      "bridgeUnavailable": "Нет связи с IDE. Откройте настройки заново.",
+      "sourceTimeout": "Время чтения истекло. Перезагрузите источник перед правкой.",
+      "mutationTimeout": "Время подтверждения истекло. Обновите перед повтором: изменение могло сохраниться.",
+      "mutationConfirmedLate": "Получено позднее подтверждение сохранения. Черновик сохранён; перезагрузите источник.",
+      "issues": {
+        "COMMAND_MISSING": "Нет команды",
+        "TYPE_MISSING": "Нет типа",
+        "HOOKS_NOT_OBJECT": "hooks должен быть объектом",
+        "SETTINGS_NOT_OBJECT": "Настройки должны быть объектом",
+        "INVALID_JSON": "Некорректный JSON",
+        "HOOK_ENTRY_NOT_OBJECT": "Элемент хука должен быть объектом",
+        "INVALID_TOML": "Некорректный TOML",
+        "CODEX_HOOKS_NOT_TABLE": "hooks Codex должен быть таблицей",
+        "CODEX_HOOK_EVENT_NOT_ARRAY": "События должны быть массивами",
+        "CODEX_HOOK_ENTRY_NOT_TABLE": "Элемент должен быть таблицей",
+        "CODEX_ENABLED_INVALID": "Некорректное поле включения",
+        "CODEX_MATCHER_INVALID": "Некорректное условие",
+        "CODEX_COMMANDS_INVALID": "Нет допустимой команды или инструмента MCP",
+        "CODEX_HOOKS_FEATURE_DISABLED": "Функция хуков отключена",
+        "READ_FAILED": "Ошибка чтения",
+        "CODEX_EVENT_UNSUPPORTED": "Событие не поддерживается проверенной схемой",
+        "CODEX_HANDLER_UNSUPPORTED": "Тип обработчика не поддерживается",
+        "CODEX_HOOK_FILE_FIELDS_INVALID": "Некорректные поля файла",
+        "CODEX_STATE_INLINE_UNSUPPORTED": "Встроенное состояние нельзя безопасно изменить; используйте таблицу.",
+        "LINKED_SOURCE_READ_ONLY": "Связанные файлы доступны только для чтения. Измените исходный файл напрямую.",
+        "HOOK_SOURCE_UNAVAILABLE": "Исходный файл недоступен."
+      },
+      "sharedToggleTitle": "Подтвердите изменение общего проекта",
+      "sharedToggleMessage": "Это изменит общий файл .claude/settings.json и может повлиять на других участников. Данные восстановления сохраняются только на этом компьютере.",
+      "confirmSharedToggle": "Изменить общую конфигурацию",
+      "sensitiveSourceWarning": "Файл может содержать учётные данные и конфиденциальные настройки. Откройте содержимое, когда будете готовы к редактированию.",
+      "revealSource": "Показать конфигурацию",
+      "errors": {
+        "HOOK_SHARED_CONFIRMATION_REQUIRED": "Сначала подтвердите изменение общей конфигурации проекта.",
+        "HOOK_CATALOG_TIMEOUT": "Время обновления хуков истекло. Обновите список перед изменением другого хука.",
+        "HOOK_REVISION_CONFLICT": "Файл изменён вне этой страницы. Обновите и повторите попытку.",
+        "HOOK_RESTORE_CONFLICT": "Не удалось восстановить хук: это событие в файле больше не является списком. Исправьте файл и повторите попытку.",
+        "HOOK_TOGGLE_LOCKED": "С этим файлом уже выполняется другое изменение. Повторите попытку чуть позже.",
+        "HOOK_TOGGLE_LOCK_FAILED": "Не удалось заблокировать файл для этого изменения.",
+        "HOOK_FILE_LOCKED": "С этим файлом уже выполняется другое изменение. Повторите попытку чуть позже.",
+        "HOOK_NOT_FOUND": "Этого хука больше нет в файле. Обновите список.",
+        "HOOK_NOT_DISABLED": "Этот хук не отключён. Обновите список.",
+        "HOOK_ALREADY_DISABLED": "Этот хук уже отключён. Обновите список.",
+        "HOOK_STATE_WRITE_FAILED": "Не удалось сохранить запись об отключённом хуке. Изменение файла по возможности отменено.",
+        "HOOK_TOGGLE_FAILED": "Не удалось изменить хук.",
+        "INVALID_HOOK_PATH": "Этот файл нельзя изменить здесь. Связанные файлы и файлы вне известных расположений доступны только для чтения.",
+        "INVALID_BACKUP_PATH": "Файл резервной копии недоступен.",
+        "SOURCE_TOO_LARGE": "Файл больше 128 КБ, его нельзя редактировать здесь.",
+        "INVALID_REQUEST": "Недопустимый запрос. Обновите страницу и повторите попытку.",
+        "WRITE_FAILED": "Не удалось сохранить файл.",
+        "RESTORE_FAILED": "Не удалось восстановить резервную копию.",
+        "UNSUPPORTED_HOOK_PROVIDER": "Этот тип хука нельзя изменить здесь.",
+        "UNKNOWN_ERROR": "Неизвестная ошибка."
+      }
     }
   },
   "history": {
@@ -1071,27 +1216,12 @@
     "confirmConvert": "Преобразовать в сессию CLI?",
     "convertConfirmMessage": "Это изменит entrypoint сессии, чтобы она отображалась в списке /resume CLI Claude Code.",
     "timeAgo": {
-      "yearsAgo_one": "{{count}} год назад",
-      "yearsAgo_other": "{{count}} лет назад",
-      "monthsAgo_one": "{{count}} месяц назад",
-      "monthsAgo_other": "{{count}} месяцев назад",
-      "daysAgo_one": "{{count}} день назад",
-      "daysAgo_other": "{{count}} дней назад",
-      "hoursAgo_one": "{{count}} час назад",
-      "hoursAgo_other": "{{count}} часов назад",
-      "minutesAgo_one": "{{count}} минуту назад",
-      "minutesAgo_other": "{{count}} минут назад",
-      "justNow": "только что",
-      "yearsAgo_few": "{{count}} года назад",
-      "yearsAgo_many": "{{count}} лет назад",
-      "monthsAgo_few": "{{count}} месяца назад",
-      "monthsAgo_many": "{{count}} месяцев назад",
-      "daysAgo_few": "{{count}} дня назад",
-      "daysAgo_many": "{{count}} дней назад",
-      "hoursAgo_few": "{{count}} часа назад",
-      "hoursAgo_many": "{{count}} часов назад",
-      "minutesAgo_few": "{{count}} минуты назад",
-      "minutesAgo_many": "{{count}} минут назад"
+      "yearsAgo": "г. назад",
+      "monthsAgo": "мес. назад",
+      "daysAgo": "дн. назад",
+      "hoursAgo": "ч. назад",
+      "minutesAgo": "мин. назад",
+      "secondsAgo": "сек. назад"
     },
     "conversionErrors": {
       "INVALID_SESSION_ID": "Недействительный ID сеанса",
@@ -1115,7 +1245,10 @@
     },
     "loadMore": "Load more",
     "sessionInUse": "Используемые чаты нельзя удалить.",
-    "deleteFailed": "Не удалось удалить чат. Повторите попытку."
+    "deleteFailed": "Не удалось удалить чат. Повторите попытку.",
+    "confirmDirectoryTitle": "Открыть сессию в другом каталоге?",
+    "confirmDirectoryMessage": "Команды и изменения файлов будут выполняться в каталоге, указанном ниже.",
+    "executionDirectory": "Каталог запуска"
   },
   "permission": {
     "dialogTitle": "Запрос разрешения",
@@ -1147,7 +1280,15 @@
     "codexDeliveryFailed": "Codex не получил ваш выбор ({{error}}). Если диалог не продолжается, нажмите «Стоп» и отправьте сообщение снова.",
     "codexDeliveryUnconfirmed": "Codex ещё не подтвердил получение вашего выбора ({{error}}). Он ещё может вступить в силу, поэтому не отвечайте повторно; если диалог не продолжается, нажмите «Стоп» и отправьте сообщение снова."
   },
+  "modelConfig": {
+    "approvals": "Подтверждения",
+    "ultracode": {
+      "label": "Ultracode",
+      "description": "Встроенный процесс Claude с автоматическим делегированием задач. Сохраняет выбранный уровень рассуждения."
+    }
+  },
   "askUserQuestion": {
+    "ompTitle": "У OMP есть несколько вопросов к вам",
     "title": "У Claude есть вопросы к вам",
     "progress": "Вопрос {{current}} / {{total}}",
     "multiSelectHint": "Можно выбрать несколько вариантов",
@@ -1198,7 +1339,8 @@
     "invalidJsonConfig": "Неверный формат JSON",
     "providerAdded": "Провайдер добавлен",
     "providerUpdated": "Провайдер обновлён",
-    "providerDeleted": "Провайдер удалён"
+    "providerDeleted": "Провайдер удалён",
+    "codexSettingsDispatchFailed": "Не удалось отправить настройки Codex в IDE. Откройте чат заново и повторите попытку."
   },
   "config": {
     "clickToCopy": "Нажмите для копирования",
@@ -1588,6 +1730,7 @@
       "loading": "Загрузка процесса агента…",
       "unavailable": "Журнал процесса недоступен, пока у сессии нет id.",
       "reportGenerated": "Сформирован структурированный аналитический отчёт",
+      "historyTruncated": "История сокращена: пропущено записей — {{count}}. Исходная задача и последние действия сохранены.",
       "unitMs": "мс",
       "unitS": "с",
       "unitTools": "инструментов",
@@ -1933,6 +2076,25 @@
       "description": "Режим без вмешательства. Codex выполняет правки и команды немедленно."
     }
   },
+  "ompApprovals": {
+    "title": "Выберите режим подтверждений OMP",
+    "default": {
+      "label": "По умолчанию",
+      "description": "Полный автомат, если не задан tools.approvalMode"
+    },
+    "alwaysAsk": {
+      "label": "Спрашивать",
+      "description": "Спрашивает перед правками и командами"
+    },
+    "write": {
+      "label": "Автоодобрение правок",
+      "description": "Спрашивает только перед командами"
+    },
+    "yolo": {
+      "label": "Полный автомат",
+      "description": "Никогда не спрашивает"
+    }
+  },
   "ompModes": {
     "default": {
       "label": "По умолчанию",
@@ -2051,6 +2213,10 @@
     "xhigh": {
       "label": "Максимальная",
       "description": "Максимальная глубина рассуждений"
+    },
+    "ultra": {
+      "label": "Ultra",
+      "description": "Максимальное рассуждение с автоматическим делегированием задач"
     }
   },
   "errorBoundary": {
@@ -2314,5 +2480,11 @@
       "executing": "Executing…",
       "adjust": "Continue adjusting"
     }
+  },
+  "sessionSupplier": {
+    "label": "Поставщик",
+    "choose": "Выберите поставщика",
+    "nextTurn": "Применится со следующего хода",
+    "unavailable": "Поставщик недоступен. Откройте меню снова, чтобы повторить попытку, или выберите другого поставщика."
   }
 }
