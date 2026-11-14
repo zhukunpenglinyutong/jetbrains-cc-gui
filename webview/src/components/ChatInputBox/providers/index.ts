@@ -6,6 +6,7 @@ export {
 
 export {
   slashCommandProvider,
+  ompCommandProvider,
   commandToDropdownItem,
   setupSlashCommandsCallback,
   resetSlashCommandsState,

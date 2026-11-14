@@ -31,7 +31,7 @@ export function normalizeQuestion(raw: any): Question | null {
     const label = typeof opt.label === 'string' ? opt.label : (typeof opt.value === 'string' ? opt.value : '');
     const description = typeof opt.description === 'string' ? opt.description : '';
     if (!label) return [];
-    return [{ label, description }];
+    return [{ label, description, ...(opt.selected === true ? { selected: true } : {}) }];
   });
   if (!questionText) return null;
   // `detail` (DSH's plan under review) and `intent` are part of the question,

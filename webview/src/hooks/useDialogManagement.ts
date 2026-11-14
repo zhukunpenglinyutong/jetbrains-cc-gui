@@ -7,6 +7,7 @@ import type { RewindRequest } from '../components/RewindDialog';
 import type { ContextUsageData } from '../components/ContextUsageDialog';
 import { openBrowserExternal, sendBridgeEvent } from '../utils/bridge';
 import { clearDialogDraft, type DialogDraftKind } from '../utils/dialogStateStorage';
+import { normalizeQuestions, withBlankOptionalAnswers } from '../components/AskUserQuestionDialog/answerState';
 import type { ToastMessage } from '../components/Toast';
 import { useCodexDeliveryRecovery, type SubmittedCodexAnswer } from './useCodexDeliveryRecovery';
 import { CODEX_EMPTY_FORM_ALLOW_LABEL, CODEX_EMPTY_FORM_QUESTION_ID } from './codexElicitation';
@@ -537,7 +538,7 @@ export function useDialogManagement({ t, addToast }: UseDialogManagementOptions)
     const payload = JSON.stringify({
       requestId,
       dialogToken: currentAskUserQuestionRequestRef.current?.dialogToken,
-      answers,
+      answers: withBlankOptionalAnswers(normalizeQuestions(current?.questions), answers),
     });
     rememberClosedDialog(closedAskUserQuestionTokensRef.current, currentAskUserQuestionRequestRef.current?.dialogToken);
     sendBridgeEvent('ask_user_question_response', payload);

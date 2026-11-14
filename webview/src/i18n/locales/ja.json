@@ -1115,7 +1115,11 @@
     "codexDeliveryFailed": "Codex があなたの選択を受け取れませんでした（{{error}}）。会話が進まない場合は、停止してからもう一度送信してください。",
     "codexDeliveryUnconfirmed": "Codex はまだあなたの選択の受け取りを確認していません（{{error}}）。選択はまだ反映される可能性があるため、もう一度回答しないでください。会話が進まない場合は、停止してからもう一度送信してください。"
   },
+  "modelConfig": {
+    "approvals": "承認"
+  },
   "askUserQuestion": {
+    "ompTitle": "OMP からいくつか質問があります",
     "title": "Claudeからの質問があります",
     "progress": "質問 {{current}} / {{total}}",
     "multiSelectHint": "複数のオプションを選択できます",
@@ -1896,6 +1900,25 @@
       "label": "Full Auto",
       "tooltip": "Codex approval_policy=never – runs commands and writes files without prompting (workspace sandbox still enforced).",
       "description": "Hands-off mode. Codex executes edits and shell commands immediately."
+    }
+  },
+  "ompApprovals": {
+    "title": "OMP の承認モードを選択",
+    "default": {
+      "label": "デフォルト",
+      "description": "未設定ならフルオート（OMP の tools.approvalMode）"
+    },
+    "alwaysAsk": {
+      "label": "確認する",
+      "description": "編集とコマンドの実行前に確認します"
+    },
+    "write": {
+      "label": "編集を自動承認",
+      "description": "コマンドの実行前のみ確認します"
+    },
+    "yolo": {
+      "label": "フルオート",
+      "description": "確認しません"
     }
   },
   "ompModes": {

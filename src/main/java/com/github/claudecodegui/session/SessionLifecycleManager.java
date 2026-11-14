@@ -9,6 +9,7 @@ import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.provider.common.MarkerCliBridge;
+import com.github.claudecodegui.skill.OmpSlashCommandService;
 import com.github.claudecodegui.skill.SlashCommandRegistry;
 import com.github.claudecodegui.util.JsUtils;
 import com.intellij.ide.util.PropertiesComponent;
@@ -123,6 +124,7 @@ public class SessionLifecycleManager {
             // on restore, or an explicit custom id via set_model), so re-migrating
             // here could only rewrite a user's custom model behind their back.
             newSession.setModelVerbatim(previousModel);
+            keepOmpApprovalMode(oldSession, newSession);
             LOG.info("Restored session state to new session: mode=" + previousPermissionMode
                              + ", provider=" + previousProvider + ", model=" + previousModel);
 
@@ -182,6 +184,7 @@ public class SessionLifecycleManager {
                 newSession.setReasoningEffort(template.getReasoningEffort());
             }
             newSession.getState().setPsiContextEnabled(template.isPsiContextEnabled());
+            keepOmpApprovalMode(oldSession, newSession);
 
             LOG.info("Applied template settings to new session: provider=" + template.getProvider()
                     + ", model=" + template.getModel() + ", mode=" + template.getPermissionMode());
@@ -271,6 +274,7 @@ public class SessionLifecycleManager {
             // on custom ids and already applied retired-id migration where it is safe;
             // a fallback previousModel is a live value that was sanitized when set.
             newSession.setModelVerbatim(modelToRestore);
+            keepOmpApprovalMode(oldSession, newSession);
             LOG.info("Restored session state to loaded session: mode=" + previousPermissionMode
                              + ", provider=" + newSession.getProvider() + ", model=" + modelToRestore);
 
@@ -376,8 +380,11 @@ public class SessionLifecycleManager {
     /**
      * Fetch slash commands using local registry (no SDK/API call needed).
      * Merges built-in commands with skill-derived commands per provider.
+     *
+     * @param userRequested true when the webview asked for a refresh (the user is waiting
+     *                      for the list), which also bypasses the OMP failure backoff
      */
-    public void fetchSlashCommandsOnStartup() {
+    public void fetchSlashCommandsOnStartup(boolean userRequested) {
         ClaudeSession currentSession = host.getSession();
         String cwd = currentSession != null ? currentSession.getCwd() : null;
         if (cwd == null) {
@@ -424,6 +431,31 @@ public class SessionLifecycleManager {
                 LOG.warn("Failed to send slash commands to frontend: " + e.getMessage(), e);
             }
         });
+
+        // Cached (or empty) list is queued above; the fetched catalog is queued after it.
+        if (OmpSlashCommandService.isOmp(provider)) {
+            final String ompCwd = cwd;
+            OmpSlashCommandService.refreshAndPush(
+                    ompCwd,
+                    userRequested,
+                    () -> !host.isDisposed() && isCurrentOmpSlashCwd(ompCwd),
+                    fetchedJson -> ApplicationManager.getApplication().invokeLater(() -> {
+                        try {
+                            host.callJavaScript("updateSlashCommands", JsUtils.escapeJs(fetchedJson));
+                        } catch (Exception e) {
+                            LOG.warn("Failed to send omp slash commands to frontend: " + e.getMessage(), e);
+                        }
+                    }));
+        }
+    }
+
+    private boolean isCurrentOmpSlashCwd(String cwd) {
+        ClaudeSession session = host.getSession();
+        if (session == null || !OmpSlashCommandService.isOmp(session.getProvider())) {
+            return false;
+        }
+        String currentCwd = session.getCwd() != null ? session.getCwd() : host.getProject().getBasePath();
+        return OmpSlashCommandService.cacheKey(cwd).equals(OmpSlashCommandService.cacheKey(currentCwd));
     }
 
     /**
@@ -450,6 +482,33 @@ public class SessionLifecycleManager {
             });
         } catch (Exception e) {
             LOG.error("Failed to send current permission mode: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Send the tab's OMP approval mode to the frontend. A (re)loaded page starts at
+     * "default", which hands the decision to OMP's own setting, so the choice made in
+     * this tab has to be put back.
+     */
+    public void sendCurrentOmpApprovalMode() {
+        try {
+            ClaudeSession currentSession = host.getSession();
+            String mode = currentSession != null ? currentSession.getState().getOmpApprovalMode() : "";
+            String modeToSend = mode.isEmpty() ? "default" : mode;
+            ApplicationManager.getApplication().invokeLater(() -> {
+                if (!host.isDisposed() && host.getBrowser() != null) {
+                    host.callJavaScript("window.onOmpApprovalModeReceived", JsUtils.escapeJs(modeToSend));
+                }
+            });
+        } catch (Exception e) {
+            LOG.error("Failed to send current OMP approval mode: " + e.getMessage(), e);
+        }
+    }
+
+    /** A tab keeps its OMP approval mode when its session is replaced. */
+    private static void keepOmpApprovalMode(ClaudeSession from, ClaudeSession to) {
+        if (from != null) {
+            to.getState().setOmpApprovalMode(from.getState().getOmpApprovalMode());
         }
     }
 
@@ -528,7 +587,7 @@ public class SessionLifecycleManager {
 
         newSession.setSessionInfo(null, workingDirectory);
         LOG.info(successLogPrefix + workingDirectory + ", epoch=" + newSession.getRuntimeSessionEpoch());
-        fetchSlashCommandsOnStartup();
+        fetchSlashCommandsOnStartup(false);
 
         ApplicationManager.getApplication().invokeLater(() -> {
             // Release the frontend session transition guard so updateMessages works again.

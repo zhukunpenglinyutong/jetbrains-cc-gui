@@ -7,7 +7,7 @@ import { createInterface } from 'readline';
 import { emitSendError, endStream } from './marker-protocol.js';
 import { resolveCliSpawn } from './cli-path.js';
 
-function killChildTree(child, label) {
+export function killChildTree(child, label) {
   if (!child || child.killed) return;
   try {
     if (process.platform === 'win32') {

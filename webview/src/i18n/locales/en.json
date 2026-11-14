@@ -1579,6 +1579,7 @@
     "codexDeliveryUnconfirmed": "Codex has not confirmed your choice yet ({{error}}). It may still take effect, so do not answer again; if the conversation does not continue, click Stop and send your message again."
   },
   "askUserQuestion": {
+    "ompTitle": "OMP has some questions for you",
     "configWarning": "Codex reported a configuration warning. Review the details.",
     "configWarningTitle": "Codex configuration warning",
     "apiDeprecationWarning": "Codex reported an API compatibility notice. Review the details.",
@@ -2345,6 +2346,7 @@
     "effort": "Effort",
     "speed": "Speed",
     "preset": "Preset",
+    "approvals": "Approvals",
     "model": "Model"
   },
   "modes": {
@@ -2653,6 +2655,25 @@
     "fast": {
       "label": "Fast",
       "description": "Codex fast response mode (uses additional credits)"
+    }
+  },
+  "ompApprovals": {
+    "title": "Select OMP approval mode",
+    "default": {
+      "label": "Default",
+      "description": "Full auto unless OMP's tools.approvalMode is set"
+    },
+    "alwaysAsk": {
+      "label": "Ask",
+      "description": "Asks before edits and commands"
+    },
+    "write": {
+      "label": "Auto-approve edits",
+      "description": "Asks only before commands"
+    },
+    "yolo": {
+      "label": "Full auto",
+      "description": "Never asks"
     }
   },
   "dshPresets": {
