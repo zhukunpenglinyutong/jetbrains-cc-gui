@@ -1,3 +1,73 @@
+##### **2026年11月14日（v0.6.6）**
+
+English:
+
+✨ Features
+- **Choose the API supplier per conversation** (#2067): Claude and Codex chats can each be bound to their own supplier from the provider menu in the input box. The menu now changes only the current conversation, not the global active provider in Settings. A change made while a turn is running applies from the next turn, and restored history reopens with its supplier (by @GGMGG, @zhukunpenglinyutong)
+- **Native Codex Ultra and Claude Ultracode** (#1268, #1998): Codex models whose catalog lists Ultra can run at the Ultra reasoning level, and Claude Code 2.1.284 or later can turn on Ultracode per conversation. Background workflows appear in the task panel and can be stopped, and Stop and session switches keep each turn with the session that started it (by @patpatpat123, @zhukunpenglinyutong)
+- **Run OMP over RPC** (#2072): OMP chats now use omp's RPC mode, with tool approvals, questions, approval modes, plan usage and per-step usage, and history restores with its tool calls (by @Sojiroh)
+- **Manage hooks in Settings** (#1878): a Hooks page lists Claude and Codex hooks by scope and event, and lets you enable, disable, view and edit them. Edits keep the native file structure and save a backup you can restore, including when a group was moved or deleted outside the plugin (by @GGMGG, @zhukunpenglinyutong)
+- **Show balances for relay vendors** (#1781): the plan-usage indicator shows the balance for DeepSeek, Moonshot and OpenRouter and the usage of the OpenCode Go plan. It follows the supplier the conversation is bound to (by @Mrlihao, @zhukunpenglinyutong)
+- **Match session history by Git remote** (#2031): an optional setting lists Codex and Claude Code history from other directories of the same repository, matched by normalized remote host, owner and name. Opening such a session first confirms the directory it will run in (by @kochpy)
+
+🔧 Improvements
+- **MiniMax Code for mcode 0.5.5** (#2000): the new stream protocol is parsed, images are attached natively with `--file`, multi-line prompts go through stdin, and `MINIMAX_DATA_DIR` is honored for models and history. On Windows, dead `.cmd` shims are skipped, shims run by their quoted full path and GBK error output is decoded. Commit messages and prompt enhancement with MiniMax also pass the prompt through stdin on Windows (by @whyz23901, @zhukunpenglinyutong)
+- **Grok turns time out on inactivity, not on a fixed clock** (#2038): a long Grok turn keeps running while it is still producing output, running a terminal or waiting on a permission, and a hard cap still ends a turn that never finishes. Terminal processes are stopped by process group (by @toxeh, @zhukunpenglinyutong)
+- **Honor permission rules from settings.json in default mode** (#566, #2055): allow, ask and deny rules from your own `~/.claude/settings.json` now apply. The plugin still asks when the repository's project settings carry allow rules or define a sandbox, agents, skills or commands, since those files come with the repository (by @Faq)
+- **Send each model the thinking setting it accepts** (#1949, #2078): commit messages, titles and other one-shot requests no longer fail on models that reject disabled thinking (by @EeeasyCode)
+- **Update tokentracker-cli to 1.5.4** (#2041): older installs and running servers are upgraded automatically (by @Faq, @zhukunpenglinyutong)
+- **Smaller plugin**: unused bundled React, Babel and Marked libraries (3.4 MB) are removed (by @zhukunpenglinyutong)
+- **Security updates**: DOMPurify 3.4.17 and Mermaid 11.17.2 (by @zhukunpenglinyutong)
+- **Releases are tested first**: a tag release now runs the full test suite before it is published (by @zhukunpenglinyutong)
+
+🐛 Fixes
+- **Keep All remembers edits by content** (#1875): accepted edits are matched by what they changed instead of their position in the transcript, so a repeated edit, an apply_patch rename or a finished subagent no longer comes back after Keep All (by @R-Tsubasa, @zhukunpenglinyutong)
+- **Keep your Codex configuration during CLI migration** (#1988): plugin model aliases move from `config.toml` into the `config.toml.ccgui` sidecar so Codex CLI 0.166 no longer warns or refuses `--strict-config`, and the previous file is backed up as `config.toml.pre-cli-migration*.bak`. Comments in `config.toml` are not kept when it is rewritten (by @GGMGG, @zhukunpenglinyutong)
+- **The six-hour runtime cap no longer kills active turns** (#1983, #2077): a long turn or a running background task is kept; only a runtime that is busy and silent for two hours is reclaimed, and that turn now ends with an error instead of freezing every chat (by @Faq, @zhukunpenglinyutong)
+- **Hidden windows no longer trigger the render watchdog** (#2074, #2076): time spent hidden is not counted as a render stall, so the chat is not reloaded when you come back (by @Faq)
+- **Restore Codex history from WSL** (#2075): the history directory is resolved after the WSL node path is applied, so restored WSL sessions no longer lose their history (by @nikitasnv)
+- **External links no longer replace the chat** (#2073): web links, including middle-clicked ones, open in the browser (by @romanbesedinskiy-jpg)
+- **Allow or deny MCP tools that ask with an empty form** (#2079, #2080) (by @Faq)
+- **Fenced code inside list items renders correctly** (#2046, #2066) (by @hebulin, @zhukunpenglinyutong)
+- **New sessions in a ZCode tab stay on ZCode**: after New Session or loading history in a ZCode tab, messages were sent to Claude (by @zhukunpenglinyutong)
+- **Supplier-bound chats apply effort and model changes in place**: changing effort or model no longer restarts the Claude CLI, opening `/context` no longer restarts it, and switching the Codex supplier no longer keeps the previous supplier's Ultra level. OMP receives its top level when Ultra was selected for Codex (by @zhukunpenglinyutong)
+- **Smaller fixes**: the context ring after a webview reload uses the conversation's supplier and the OMP, OpenCode and Grok context windows; OMP plan usage and models work from a Windows install path with spaces; Windows no longer flashes a console when a CLI is stopped; Grok cannot signal a reused process group; time-ago labels are localized in Russian, Chinese and Japanese; new strings are translated in all locales (by @zhukunpenglinyutong)
+
+中文：
+
+✨ 新功能
+- **按对话选择 API 供应商**（#2067）：Claude 与 Codex 对话可以在输入框的 Provider 菜单中各自绑定供应商。该菜单现在只修改当前对话，不再修改设置页中的全局 Provider。回合进行中修改的供应商从下一轮生效，恢复历史时会带回其供应商（by @GGMGG、@zhukunpenglinyutong）
+- **原生 Codex Ultra 与 Claude Ultracode**（#1268、#1998）：模型目录中声明支持 Ultra 的 Codex 模型可以使用 Ultra 推理强度；Claude Code 2.1.284 及以上可以按对话开启 Ultracode。后台工作流会显示在任务面板中并可停止；停止和切换会话时，每个回合都归属于发起它的会话（by @patpatpat123、@zhukunpenglinyutong）
+- **OMP 改为 RPC 模式运行**（#2072）：OMP 对话支持工具审批、提问、审批模式、套餐用量和逐步用量，恢复历史时保留工具调用（by @Sojiroh）
+- **在设置中管理 Hooks**（#1878）：Hooks 页面按作用域和事件列出 Claude 与 Codex 的 hook，支持启用、停用、查看和编辑。编辑会保留原生文件结构并保存可恢复的备份，即使分组在插件外被移动或删除也能恢复（by @GGMGG、@zhukunpenglinyutong）
+- **显示中转厂商余额**（#1781）：用量指示器可显示 DeepSeek、Moonshot、OpenRouter 的余额，以及 OpenCode Go 套餐的用量，并跟随当前对话绑定的供应商（by @Mrlihao、@zhukunpenglinyutong）
+- **按 Git 远端匹配历史会话**（#2031）：开启该设置后，会列出同一仓库其他目录中的 Codex 与 Claude Code 历史，按规范化后的远端主机、所有者和仓库名匹配。打开这类会话前会先确认它的运行目录（by @kochpy）
+
+🔧 优化
+- **MiniMax Code 适配 mcode 0.5.5**（#2000）：支持新的流式协议，图片通过 `--file` 原生附加，多行提示词通过 stdin 传入，模型与历史读取遵循 `MINIMAX_DATA_DIR`。Windows 上会跳过失效的 `.cmd` 启动器，按带引号的完整路径启动，并正确解码 GBK 错误输出。使用 MiniMax 生成提交信息和增强提示词时，Windows 上同样通过 stdin 传入提示词（by @whyz23901、@zhukunpenglinyutong）
+- **Grok 回合按无活动时间超时**（#2038）：只要仍在输出、运行终端或等待权限确认，较长的 Grok 回合会继续运行；始终无法结束的回合仍由硬性上限终止。终端进程按进程组停止（by @toxeh、@zhukunpenglinyutong）
+- **默认模式下遵循 settings.json 中的权限规则**（#566、#2055）：你自己的 `~/.claude/settings.json` 中的 allow、ask、deny 规则现在生效。项目设置随仓库一起分发，因此项目中含有 allow 规则，或定义了沙箱、agents、skills、commands 时，插件仍会询问（by @Faq）
+- **按模型发送其支持的 thinking 设置**（#1949、#2078）：生成提交信息、标题等一次性请求不再因模型拒绝关闭 thinking 而失败（by @EeeasyCode）
+- **tokentracker-cli 升级到 1.5.4**（#2041）：旧版本安装和正在运行的服务会自动升级（by @Faq、@zhukunpenglinyutong）
+- **插件体积更小**：移除未使用的内置 React、Babel 与 Marked 库（3.4 MB）（by @zhukunpenglinyutong）
+- **安全更新**：DOMPurify 升级到 3.4.17，Mermaid 升级到 11.17.2（by @zhukunpenglinyutong）
+- **发布前先跑测试**：打 tag 发布时会先运行完整测试套件，通过后才发布（by @zhukunpenglinyutong）
+
+🐛 修复
+- **Keep All 按内容记住已接受的编辑**（#1875）：已接受的编辑按改动内容匹配，不再按在记录中的位置匹配，重复编辑、apply_patch 重命名和已结束的子 agent 不会在 Keep All 后再次出现（by @R-Tsubasa、@zhukunpenglinyutong）
+- **CLI 迁移时保留 Codex 配置**（#1988）：插件的模型别名从 `config.toml` 移到 `config.toml.ccgui` 附属文件，Codex CLI 0.166 不再告警，也不会在 `--strict-config` 下拒绝启动；原文件备份为 `config.toml.pre-cli-migration*.bak`。重写 `config.toml` 时不会保留其中的注释（by @GGMGG、@zhukunpenglinyutong）
+- **六小时运行时上限不再终止进行中的回合**（#1983、#2077）：较长的回合和正在运行的后台任务会被保留；只有忙碌且两小时没有输出的运行时才会被回收，该回合会以错误结束，不再让所有对话卡住（by @Faq、@zhukunpenglinyutong）
+- **窗口隐藏时不再触发渲染看门狗**（#2074、#2076）：隐藏期间的时间不计为渲染卡顿，切回窗口时不会重新加载聊天（by @Faq）
+- **恢复 WSL 中的 Codex 历史**（#2075）：历史目录在应用 WSL node 路径后再解析，恢复 WSL 会话时不再丢失历史（by @nikitasnv）
+- **外部链接不再替换聊天页面**（#2073）：网页链接（包括中键点击）会在浏览器中打开（by @romanbesedinskiy-jpg）
+- **表单为空的 MCP 工具审批可以允许或拒绝**（#2079、#2080）（by @Faq）
+- **列表项中的代码块正确渲染**（#2046、#2066）（by @hebulin、@zhukunpenglinyutong）
+- **ZCode 标签页中的新会话保持使用 ZCode**：此前在 ZCode 标签页新建会话或加载历史后，消息会被发送给 Claude（by @zhukunpenglinyutong）
+- **绑定供应商的对话原地应用推理强度和模型修改**：修改推理强度或模型不再重启 Claude CLI，打开 `/context` 也不再重启；切换 Codex 供应商后不再沿用上一个供应商的 Ultra 档位；为 Codex 选择 Ultra 后切到 OMP 时，OMP 使用其最高档位（by @zhukunpenglinyutong）
+- **其他修复**：webview 重新加载后，上下文圆环使用当前对话的供应商以及 OMP、OpenCode、Grok 的上下文窗口；从带空格的 Windows 安装路径启动时，OMP 套餐用量和模型列表可以正常读取；停止 CLI 时 Windows 不再闪出控制台窗口；Grok 不会再向被复用的进程组发送信号；俄语、中文和日语的相对时间标签完成本地化；新增文案已翻译为所有语言（by @zhukunpenglinyutong）
+
+---
+
 ##### **2026年11月10日（v0.6.5）**
 
 English:
