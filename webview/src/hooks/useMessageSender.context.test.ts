@@ -200,6 +200,14 @@ describe('useMessageSender - /context command', () => {
     }
   });
 
+  it('passes the stored OMP effort through so omp picks the nearest level itself', () => {
+    const { result } = renderHook(() => useMessageSender(createOptions({
+      currentProvider: 'omp', selectedModel: 'omp-model', reasoningEffort: 'max',
+    })));
+    act(() => result.current.handleSubmit('hello'));
+    expect(getBridgePayload('send_message').reasoningEffort).toBe('max');
+  });
+
   it.each([false, true])('ends a refused Codex message dispatch without sending a text fallback (attachments: %s)', withAttachments => {
     const opts = createOptions({ currentProvider: 'codex', selectedModel: 'gpt-5.5' });
     window.sendToJava = vi.fn(message => {

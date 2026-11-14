@@ -1267,7 +1267,11 @@
     "codexDeliveryUnconfirmed": "Codex ещё не подтвердил получение вашего выбора ({{error}}). Он ещё может вступить в силу, поэтому не отвечайте повторно; если диалог не продолжается, нажмите «Стоп» и отправьте сообщение снова."
   },
   "modelConfig": {
-    "approvals": "Подтверждения"
+    "approvals": "Подтверждения",
+    "ultracode": {
+      "label": "Ultracode",
+      "description": "Встроенный процесс Claude с автоматическим делегированием задач. Сохраняет выбранный уровень рассуждения."
+    }
   },
   "askUserQuestion": {
     "ompTitle": "У OMP есть несколько вопросов к вам",
@@ -2460,12 +2464,6 @@
       "execute": "Execute plan",
       "executing": "Executing…",
       "adjust": "Continue adjusting"
-    }
-  },
-  "modelConfig": {
-    "ultracode": {
-      "label": "Ultracode",
-      "description": "Встроенный процесс Claude с автоматическим делегированием задач. Сохраняет выбранный уровень рассуждения."
     }
   }
 }

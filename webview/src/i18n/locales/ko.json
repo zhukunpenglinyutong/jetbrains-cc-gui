@@ -1340,7 +1340,11 @@
     "codexDeliveryUnconfirmed": "Codex가 아직 선택을 받았는지 확인하지 못했습니다({{error}}). 선택이 여전히 적용될 수 있으니 다시 응답하지 마세요. 대화가 계속되지 않으면 중지를 누른 뒤 다시 보내 주세요."
   },
   "modelConfig": {
-    "approvals": "승인"
+    "approvals": "승인",
+    "ultracode": {
+      "label": "Ultracode",
+      "description": "작업을 자동으로 위임하는 Claude 기본 워크플로입니다. 선택한 추론 수준을 유지합니다."
+    }
   },
   "askUserQuestion": {
     "ompTitle": "OMP에서 몇 가지 질문이 있습니다",
@@ -2537,12 +2541,6 @@
       "execute": "Execute plan",
       "executing": "Executing…",
       "adjust": "Continue adjusting"
-    }
-  },
-  "modelConfig": {
-    "ultracode": {
-      "label": "Ultracode",
-      "description": "작업을 자동으로 위임하는 Claude 기본 워크플로입니다. 선택한 추론 수준을 유지합니다."
     }
   }
 }

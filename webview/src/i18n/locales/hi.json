@@ -1255,7 +1255,11 @@
     "codexDeliveryUnconfirmed": "Codex ने अभी तक आपके चुनाव की पुष्टि नहीं की है ({{error}})। यह अभी भी लागू हो सकता है, इसलिए दोबारा जवाब न दें; अगर बातचीत आगे नहीं बढ़ती, तो रोकें पर क्लिक करके संदेश फिर से भेजें।"
   },
   "modelConfig": {
-    "approvals": "अनुमोदन"
+    "approvals": "अनुमोदन",
+    "ultracode": {
+      "label": "Ultracode",
+      "description": "स्वचालित कार्य प्रत्यायोजन वाला Claude का मूल वर्कफ़्लो। चुने गए तर्क स्तर को बनाए रखता है।"
+    }
   },
   "askUserQuestion": {
     "ompTitle": "OMP के पास आपके लिए कुछ प्रश्न हैं",
@@ -2446,12 +2450,6 @@
       "execute": "Execute plan",
       "executing": "Executing…",
       "adjust": "Continue adjusting"
-    }
-  },
-  "modelConfig": {
-    "ultracode": {
-      "label": "Ultracode",
-      "description": "स्वचालित कार्य प्रत्यायोजन वाला Claude का मूल वर्कफ़्लो। चुने गए तर्क स्तर को बनाए रखता है।"
     }
   }
 }

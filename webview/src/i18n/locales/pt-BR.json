@@ -1393,7 +1393,11 @@
     "codexDeliveryUnconfirmed": "O Codex ainda não confirmou sua escolha ({{error}}). Ela ainda pode ter efeito, então não responda de novo; se a conversa não continuar, clique em Parar e envie a mensagem novamente."
   },
   "modelConfig": {
-    "approvals": "Aprovações"
+    "approvals": "Aprovações",
+    "ultracode": {
+      "label": "Ultracode",
+      "description": "Fluxo nativo do Claude com delegação automática de tarefas. Mantém o nível de raciocínio selecionado."
+    }
   },
   "askUserQuestion": {
     "ompTitle": "O OMP tem algumas perguntas para você",
@@ -2589,12 +2593,6 @@
       "execute": "Execute plan",
       "executing": "Executing…",
       "adjust": "Continue adjusting"
-    }
-  },
-  "modelConfig": {
-    "ultracode": {
-      "label": "Ultracode",
-      "description": "Fluxo nativo do Claude com delegação automática de tarefas. Mantém o nível de raciocínio selecionado."
     }
   }
 }

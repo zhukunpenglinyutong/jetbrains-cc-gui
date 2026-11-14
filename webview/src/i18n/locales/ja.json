@@ -1250,7 +1250,11 @@
     "codexDeliveryUnconfirmed": "Codex はまだあなたの選択の受け取りを確認していません（{{error}}）。選択はまだ反映される可能性があるため、もう一度回答しないでください。会話が進まない場合は、停止してからもう一度送信してください。"
   },
   "modelConfig": {
-    "approvals": "承認"
+    "approvals": "承認",
+    "ultracode": {
+      "label": "Ultracode",
+      "description": "タスクを自動委任する Claude のネイティブワークフロー。選択した推論強度を保持します。"
+    }
   },
   "askUserQuestion": {
     "ompTitle": "OMP からいくつか質問があります",
@@ -2440,12 +2444,6 @@
       "execute": "Execute plan",
       "executing": "Executing…",
       "adjust": "Continue adjusting"
-    }
-  },
-  "modelConfig": {
-    "ultracode": {
-      "label": "Ultracode",
-      "description": "タスクを自動委任する Claude のネイティブワークフロー。選択した推論強度を保持します。"
     }
   }
 }

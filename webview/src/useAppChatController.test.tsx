@@ -104,6 +104,21 @@ describe('session lifecycle through the registered bridge callbacks', () => {
     expect(JSON.parse(sentTurns()[0].split(/:(.*)/s)[1])).toMatchObject({ text: 'typed after clicking new' });
   });
 
+
+  it('a message typed during a refused switch is dropped by a later switch', () => {
+    const { result } = renderSessionController();
+    act(() => { window.showLoading?.('true'); window.onStreamStart?.(); });
+    act(() => result.current.controller.loadHistorySession('session-x', 'claude'));
+    const tokenX = lastRequest('load_session').transitionToken;
+    act(() => result.current.controller.handleSubmit('typed while opening X'));
+    act(() => window.sessionTransitionFailed?.('refused', tokenX));
+    expect(result.current.controller.messageQueue).toHaveLength(1);
+    act(() => result.current.controller.loadHistorySession('session-y', 'claude'));
+    const tokenY = lastRequest('load_session').transitionToken;
+    act(() => { window.onStreamEnd?.(); window.showLoading?.('false'); });
+    act(() => { window.clearMessages?.(undefined, tokenY); window.historyLoadComplete?.(0, tokenY); });
+    expect(sentTurns()).toHaveLength(0);
+  });
   it('keeps a timed-out transaction pending and accepts its late clear after an early completion', () => {
     const { result } = renderSessionController();
     act(() => result.current.controller.handleSubmit('/new'));

@@ -386,6 +386,10 @@ export const useAppChatController = ({
   useEffect(() => {
     clearMessageQueueRef.current = () => clearQueue(item => transitionQueuedIdsRef.current.has(item.id));
   }, [clearQueue]);
+  // Once the switch settles, those messages belong to whichever session won; a later reset drops them.
+  useEffect(() => subscribeSessionTransition(() => {
+    if (!getSessionTransitionPending()) transitionQueuedIdsRef.current.clear();
+  }), []);
 
   // handleSubmit with queue support (new session and local commands bypass loading check)
   const handleSubmit = useCallback((content: string, attachments?: Attachment[]) => {
