@@ -1725,8 +1725,6 @@
     "ompTitle": "OMP has some questions for you",
     "configWarning": "Codex reported a configuration warning. Review the details.",
     "configWarningTitle": "Codex configuration warning",
-    "apiDeprecationWarning": "Codex reported an API compatibility notice. Review the details.",
-    "apiDeprecationTitle": "Codex API compatibility notice",
     "warningDetails": "View details",
     "title": "Claude has some questions for you",
     "progress": "Question {{current}} / {{total}}",
