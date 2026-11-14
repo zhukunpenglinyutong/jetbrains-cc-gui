@@ -676,7 +676,7 @@ public class ClaudeSession {
             String clientMessageId
     ) {
         return send(input, null, agentPrompt, fileTagPaths, requestedPermissionMode,
-                requestedReasoningEffort, requestedCodexFastMode, requestedDshPreset, clientMessageId, null);
+                requestedReasoningEffort, requestedCodexFastMode, requestedDshPreset, null, clientMessageId, null);
     }
 
     /**
@@ -689,6 +689,7 @@ public class ClaudeSession {
      * @param requestedReasoningEffort requested reasoning effort
      * @param requestedCodexFastMode requested Codex service tier
      * @param requestedDshPreset requested DSH preset
+     * @param requestedOmpApprovalMode OMP approval mode of this message, or null when none is stated
      * @param clientMessageId frontend submission identity
      * @param nativeCodexSettings filtered native Codex settings
      * @return future completed after the provider turn
@@ -701,12 +702,13 @@ public class ClaudeSession {
             String requestedReasoningEffort,
             String requestedCodexFastMode,
             String requestedDshPreset,
+            String requestedOmpApprovalMode,
             String clientMessageId,
             JsonObject nativeCodexSettings
     ) {
         return send(input, null, agentPrompt, fileTagPaths, requestedPermissionMode,
                 requestedReasoningEffort, requestedCodexFastMode, requestedDshPreset,
-                clientMessageId, nativeCodexSettings);
+                requestedOmpApprovalMode, clientMessageId, nativeCodexSettings);
     }
 
     /**
@@ -823,7 +825,7 @@ public class ClaudeSession {
     ) {
         return send(input, attachments, agentPrompt, fileTagPaths, requestedPermissionMode,
                 requestedReasoningEffort, requestedCodexFastMode, requestedDshPreset,
-                requestedClientMessageId, null);
+                null, requestedClientMessageId, null);
     }
 
     /**
@@ -837,6 +839,7 @@ public class ClaudeSession {
      * @param requestedReasoningEffort requested reasoning effort
      * @param requestedCodexFastMode requested Codex service tier
      * @param requestedDshPreset requested DSH preset
+     * @param requestedOmpApprovalMode OMP approval mode of this message, or null when none is stated
      * @param requestedClientMessageId frontend submission identity
      * @param nativeCodexSettings filtered native Codex settings
      * @return future completed after the provider turn
@@ -850,6 +853,7 @@ public class ClaudeSession {
             String requestedReasoningEffort,
             String requestedCodexFastMode,
             String requestedDshPreset,
+            String requestedOmpApprovalMode,
             String requestedClientMessageId,
             JsonObject nativeCodexSettings
     ) {
@@ -897,6 +901,7 @@ public class ClaudeSession {
                             finalRequestedReasoningEffort,
                             finalRequestedCodexFastMode,
                             finalRequestedDshPreset,
+                            requestedOmpApprovalMode,
                             clientMessageId,
                             nativeCodexSettings,
                             turnOwner

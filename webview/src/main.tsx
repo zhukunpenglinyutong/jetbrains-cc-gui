@@ -664,6 +664,14 @@ if (typeof window !== 'undefined' && !window.applyBackendTabState) {
   };
 }
 
+// Java puts the tab's OMP approval mode back right after frontend_ready. A page
+// that missed it would stay on "Default", so keep it until the provider hook mounts.
+if (typeof window !== 'undefined' && !window.onOmpApprovalModeReceived) {
+  window.onOmpApprovalModeReceived = (mode: string) => {
+    window.__pendingOmpApprovalMode = mode;
+  };
+}
+
 // Restored-history state can be pushed immediately after frontend_ready. Buffer
 // the latest generation until the React callback is mounted so manual loading
 // remains available when automatic startup loading is disabled.

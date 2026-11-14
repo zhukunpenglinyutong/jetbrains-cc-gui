@@ -1,3 +1,5 @@
+import favoritesService from '../favorites-service.cjs';
+import { applyCodexFavorites, readFavoriteCodexThreads } from './codex-history-metadata.js';
 import { filterAvailableCodexThreads } from './codex-history-availability.js';
 import { buildSessionCodexConfig, resolveSessionCodexModel } from '../../config/session-supplier.js';
 /**
@@ -650,7 +652,7 @@ async function codexReadOnlyPersistent(method, stdinData = {}) {
   return await service.readOnly(method, params);
 }
 
-export async function codexListThreadsPersistent(stdinData) {
+export async function codexListThreadsPersistent(stdinData, { loadFavorites = favoritesService.loadFavorites } = {}) {
   const projectPath = stdinData?.params?.projectPath ?? stdinData?.cwd;
   const params = {
     cwd: null,
@@ -660,6 +662,7 @@ export async function codexListThreadsPersistent(stdinData) {
     ...stdinData?.params,
   };
   delete params.projectPath;
+  const requestedCursor = params.cursor ?? stdinData.cursor;
   let result;
   let threads;
   const visited = new Set();
@@ -670,7 +673,20 @@ export async function codexListThreadsPersistent(stdinData) {
     visited.add(result.nextCursor);
     params.cursor = result.nextCursor;
   } while (true);
-  return { ...result, data: applyCodexCustomTitles(filterCodexProjectThreads(threads, projectPath), await readCodexCustomTitles()) };
+  const favorites = loadFavorites();
+  const { service } = ensureSessionService(stdinData);
+  const saved = requestedCursor == null ? await readFavoriteCodexThreads({
+    owner: service,
+    scope: JSON.stringify({ projectPath, generation: service.runtimeGeneration, params: { ...params, cursor: undefined } }),
+    firstPage: { ...result, data: threads }, favorites,
+    matchProject: rows => filterCodexProjectThreads(rows, projectPath),
+    readPage: cursor => codexReadOnlyPersistent('thread/list', { ...stdinData, params: { ...params, cursor } }),
+  }) : [];
+  // A favorite catalog can outlive its rollout; recheck cached rows as well.
+  const merged = [...new Map([...saved, ...threads].map(thread => [thread.id, thread])).values()];
+  const available = await filterAvailableCodexThreads(merged);
+  return { ...result, data: applyCodexCustomTitles(applyCodexFavorites(
+    filterCodexProjectThreads(available, projectPath), favorites), await readCodexCustomTitles()) };
 }
 
 /** Counts history independently so listing metadata never waits for full transcripts. */

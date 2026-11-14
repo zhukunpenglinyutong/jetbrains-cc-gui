@@ -5,10 +5,12 @@ import com.github.claudecodegui.handler.core.HandlerContext;
 
 import com.github.claudecodegui.session.SessionSendService;
 import com.github.claudecodegui.session.SessionState;
+import com.github.claudecodegui.skill.OmpSlashCommandService;
 import com.github.claudecodegui.skill.SlashCommandRegistry;
 import com.github.claudecodegui.provider.ClaudeContextWindowOverrideProvider;
 import com.github.claudecodegui.provider.CustomModelContextWindowProvider;
 import com.github.claudecodegui.provider.grok.GrokContextWindowResolver;
+import com.github.claudecodegui.provider.omp.OmpContextWindows;
 import com.github.claudecodegui.provider.opencode.OpenCodeContextWindowResolver;
 import com.github.claudecodegui.util.EditorFileUtils;
 import com.github.claudecodegui.util.TokenUsageUtils;
@@ -240,7 +242,7 @@ public class ModelProviderHandler {
             // actually send the next Claude message.
             shutdownStaleClaudeDaemonIfLeavingClaude(previousProvider, provider);
 
-            refreshSlashCommandsForProvider(provider);
+            refreshSlashCommandsForProvider(provider, providerChanged);
             usagePushService.refreshContextBar();
         } catch (Exception e) {
             LOG.error("[ModelProviderHandler] Failed to set provider: " + e.getMessage(), e);
@@ -389,7 +391,7 @@ public class ModelProviderHandler {
         }
     }
 
-    private void refreshSlashCommandsForProvider(String provider) {
+    private String resolveSlashCommandCwd() {
         String cwd = null;
         if (context.getSession() != null) {
             cwd = context.getSession().getCwd();
@@ -397,8 +399,11 @@ public class ModelProviderHandler {
         if (cwd == null) {
             cwd = context.getProject().getBasePath();
         }
+        return cwd;
+    }
 
-        final String finalCwd = cwd;
+    private void refreshSlashCommandsForProvider(String provider, boolean providerChanged) {
+        final String finalCwd = resolveSlashCommandCwd();
         CompletableFuture.runAsync(() -> {
             String currentFilePath = EditorFileUtils.getCurrentEditorFilePath(context.getProject());
             var commands = SlashCommandRegistry.getCommands(provider, finalCwd, currentFilePath);
@@ -423,6 +428,25 @@ public class ModelProviderHandler {
                     LOG.warn("[ModelProviderHandler] Failed to refresh slash commands: " + e.getMessage());
                 }
             });
+
+            // set_provider is re-sent on every message; only a real switch, or a
+            // directory without a catalog yet, is worth spawning omp for. The cached
+            // (or empty) list above is queued first so the fetched one always lands last.
+            if (OmpSlashCommandService.isOmp(provider)
+                    && (providerChanged || !OmpSlashCommandService.hasCached(finalCwd))) {
+                OmpSlashCommandService.refreshAndPush(
+                        finalCwd,
+                        () -> OmpSlashCommandService.isOmp(context.getCurrentProvider())
+                                && OmpSlashCommandService.cacheKey(finalCwd)
+                                        .equals(OmpSlashCommandService.cacheKey(resolveSlashCommandCwd())),
+                        fetchedJson -> ApplicationManager.getApplication().invokeLater(() -> {
+                            try {
+                                context.callJavaScript("updateSlashCommands", context.escapeJs(fetchedJson));
+                            } catch (Exception e) {
+                                LOG.warn("[ModelProviderHandler] Failed to push omp slash commands: " + e.getMessage());
+                            }
+                        }));
+            }
         }, AppExecutorUtil.getAppExecutorService()).exceptionally(ex -> {
             LOG.error("[ModelProviderHandler] Failed to refresh slash commands asynchronously: " + ex.getMessage(), ex);
             return null;
@@ -568,6 +592,12 @@ public class ModelProviderHandler {
     private static int providerContextLimit(String provider, String model, String cwd) {
         if ("opencode".equalsIgnoreCase(provider)) {
             Integer declared = OpenCodeContextWindowResolver.resolve(model, cwd);
+            if (declared != null) {
+                return declared;
+            }
+        }
+        if ("omp".equalsIgnoreCase(provider)) {
+            Integer declared = OmpContextWindows.resolve(model);
             if (declared != null) {
                 return declared;
             }

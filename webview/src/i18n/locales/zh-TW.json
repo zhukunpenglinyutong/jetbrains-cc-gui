@@ -40,6 +40,11 @@
     "optional": "Optional"
   },
   "chat": {
+    "planUsage": {
+      "balanceLabel": "餘額：",
+      "balanceRemaining": "餘額：{{value}}",
+      "balanceDetail": "總額 {{total}} · 已用 {{used}}"
+    },
     "sendMessage": "給 {{provider}} 發送訊息",
     "createNewSession": "建立新會話",
     "confirmNewSession": "目前會話已有訊息，確定要建立新會話嗎？",
@@ -255,6 +260,12 @@
         "warningUnavailable": "程式碼字體不可用，目前已回退到編輯器字體",
         "statusFollowEditor": "目前跟隨編輯器字體：{{font}}",
         "statusCustom": "目前使用自訂程式碼字體：{{font}}"
+      },
+      "sessionGitRepositoryMatching": {
+        "label": "依 Git 遠端儲存庫比對歷史工作階段",
+        "enabled": "啟用",
+        "disabled": "停用",
+        "hint": "顯示遠端主機、擁有者及儲存庫皆相同的 Codex 與 Claude Code 工作階段。無法讀取 Git 資訊時依工作目錄比對。"
       },
       "streaming": {
         "label": "Streaming",
@@ -555,16 +566,6 @@
           "importanceHint": "重要度越高，自動補全時越靠前"
         },
         "timeAgo": {
-          "yearsAgo_one": "{{count}} year ago",
-          "yearsAgo_other": "{{count}} years ago",
-          "monthsAgo_one": "{{count}} month ago",
-          "monthsAgo_other": "{{count}} months ago",
-          "daysAgo_one": "{{count}} day ago",
-          "daysAgo_other": "{{count}} days ago",
-          "hoursAgo_one": "{{count}} hour ago",
-          "hoursAgo_other": "{{count}} hours ago",
-          "minutesAgo_one": "{{count}} minute ago",
-          "minutesAgo_other": "{{count}} minutes ago",
           "justNow": "剛剛",
           "yearsAgo": "{{count}}年前",
           "monthsAgo": "{{count}}個月前",
@@ -1051,6 +1052,9 @@
     }
   },
   "history": {
+    "confirmDirectoryTitle": "在另一個目錄中開啟工作階段？",
+    "confirmDirectoryMessage": "指令與檔案修改將在下方目錄中執行。",
+    "executionDirectory": "執行目錄",
     "title": "歷史會話",
     "sessionDeleted": "會話已刪除",
     "confirmDelete": "確認刪除",
@@ -1162,6 +1166,7 @@
     "codexDeliveryUnconfirmed": "Codex 尚未確認收到你的選擇（{{error}}）。它可能仍會生效，請不要重複作答；如果對話沒有繼續，請點擊停止後重新傳送。"
   },
   "askUserQuestion": {
+    "ompTitle": "OMP 有一些問題想問你",
     "title": "Claude 有一些問題想問你",
     "progress": "問題 {{current}} / {{total}}",
     "multiSelectHint": "可以選擇多個選項",
@@ -1885,6 +1890,7 @@
     "effort": "思考強度",
     "speed": "速度",
     "preset": "預設組合",
+    "approvals": "審核",
     "model": "模型"
   },
   "modes": {
@@ -2152,6 +2158,25 @@
     "fast": {
       "label": "Fast",
       "description": "Codex 快速回應模式（會產生額外消耗）"
+    }
+  },
+  "ompApprovals": {
+    "title": "選擇 OMP 審核模式",
+    "default": {
+      "label": "預設",
+      "description": "未設定時完全自動（OMP 的 tools.approvalMode）"
+    },
+    "alwaysAsk": {
+      "label": "詢問",
+      "description": "編輯與指令執行前都會詢問"
+    },
+    "write": {
+      "label": "自動核准編輯",
+      "description": "僅在執行指令前詢問"
+    },
+    "yolo": {
+      "label": "完全自動",
+      "description": "從不詢問"
     }
   },
   "dshPresets": {

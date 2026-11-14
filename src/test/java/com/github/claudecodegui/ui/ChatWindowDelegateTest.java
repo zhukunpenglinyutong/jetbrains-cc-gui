@@ -290,6 +290,11 @@ public class ChatWindowDelegateTest {
             public void sendCurrentPermissionMode() {
                 // Permission-mode delivery is independent of the recovery snapshot gate.
             }
+
+            @Override
+            public void sendCurrentOmpApprovalMode() {
+                // Delivered like the permission mode, outside the recovery snapshot gate.
+            }
         };
         StreamMessageCoalescer.JsCallbackTarget coalescerTarget =
                 (StreamMessageCoalescer.JsCallbackTarget) Proxy.newProxyInstance(

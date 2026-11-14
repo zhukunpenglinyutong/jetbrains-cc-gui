@@ -1120,7 +1120,11 @@
     "codexDeliveryFailed": "Codex को आपका चुनाव नहीं मिला ({{error}})। अगर बातचीत आगे नहीं बढ़ती, तो रोकें पर क्लिक करके संदेश फिर से भेजें।",
     "codexDeliveryUnconfirmed": "Codex ने अभी तक आपके चुनाव की पुष्टि नहीं की है ({{error}})। यह अभी भी लागू हो सकता है, इसलिए दोबारा जवाब न दें; अगर बातचीत आगे नहीं बढ़ती, तो रोकें पर क्लिक करके संदेश फिर से भेजें।"
   },
+  "modelConfig": {
+    "approvals": "अनुमोदन"
+  },
   "askUserQuestion": {
+    "ompTitle": "OMP के पास आपके लिए कुछ प्रश्न हैं",
     "title": "Claude के पास आपके लिए कुछ प्रश्न हैं",
     "progress": "प्रश्न {{current}} / {{total}}",
     "multiSelectHint": "आप एकाधिक विकल्प चुन सकते हैं",
@@ -1902,6 +1906,25 @@
       "label": "Full Auto",
       "tooltip": "Codex approval_policy=never – runs commands and writes files without prompting (workspace sandbox still enforced).",
       "description": "Hands-off mode. Codex executes edits and shell commands immediately."
+    }
+  },
+  "ompApprovals": {
+    "title": "OMP अनुमोदन मोड चुनें",
+    "default": {
+      "label": "डिफ़ॉल्ट",
+      "description": "पूर्ण स्वचालित, जब तक tools.approvalMode सेट न हो"
+    },
+    "alwaysAsk": {
+      "label": "पूछें",
+      "description": "संपादन और कमांड से पहले पूछता है"
+    },
+    "write": {
+      "label": "संपादन स्वतः स्वीकृत",
+      "description": "केवल कमांड से पहले पूछता है"
+    },
+    "yolo": {
+      "label": "पूर्ण स्वचालित",
+      "description": "कभी नहीं पूछता"
     }
   },
   "ompModes": {

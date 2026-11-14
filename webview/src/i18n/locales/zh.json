@@ -106,6 +106,9 @@
     "usagePercentage": "上下文: {{percentage}}",
     "planUsage": {
       "title": "Claude 额度详情",
+      "balanceLabel": "余额：",
+      "balanceRemaining": "余额：{{value}}",
+      "balanceDetail": "总额 {{total}} · 已用 {{used}}",
       "grokTitle": "Grok 额度详情",
       "staleIdle": "这是上次读取的额度，下次使用 Grok 时会自动刷新",
       "loading": "正在获取额度…",
@@ -597,6 +600,12 @@
         "disabled": "已关闭",
         "hint": "开启后，在提交对话框中显示「AI 生成提交信息」按钮。关闭后隐藏该按钮。"
       },
+      "sessionGitRepositoryMatching": {
+        "label": "按 Git 远端仓库匹配历史会话",
+        "enabled": "启用",
+        "disabled": "禁用",
+        "hint": "显示远端主机、所有者及仓库都相同的 Codex 和 Claude Code 会话。无法读取 Git 信息时按工作目录匹配。"
+      },
       "statusBarWidget": {
         "label": "状态栏信息展示",
         "enabled": "已开启",
@@ -971,16 +980,6 @@
           "importanceHint": "重要度越高，自动补全时越靠前"
         },
         "timeAgo": {
-          "yearsAgo_one": "{{count}} year ago",
-          "yearsAgo_other": "{{count}} years ago",
-          "monthsAgo_one": "{{count}} month ago",
-          "monthsAgo_other": "{{count}} months ago",
-          "daysAgo_one": "{{count}} day ago",
-          "daysAgo_other": "{{count}} days ago",
-          "hoursAgo_one": "{{count}} hour ago",
-          "hoursAgo_other": "{{count}} hours ago",
-          "minutesAgo_one": "{{count}} minute ago",
-          "minutesAgo_other": "{{count}} minutes ago",
           "justNow": "刚刚",
           "yearsAgo": "{{count}}年前",
           "monthsAgo": "{{count}}个月前",
@@ -1470,6 +1469,9 @@
     }
   },
   "history": {
+    "confirmDirectoryTitle": "在另一个目录中打开会话？",
+    "confirmDirectoryMessage": "命令和文件修改将在下方目录中执行。",
+    "executionDirectory": "运行目录",
     "title": "历史会话",
     "sessionDeleted": "会话已删除",
     "confirmDelete": "确认删除",
@@ -1581,6 +1583,7 @@
     "codexDeliveryUnconfirmed": "Codex 还没有确认收到你的选择（{{error}}）。它可能仍会生效，请不要重复作答；如果对话没有继续，请点击停止后重新发送。"
   },
   "askUserQuestion": {
+    "ompTitle": "OMP 有一些问题想问你",
     "configWarning": "Codex 部分配置可能未生效，请查看兼容提示详情。",
     "configWarningTitle": "Codex 配置兼容提示",
     "apiDeprecationWarning": "Codex 返回接口兼容提示，可查看详情。",
@@ -2347,6 +2350,7 @@
     "effort": "思考强度",
     "speed": "速度",
     "preset": "预设",
+    "approvals": "审批",
     "model": "模型"
   },
   "modes": {
@@ -2654,6 +2658,25 @@
     "fast": {
       "label": "Fast",
       "description": "Codex快速响应模式（会产生额外消耗）"
+    }
+  },
+  "ompApprovals": {
+    "title": "选择 OMP 审批模式",
+    "default": {
+      "label": "默认",
+      "description": "未设置时完全自动（OMP 的 tools.approvalMode）"
+    },
+    "alwaysAsk": {
+      "label": "询问",
+      "description": "编辑和命令执行前都会询问"
+    },
+    "write": {
+      "label": "自动批准编辑",
+      "description": "仅在执行命令前询问"
+    },
+    "yolo": {
+      "label": "完全自动",
+      "description": "从不询问"
     }
   },
   "dshPresets": {

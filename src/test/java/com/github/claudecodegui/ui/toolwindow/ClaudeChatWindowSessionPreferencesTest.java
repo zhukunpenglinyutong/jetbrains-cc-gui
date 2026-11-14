@@ -15,6 +15,7 @@ public class ClaudeChatWindowSessionPreferencesTest {
         source.setModel("gpt-5.6-sol");
         source.setPermissionMode("plan");
         source.setReasoningEffort("xhigh");
+        source.setOmpApprovalMode("always-ask");
         source.setSessionId("existing-session");
         source.setCwd("C:/source-project");
 
@@ -28,6 +29,8 @@ public class ClaudeChatWindowSessionPreferencesTest {
         assertEquals("gpt-5.6-sol", target.getModel());
         assertEquals("plan", target.getPermissionMode());
         assertEquals("xhigh", target.getReasoningEffort());
+        // A new tab that silently fell back to OMP's own setting would run without approvals.
+        assertEquals("always-ask", target.getOmpApprovalMode());
         assertEquals("new-session", target.getSessionId());
         assertEquals("C:/target-project", target.getCwd());
     }

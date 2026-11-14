@@ -4,14 +4,13 @@ import com.intellij.openapi.diagnostic.Logger;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * HTML loader.
- * Handles HTML file loading and local library injection.
+ * Handles HTML file loading and IDE theme injection.
  */
 public class HtmlLoader {
 
@@ -51,12 +50,6 @@ public class HtmlLoader {
             try (InputStream is = resourceClass.getResourceAsStream("/html/claude-chat.html")) {
                 if (is != null) {
                     String html = new String(is.readAllBytes(), StandardCharsets.UTF_8);
-
-                    if (html.contains("<!-- LOCAL_LIBRARY_INJECTION_POINT -->")) {
-                        html = injectLocalLibraries(html);
-                    } else {
-                        LOG.info("Detected bundled modern frontend assets; no additional library injection needed");
-                    }
 
                     // Prepare the complete static page once per theme. Per-tab state is added
                     // later, after this shared result is returned.
@@ -282,64 +275,5 @@ public class HtmlLoader {
             "</div>" +
             "</body>" +
             "</html>";
-    }
-
-    /**
-     * Inject local library file contents into the HTML.
-     */
-    private String injectLocalLibraries(String html) {
-        try {
-            String reactJs = loadResourceAsString("/libs/react.production.min.js");
-            String reactDomJs = loadResourceAsString("/libs/react-dom.production.min.js");
-            String babelJs = loadResourceAsString("/libs/babel.min.js");
-            String markedJs = loadResourceAsString("/libs/marked.min.js");
-            String codiconCss = loadResourceAsString("/libs/codicon.css");
-
-            String fontBase64 = loadResourceAsBase64("/libs/codicon.ttf");
-            codiconCss = codiconCss.replaceAll(
-                "url\\(\"\\./codicon\\.ttf\\?[^\"]*\"\\)",
-                "url(\"data:font/truetype;base64," + fontBase64 + "\")"
-            );
-
-            StringBuilder injectedLibs = new StringBuilder();
-            injectedLibs.append("\n    <!-- React and related libraries (local versions) -->\n");
-            injectedLibs.append("    <script>/* React 18 */\n").append(reactJs).append("\n    </script>\n");
-            injectedLibs.append("    <script>/* ReactDOM 18 */\n").append(reactDomJs).append("\n    </script>\n");
-            injectedLibs.append("    <script>/* Babel Standalone */\n").append(babelJs).append("\n    </script>\n");
-            injectedLibs.append("    <script>/* Marked */\n").append(markedJs).append("\n    </script>\n");
-            injectedLibs.append("    <style>/* VS Code Codicons (with embedded font) */\n").append(codiconCss).append("\n    </style>");
-
-            html = html.replace("<!-- LOCAL_LIBRARY_INJECTION_POINT -->", injectedLibs.toString());
-
-            LOG.info("Successfully injected local libraries (React + ReactDOM + Babel + Codicons)");
-        } catch (Exception e) {
-            LOG.error("Failed to inject local libraries: " + e.getMessage());
-        }
-
-        return html;
-    }
-
-    /**
-     * Load a resource file as a string.
-     */
-    private String loadResourceAsString(String resourcePath) throws Exception {
-        try (InputStream is = resourceClass.getResourceAsStream(resourcePath)) {
-            if (is == null) {
-                throw new Exception("Resource not found: " + resourcePath);
-            }
-            return new String(is.readAllBytes(), StandardCharsets.UTF_8);
-        }
-    }
-
-    /**
-     * Load a resource file as a Base64-encoded string.
-     */
-    private String loadResourceAsBase64(String resourcePath) throws Exception {
-        try (InputStream is = resourceClass.getResourceAsStream(resourcePath)) {
-            if (is == null) {
-                throw new Exception("Resource not found: " + resourcePath);
-            }
-            return Base64.getEncoder().encodeToString(is.readAllBytes());
-        }
     }
 }

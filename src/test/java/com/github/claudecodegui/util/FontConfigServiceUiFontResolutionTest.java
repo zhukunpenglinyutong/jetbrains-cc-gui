@@ -275,7 +275,7 @@ public class FontConfigServiceUiFontResolutionTest {
 
     private Path createLargeFontLikeFile() throws Exception {
         Path fontFile = Files.createTempFile("large-ui-font", ".ttf");
-        try (InputStream inputStream = getClass().getResourceAsStream("/libs/codicon.ttf")) {
+        try (InputStream inputStream = getClass().getResourceAsStream("/fonts/codicon.ttf")) {
             assertNotNull("Test font resource should exist", inputStream);
             Files.write(fontFile, inputStream.readAllBytes());
         }

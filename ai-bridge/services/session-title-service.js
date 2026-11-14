@@ -9,6 +9,7 @@ import { join } from 'path';
 import { setupApiKey, loadClaudeSettings, getCliUserAgent } from '../config/api-config.js';
 import { ensureAnthropicSdk, ensureBedrockSdk } from './claude/message-utils.js';
 import { resolveModelFromSettings } from '../utils/model-utils.js';
+import { buildAskThinkingFields, createWithThinkingFallback } from '../utils/ask-thinking.js';
 import { getExistingClaudeProjectSessionFilePath, getCodemossDir } from '../utils/path-utils.js';
 
 const DEFAULT_HAIKU_MODEL = 'claude-haiku-4-5-20251001';
@@ -196,17 +197,18 @@ async function createAnthropicClient(config, sessionId, { anthropicSdk = ensureA
 
 /**
  * Build the messages.create() request for title generation.
- * thinking is disabled: the Haiku alias can be user-mapped to a reasoning
- * model (e.g. DeepSeek via relay), which would otherwise spend the budget on
- * `thinking` blocks and return an empty title. The budget keeps headroom for
- * relays that ignore the flag (observed: thinking block, stop_reason max_tokens).
+ * Thinking is turned off where the model allows it: the Haiku alias can be
+ * user-mapped to a reasoning model (e.g. DeepSeek via relay), which would
+ * otherwise spend the budget on `thinking` blocks and return an empty title
+ * (#1693). Models that reject `disabled` get the form they accept (#1949), see
+ * ask-thinking.js. The budget keeps headroom for relays that ignore the flag
+ * (observed: thinking block, stop_reason max_tokens).
  * Exposed for tests.
  */
 export function buildSessionTitleRequest(model, userMessage) {
   return {
     model,
-    max_tokens: 2048,
-    thinking: { type: 'disabled' },
+    ...buildAskThinkingFields(model, 2048),
     messages: [{ role: 'user', content: userMessage }],
     system: SESSION_TITLE_PROMPT,
   };
@@ -269,9 +271,12 @@ async function callHaikuApi(userMessage, sessionId, supplier = null, dependencie
 
   let response;
   try {
-    response = await client.messages.create(
+    response = await createWithThinkingFallback(
+      (request) => client.messages.create(request, { signal: controller.signal }),
       buildSessionTitleRequest(model, userMessage),
-      { signal: controller.signal }
+      {
+        onRetry: (err) => logTitleEvent('warn', 'Model rejected the thinking setting, retrying without it: ' + String(err.message).slice(0, 200)),
+      }
     );
   } catch (err) {
     if (controller.signal.aborted) {

@@ -80,6 +80,28 @@ describe('HistoryView native message counts', () => {
   const actions = { currentProvider: 'codex', onLoadSession: vi.fn(), onDeleteSession: vi.fn(),
     onDeleteSessions: vi.fn(), onExportSession: vi.fn(), onToggleFavorite: vi.fn(), onUpdateTitle: vi.fn(), onConvertToCliSession: vi.fn() };
 
+  it.each(['claude', 'codex'])('confirms the original cwd before opening cross-directory %s history', provider => {
+    const onLoadSession = vi.fn();
+    const data: HistoryData = { success: true, sessions: [{ sessionId: 'cross-directory', title: 'Sibling worktree',
+      provider, cwd: '/sibling/repo', requiresCwdConfirmation: true }] };
+    render(<HistoryView {...actions} onLoadSession={onLoadSession} historyData={data} />);
+    fireEvent.click(screen.getByText('Sibling worktree'));
+    expect(onLoadSession).not.toHaveBeenCalled();
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText('/sibling/repo')).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'common.confirm' }));
+    expect(onLoadSession).toHaveBeenCalledWith('cross-directory', provider, undefined, undefined);
+  });
+
+  it('cancelling a directory confirmation leaves the current session unchanged', () => {
+    const onLoadSession = vi.fn();
+    render(<HistoryView {...actions} onLoadSession={onLoadSession} historyData={{ success: true,
+      sessions: [{ sessionId: 'cross', title: 'Cross directory', cwd: '/elsewhere', requiresCwdConfirmation: true }] }} />);
+    fireEvent.click(screen.getByText('Cross directory'));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }));
+    expect(onLoadSession).not.toHaveBeenCalled();
+  });
+
   it('distinguishes unknown counts from zero and shows a message total only when known', () => {
     const data: HistoryData = { ...historyData, source: 'native', total: undefined,
       sessions: [{ ...historyData.sessions![0], messageCount: undefined }, { ...historyData.sessions![1], messageCount: 0 }] };

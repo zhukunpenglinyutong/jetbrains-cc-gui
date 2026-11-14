@@ -78,6 +78,24 @@ public class SessionState {
                 || discoverUserDshPresetIds().contains(normalized);
     }
 
+    /**
+     * OMP tool-approval modes the plugin may pass as {@code omp --approval-mode}.
+     */
+    public static final Set<String> OMP_APPROVAL_MODES = Set.of("always-ask", "write", "yolo");
+
+    /**
+     * Normalize a requested OMP approval mode. Anything unrecognized becomes the
+     * empty string, which means "pass no flag": OMP's own {@code tools.approvalMode}
+     * setting decides.
+     */
+    public static String normalizeOmpApprovalMode(String mode) {
+        if (mode == null) {
+            return "";
+        }
+        String normalized = mode.trim();
+        return OMP_APPROVAL_MODES.contains(normalized) ? normalized : "";
+    }
+
     public static List<String> discoverUserDshPresetIds() {
         List<String> ids = new ArrayList<>();
         String dshHome = System.getenv("DSH_HOME");
@@ -160,6 +178,8 @@ public class SessionState {
     // Codex service tier: null = use Codex defaults, "fast" = Codex /fast.
     private volatile String codexServiceTier = null;
     private volatile String dshPreset = "";
+    // OMP --approval-mode override; "" = follow OMP's own tools.approvalMode.
+    private volatile String ompApprovalMode = "";
 
     // Slash commands — volatile for cross-thread visibility (same reason as permissionMode/model/provider)
     private volatile List<String> slashCommands = new ArrayList<>();
@@ -360,6 +380,10 @@ public class SessionState {
 
     public String getDshPreset() {
         return dshPreset;
+    }
+
+    public String getOmpApprovalMode() {
+        return ompApprovalMode;
     }
 
     public String getRuntimeSessionEpoch() {
@@ -590,6 +614,10 @@ public class SessionState {
         if (isValidDshPreset(preset)) {
             this.dshPreset = preset.trim();
         }
+    }
+
+    public void setOmpApprovalMode(String mode) {
+        this.ompApprovalMode = normalizeOmpApprovalMode(mode);
     }
 
     public void setRuntimeSessionEpoch(String runtimeSessionEpoch) {

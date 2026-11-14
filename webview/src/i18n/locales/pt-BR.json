@@ -1258,7 +1258,11 @@
     "codexDeliveryFailed": "O Codex não recebeu sua escolha ({{error}}). Se a conversa não continuar, clique em Parar e envie a mensagem novamente.",
     "codexDeliveryUnconfirmed": "O Codex ainda não confirmou sua escolha ({{error}}). Ela ainda pode ter efeito, então não responda de novo; se a conversa não continuar, clique em Parar e envie a mensagem novamente."
   },
+  "modelConfig": {
+    "approvals": "Aprovações"
+  },
   "askUserQuestion": {
+    "ompTitle": "O OMP tem algumas perguntas para você",
     "title": "Claude tem algumas perguntas para você",
     "progress": "Pergunta {{current}} / {{total}}",
     "multiSelectHint": "Você pode selecionar múltiplas opções",
@@ -2045,6 +2049,25 @@
       "label": "Auto Total",
       "tooltip": "Codex approval_policy=never – executa comandos e escreve arquivos sem solicitar (sandbox do workspace ainda aplicado).",
       "description": "Modo autônomo. O Codex executa edições e comandos shell imediatamente."
+    }
+  },
+  "ompApprovals": {
+    "title": "Selecionar o modo de aprovação do OMP",
+    "default": {
+      "label": "Padrão",
+      "description": "Automático total sem tools.approvalMode no OMP"
+    },
+    "alwaysAsk": {
+      "label": "Perguntar",
+      "description": "Pergunta antes de edições e comandos"
+    },
+    "write": {
+      "label": "Aprovar edições automaticamente",
+      "description": "Pergunta somente antes de comandos"
+    },
+    "yolo": {
+      "label": "Automático total",
+      "description": "Nunca pergunta"
     }
   },
   "ompModes": {

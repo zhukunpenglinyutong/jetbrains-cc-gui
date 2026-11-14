@@ -1071,27 +1071,12 @@
     "confirmConvert": "Преобразовать в сессию CLI?",
     "convertConfirmMessage": "Это изменит entrypoint сессии, чтобы она отображалась в списке /resume CLI Claude Code.",
     "timeAgo": {
-      "yearsAgo_one": "{{count}} год назад",
-      "yearsAgo_other": "{{count}} лет назад",
-      "monthsAgo_one": "{{count}} месяц назад",
-      "monthsAgo_other": "{{count}} месяцев назад",
-      "daysAgo_one": "{{count}} день назад",
-      "daysAgo_other": "{{count}} дней назад",
-      "hoursAgo_one": "{{count}} час назад",
-      "hoursAgo_other": "{{count}} часов назад",
-      "minutesAgo_one": "{{count}} минуту назад",
-      "minutesAgo_other": "{{count}} минут назад",
-      "justNow": "только что",
-      "yearsAgo_few": "{{count}} года назад",
-      "yearsAgo_many": "{{count}} лет назад",
-      "monthsAgo_few": "{{count}} месяца назад",
-      "monthsAgo_many": "{{count}} месяцев назад",
-      "daysAgo_few": "{{count}} дня назад",
-      "daysAgo_many": "{{count}} дней назад",
-      "hoursAgo_few": "{{count}} часа назад",
-      "hoursAgo_many": "{{count}} часов назад",
-      "minutesAgo_few": "{{count}} минуты назад",
-      "minutesAgo_many": "{{count}} минут назад"
+      "yearsAgo": "г. назад",
+      "monthsAgo": "мес. назад",
+      "daysAgo": "дн. назад",
+      "hoursAgo": "ч. назад",
+      "minutesAgo": "мин. назад",
+      "secondsAgo": "сек. назад"
     },
     "conversionErrors": {
       "INVALID_SESSION_ID": "Недействительный ID сеанса",
@@ -1147,7 +1132,11 @@
     "codexDeliveryFailed": "Codex не получил ваш выбор ({{error}}). Если диалог не продолжается, нажмите «Стоп» и отправьте сообщение снова.",
     "codexDeliveryUnconfirmed": "Codex ещё не подтвердил получение вашего выбора ({{error}}). Он ещё может вступить в силу, поэтому не отвечайте повторно; если диалог не продолжается, нажмите «Стоп» и отправьте сообщение снова."
   },
+  "modelConfig": {
+    "approvals": "Подтверждения"
+  },
   "askUserQuestion": {
+    "ompTitle": "У OMP есть несколько вопросов к вам",
     "title": "У Claude есть вопросы к вам",
     "progress": "Вопрос {{current}} / {{total}}",
     "multiSelectHint": "Можно выбрать несколько вариантов",
@@ -1931,6 +1920,25 @@
       "label": "Полный автомат",
       "tooltip": "Codex approval_policy=never — выполняет команды и записывает файлы без запросов (песочница рабочей области применяется).",
       "description": "Режим без вмешательства. Codex выполняет правки и команды немедленно."
+    }
+  },
+  "ompApprovals": {
+    "title": "Выберите режим подтверждений OMP",
+    "default": {
+      "label": "По умолчанию",
+      "description": "Полный автомат, если не задан tools.approvalMode"
+    },
+    "alwaysAsk": {
+      "label": "Спрашивать",
+      "description": "Спрашивает перед правками и командами"
+    },
+    "write": {
+      "label": "Автоодобрение правок",
+      "description": "Спрашивает только перед командами"
+    },
+    "yolo": {
+      "label": "Полный автомат",
+      "description": "Никогда не спрашивает"
     }
   },
   "ompModes": {
