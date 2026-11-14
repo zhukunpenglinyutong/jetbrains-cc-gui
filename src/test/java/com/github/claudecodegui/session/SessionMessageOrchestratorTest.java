@@ -1375,6 +1375,66 @@ public class SessionMessageOrchestratorTest {
         }
     }
 
+    /**
+     * A user who sends while a background follow-up is still streaming starts a
+     * turn that waits for the CLI to go quiet; the rest of the follow-up must not
+     * land below the new question, or the end-of-turn reload is refused for good.
+     */
+    @Test
+    public void interTurnRowsArrivingAfterAUserSendDoNotLandBelowIt() {
+        ClaudeSession session = new ClaudeSession(null, null, null, null);
+        SessionState state = session.getState();
+        try {
+            state.setProvider("claude");
+            state.setSessionId("session-follow-up-send");
+            state.setCwd("/workspace");
+            MessageParser parser = new MessageParser();
+            JsonObject user = createProviderMessage("user", "Run the tests in background", "user-uuid");
+            JsonObject started = createProviderMessage("assistant", "Started in background.", "started-uuid");
+            state.addMessage(parser.parseServerMessage(user));
+            state.addMessage(parser.parseServerMessage(started));
+            JsonObject reportHead = createProviderMessage("assistant", "Background run finished: 3 failures. ", "report-head");
+            reportHead.getAsJsonObject("message").addProperty("id", "msg-follow-up");
+            JsonObject reportTail = createProviderMessage("assistant", "Failure details: foo, bar, baz.", "report-tail");
+            reportTail.getAsJsonObject("message").addProperty("id", "msg-follow-up");
+            JsonObject question = createProviderMessage("user", "What is 2+2?", "question-uuid");
+
+            assertTrue(session.appendInterTurnMessage(reportHead));
+            // SessionSendService.updateSessionStateForSend: the question is published at once.
+            state.beginTurn();
+            state.addMessage(parser.parseServerMessage(question));
+            assertFalse(session.appendInterTurnMessage(reportTail));
+            ClaudeSession.Message reply = streamAssistantText(state, "2+2 is 4.");
+            state.setBusy(false);
+            state.setLoading(false);
+
+            assertEquals(List.of("Run the tests in background", "Started in background.",
+                            "Background run finished: 3 failures. ", "What is 2+2?", "2+2 is 4."),
+                    state.getMessages().stream().map(message -> message.content).toList());
+
+            List<JsonObject> transcript = new ArrayList<>(List.of(user, started, reportHead, reportTail, question));
+            transcript.addAll(persistCliReplyBlocks(reply, "msg-reply"));
+            RecordingHistoryAccess historyAccess = new RecordingHistoryAccess();
+            historyAccess.providerHistory = transcript;
+            RecordingCallback callback = new RecordingCallback();
+            SessionCallbackFacade facade = new SessionCallbackFacade(null);
+            facade.setCallback(callback);
+            SessionMessageOrchestrator orchestrator = new SessionMessageOrchestrator(
+                    state, parser, facade, historyAccess, (used, max) -> { }, 0, 0);
+
+            orchestrator.loadFromServer().join();
+
+            assertEquals(List.of("Run the tests in background", "Started in background.",
+                            "Background run finished: 3 failures. ", "Failure details: foo, bar, baz.",
+                            "What is 2+2?", "2+2 is 4."),
+                    state.getMessages().stream().map(message -> message.content).toList());
+            assertEquals(1, callback.messageUpdates.size());
+        } finally {
+            state.setBusy(false);
+            state.getExecutionState().rebind();
+        }
+    }
+
     private static List<JsonObject> persistCliReplyBlocks(ClaudeSession.Message live, String replyId) {
         List<JsonObject> rows = new ArrayList<>();
         for (JsonElement block : live.raw.getAsJsonObject("message").getAsJsonArray("content")) {

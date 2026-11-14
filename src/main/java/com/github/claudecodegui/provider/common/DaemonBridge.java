@@ -999,6 +999,29 @@ public class DaemonBridge {
                 break;
             }
 
+            case "inter_turn_message": {
+                // Assistant body produced by a background follow-up turn (a
+                // completed run_in_background task whose notification triggered
+                // a CLI turn outside any active user turn). Emitted by the
+                // ai-bridge perpetual reader's inter-turn branch because these
+                // bodies cannot ride the [MESSAGE] stream (no active turn) and
+                // the session_updated reload that also recovers them from JSONL
+                // is best-effort (DeferredReload stream-end races). Dispatched
+                // to listeners exactly like task_event so ClaudeChatWindow can
+                // forward it to the frontend.
+                String interTurnSessionId = obj.has("sessionId") && obj.get("sessionId").isJsonPrimitive()
+                        ? obj.get("sessionId").getAsString() : "?";
+                LOG.debug("[DaemonBridge] inter_turn_message received: sessionId=" + interTurnSessionId);
+                for (DaemonEventListener listener : eventListeners) {
+                    try {
+                        listener.onDaemonEvent(event, obj);
+                    } catch (Exception ex) {
+                        LOG.warn("[DaemonBridge] Listener threw while handling " + event, ex);
+                    }
+                }
+                break;
+            }
+
             case "codex_event": {
                 // Structured Codex runtime event (task 6.4). Dispatched to
                 // listeners with the full payload so the session layer can

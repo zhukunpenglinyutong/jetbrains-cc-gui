@@ -41,6 +41,7 @@ import {
   setCachedQueryFn,
   touchRuntime,
   createTurnSink,
+  emitInterTurnEvent,
   emitTaskEvent,
   waitForReaderQuiescent,
 } from './runtime-lifecycle.js';
@@ -423,6 +424,14 @@ _runtimeCleanupTimer.unref();
       // this provenance specifically so hosts can keep it out of the main turn.
       if (msg?.type === 'result' && msg.origin?.kind === 'task-notification') {
         console.log('[LIFECYCLE] Skipping task-notification result for active user turn');
+        // The skipped result closes a background follow-up whose assistant body
+        // may already have flowed through this turn's sink (rendered into the
+        // active turn). Emit session_updated so Java schedules a JSONL reload
+        // that makes the follow-up content reachable and correctly attributed —
+        // without letting this result end the turn (the #1410 one-behind lesson).
+        if (runtime.sessionId) {
+          emitInterTurnEvent(runtime.sessionId);
+        }
         continue;
       }
 

@@ -452,6 +452,14 @@ public class SessionCallbackAdapter implements ClaudeSession.SessionCallback {
     }
 
     @Override
+    public void onInterTurnMessage(String messageJson) {
+        if (isInactive() || messageJson == null || messageJson.trim().isEmpty()) {
+            return;
+        }
+        jsTarget.callJavaScript("onInterTurnMessage", JsUtils.escapeJs(messageJson));
+    }
+
+    @Override
     public void onCodexRuntimeEvent(String eventJson) {
         if (isInactive() || eventJson == null || eventJson.trim().isEmpty()) {
             return;
