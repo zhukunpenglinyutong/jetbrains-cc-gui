@@ -542,20 +542,44 @@ test('resolveCliPath skips a dead home shim and falls through to the next candid
   assert.equal(normalize(resolved), normalize(join(freshDir, `${name}.cmd`)));
 });
 
-function envWithoutOpenCodeOverrides() {
-  return Object.fromEntries(
-    Object.entries(process.env).filter(([key]) => !/^(path|opencode_bin|opencode_path|opencode_cli_path)$/i.test(key)),
+function envWithoutOpenCodeOverrides(home) {
+  // APPDATA/LOCALAPPDATA would point the Windows npm/bin dir scan at the real profile.
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(
+      ([key]) => !/^(path|opencode_bin|opencode_path|opencode_cli_path|appdata|localappdata)$/i.test(key),
+    ),
   );
+  return home ? { ...env, HOME: home, USERPROFILE: home } : env;
+}
+
+// os.homedir() reads HOME (USERPROFILE on Windows), so a real OpenCode install
+// under the developer's home would otherwise resolve before the test binary.
+function withEmptyHome(fn) {
+  const home = mkdtempSync(join(tmpdir(), 'ccgui-opencode-home-'));
+  const key = process.platform === 'win32' ? 'USERPROFILE' : 'HOME';
+  const saved = process.env[key];
+  process.env[key] = home;
+  try {
+    return fn(home);
+  } finally {
+    if (saved === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = saved;
+    }
+  }
 }
 
 test('resolveOpenCodeCliPath falls back to the desktop app binary opencode-cli on PATH (#2019)', () => {
   const dir = mkdtempSync(join(tmpdir(), 'ccgui-opencode-cli-'));
   const file = join(dir, process.platform === 'win32' ? 'opencode-cli.exe' : 'opencode-cli');
   writeFileSync(file, '', { mode: 0o755 });
-  const env = envWithoutOpenCodeOverrides();
-  const systemDirs = process.platform === 'win32' ? [join(process.env.SystemRoot, 'System32')] : ['/usr/bin', '/bin'];
-  env[process.platform === 'win32' ? 'Path' : 'PATH'] = [dir, ...systemDirs].join(delimiter);
-  const resolved = resolveOpenCodeCliPath(env);
+  const resolved = withEmptyHome((home) => {
+    const env = envWithoutOpenCodeOverrides(home);
+    const systemDirs = process.platform === 'win32' ? [join(process.env.SystemRoot, 'System32')] : ['/usr/bin', '/bin'];
+    env[process.platform === 'win32' ? 'Path' : 'PATH'] = [dir, ...systemDirs].join(delimiter);
+    return resolveOpenCodeCliPath(env);
+  });
   assert.equal(realpathSync.native(resolved).toLowerCase(), realpathSync.native(file).toLowerCase());
 });
 
