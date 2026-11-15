@@ -100,11 +100,11 @@ test('Claude Ultracode preserves effort and native background work stays visible
   const panel = page.locator('.claude-background-tasks');
   const pill = panel.locator('.claude-bg-pill');
   await expect(pill).toContainText('80 background tasks');
-  // The pill rides the status tabs' top border, above the last (Edits) tab.
+  // The pill sits just above the status tabs, over the last (Edits) tab, without covering it.
   const [pillBox, tabsBox, lastTabBox] = await Promise.all([pill.boundingBox(),
     page.locator('.status-panel-tabs').boundingBox(), page.locator('.status-panel-tab').last().boundingBox()]);
-  expect(pillBox!.y).toBeLessThan(tabsBox!.y);
-  expect(pillBox!.y + pillBox!.height).toBeGreaterThan(tabsBox!.y);
+  expect(pillBox!.y + pillBox!.height).toBeLessThanOrEqual(tabsBox!.y);
+  expect(pillBox!.y + pillBox!.height).toBeGreaterThan(tabsBox!.y - 16);
   expect(pillBox!.x + pillBox!.width).toBeLessThanOrEqual(tabsBox!.x + tabsBox!.width);
   expect(pillBox!.x).toBeGreaterThanOrEqual(lastTabBox!.x - pillBox!.width);
   await page.screenshot({ path: testInfo.outputPath('ultracode-background-pill.png'), animations: 'disabled' });
@@ -239,8 +239,9 @@ test('one legacy background task has Stop and a completion received on another p
       session_id: 'legacy-session', tasks: [{ task_id: 'dev-server', task_type: 'local_bash', description: 'Development server' }] }));
   });
   const panel = page.locator('.claude-background-tasks');
-  await expect(panel).toContainText('1 background task running');
-  await panel.getByRole('button', { name: 'Stop background tasks' }).click();
+  await expect(panel.locator('.claude-bg-pill')).toContainText('1 background task');
+  await panel.locator('.claude-bg-pill').click();
+  await panel.getByRole('dialog', { name: 'Background tasks' }).getByRole('button', { name: 'Stop background tasks' }).click();
   await expect.poll(() => page.evaluate(() => (window as any).__ultraMessages.some((line: string) => line.startsWith('interrupt_session:')))).toBe(true);
   // Recovery can change the active provider without a session clear. Exercise
   // the snapshot handler itself, so a session reset cannot mask a stale panel.
