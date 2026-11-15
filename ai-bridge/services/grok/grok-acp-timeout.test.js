@@ -646,7 +646,11 @@ test('Review items 5 & 6: release() gives grandchild SIGTERM handler time to cle
 
 
 
-test('a broken stdin pipe fails pending requests and marks the client unhealthy instead of throwing', async (t) => {
+test('a broken stdin pipe fails pending requests and marks the client unhealthy instead of throwing', {
+  // Closing fd 0 in the fake agent breaks the pipe on POSIX only; on Windows the
+  // parent's write still succeeds, so the listener under test is never reached.
+  skip: process.platform === 'win32' && 'closing fd 0 does not break the pipe on Windows',
+}, async (t) => {
   // The agent closes its stdin but stays alive, so the next write gets EPIPE
   // while no exit event has rejected the pending requests yet.
   createFakeGrokCli(
