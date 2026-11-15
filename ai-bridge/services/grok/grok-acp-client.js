@@ -357,21 +357,24 @@ export class GrokAcpClient {
       }
     });
 
-    this.proc.on('exit', (code, signal) => {
+    const failPending = (err) => {
       this.closed = true;
-      const err = new Error(`grok agent stdio exited (code=${code}, signal=${signal || 'none'})`);
       for (const [, p] of this.pending) {
         p.reject(err);
       }
       this.pending.clear();
+    };
+
+    this.proc.on('exit', (code, signal) => {
+      failPending(new Error(`grok agent stdio exited (code=${code}, signal=${signal || 'none'})`));
     });
 
-    this.proc.on('error', (err) => {
-      this.closed = true;
-      for (const [, p] of this.pending) {
-        p.reject(err);
-      }
-      this.pending.clear();
+    this.proc.on('error', failPending);
+
+    // Without a listener, EPIPE from a dead agent becomes an uncaught exception
+    // that the daemon blames on whichever request is active.
+    this.proc.stdin.on('error', (err) => {
+      failPending(new Error(`grok agent stdin write failed: ${err?.message || err}`));
     });
   }
 
