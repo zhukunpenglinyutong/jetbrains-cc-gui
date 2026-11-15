@@ -4,6 +4,7 @@
  */
 
 import { sendMessage as dshSendMessage } from '../services/dsh/message-service.js';
+import { cancelSessionCommand } from '../services/dsh/cancel-service.js';
 import { listModels as dshListModels } from '../services/dsh/models-service.js';
 import {
   deleteSessionCommand,
@@ -49,6 +50,10 @@ export async function handleDshCommand(command, args, stdinData) {
       }
       break;
     }
+
+    case 'cancel':
+      await cancelSessionCommand({ sessionId: (stdinData && stdinData.sessionId) || args[0] || '' });
+      break;
 
     case 'listModels':
       await dshListModels();
@@ -102,6 +107,7 @@ export async function handleDshCommand(command, args, stdinData) {
 export function getDshCommandList() {
   return [
     'send',
+    'cancel',
     'listModels',
     'listSessions',
     'loadSession',

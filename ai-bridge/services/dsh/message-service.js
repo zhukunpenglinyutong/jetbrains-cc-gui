@@ -300,10 +300,37 @@ function awaitMuxOpen(mux) {
   ]).finally(() => clearTimeout(timer));
 }
 
-/** Best-effort cancel on interrupt (SIGTERM from Java process manager). */
+/** Max wait for the host to acknowledge session.cancel; the Java side SIGKILLs 3s after SIGTERM. */
+export const SHUTDOWN_CANCEL_TIMEOUT_MS = 1500;
+
+/**
+ * Send session.cancel and wait (bounded) for the host's reply before the
+ * process exits, otherwise the RPC dies with the process and the turn runs on.
+ */
+export async function cancelBeforeExit(client, sessionId, timeoutMs = SHUTDOWN_CANCEL_TIMEOUT_MS) {
+  let timer;
+  const timeout = new Promise((resolve) => {
+    timer = setTimeout(resolve, timeoutMs);
+  });
+  try {
+    await Promise.race([
+      Promise.resolve().then(() => dshSession.cancel(client, sessionId)).catch(() => {}),
+      timeout,
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Cancel on interrupt (SIGTERM from Java process manager), then exit. */
 function registerShutdownCancel(client, sessionId, mux) {
-  const onShutdownSignal = () => {
-    dshSession.cancel(client, sessionId).catch(() => {});
+  let shuttingDown = false;
+  const onShutdownSignal = async () => {
+    if (shuttingDown) {
+      return;
+    }
+    shuttingDown = true;
+    await cancelBeforeExit(client, sessionId);
     mux.close();
     process.exit(143);
   };
