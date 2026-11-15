@@ -179,6 +179,30 @@
     "backgroundTasksRunning_one": "Выполняется {{count}} фоновая задача",
     "backgroundTasksRunning_other": "Фоновых задач выполняется: {{count}}",
     "stopBackgroundTasks": "Остановить фоновые задачи",
+    "backgroundTasksPill": "Фоновых задач: {{count}}",
+    "backgroundTasksPill_one": "Фоновых задач: {{count}}",
+    "backgroundTasksPill_other": "Фоновых задач: {{count}}",
+    "backgroundTasksTitle": "Фоновые задачи",
+    "backgroundTasksActive": "Выполняется: {{count}}",
+    "backgroundTasksActive_one": "Выполняется: {{count}}",
+    "backgroundTasksActive_other": "Выполняется: {{count}}",
+    "backgroundTasksStopAfterAnswer": "Можно остановить после ответа",
+    "backgroundTaskDetails": {
+      "type": "Тип",
+      "taskId": "ID задачи",
+      "runId": "ID запуска",
+      "parent": "Родительская задача",
+      "elapsed": "Выполняется"
+    },
+    "backgroundTaskTypes": {
+      "local_bash": "Команда",
+      "local_agent": "Субагент",
+      "remote_agent": "Удалённый агент",
+      "local_workflow": "Рабочий процесс",
+      "in_process_teammate": "Напарник",
+      "monitor_mcp": "Монитор",
+      "other": "Задача"
+    },
     "planUsage": {
       "balanceLabel": "Баланс: ",
       "balanceRemaining": "Баланс: {{value}}",
@@ -1340,7 +1364,10 @@
     "providerAdded": "Провайдер добавлен",
     "providerUpdated": "Провайдер обновлён",
     "providerDeleted": "Провайдер удалён",
-    "codexSettingsDispatchFailed": "Не удалось отправить настройки Codex в IDE. Откройте чат заново и повторите попытку."
+    "codexSettingsDispatchFailed": "Не удалось отправить настройки Codex в IDE. Откройте чат заново и повторите попытку.",
+    "codexSettingsRuntimeInactive": "Среда выполнения Codex неактивна. Откройте чат заново и повторите попытку.",
+    "codexSettingsServiceUnavailable": "Сервис Codex недоступен. Откройте чат заново и повторите попытку.",
+    "codexSettingsUpdateFailed": "Не удалось подтвердить настройки Codex. Откройте чат заново и повторите попытку."
   },
   "config": {
     "clickToCopy": "Нажмите для копирования",

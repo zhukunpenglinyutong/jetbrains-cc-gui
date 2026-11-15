@@ -25,6 +25,9 @@ function createHarness(currentSessionId: string | null) {
   const storedTitles: Array<StoredTitle | null> = [];
   const startupHistoryUpdates: unknown[] = [];
   let messages: ClaudeMessage[] = [];
+  const isStreaming = ref(false);
+  const userPaused = ref(false);
+  const isUserAtBottom = ref(true);
 
   const options = {
     addToast: () => {},
@@ -36,15 +39,16 @@ function createHarness(currentSessionId: string | null) {
     setLoadingStartTime: () => {},
     setIsThinking: () => {},
     setHistoryData: () => {},
-    userPausedRef: ref(false),
-    isUserAtBottomRef: ref(true),
+    userPausedRef: userPaused,
+    isUserAtBottomRef: isUserAtBottom,
     messagesContainerRef: ref(null),
     suppressNextStatusToastRef: ref(false),
     streamingContentRef: ref(''),
-    isStreamingRef: ref(false),
+    isStreamingRef: isStreaming,
     useBackendStreamingRenderRef: ref(false),
     streamingMessageIndexRef: ref(-1),
     streamingTurnIdRef: ref(-1),
+    turnIdCounterRef: ref(0),
     findLastAssistantIndex: () => -1,
     extractRawBlocks: () => [],
     patchAssistantForStreaming: (message: unknown) => message,
@@ -66,7 +70,15 @@ function createHarness(currentSessionId: string | null) {
   registerMessageCallbacks(options, () => {}, () => {});
   const dispatch = window.claudeHistoryPageInfo;
   if (!dispatch) throw new Error('claudeHistoryPageInfo was not registered');
-  return { storedTitles, startupHistoryUpdates, dispatch, getMessages: () => messages };
+  return {
+    storedTitles,
+    startupHistoryUpdates,
+    dispatch,
+    getMessages: () => messages,
+    isStreaming,
+    userPaused,
+    isUserAtBottom,
+  };
 }
 
 const pageInfo = (overrides: Record<string, unknown> = {}) => JSON.stringify({
@@ -191,5 +203,196 @@ describe('native Codex opaque history pages', () => {
     deliver('stale', 'prepend', ['stale'], 'opaque:next', null);
     expect(harness.getMessages()).toHaveLength(3);
     expect(window.__codexHistoryPageInfo?.cursor).toBe('opaque:older');
+  });
+});
+
+describe('onInterTurnMessage', () => {
+  beforeEach(() => {
+    delete (window as unknown as Record<string, unknown>).__sessionTransitioning;
+    delete (window as unknown as Record<string, unknown>).onInterTurnMessage;
+  });
+
+  // Mirrors the envelope ClaudeChatWindow.buildInterTurnMessagePayload emits:
+  // { sessionId, message }. Forwarding only `message` (the pre-fix behavior)
+  // fails the session guard, which is why the Java side also has a contract
+  // test pinning the envelope shape.
+  const followUpPayload = (overrides: Record<string, unknown> = {}) => JSON.stringify({
+    sessionId: 's1',
+    message: {
+      type: 'assistant',
+      uuid: 'follow-up-uuid',
+      timestamp: '2026-11-10T00:00:00.000Z',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'Task report' }] },
+    },
+    ...overrides,
+  });
+
+  it('appends the follow-up assistant body with a fresh turn id tag', () => {
+    const harness = createHarness('s1');
+    window.onInterTurnMessage?.(followUpPayload());
+    const messages = harness.getMessages();
+    expect(messages).toHaveLength(1);
+    expect(messages[0].type).toBe('assistant');
+    expect(messages[0].content).toBe('Task report');
+    // The tag is load-bearing: preserveLatestMessagesOnShrink only keeps a tail
+    // assistant that carries isStreaming or __turnId, and it also stops the
+    // follow-up report from merging into the previous turn's bubble.
+    expect(messages[0].__turnId).toBe(1);
+    expect(typeof messages[0].raw === 'object' && (messages[0].raw as { uuid?: string }).uuid).toBe('follow-up-uuid');
+  });
+
+  it('drops the event when its session is not the displayed session', () => {
+    const harness = createHarness('other-session');
+    window.onInterTurnMessage?.(followUpPayload());
+    expect(harness.getMessages()).toHaveLength(0);
+  });
+
+  it('drops the event while a turn is streaming', () => {
+    const harness = createHarness('s1');
+    harness.isStreaming.current = true;
+    window.onInterTurnMessage?.(followUpPayload());
+    expect(harness.getMessages()).toHaveLength(0);
+  });
+
+  it('drops the event during a session transition', () => {
+    const harness = createHarness('s1');
+    (window as unknown as Record<string, unknown>).__sessionTransitioning = true;
+    window.onInterTurnMessage?.(followUpPayload());
+    expect(harness.getMessages()).toHaveLength(0);
+  });
+
+  it('converges duplicate deliveries to one bubble via the raw uuid', () => {
+    const harness = createHarness('s1');
+    window.onInterTurnMessage?.(followUpPayload());
+    window.onInterTurnMessage?.(followUpPayload());
+    expect(harness.getMessages()).toHaveLength(1);
+  });
+
+  it('ignores malformed payloads', () => {
+    const harness = createHarness('s1');
+    expect(() => window.onInterTurnMessage?.('not json')).not.toThrow();
+    expect(harness.getMessages()).toHaveLength(0);
+  });
+
+  it('appends a tool_result user row for card settlement without rendering it', () => {
+    const harness = createHarness('s1');
+    window.onInterTurnMessage?.(JSON.stringify({
+      sessionId: 's1',
+      message: {
+        type: 'user',
+        uuid: 'tool-result-uuid',
+        message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tool-1', content: 'ok' }] },
+      },
+    }));
+
+    const messages = harness.getMessages();
+    expect(messages).toHaveLength(1);
+    expect(messages[0].type).toBe('user');
+    // The list filters this exact marker text, so the row settles the matching
+    // tool card (findToolResult) without adding a visible user bubble.
+    expect(messages[0].content).toBe('[tool_result]');
+  });
+
+  it('drops user rows that carry no tool_result', () => {
+    const harness = createHarness('s1');
+    window.onInterTurnMessage?.(JSON.stringify({
+      sessionId: 's1',
+      message: {
+        type: 'user',
+        uuid: 'plain-user-uuid',
+        message: { role: 'user', content: [{ type: 'text', text: 'hi' }] },
+      },
+    }));
+    expect(harness.getMessages()).toHaveLength(0);
+  });
+
+  it('drops the "No response requested." placeholder the history parser filters', () => {
+    const harness = createHarness('s1');
+    window.onInterTurnMessage?.(JSON.stringify({
+      sessionId: 's1',
+      message: {
+        type: 'assistant',
+        uuid: 'placeholder-uuid',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'No response requested.' }] },
+      },
+    }));
+    expect(harness.getMessages()).toHaveLength(0);
+  });
+
+  it('drops an assistant row that carries no renderable block', () => {
+    const harness = createHarness('s1');
+    window.onInterTurnMessage?.(JSON.stringify({
+      sessionId: 's1',
+      message: {
+        type: 'assistant',
+        uuid: 'empty-uuid',
+        message: { role: 'assistant', content: [] },
+      },
+    }));
+    expect(harness.getMessages()).toHaveLength(0);
+  });
+
+  it('keeps the scroll pause and position when the user is reading history', () => {
+    const harness = createHarness('s1');
+    harness.userPaused.current = true;
+    harness.isUserAtBottom.current = false;
+
+    window.onInterTurnMessage?.(followUpPayload());
+
+    expect(harness.getMessages()).toHaveLength(1);
+    expect(harness.userPaused.current).toBe(true);
+    expect(harness.isUserAtBottom.current).toBe(false);
+  });
+});
+
+describe('onInterTurnMessage increment folding', () => {
+  beforeEach(() => {
+    delete (window as unknown as Record<string, unknown>).__sessionTransitioning;
+  });
+
+  const increment = (uuid: string, msgId: string, blocks: unknown[]) => JSON.stringify({
+    sessionId: 's1',
+    message: {
+      type: 'assistant',
+      uuid,
+      message: { id: msgId, role: 'assistant', content: blocks },
+    },
+  });
+
+  it('folds increments sharing one message id into a single bubble', () => {
+    // The CLI emits one assistant record per content block while a follow-up
+    // turn streams, so the live forward arrives as several increments with a
+    // shared message.id. They must converge to one bubble, not one per block.
+    const harness = createHarness('s1');
+    window.onInterTurnMessage?.(increment('u1', 'msg-1', [{ type: 'thinking', thinking: 'planning' }]));
+    window.onInterTurnMessage?.(increment('u2', 'msg-1', [{ type: 'tool_use', id: 't1', name: 'Bash', input: {} }]));
+    window.onInterTurnMessage?.(increment('u3', 'msg-1', [{ type: 'text', text: 'report' }]));
+
+    const messages = harness.getMessages();
+    expect(messages).toHaveLength(1);
+    expect(messages[0].content).toBe('report');
+    const blocks = (messages[0].raw as { message: { content: Array<{ type: string }> } }).message.content;
+    expect(blocks.map((block) => block.type)).toEqual(['thinking', 'tool_use', 'text']);
+  });
+
+  it('keeps distinct message ids as separate bubbles', () => {
+    const harness = createHarness('s1');
+    window.onInterTurnMessage?.(increment('u1', 'msg-a', [{ type: 'text', text: 'first' }]));
+    window.onInterTurnMessage?.(increment('u2', 'msg-b', [{ type: 'text', text: 'second' }]));
+
+    const messages = harness.getMessages();
+    expect(messages).toHaveLength(2);
+    expect(messages.map((message) => message.content)).toEqual(['first', 'second']);
+  });
+
+  it('does not duplicate a replayed block on the same message', () => {
+    const harness = createHarness('s1');
+    window.onInterTurnMessage?.(increment('u1', 'msg-c', [{ type: 'text', text: 'same' }]));
+    window.onInterTurnMessage?.(increment('u2', 'msg-c', [{ type: 'text', text: 'same' }]));
+
+    const messages = harness.getMessages();
+    expect(messages).toHaveLength(1);
+    const blocks = (messages[0].raw as { message: { content: unknown[] } }).message.content;
+    expect(blocks).toHaveLength(1);
   });
 });

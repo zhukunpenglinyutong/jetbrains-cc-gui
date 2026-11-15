@@ -390,7 +390,7 @@ test('Integration: inter-turn result on anonymous runtime emits no event', async
   assert.equal(events.list.filter((e) => e.event === 'session_updated').length, 0);
 });
 
-test('Integration: non-result inter-turn messages do not emit events', async () => {
+test('Integration: non-result inter-turn messages emit no session_updated (assistant forwards as inter_turn_message)', async () => {
   const ctl = createControlledQuery();
   const runtime = { closed: false, sessionId: 'sess-x', turnSink: null, query: ctl.query };
   const events = captureInterTurnEvents();
@@ -408,6 +408,146 @@ test('Integration: non-result inter-turn messages do not emit events', async () 
   }
 
   assert.equal(events.list.filter((e) => e.event === 'session_updated').length, 0);
+  // The assistant body routes to the dedicated inter_turn_message event, never
+  // to session_updated; user noise emits nothing at all.
+  assert.equal(events.list.length, 1);
+  assert.equal(events.list[0].event, 'inter_turn_message');
+  assert.equal(events.list[0].sessionId, 'sess-x');
+  assert.equal(events.list[0].message.content, 'partial');
+});
+
+test('Integration: inter-turn assistant body emits inter_turn_message with the full message (#2069)', async () => {
+  const ctl = createControlledQuery();
+  const runtime = { closed: false, sessionId: 'sess-fu', turnSink: null, query: ctl.query };
+  const events = captureInterTurnEvents();
+
+  const reader = startPerpetualReader(runtime);
+  const body = {
+    type: 'assistant',
+    uuid: 'msg-uuid-1',
+    message: { role: 'assistant', content: [{ type: 'text', text: 'Task report' }] },
+  };
+  try {
+    ctl.deliver(body);
+    await settle();
+  } finally {
+    runtime.closed = true;
+    ctl.end();
+    await reader;
+    events.restore();
+  }
+
+  const forwards = events.list.filter((e) => e.event === 'inter_turn_message');
+  assert.equal(forwards.length, 1);
+  assert.equal(forwards[0].sessionId, 'sess-fu');
+  assert.deepEqual(forwards[0].message, body);
+});
+
+test('Integration: inter-turn sidechain assistant body is not forwarded', async () => {
+  const ctl = createControlledQuery();
+  const runtime = { closed: false, sessionId: 'sess-side', turnSink: null, query: ctl.query };
+  const events = captureInterTurnEvents();
+
+  const reader = startPerpetualReader(runtime);
+  try {
+    ctl.deliver({ type: 'assistant', parent_tool_use_id: 'agent-tool', content: 'sidechain' });
+    await settle();
+  } finally {
+    runtime.closed = true;
+    ctl.end();
+    await reader;
+    events.restore();
+  }
+
+  assert.equal(events.list.filter((e) => e.event === 'inter_turn_message').length, 0);
+});
+
+test('Integration: inter-turn tool_result user row is forwarded so the tool card can settle', async () => {
+  const ctl = createControlledQuery();
+  const runtime = { closed: false, sessionId: 'sess-tr', turnSink: null, query: ctl.query };
+  const events = captureInterTurnEvents();
+
+  const reader = startPerpetualReader(runtime);
+  const body = {
+    type: 'user',
+    uuid: 'tool-result-uuid',
+    message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tool-1', content: 'ok' }] },
+  };
+  try {
+    ctl.deliver(body);
+    await settle();
+  } finally {
+    runtime.closed = true;
+    ctl.end();
+    await reader;
+    events.restore();
+  }
+
+  const forwards = events.list.filter((e) => e.event === 'inter_turn_message');
+  assert.equal(forwards.length, 1);
+  assert.equal(forwards[0].sessionId, 'sess-tr');
+  assert.deepEqual(forwards[0].message, body);
+});
+
+test('Integration: inter-turn plain user text is not forwarded', async () => {
+  const ctl = createControlledQuery();
+  const runtime = { closed: false, sessionId: 'sess-text', turnSink: null, query: ctl.query };
+  const events = captureInterTurnEvents();
+
+  const reader = startPerpetualReader(runtime);
+  try {
+    ctl.deliver({ type: 'user', message: { role: 'user', content: [{ type: 'text', text: 'note' }] } });
+    await settle();
+  } finally {
+    runtime.closed = true;
+    ctl.end();
+    await reader;
+    events.restore();
+  }
+
+  assert.equal(events.list.filter((e) => e.event === 'inter_turn_message').length, 0);
+});
+
+test('Integration: inter-turn sidechain tool_result is not forwarded', async () => {
+  const ctl = createControlledQuery();
+  const runtime = { closed: false, sessionId: 'sess-side-tr', turnSink: null, query: ctl.query };
+  const events = captureInterTurnEvents();
+
+  const reader = startPerpetualReader(runtime);
+  try {
+    ctl.deliver({
+      type: 'user',
+      parent_tool_use_id: 'agent-tool',
+      message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tool-1', content: 'ok' }] },
+    });
+    await settle();
+  } finally {
+    runtime.closed = true;
+    ctl.end();
+    await reader;
+    events.restore();
+  }
+
+  assert.equal(events.list.filter((e) => e.event === 'inter_turn_message').length, 0);
+});
+
+test('Integration: inter-turn assistant body on anonymous runtime emits no event', async () => {
+  const ctl = createControlledQuery();
+  const runtime = { closed: false, sessionId: null, turnSink: null, query: ctl.query };
+  const events = captureInterTurnEvents();
+
+  const reader = startPerpetualReader(runtime);
+  try {
+    ctl.deliver({ type: 'assistant', content: 'anonymous' });
+    await settle();
+  } finally {
+    runtime.closed = true;
+    ctl.end();
+    await reader;
+    events.restore();
+  }
+
+  assert.equal(events.list.length, 0);
 });
 
 // ============================================================================

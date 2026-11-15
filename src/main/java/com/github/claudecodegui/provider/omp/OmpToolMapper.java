@@ -265,7 +265,7 @@ final class OmpToolMapper {
         }
         if (filePath == null) {
             // omp rewrites some paths before writing; only a plain one is known without the result.
-            if (!isPlainPath(path)) {
+            if (!isPlainPath(path, usesWindowsPathRules(cwd, File.separatorChar == '\\'))) {
                 return null;
             }
             filePath = absolute(path, cwd, home);
@@ -310,12 +310,25 @@ final class OmpToolMapper {
     }
 
     /**
+     * Whether omp applied Windows path rules in a session. On a Windows host a POSIX session
+     * directory means omp ran in WSL, where it writes POSIX paths as given; OmpHistoryReader
+     * reads the session's {@code ~} the same way. Without a session directory the host decides.
+     */
+    static boolean usesWindowsPathRules(String sessionCwd, boolean windowsHost) {
+        return windowsHost && (sessionCwd == null || !sessionCwd.startsWith("/"));
+    }
+
+    /**
      * Whether omp writes to {@code path} exactly as written (resolved against the session
      * directory, {@code ~} and {@code ~/} against home). Every other form is rewritten by omp
      * first ({@code @...}, {@code :...}, {@code ~name}, {@code [path#TAG]}, {@code archive:member}, ...),
      * so where it lands is only known from the result.
+     *
+     * <p>{@code windows} selects omp's Windows rules (see {@link #usesWindowsPathRules}). On
+     * Windows omp turns {@code /c/...} into a drive path, and any other leading slash is
+     * drive-relative, so no path starting with {@code /} is written as given there.
      */
-    static boolean isPlainPath(String path) {
+    static boolean isPlainPath(String path, boolean windows) {
         if (path == null || path.isEmpty() || !path.equals(path.strip())) {
             return false;
         }
@@ -330,7 +343,7 @@ final class OmpToolMapper {
         if (path.startsWith("~") && !"~".equals(path) && !path.startsWith("~/") && !path.startsWith("~\\")) {
             return false;
         }
-        if (File.separatorChar == '\\' && path.startsWith("/")) {
+        if (windows && path.startsWith("/")) {
             return false;
         }
         return (DRIVE_PREFIX.matcher(path).find() ? path.substring(2) : path).indexOf(':') < 0;

@@ -189,6 +189,16 @@ interface Window {
    */
   onTaskEvent?: (eventJson: string) => void;
 
+  /**
+   * Inter-turn rows from a background follow-up turn. Payload:
+   * { sessionId, message }, built by ClaudeChatWindow (the daemon already
+   * carries sessionId, and dropping it here would make every event fail the
+   * session guard). An assistant message appends a live bubble; a user row
+   * carrying tool_result blocks settles the matching tool card instead of
+   * rendering. A later updateMessages snapshot supersedes the appended copy.
+   */
+  onInterTurnMessage?: (json: string) => void;
+
   /** Structured native Codex app-server event envelope. */
   onCodexRuntimeEvent?: (eventJson: string) => void;
   /** Native Codex catalog/history response envelope. */

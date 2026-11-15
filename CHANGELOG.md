@@ -1,4 +1,4 @@
-##### **2026年11月14日（v0.6.6）**
+##### **2026年11月15日（v0.6.6）**
 
 English:
 
@@ -18,9 +18,11 @@ English:
 - **Update tokentracker-cli to 1.5.4** (#2041): older installs and running servers are upgraded automatically (by @Faq, @zhukunpenglinyutong)
 - **Smaller plugin**: unused bundled React, Babel and Marked libraries (3.4 MB) are removed (by @zhukunpenglinyutong)
 - **Security updates**: DOMPurify 3.4.17 and Mermaid 11.17.2 (by @zhukunpenglinyutong)
-- **Releases are tested first**: a tag release now runs the full test suite before it is published (by @zhukunpenglinyutong)
+- **Releases are tested first**: a tag release now runs the full test suite before it is published. Codex CLI 0.146 and 0.163 are checked on Linux, macOS and Windows, and the Java suite passes on Windows (#2083, #2085, #2087) (by @GGMGG, @Faq, @zhukunpenglinyutong)
 
 🐛 Fixes
+- **Project Claude settings load only in trusted projects** (#2057, #2059): in a project opened in Safe Mode, the repository's hooks, `.mcp.json` servers, CLAUDE.md, skills, agents, commands and permission rules are no longer loaded, so a cloned repository cannot run a hook or start an MCP server without asking. Your own settings still apply, and trusting the project in the IDE brings everything back on the next request. A one-time notice explains this and offers Trust Project. Older IDEs that open a recent project without a trust dialog count it as untrusted (by @Faq)
+- **Answers from background-task follow-ups appear in the chat** (#2069, #2070): when a background task finishes after the turn, the reply Claude writes about it is shown right away instead of staying invisible (by @8p98h2fgnd-max, @zhukunpenglinyutong)
 - **Keep All remembers edits by content** (#1875): accepted edits are matched by what they changed instead of their position in the transcript, so a repeated edit, an apply_patch rename or a finished subagent no longer comes back after Keep All (by @R-Tsubasa, @zhukunpenglinyutong)
 - **Keep your Codex configuration during CLI migration** (#1988): plugin model aliases move from `config.toml` into the `config.toml.ccgui` sidecar so Codex CLI 0.166 no longer warns or refuses `--strict-config`, and the previous file is backed up as `config.toml.pre-cli-migration*.bak`. Comments in `config.toml` are not kept when it is rewritten (by @GGMGG, @zhukunpenglinyutong)
 - **The six-hour runtime cap no longer kills active turns** (#1983, #2077): a long turn or a running background task is kept; only a runtime that is busy and silent for two hours is reclaimed, and that turn now ends with an error instead of freezing every chat (by @Faq, @zhukunpenglinyutong)
@@ -29,9 +31,12 @@ English:
 - **External links no longer replace the chat** (#2073): web links, including middle-clicked ones, open in the browser (by @romanbesedinskiy-jpg)
 - **Allow or deny MCP tools that ask with an empty form** (#2079, #2080) (by @Faq)
 - **Fenced code inside list items renders correctly** (#2046, #2066) (by @hebulin, @zhukunpenglinyutong)
+- **Codex settings failures are reported** (#2081, #2086): when Codex settings cannot be applied, a translated error appears and you can reopen the chat to retry (by @GGMGG)
+- **Supplier bindings follow the conversation** (#2086): a conversation started before any supplier was configured picks up the first one, and deleting a history entry also removes its supplier binding (by @GGMGG)
+- **Restore OMP writes from WSL sessions on Windows** (#2084): a restored write to an absolute Linux path shows as a Write card again (by @Faq)
 - **New sessions in a ZCode tab stay on ZCode**: after New Session or loading history in a ZCode tab, messages were sent to Claude (by @zhukunpenglinyutong)
 - **Supplier-bound chats apply effort and model changes in place**: changing effort or model no longer restarts the Claude CLI, opening `/context` no longer restarts it, and switching the Codex supplier no longer keeps the previous supplier's Ultra level. OMP receives its top level when Ultra was selected for Codex (by @zhukunpenglinyutong)
-- **Smaller fixes**: the context ring after a webview reload uses the conversation's supplier and the OMP, OpenCode and Grok context windows; OMP plan usage and models work from a Windows install path with spaces; Windows no longer flashes a console when a CLI is stopped; Grok cannot signal a reused process group; time-ago labels are localized in Russian, Chinese and Japanese; new strings are translated in all locales (by @zhukunpenglinyutong)
+- **Smaller fixes**: the context ring after a webview reload uses the conversation's supplier and the OMP, OpenCode and Grok context windows; OMP plan usage and models work from a Windows install path with spaces; Windows no longer flashes a console when a CLI is stopped; Grok cannot signal a reused process group; time-ago labels are localized in Russian, Chinese and Japanese; new strings are translated in all locales; Codex API deprecation notices meant for client developers no longer pop up; hovering a file link to a Windows network path no longer contacts the remote host; the token tracker proxy rejects dot segments in paths (by @zhukunpenglinyutong)
 
 中文：
 
@@ -51,9 +56,11 @@ English:
 - **tokentracker-cli 升级到 1.5.4**（#2041）：旧版本安装和正在运行的服务会自动升级（by @Faq、@zhukunpenglinyutong）
 - **插件体积更小**：移除未使用的内置 React、Babel 与 Marked 库（3.4 MB）（by @zhukunpenglinyutong）
 - **安全更新**：DOMPurify 升级到 3.4.17，Mermaid 升级到 11.17.2（by @zhukunpenglinyutong）
-- **发布前先跑测试**：打 tag 发布时会先运行完整测试套件，通过后才发布（by @zhukunpenglinyutong）
+- **发布前先跑测试**：打 tag 发布时会先运行完整测试套件，通过后才发布。Codex CLI 0.146 与 0.163 在 Linux、macOS、Windows 上做兼容性测试，Java 测试在 Windows 上全部通过（#2083、#2085、#2087）（by @GGMGG、@Faq、@zhukunpenglinyutong）
 
 🐛 修复
+- **只在受信任的项目中加载项目级 Claude 设置**（#2057、#2059）：以安全模式（Safe Mode）打开的项目不再加载仓库中的 hooks、`.mcp.json` 服务器、CLAUDE.md、skills、agents、commands 和权限规则，克隆下来的仓库无法在不询问的情况下运行 hook 或启动 MCP 服务器。你自己的设置仍然生效，在 IDE 中信任该项目后，下一次请求即恢复全部加载。插件会提示一次并提供“信任项目”入口。较旧的 IDE 打开最近项目时不弹信任对话框，这类项目会被视为不受信任（by @Faq）
+- **后台任务 follow-up 回合的回答会显示在聊天中**（#2069、#2070）：后台任务在回合结束后完成时，Claude 针对结果写的回复会立即显示，不再一直不可见（by @8p98h2fgnd-max、@zhukunpenglinyutong）
 - **Keep All 按内容记住已接受的编辑**（#1875）：已接受的编辑按改动内容匹配，不再按在记录中的位置匹配，重复编辑、apply_patch 重命名和已结束的子 agent 不会在 Keep All 后再次出现（by @R-Tsubasa、@zhukunpenglinyutong）
 - **CLI 迁移时保留 Codex 配置**（#1988）：插件的模型别名从 `config.toml` 移到 `config.toml.ccgui` 附属文件，Codex CLI 0.166 不再告警，也不会在 `--strict-config` 下拒绝启动；原文件备份为 `config.toml.pre-cli-migration*.bak`。重写 `config.toml` 时不会保留其中的注释（by @GGMGG、@zhukunpenglinyutong）
 - **六小时运行时上限不再终止进行中的回合**（#1983、#2077）：较长的回合和正在运行的后台任务会被保留；只有忙碌且两小时没有输出的运行时才会被回收，该回合会以错误结束，不再让所有对话卡住（by @Faq、@zhukunpenglinyutong）
@@ -62,9 +69,12 @@ English:
 - **外部链接不再替换聊天页面**（#2073）：网页链接（包括中键点击）会在浏览器中打开（by @romanbesedinskiy-jpg）
 - **表单为空的 MCP 工具审批可以允许或拒绝**（#2079、#2080）（by @Faq）
 - **列表项中的代码块正确渲染**（#2046、#2066）（by @hebulin、@zhukunpenglinyutong）
+- **Codex 设置应用失败时给出提示**（#2081、#2086）：Codex 设置无法应用时会显示已翻译的错误提示，可重新打开聊天重试（by @GGMGG）
+- **供应商绑定跟随对话**（#2086）：在尚未配置任何供应商时创建的对话会自动使用第一个供应商；删除历史记录时会一并删除其供应商绑定（by @GGMGG）
+- **Windows 上恢复 WSL 会话中的 OMP 写入**（#2084）：恢复历史时，写入 Linux 绝对路径的操作重新显示为 Write 卡片（by @Faq）
 - **ZCode 标签页中的新会话保持使用 ZCode**：此前在 ZCode 标签页新建会话或加载历史后，消息会被发送给 Claude（by @zhukunpenglinyutong）
 - **绑定供应商的对话原地应用推理强度和模型修改**：修改推理强度或模型不再重启 Claude CLI，打开 `/context` 也不再重启；切换 Codex 供应商后不再沿用上一个供应商的 Ultra 档位；为 Codex 选择 Ultra 后切到 OMP 时，OMP 使用其最高档位（by @zhukunpenglinyutong）
-- **其他修复**：webview 重新加载后，上下文圆环使用当前对话的供应商以及 OMP、OpenCode、Grok 的上下文窗口；从带空格的 Windows 安装路径启动时，OMP 套餐用量和模型列表可以正常读取；停止 CLI 时 Windows 不再闪出控制台窗口；Grok 不会再向被复用的进程组发送信号；俄语、中文和日语的相对时间标签完成本地化；新增文案已翻译为所有语言（by @zhukunpenglinyutong）
+- **其他修复**：webview 重新加载后，上下文圆环使用当前对话的供应商以及 OMP、OpenCode、Grok 的上下文窗口；从带空格的 Windows 安装路径启动时，OMP 套餐用量和模型列表可以正常读取；停止 CLI 时 Windows 不再闪出控制台窗口；Grok 不会再向被复用的进程组发送信号；俄语、中文和日语的相对时间标签完成本地化；新增文案已翻译为所有语言；面向客户端开发者的 Codex API 弃用通知不再弹出；在 Windows 上悬停指向网络路径的文件链接时不再访问远程主机；token tracker 代理拒绝路径中的 `.` / `..` 段（by @zhukunpenglinyutong）
 
 ---
 

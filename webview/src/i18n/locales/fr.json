@@ -179,6 +179,30 @@
     "backgroundTasksRunning_one": "{{count}} tâche en arrière-plan en cours",
     "backgroundTasksRunning_other": "{{count}} tâches en arrière-plan en cours",
     "stopBackgroundTasks": "Arrêter les tâches en arrière-plan",
+    "backgroundTasksPill": "{{count}} tâches en arrière-plan",
+    "backgroundTasksPill_one": "{{count}} tâche en arrière-plan",
+    "backgroundTasksPill_other": "{{count}} tâches en arrière-plan",
+    "backgroundTasksTitle": "Tâches en arrière-plan",
+    "backgroundTasksActive": "{{count}} en cours",
+    "backgroundTasksActive_one": "{{count}} en cours",
+    "backgroundTasksActive_other": "{{count}} en cours",
+    "backgroundTasksStopAfterAnswer": "Arrêt possible après la réponse",
+    "backgroundTaskDetails": {
+      "type": "Type",
+      "taskId": "ID de tâche",
+      "runId": "ID d'exécution",
+      "parent": "Tâche parente",
+      "elapsed": "En cours depuis"
+    },
+    "backgroundTaskTypes": {
+      "local_bash": "Commande",
+      "local_agent": "Sous-agent",
+      "remote_agent": "Agent distant",
+      "local_workflow": "Workflow",
+      "in_process_teammate": "Coéquipier",
+      "monitor_mcp": "Moniteur",
+      "other": "Tâche"
+    },
     "planUsage": {
       "balanceLabel": "Solde : ",
       "balanceRemaining": "Solde : {{value}}",
@@ -1328,7 +1352,10 @@
     "providerAdded": "Fournisseur ajouté",
     "providerUpdated": "Fournisseur mis à jour",
     "providerDeleted": "Fournisseur supprimé",
-    "codexSettingsDispatchFailed": "Impossible d'envoyer les paramètres Codex à l'IDE. Rouvrez la discussion et réessayez."
+    "codexSettingsDispatchFailed": "Impossible d'envoyer les paramètres Codex à l'IDE. Rouvrez la discussion et réessayez.",
+    "codexSettingsRuntimeInactive": "L’environnement d’exécution de Codex est inactif. Rouvrez la conversation et réessayez.",
+    "codexSettingsServiceUnavailable": "Le service Codex est indisponible. Rouvrez la conversation et réessayez.",
+    "codexSettingsUpdateFailed": "Impossible de confirmer les paramètres de Codex. Rouvrez la conversation et réessayez."
   },
   "config": {
     "clickToCopy": "Cliquer pour copier",

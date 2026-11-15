@@ -178,6 +178,19 @@ public class ClaudeSession {
         }
 
         /**
+         * Called when the ai-bridge perpetual reader forwards an assistant
+         * message body produced by a background follow-up turn (inter-turn).
+         *
+         * <p>These bodies never ride the normal [MESSAGE] stream because no user
+         * turn is active when the CLI generates them, and the session_updated
+         * reload that also recovers them from JSONL is best-effort. Forwarding
+         * them live lets the chat surface the AI's analysis of a completed
+         * background task without a manual reload.</p>
+         */
+        default void onInterTurnMessage(String messageJson) {
+        }
+
+        /**
          * Called when the native Codex app-server emits a structured runtime event.
          *
          * @param eventJson serialized event envelope
@@ -422,6 +435,73 @@ public class ClaudeSession {
      */
     public List<Message> getMessagesSnapshot() {
         return state.getMessagesSnapshot();
+    }
+
+    /**
+     * Append an inter-turn row forwarded by the ai-bridge perpetual reader to
+     * this session's message list.
+     *
+     * <p>These rows never ride the normal stream — no user turn is active when
+     * the CLI generates them — so without this the next {@code updateMessages}
+     * snapshot would be shorter than the frontend list (which appends its own
+     * live copy) and the positional shrink guard would misalign. Parsing goes
+     * through {@link MessageParser#parseServerMessage} so the live path and a
+     * history reload agree on what is a real row: sidechain rows, the
+     * {@code "No response requested."} placeholder and command-tag user rows
+     * are dropped, and a tool_result-only user row becomes the
+     * {@code "[tool_result]"} marker row the frontend already understands.</p>
+     *
+     * @param raw the SDK message object forwarded by the daemon
+     * @return false when a user turn already owns the tail, so the caller must
+     *         not forward the row either
+     */
+    public boolean appendInterTurnMessage(JsonObject raw) {
+        if (raw == null) {
+            return true;
+        }
+        Message parsed;
+        try {
+            parsed = messageParser.parseServerMessage(raw);
+        } catch (RuntimeException e) {
+            // A malformed row must not abort the caller: ClaudeChatWindow
+            // forwards the same payload to the webview immediately after this
+            // call, so throwing here would drop the live message entirely.
+            LOG.debug("[ClaudeSession] Skipping unparseable inter-turn message", e);
+            return true;
+        }
+        SessionState sessionState = state;
+        synchronized (sessionState.getMessageStateLock()) {
+            // A send publishes its question under this lock before the daemon waits
+            // for the CLI to go quiet, so later follow-up rows would land below it.
+            // ClaudeChatWindow reloads them in transcript order once the turn is idle.
+            if (sessionState.isBusy()) {
+                return false;
+            }
+            if (parsed == null) {
+                return true;
+            }
+            String uuid = rawUuid(parsed);
+            if (uuid != null) {
+                for (Message existing : sessionState.getMessagesReference()) {
+                    if (uuid.equals(rawUuid(existing))) {
+                        return true;
+                    }
+                }
+            }
+            sessionState.addMessage(parsed);
+        }
+        return true;
+    }
+
+    /**
+     * Read the CLI-assigned uuid of a message, or null when it carries none.
+     */
+    private static String rawUuid(Message message) {
+        JsonObject raw = message.raw;
+        if (raw == null || !raw.has("uuid") || raw.get("uuid").isJsonNull()) {
+            return null;
+        }
+        return raw.get("uuid").getAsString();
     }
 
     /**
@@ -972,10 +1052,22 @@ public class ClaudeSession {
     }
 
     private void initializeSupplierDefaults() {
-        CodemossSettingsService settings = new CodemossSettingsService();
+        initializeSupplierDefaults(new CodemossSettingsService());
+    }
+
+    void initializeSupplierDefaults(CodemossSettingsService settings) {
         for (String engine : List.of("claude", "codex")) {
-            if (state.getSupplierId(engine) == null) {
-                state.setSupplierId(engine, SessionSupplierCatalog.defaultId(settings, engine));
+            String current = state.getSupplierId(engine);
+            if (current != null && !SessionSupplierCatalog.UNAVAILABLE.equals(current)) {
+                continue;
+            }
+            String defaultId = SessionSupplierCatalog.defaultId(settings, engine);
+            synchronized (state.getMessageStateLock()) {
+                // Reading configuration must not overwrite an explicit selection made in the meantime.
+                current = state.getSupplierId(engine);
+                if (current == null || SessionSupplierCatalog.UNAVAILABLE.equals(current)) {
+                    state.setSupplierId(engine, defaultId);
+                }
             }
         }
     }

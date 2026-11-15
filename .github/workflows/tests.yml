@@ -115,7 +115,8 @@ jobs:
   # resolveWslHomeUncPath / resolveHomeForFileOps behave as on a developer's
   # Windows+WSL machine. The tests still Assume WSL availability, so they
   # self-skip if the distro fails to come up rather than producing false
-  # failures.
+  # failures. It also runs OmpHistoryRestoreTest, whose Windows-host path
+  # rules (a WSL session restored on Windows) the Linux job cannot reach.
   java-wsl:
     name: WSL integration tests (Windows)
     runs-on: windows-latest
@@ -167,3 +168,4 @@ jobs:
           --tests "com.github.claudecodegui.cli.CliStatusDetectorCodexWslTest"
           --tests "com.github.claudecodegui.handler.history.HistoryMessageInjectorTest.restoresLocalImageRecordedByCodexInWsl"
           --tests "com.github.claudecodegui.provider.codex.CodexSDKBridgeWslCwdTest"
+          --tests "com.github.claudecodegui.provider.omp.OmpHistoryRestoreTest"

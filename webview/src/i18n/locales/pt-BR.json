@@ -179,6 +179,30 @@
     "backgroundTasksRunning_one": "{{count}} tarefa em segundo plano em execução",
     "backgroundTasksRunning_other": "{{count}} tarefas em segundo plano em execução",
     "stopBackgroundTasks": "Parar tarefas em segundo plano",
+    "backgroundTasksPill": "{{count}} tarefas em segundo plano",
+    "backgroundTasksPill_one": "{{count}} tarefa em segundo plano",
+    "backgroundTasksPill_other": "{{count}} tarefas em segundo plano",
+    "backgroundTasksTitle": "Tarefas em segundo plano",
+    "backgroundTasksActive": "{{count}} em execução",
+    "backgroundTasksActive_one": "{{count}} em execução",
+    "backgroundTasksActive_other": "{{count}} em execução",
+    "backgroundTasksStopAfterAnswer": "Pode parar após a resposta",
+    "backgroundTaskDetails": {
+      "type": "Tipo",
+      "taskId": "ID da tarefa",
+      "runId": "ID da execução",
+      "parent": "Tarefa pai",
+      "elapsed": "Em execução há"
+    },
+    "backgroundTaskTypes": {
+      "local_bash": "Comando",
+      "local_agent": "Subagente",
+      "remote_agent": "Agente remoto",
+      "local_workflow": "Fluxo de trabalho",
+      "in_process_teammate": "Colega",
+      "monitor_mcp": "Monitor",
+      "other": "Tarefa"
+    },
     "planUsage": {
       "balanceLabel": "Saldo: ",
       "balanceRemaining": "Saldo: {{value}}",
@@ -1467,7 +1491,10 @@
     "providerAdded": "Provedor adicionado",
     "providerUpdated": "Provedor atualizado",
     "providerDeleted": "Provedor excluído",
-    "codexSettingsDispatchFailed": "Não foi possível enviar as configurações do Codex para a IDE. Reabra o chat e tente novamente."
+    "codexSettingsDispatchFailed": "Não foi possível enviar as configurações do Codex para a IDE. Reabra o chat e tente novamente.",
+    "codexSettingsRuntimeInactive": "O ambiente de execução do Codex está inativo. Reabra a conversa e tente novamente.",
+    "codexSettingsServiceUnavailable": "O serviço do Codex está indisponível. Reabra a conversa e tente novamente.",
+    "codexSettingsUpdateFailed": "Não foi possível confirmar as configurações do Codex. Reabra a conversa e tente novamente."
   },
   "config": {
     "clickToCopy": "Clique para copiar",

@@ -10,6 +10,7 @@ import com.github.claudecodegui.provider.dsh.DshHistoryReader;
 import com.github.claudecodegui.cache.SessionIndexCache;
 import com.github.claudecodegui.cache.SessionIndexManager;
 import com.github.claudecodegui.session.ClaudeSession;
+import com.github.claudecodegui.settings.SessionSupplierStateService;
 import com.github.claudecodegui.util.PathUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -56,11 +57,18 @@ class HistoryDeleteService {
     private final HandlerContext context;
     private final NodeJsServiceCaller nodeJsServiceCaller;
     private final HistoryLoadService historyLoadService;
+    private final SessionSupplierStateService sessionSuppliers;
 
     HistoryDeleteService(HandlerContext context, NodeJsServiceCaller nodeJsServiceCaller, HistoryLoadService historyLoadService) {
+        this(context, nodeJsServiceCaller, historyLoadService, SessionSupplierStateService.getInstance());
+    }
+
+    HistoryDeleteService(HandlerContext context, NodeJsServiceCaller nodeJsServiceCaller,
+                         HistoryLoadService historyLoadService, SessionSupplierStateService sessionSuppliers) {
         this.context = context;
         this.nodeJsServiceCaller = nodeJsServiceCaller;
         this.historyLoadService = historyLoadService;
+        this.sessionSuppliers = sessionSuppliers;
     }
 
     /**
@@ -172,7 +180,7 @@ class HistoryDeleteService {
                 }
             }
         }
-        cleanupSessionMetadata(deletedSessionIds);
+        cleanupSessionMetadata(currentProvider, deletedSessionIds);
 
         cleanupCache(currentProvider);
 
@@ -649,6 +657,15 @@ class HistoryDeleteService {
      * @param sessionIds the sessions whose files were deleted
      * @return true if both were cleaned up (or there was nothing to clean up)
      */
+    boolean cleanupSessionMetadata(String provider, List<String> sessionIds) {
+        if (sessionSuppliers != null) {
+            for (String sessionId : sessionIds) {
+                sessionSuppliers.removeSupplier(provider, sessionId);
+            }
+        }
+        return cleanupSessionMetadata(sessionIds);
+    }
+
     boolean cleanupSessionMetadata(List<String> sessionIds) {
         if (sessionIds.isEmpty()) {
             return true;

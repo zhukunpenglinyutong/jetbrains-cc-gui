@@ -354,6 +354,10 @@ export const ChatScreen = ({
 
       <ScrollControl containerRef={messagesContainerRef} inputAreaRef={inputAreaRef} />
 
+      {/* Zero-height anchor: its pill rides the status tabs' top border. */}
+      <ClaudeBackgroundTasksPanel provider={currentProvider} sessionId={currentSessionId}
+        foregroundActive={waiting} onStop={onInterrupt} />
+
       <StatusPanelErrorBoundary>
         <StatusPanel
           todos={globalTodos}
@@ -369,9 +373,6 @@ export const ChatScreen = ({
           onKeepAll={onKeepAll}
         />
       </StatusPanelErrorBoundary>
-
-      <ClaudeBackgroundTasksPanel provider={currentProvider} sessionId={currentSessionId}
-        foregroundActive={waiting} onStop={onInterrupt} />
 
       {currentProvider === 'codex' && onExecuteCodexPlan && onContinueCodexPlan && (
         <CodexPlanActions

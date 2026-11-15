@@ -225,7 +225,31 @@
     "backgroundTasksRunning": "{{count}} 个后台任务正在运行",
     "backgroundTasksRunning_one": "{{count}} 个后台任务正在运行",
     "backgroundTasksRunning_other": "{{count}} 个后台任务正在运行",
-    "stopBackgroundTasks": "停止后台任务"
+    "stopBackgroundTasks": "全部停止",
+    "backgroundTasksPill": "{{count}} 个后台任务",
+    "backgroundTasksPill_one": "{{count}} 个后台任务",
+    "backgroundTasksPill_other": "{{count}} 个后台任务",
+    "backgroundTasksTitle": "后台任务",
+    "backgroundTasksActive": "{{count}} 个运行中",
+    "backgroundTasksActive_one": "{{count}} 个运行中",
+    "backgroundTasksActive_other": "{{count}} 个运行中",
+    "backgroundTasksStopAfterAnswer": "回答结束后可停止",
+    "backgroundTaskDetails": {
+      "type": "类型",
+      "taskId": "任务 ID",
+      "runId": "运行 ID",
+      "parent": "父任务",
+      "elapsed": "已运行"
+    },
+    "backgroundTaskTypes": {
+      "local_bash": "命令",
+      "local_agent": "子代理",
+      "remote_agent": "远程代理",
+      "local_workflow": "工作流",
+      "in_process_teammate": "队友",
+      "monitor_mcp": "监控",
+      "other": "任务"
+    }
   },
   "settings": {
     "title": "设置",
@@ -1773,7 +1797,10 @@
     "providerAdded": "供应商添加成功",
     "providerUpdated": "供应商更新成功",
     "providerDeleted": "供应商删除成功",
-    "codexSettingsDispatchFailed": "无法将 Codex 设置发送到 IDE，请重新打开对话后重试。"
+    "codexSettingsDispatchFailed": "无法将 Codex 设置发送到 IDE，请重新打开对话后重试。",
+    "codexSettingsRuntimeInactive": "Codex 运行环境未启用，请重新打开对话后重试。",
+    "codexSettingsServiceUnavailable": "Codex 服务当前不可用，请重新打开对话后重试。",
+    "codexSettingsUpdateFailed": "无法确认 Codex 设置，请重新打开对话后重试。"
   },
   "config": {
     "clickToCopy": "点击复制",

@@ -179,6 +179,30 @@
     "backgroundTasksRunning_one": "{{count}} पृष्ठभूमि कार्य चल रहा है",
     "backgroundTasksRunning_other": "{{count}} पृष्ठभूमि कार्य चल रहे हैं",
     "stopBackgroundTasks": "पृष्ठभूमि कार्य रोकें",
+    "backgroundTasksPill": "{{count}} पृष्ठभूमि कार्य",
+    "backgroundTasksPill_one": "{{count}} पृष्ठभूमि कार्य",
+    "backgroundTasksPill_other": "{{count}} पृष्ठभूमि कार्य",
+    "backgroundTasksTitle": "पृष्ठभूमि कार्य",
+    "backgroundTasksActive": "{{count}} चल रहे हैं",
+    "backgroundTasksActive_one": "{{count}} चल रहा है",
+    "backgroundTasksActive_other": "{{count}} चल रहे हैं",
+    "backgroundTasksStopAfterAnswer": "उत्तर के बाद रोका जा सकता है",
+    "backgroundTaskDetails": {
+      "type": "प्रकार",
+      "taskId": "कार्य ID",
+      "runId": "रन ID",
+      "parent": "मूल कार्य",
+      "elapsed": "चलने का समय"
+    },
+    "backgroundTaskTypes": {
+      "local_bash": "कमांड",
+      "local_agent": "सबएजेंट",
+      "remote_agent": "रिमोट एजेंट",
+      "local_workflow": "वर्कफ़्लो",
+      "in_process_teammate": "साथी",
+      "monitor_mcp": "मॉनिटर",
+      "other": "कार्य"
+    },
     "planUsage": {
       "balanceLabel": "शेष राशि: ",
       "balanceRemaining": "शेष राशि: {{value}}",
@@ -1328,7 +1352,10 @@
     "providerAdded": "प्रदाता जोड़ा गया",
     "providerUpdated": "प्रदाता अपडेट किया गया",
     "providerDeleted": "प्रदाता हटाया गया",
-    "codexSettingsDispatchFailed": "Codex की सेटिंग IDE को नहीं भेजी जा सकी। चैट दोबारा खोलकर फिर कोशिश करें।"
+    "codexSettingsDispatchFailed": "Codex की सेटिंग IDE को नहीं भेजी जा सकी। चैट दोबारा खोलकर फिर कोशिश करें।",
+    "codexSettingsRuntimeInactive": "Codex रनटाइम निष्क्रिय है। चैट फिर से खोलें और दोबारा प्रयास करें।",
+    "codexSettingsServiceUnavailable": "Codex सेवा उपलब्ध नहीं है। चैट फिर से खोलें और दोबारा प्रयास करें।",
+    "codexSettingsUpdateFailed": "Codex सेटिंग्स की पुष्टि नहीं हो सकी। चैट फिर से खोलें और दोबारा प्रयास करें।"
   },
   "config": {
     "clickToCopy": "कॉपी करने के लिए क्लिक करें",

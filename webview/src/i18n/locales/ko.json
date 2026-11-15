@@ -179,6 +179,30 @@
     "backgroundTasksRunning_one": "백그라운드 작업 {{count}}개 실행 중",
     "backgroundTasksRunning_other": "백그라운드 작업 {{count}}개 실행 중",
     "stopBackgroundTasks": "백그라운드 작업 중지",
+    "backgroundTasksPill": "백그라운드 작업 {{count}}개",
+    "backgroundTasksPill_one": "백그라운드 작업 {{count}}개",
+    "backgroundTasksPill_other": "백그라운드 작업 {{count}}개",
+    "backgroundTasksTitle": "백그라운드 작업",
+    "backgroundTasksActive": "{{count}}개 실행 중",
+    "backgroundTasksActive_one": "{{count}}개 실행 중",
+    "backgroundTasksActive_other": "{{count}}개 실행 중",
+    "backgroundTasksStopAfterAnswer": "답변이 끝나면 중지할 수 있음",
+    "backgroundTaskDetails": {
+      "type": "유형",
+      "taskId": "작업 ID",
+      "runId": "실행 ID",
+      "parent": "상위 작업",
+      "elapsed": "실행 시간"
+    },
+    "backgroundTaskTypes": {
+      "local_bash": "명령",
+      "local_agent": "서브에이전트",
+      "remote_agent": "원격 에이전트",
+      "local_workflow": "워크플로",
+      "in_process_teammate": "팀원",
+      "monitor_mcp": "모니터",
+      "other": "작업"
+    },
     "planUsage": {
       "balanceLabel": "잔액: ",
       "balanceRemaining": "잔액: {{value}}",
@@ -1413,7 +1437,10 @@
     "providerAdded": "제공자 추가됨",
     "providerUpdated": "제공자 업데이트됨",
     "providerDeleted": "제공자 삭제됨",
-    "codexSettingsDispatchFailed": "Codex 설정을 IDE로 보낼 수 없습니다. 대화를 다시 열고 재시도하세요."
+    "codexSettingsDispatchFailed": "Codex 설정을 IDE로 보낼 수 없습니다. 대화를 다시 열고 재시도하세요.",
+    "codexSettingsRuntimeInactive": "Codex 실행 환경이 비활성 상태입니다. 채팅을 다시 열고 재시도하세요.",
+    "codexSettingsServiceUnavailable": "Codex 서비스를 사용할 수 없습니다. 채팅을 다시 열고 재시도하세요.",
+    "codexSettingsUpdateFailed": "Codex 설정을 확인하지 못했습니다. 채팅을 다시 열고 재시도하세요."
   },
   "config": {
     "clickToCopy": "클릭하여 복사",

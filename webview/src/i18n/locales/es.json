@@ -179,6 +179,30 @@
     "backgroundTasksRunning_one": "{{count}} tarea en segundo plano en ejecución",
     "backgroundTasksRunning_other": "{{count}} tareas en segundo plano en ejecución",
     "stopBackgroundTasks": "Detener tareas en segundo plano",
+    "backgroundTasksPill": "{{count}} tareas en segundo plano",
+    "backgroundTasksPill_one": "{{count}} tarea en segundo plano",
+    "backgroundTasksPill_other": "{{count}} tareas en segundo plano",
+    "backgroundTasksTitle": "Tareas en segundo plano",
+    "backgroundTasksActive": "{{count}} en ejecución",
+    "backgroundTasksActive_one": "{{count}} en ejecución",
+    "backgroundTasksActive_other": "{{count}} en ejecución",
+    "backgroundTasksStopAfterAnswer": "Se puede detener al terminar la respuesta",
+    "backgroundTaskDetails": {
+      "type": "Tipo",
+      "taskId": "ID de tarea",
+      "runId": "ID de ejecución",
+      "parent": "Tarea principal",
+      "elapsed": "En ejecución"
+    },
+    "backgroundTaskTypes": {
+      "local_bash": "Comando",
+      "local_agent": "Subagente",
+      "remote_agent": "Agente remoto",
+      "local_workflow": "Flujo de trabajo",
+      "in_process_teammate": "Compañero",
+      "monitor_mcp": "Monitor",
+      "other": "Tarea"
+    },
     "planUsage": {
       "balanceLabel": "Saldo: ",
       "balanceRemaining": "Saldo: {{value}}",
@@ -1328,7 +1352,10 @@
     "providerAdded": "Proveedor añadido",
     "providerUpdated": "Proveedor actualizado",
     "providerDeleted": "Proveedor eliminado",
-    "codexSettingsDispatchFailed": "No se puede enviar la configuración de Codex al IDE. Abre el chat de nuevo e inténtalo."
+    "codexSettingsDispatchFailed": "No se puede enviar la configuración de Codex al IDE. Abre el chat de nuevo e inténtalo.",
+    "codexSettingsRuntimeInactive": "El entorno de ejecución de Codex está inactivo. Vuelve a abrir el chat e inténtalo de nuevo.",
+    "codexSettingsServiceUnavailable": "El servicio de Codex no está disponible. Vuelve a abrir el chat e inténtalo de nuevo.",
+    "codexSettingsUpdateFailed": "No se pudo confirmar la configuración de Codex. Vuelve a abrir el chat e inténtalo de nuevo."
   },
   "config": {
     "clickToCopy": "Haz clic para copiar",

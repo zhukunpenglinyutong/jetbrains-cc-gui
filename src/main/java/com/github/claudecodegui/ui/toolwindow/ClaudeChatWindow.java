@@ -2736,6 +2736,46 @@ public class ClaudeChatWindow {
                     if (adapter != null && data.has("taskEvent") && !data.get("taskEvent").isJsonNull()) {
                         adapter.onTaskEvent(data.get("taskEvent").toString());
                     }
+                } else if ("inter_turn_message".equals(event)) {
+                    // Assistant body from a background follow-up turn, forwarded
+                    // by the ai-bridge perpetual reader's inter-turn branch (no
+                    // active turn means the [MESSAGE] stream cannot carry it and
+                    // the session_updated reload is best-effort). Mirror
+                    // task_event's session guard so a stale follow-up cannot leak
+                    // into a session the user has navigated to; a dropped event
+                    // is still recovered by the loadHistorySession reload when
+                    // the user switches back.
+                    String interTurnSessionId = data.has("sessionId") && data.get("sessionId").isJsonPrimitive()
+                            ? data.get("sessionId").getAsString() : null;
+                    if (interTurnSessionId == null) {
+                        LOG.warn("[ClaudeChatWindow] inter_turn_message event missing sessionId");
+                        return;
+                    }
+                    var interTurnAdapter = sessionCallbackAdapter;
+                    ClaudeSession interTurnSession = session;
+                    String interTurnCurrentSessionId = interTurnSession != null ? interTurnSession.getSessionId() : null;
+                    if (interTurnCurrentSessionId == null || !interTurnCurrentSessionId.equals(interTurnSessionId)) {
+                        return;
+                    }
+                    if (interTurnAdapter == null || !data.has("message") || !data.get("message").isJsonObject()) {
+                        return;
+                    }
+                    JsonObject interTurnRaw = data.getAsJsonObject("message");
+                    // Keep SessionState in sync with the frontend's live append:
+                    // otherwise the next updateMessages snapshot is one row
+                    // shorter and preserveLatestMessagesOnShrink misaligns its
+                    // positional tail. MessageParser applies the same filters a
+                    // history read would (placeholder, sidechain, command tags).
+                    if (interTurnSession.appendInterTurnMessage(interTurnRaw)) {
+                        interTurnAdapter.onInterTurnMessage(
+                                buildInterTurnMessagePayload(interTurnSessionId, interTurnRaw));
+                    } else {
+                        // The follow-up's own session_updated reload runs before this send's
+                        // stream starts and can read the transcript before the question is
+                        // written, so reload again once the turn is idle.
+                        deferredReload.defer(interTurnSessionId);
+                        scheduleDeferredReloadSafetyDrain();
+                    }
                 }
             };
             this.claudeSDKBridge.addDaemonEventListener(this.titleEventListener);
@@ -2797,8 +2837,10 @@ public class ClaudeChatWindow {
      *       path already drained it): stop polling.</li>
      *   <li>{@code RECHECK_LATER} — still parked but a stream or its final
      *       snapshot is active: reloading now would race the stream or clear the
-     *       live state before the snapshot is queued, so wait and re-check.</li>
-     *   <li>{@code DRAIN} — parked and the stream is idle: the safe point to
+     *       live state before the snapshot is queued, so wait and re-check. A
+     *       busy session counts too: a send waiting for the CLI to go quiet has
+     *       no stream yet, and a non-streaming turn never starts one.</li>
+     *   <li>{@code DRAIN} — parked and the turn is idle: the safe point to
      *       drain, even though no onStreamEnded edge arrived for this defer.</li>
      * </ul>
      */
@@ -2808,17 +2850,37 @@ public class ClaudeChatWindow {
             boolean disposed,
             boolean hasPending,
             boolean streamActive,
-            boolean snapshotBuildPending
+            boolean snapshotBuildPending,
+            boolean busy
     ) {
         if (disposed || !hasPending) {
             return SafetyDrainAction.DONE;
         }
-        return streamActive || snapshotBuildPending
+        return streamActive || snapshotBuildPending || busy
                 ? SafetyDrainAction.RECHECK_LATER : SafetyDrainAction.DRAIN;
     }
 
     static boolean shouldReconcileTranscriptAtStreamEnd(String provider, String sessionId) {
         return ("grok".equals(provider) || "zcode".equals(provider)) && sessionId != null && !sessionId.isBlank();
+    }
+
+    /**
+     * Build the envelope forwarded to {@code window.onInterTurnMessage}.
+     *
+     * <p>The daemon emits {@code {type:"daemon", event:"inter_turn_message",
+     * sessionId, message}}. Forwarding only {@code message} made the frontend's
+     * session guard see no {@code sessionId} and drop every real event, so the
+     * envelope shape is pinned here and in messageCallbacks.ts.</p>
+     *
+     * @param sessionId the session the event belongs to
+     * @param message   the SDK message object
+     * @return the JSON string handed to the webview callback
+     */
+    static String buildInterTurnMessagePayload(String sessionId, JsonObject message) {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("sessionId", sessionId);
+        payload.add("message", message);
+        return GSON.toJson(payload);
     }
 
     /** (Re)arm the safety backstop; overlapping arms collapse to one pending tick. */
@@ -2839,11 +2901,13 @@ public class ClaudeChatWindow {
     private void deferredReloadSafetyTick() {
         boolean streamActive = streamCoalescer != null && streamCoalescer.isStreamActive();
         boolean snapshotBuildPending = streamCoalescer != null && streamCoalescer.isSnapshotBuildPending();
+        ClaudeSession current = session;
         switch (decideDeferredReloadSafety(
                 disposed,
                 deferredReload.hasPending(),
                 streamActive,
-                snapshotBuildPending)) {
+                snapshotBuildPending,
+                current != null && current.isBusy())) {
             case DRAIN:
                 LOG.info("[ClaudeChatWindow] safety-draining deferred reload (no stream-end edge followed the defer)");
                 drainDeferredReload();
