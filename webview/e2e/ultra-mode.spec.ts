@@ -98,14 +98,29 @@ test('Claude Ultracode preserves effort and native background work stays visible
     window.updateLoadingStatus?.(false);
   });
   const panel = page.locator('.claude-background-tasks');
-  await expect(panel).toContainText('80 background tasks running');
-  await panel.locator('summary').click();
-  await expect(panel.locator('li')).toHaveCount(80);
+  const pill = panel.locator('.claude-bg-pill');
+  await expect(pill).toContainText('80 background tasks');
+  // The pill rides the status tabs' top border, above the last (Edits) tab.
+  const [pillBox, tabsBox, lastTabBox] = await Promise.all([pill.boundingBox(),
+    page.locator('.status-panel-tabs').boundingBox(), page.locator('.status-panel-tab').last().boundingBox()]);
+  expect(pillBox!.y).toBeLessThan(tabsBox!.y);
+  expect(pillBox!.y + pillBox!.height).toBeGreaterThan(tabsBox!.y);
+  expect(pillBox!.x + pillBox!.width).toBeLessThanOrEqual(tabsBox!.x + tabsBox!.width);
+  expect(pillBox!.x).toBeGreaterThanOrEqual(lastTabBox!.x - pillBox!.width);
+  await page.screenshot({ path: testInfo.outputPath('ultracode-background-pill.png'), animations: 'disabled' });
+  await pill.click();
+  const popover = panel.getByRole('dialog', { name: 'Background tasks' });
+  await expect(popover.locator('li')).toHaveCount(80);
+  const popoverBox = (await popover.boundingBox())!;
+  expect(popoverBox.y).toBeGreaterThanOrEqual(0);
+  expect(popoverBox.y + popoverBox.height).toBeLessThanOrEqual(page.viewportSize()!.height);
+  await popover.locator('.claude-bg-row').first().click();
+  await expect(popover).toContainText('workflow-0');
   await expect(page.locator('.submit-button:not(.stop-button)')).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('ultracode-background.png'), animations: 'disabled' });
-  await panel.getByRole('button', { name: 'Stop background tasks' }).click();
+  await popover.getByRole('button', { name: 'Stop background tasks' }).click();
   await expect.poll(() => page.evaluate(() => (window as any).__ultraMessages.some((line: string) => line.startsWith('interrupt_session:')))).toBe(true);
-  await expect(panel).toBeVisible();
+  await expect(pill).toBeVisible();
   await page.evaluate(() => window.onTaskEvent?.(JSON.stringify({ type: 'system', subtype: 'background_tasks_changed',
     session_id: 'ultra-claude-session', tasks: [] })));
   await expect(panel).toHaveCount(0);

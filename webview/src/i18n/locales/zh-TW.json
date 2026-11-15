@@ -183,7 +183,31 @@
     "backgroundTasksRunning": "{{count}} 個背景工作正在執行",
     "backgroundTasksRunning_one": "{{count}} 個背景工作正在執行",
     "backgroundTasksRunning_other": "{{count}} 個背景工作正在執行",
-    "stopBackgroundTasks": "停止背景工作"
+    "stopBackgroundTasks": "全部停止",
+    "backgroundTasksPill": "{{count}} 個背景工作",
+    "backgroundTasksPill_one": "{{count}} 個背景工作",
+    "backgroundTasksPill_other": "{{count}} 個背景工作",
+    "backgroundTasksTitle": "背景工作",
+    "backgroundTasksActive": "{{count}} 個執行中",
+    "backgroundTasksActive_one": "{{count}} 個執行中",
+    "backgroundTasksActive_other": "{{count}} 個執行中",
+    "backgroundTasksStopAfterAnswer": "回答結束後可停止",
+    "backgroundTaskDetails": {
+      "type": "類型",
+      "taskId": "工作 ID",
+      "runId": "執行 ID",
+      "parent": "父工作",
+      "elapsed": "已執行"
+    },
+    "backgroundTaskTypes": {
+      "local_bash": "指令",
+      "local_agent": "子代理",
+      "remote_agent": "遠端代理",
+      "local_workflow": "工作流程",
+      "in_process_teammate": "隊友",
+      "monitor_mcp": "監控",
+      "other": "工作"
+    }
   },
   "settings": {
     "title": "設定",

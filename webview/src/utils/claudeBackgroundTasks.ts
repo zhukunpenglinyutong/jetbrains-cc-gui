@@ -5,6 +5,8 @@ export interface ClaudeBackgroundTask {
   description: string;
   taskType: string;
   parentTaskId?: string;
+  /** First time this webview saw the task; events carry no start time, so a reload restarts it. */
+  startedAt: number;
 }
 
 interface BackgroundSnapshot {
@@ -41,6 +43,9 @@ export function receiveClaudeBackgroundTasks(raw: unknown, currentSessionId: str
   if (currentSessionId && event.session_id !== currentSessionId) return false;
   const tasks: ClaudeBackgroundTask[] = [];
   const seen = new Set<string>();
+  const startedAt = new Map<string, number>(snapshot.sessionId === event.session_id
+    ? snapshot.tasks.map(task => [JSON.stringify([task.taskId, task.runId]), task.startedAt] as const) : []);
+  const now = Date.now();
   for (const value of event.tasks) {
     if (!value || typeof value !== 'object') return false;
     const task = value as Record<string, unknown>;
@@ -53,7 +58,8 @@ export function receiveClaudeBackgroundTasks(raw: unknown, currentSessionId: str
     if (seen.has(key)) continue;
     seen.add(key);
     tasks.push({ taskId: task.task_id, runId, description: task.description, taskType: task.task_type,
-      parentTaskId: typeof task.parent_task_id === 'string' ? task.parent_task_id : undefined });
+      parentTaskId: typeof task.parent_task_id === 'string' ? task.parent_task_id : undefined,
+      startedAt: startedAt.get(key) ?? now });
   }
   replaceSnapshot({ sessionId: event.session_id, tasks });
   return true;

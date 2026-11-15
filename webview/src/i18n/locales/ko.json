@@ -179,6 +179,30 @@
     "backgroundTasksRunning_one": "백그라운드 작업 {{count}}개 실행 중",
     "backgroundTasksRunning_other": "백그라운드 작업 {{count}}개 실행 중",
     "stopBackgroundTasks": "백그라운드 작업 중지",
+    "backgroundTasksPill": "백그라운드 작업 {{count}}개",
+    "backgroundTasksPill_one": "백그라운드 작업 {{count}}개",
+    "backgroundTasksPill_other": "백그라운드 작업 {{count}}개",
+    "backgroundTasksTitle": "백그라운드 작업",
+    "backgroundTasksActive": "{{count}}개 실행 중",
+    "backgroundTasksActive_one": "{{count}}개 실행 중",
+    "backgroundTasksActive_other": "{{count}}개 실행 중",
+    "backgroundTasksStopAfterAnswer": "답변이 끝나면 중지할 수 있음",
+    "backgroundTaskDetails": {
+      "type": "유형",
+      "taskId": "작업 ID",
+      "runId": "실행 ID",
+      "parent": "상위 작업",
+      "elapsed": "실행 시간"
+    },
+    "backgroundTaskTypes": {
+      "local_bash": "명령",
+      "local_agent": "서브에이전트",
+      "remote_agent": "원격 에이전트",
+      "local_workflow": "워크플로",
+      "in_process_teammate": "팀원",
+      "monitor_mcp": "모니터",
+      "other": "작업"
+    },
     "planUsage": {
       "balanceLabel": "잔액: ",
       "balanceRemaining": "잔액: {{value}}",

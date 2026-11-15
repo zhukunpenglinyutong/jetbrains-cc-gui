@@ -179,6 +179,30 @@
     "backgroundTasksRunning_one": "{{count}} tâche en arrière-plan en cours",
     "backgroundTasksRunning_other": "{{count}} tâches en arrière-plan en cours",
     "stopBackgroundTasks": "Arrêter les tâches en arrière-plan",
+    "backgroundTasksPill": "{{count}} tâches en arrière-plan",
+    "backgroundTasksPill_one": "{{count}} tâche en arrière-plan",
+    "backgroundTasksPill_other": "{{count}} tâches en arrière-plan",
+    "backgroundTasksTitle": "Tâches en arrière-plan",
+    "backgroundTasksActive": "{{count}} en cours",
+    "backgroundTasksActive_one": "{{count}} en cours",
+    "backgroundTasksActive_other": "{{count}} en cours",
+    "backgroundTasksStopAfterAnswer": "Arrêt possible après la réponse",
+    "backgroundTaskDetails": {
+      "type": "Type",
+      "taskId": "ID de tâche",
+      "runId": "ID d'exécution",
+      "parent": "Tâche parente",
+      "elapsed": "En cours depuis"
+    },
+    "backgroundTaskTypes": {
+      "local_bash": "Commande",
+      "local_agent": "Sous-agent",
+      "remote_agent": "Agent distant",
+      "local_workflow": "Workflow",
+      "in_process_teammate": "Coéquipier",
+      "monitor_mcp": "Moniteur",
+      "other": "Tâche"
+    },
     "planUsage": {
       "balanceLabel": "Solde : ",
       "balanceRemaining": "Solde : {{value}}",

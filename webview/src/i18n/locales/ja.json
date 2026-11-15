@@ -179,6 +179,30 @@
     "backgroundTasksRunning_one": "{{count}} 件のバックグラウンドタスクを実行中",
     "backgroundTasksRunning_other": "{{count}} 件のバックグラウンドタスクを実行中",
     "stopBackgroundTasks": "バックグラウンドタスクを停止",
+    "backgroundTasksPill": "{{count}} 件のバックグラウンドタスク",
+    "backgroundTasksPill_one": "{{count}} 件のバックグラウンドタスク",
+    "backgroundTasksPill_other": "{{count}} 件のバックグラウンドタスク",
+    "backgroundTasksTitle": "バックグラウンドタスク",
+    "backgroundTasksActive": "{{count}} 件実行中",
+    "backgroundTasksActive_one": "{{count}} 件実行中",
+    "backgroundTasksActive_other": "{{count}} 件実行中",
+    "backgroundTasksStopAfterAnswer": "回答終了後に停止できます",
+    "backgroundTaskDetails": {
+      "type": "種類",
+      "taskId": "タスク ID",
+      "runId": "実行 ID",
+      "parent": "親タスク",
+      "elapsed": "実行時間"
+    },
+    "backgroundTaskTypes": {
+      "local_bash": "コマンド",
+      "local_agent": "サブエージェント",
+      "remote_agent": "リモートエージェント",
+      "local_workflow": "ワークフロー",
+      "in_process_teammate": "チームメイト",
+      "monitor_mcp": "モニター",
+      "other": "タスク"
+    },
     "planUsage": {
       "balanceLabel": "残高：",
       "balanceRemaining": "残高：{{value}}",

@@ -179,6 +179,30 @@
     "backgroundTasksRunning_one": "{{count}} पृष्ठभूमि कार्य चल रहा है",
     "backgroundTasksRunning_other": "{{count}} पृष्ठभूमि कार्य चल रहे हैं",
     "stopBackgroundTasks": "पृष्ठभूमि कार्य रोकें",
+    "backgroundTasksPill": "{{count}} पृष्ठभूमि कार्य",
+    "backgroundTasksPill_one": "{{count}} पृष्ठभूमि कार्य",
+    "backgroundTasksPill_other": "{{count}} पृष्ठभूमि कार्य",
+    "backgroundTasksTitle": "पृष्ठभूमि कार्य",
+    "backgroundTasksActive": "{{count}} चल रहे हैं",
+    "backgroundTasksActive_one": "{{count}} चल रहा है",
+    "backgroundTasksActive_other": "{{count}} चल रहे हैं",
+    "backgroundTasksStopAfterAnswer": "उत्तर के बाद रोका जा सकता है",
+    "backgroundTaskDetails": {
+      "type": "प्रकार",
+      "taskId": "कार्य ID",
+      "runId": "रन ID",
+      "parent": "मूल कार्य",
+      "elapsed": "चलने का समय"
+    },
+    "backgroundTaskTypes": {
+      "local_bash": "कमांड",
+      "local_agent": "सबएजेंट",
+      "remote_agent": "रिमोट एजेंट",
+      "local_workflow": "वर्कफ़्लो",
+      "in_process_teammate": "साथी",
+      "monitor_mcp": "मॉनिटर",
+      "other": "कार्य"
+    },
     "planUsage": {
       "balanceLabel": "शेष राशि: ",
       "balanceRemaining": "शेष राशि: {{value}}",

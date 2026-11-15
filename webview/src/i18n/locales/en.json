@@ -225,7 +225,31 @@
     "backgroundTasksRunning": "{{count}} background tasks running",
     "backgroundTasksRunning_one": "{{count}} background task running",
     "backgroundTasksRunning_other": "{{count}} background tasks running",
-    "stopBackgroundTasks": "Stop background tasks"
+    "stopBackgroundTasks": "Stop background tasks",
+    "backgroundTasksPill": "{{count}} background tasks",
+    "backgroundTasksPill_one": "{{count}} background task",
+    "backgroundTasksPill_other": "{{count}} background tasks",
+    "backgroundTasksTitle": "Background tasks",
+    "backgroundTasksActive": "{{count}} running",
+    "backgroundTasksActive_one": "{{count}} running",
+    "backgroundTasksActive_other": "{{count}} running",
+    "backgroundTasksStopAfterAnswer": "Can stop after the answer",
+    "backgroundTaskDetails": {
+      "type": "Type",
+      "taskId": "Task ID",
+      "runId": "Run ID",
+      "parent": "Parent",
+      "elapsed": "Running for"
+    },
+    "backgroundTaskTypes": {
+      "local_bash": "Command",
+      "local_agent": "Subagent",
+      "remote_agent": "Remote agent",
+      "local_workflow": "Workflow",
+      "in_process_teammate": "Teammate",
+      "monitor_mcp": "Monitor",
+      "other": "Task"
+    }
   },
   "settings": {
     "title": "Settings",
