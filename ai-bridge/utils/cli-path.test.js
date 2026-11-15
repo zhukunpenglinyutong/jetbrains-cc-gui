@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, mkdirSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, join, normalize } from 'node:path';
 import {
@@ -542,21 +542,27 @@ test('resolveCliPath skips a dead home shim and falls through to the next candid
   assert.equal(normalize(resolved), normalize(join(freshDir, `${name}.cmd`)));
 });
 
+function envWithoutOpenCodeOverrides() {
+  return Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => !/^(path|opencode_bin|opencode_path|opencode_cli_path)$/i.test(key)),
+  );
+}
+
 test('resolveOpenCodeCliPath falls back to the desktop app binary opencode-cli on PATH (#2019)', () => {
   const dir = mkdtempSync(join(tmpdir(), 'ccgui-opencode-cli-'));
   const file = join(dir, process.platform === 'win32' ? 'opencode-cli.exe' : 'opencode-cli');
   writeFileSync(file, '', { mode: 0o755 });
-  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toLowerCase() !== 'path'));
+  const env = envWithoutOpenCodeOverrides();
   const systemDirs = process.platform === 'win32' ? [join(process.env.SystemRoot, 'System32')] : ['/usr/bin', '/bin'];
   env[process.platform === 'win32' ? 'Path' : 'PATH'] = [dir, ...systemDirs].join(delimiter);
   const resolved = resolveOpenCodeCliPath(env);
-  assert.equal(normalize(resolved).toLowerCase(), normalize(file).toLowerCase());
+  assert.equal(realpathSync.native(resolved).toLowerCase(), realpathSync.native(file).toLowerCase());
 });
 
 test('resolveOpenCodeCliPath honors the OPENCODE_CLI_PATH override', () => {
   const dir = mkdtempSync(join(tmpdir(), 'ccgui-opencode-override-'));
   const file = join(dir, process.platform === 'win32' ? 'custom.exe' : 'custom');
   writeFileSync(file, '', { mode: 0o755 });
-  const resolved = resolveOpenCodeCliPath({ ...process.env, OPENCODE_CLI_PATH: file });
-  assert.equal(normalize(resolved).toLowerCase(), normalize(file).toLowerCase());
+  const resolved = resolveOpenCodeCliPath({ ...envWithoutOpenCodeOverrides(), OPENCODE_CLI_PATH: file });
+  assert.equal(realpathSync.native(resolved).toLowerCase(), realpathSync.native(file).toLowerCase());
 });

@@ -751,29 +751,16 @@ export function resolveKimiCliPath() {
  */
 export function resolveOpenCodeCliPath(env = process.env) {
   const envKeys = ['OPENCODE_BIN', 'OPENCODE_PATH', 'OPENCODE_CLI_PATH'];
-  const opencode = resolveCliPath({
-    binaryName: 'opencode',
-    envKeys,
-    env,
-    homeCandidates: [
-      '{home}/.opencode/bin/{bin}',
-      '{home}/.local/bin/{bin}',
-      '{home}/.local/share/opencode/bin/{bin}',
-    ],
-  });
+  const homeCandidates = [
+    '{home}/.opencode/bin/{bin}',
+    '{home}/.local/bin/{bin}',
+    '{home}/.local/share/opencode/bin/{bin}',
+  ];
+  const opencode = resolveCliPath({ binaryName: 'opencode', envKeys, env, homeCandidates });
   if (opencode !== 'opencode') {
     return opencode;
   }
-  const desktopCli = resolveCliPath({
-    binaryName: 'opencode-cli',
-    envKeys,
-    env,
-    homeCandidates: [
-      '{home}/.opencode/bin/{bin}',
-      '{home}/.local/bin/{bin}',
-      '{home}/.local/share/opencode/bin/{bin}',
-    ],
-  });
+  const desktopCli = resolveCliPath({ binaryName: 'opencode-cli', envKeys, env, homeCandidates });
   // resolveCliPath returns the bare name when nothing resolved; keep `opencode`
   // as the unresolved fallback so error messages stay unchanged.
   return desktopCli !== 'opencode-cli' ? desktopCli : opencode;
