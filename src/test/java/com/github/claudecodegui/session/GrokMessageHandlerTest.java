@@ -1,6 +1,7 @@
 package com.github.claudecodegui.session;
 
 import com.github.claudecodegui.permission.PermissionRequest;
+import com.github.claudecodegui.provider.common.SDKResult;
 import com.github.claudecodegui.provider.grok.GrokUsageLedger;
 import com.github.claudecodegui.session.ClaudeSession.Message;
 import com.google.gson.JsonObject;
@@ -13,6 +14,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
@@ -60,6 +63,48 @@ public class GrokMessageHandlerTest {
         CallbackHandler callbacks = new CallbackHandler();
         callbacks.setCallback(callback);
         return new GrokMessageHandler(state, callbacks);
+    }
+
+    @Test
+    public void previousTurnCallbacksCannotTouchTheNextTurn() {
+        SessionState state = new SessionState();
+        state.beginTurn();
+        RecordingCallback recorded = new RecordingCallback();
+        GrokMessageHandler previous = newHandler(state, recorded);
+        previous.onMessage("stream_start", "");
+
+        // Stop or stream_end lets the user send again before the old agent reports back.
+        state.beginTurn();
+        GrokMessageHandler current = newHandler(state, recorded);
+        current.onMessage("stream_start", "");
+        int snapshots = recorded.messageSnapshots.size();
+
+        previous.onMessage("content_delta", "stale answer");
+        previous.onError("old agent exited");
+        previous.onComplete(new SDKResult());
+
+        assertTrue(state.isBusy());
+        assertTrue(state.isLoading());
+        assertNull(state.getError());
+        assertEquals(snapshots, recorded.messageSnapshots.size());
+        assertFalse(state.getMessages().stream().anyMatch(m -> m.type == Message.Type.ERROR));
+    }
+
+    @Test
+    public void replacedSessionIgnoresOldGrokCallbacks() {
+        SessionState state = new SessionState();
+        state.beginTurn();
+        GrokMessageHandler previous = newHandler(state);
+        state.rotateRuntimeSessionEpoch();
+        state.beginTurn();
+
+        previous.onMessage("session_id", "old-session");
+        previous.onError("old error");
+        previous.onComplete(new SDKResult());
+
+        assertNull(state.getSessionId());
+        assertNull(state.getError());
+        assertTrue(state.isBusy());
     }
 
     @Test

@@ -41,9 +41,7 @@ public class CodexMessageHandler implements MessageCallback {
      * state.
      */
     private final SessionState state;
-    private final Object turnOwner;
-    private final String runtimeSessionEpoch;
-    private final String executionBindingEpoch;
+    private final TurnGuard turnGuard;
     private final SessionExecutionState.Turn executionTurn;
     private final Map<String, SessionExecutionState.Interaction> executionInteractions = new HashMap<>();
 
@@ -119,9 +117,7 @@ public class CodexMessageHandler implements MessageCallback {
     private CodexMessageHandler(SessionState state, CallbackHandler callbackHandler,
                                 boolean reportStateErrors, String clientMessageId, Object turnOwner) {
         this.state = state;
-        this.turnOwner = turnOwner;
-        this.runtimeSessionEpoch = state.getRuntimeSessionEpoch();
-        this.executionBindingEpoch = state.getExecutionSnapshot().bindingEpoch();
+        this.turnGuard = new TurnGuard(state, turnOwner);
         this.executionTurn = state.executionTurnForOwner(turnOwner);
         this.callbackHandler = callbackHandler;
         this.reportStateErrors = reportStateErrors;
@@ -287,8 +283,7 @@ public class CodexMessageHandler implements MessageCallback {
     // ===== Private methods =====
 
     private boolean ownsBindingAndTurn() {
-        return state.isCurrentTurn(turnOwner) && runtimeSessionEpoch.equals(state.getRuntimeSessionEpoch())
-                && state.getExecutionState().isCurrentBinding(executionBindingEpoch);
+        return turnGuard.ownsCurrentTurn();
     }
 
     private void observeExecution(String type) {
