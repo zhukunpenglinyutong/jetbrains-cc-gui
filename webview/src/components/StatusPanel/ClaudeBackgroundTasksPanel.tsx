@@ -29,15 +29,15 @@ function useFitToWindow(rootRef: RefObject<HTMLDivElement | null>, active: boole
     const root = rootRef.current;
     if (!active || !root) return;
     const fitToWindow = () => {
-      // The anchor has zero height; the popover keeps 16px clear of it for the pill.
+      // The anchor has zero height; opening above, the popover clears the pill (38px), below it keeps 16px.
       const top = root.getBoundingClientRect().top;
       const headerBottom = document.querySelector('.header')?.getBoundingClientRect().bottom ?? 0;
-      const above = Math.max(0, top - headerBottom - 24);
+      const above = Math.max(0, top - headerBottom - 46);
       const below = Math.max(0, window.innerHeight - top - 24);
       const opensAbove = above >= 240 || above >= below;
       root.style.setProperty('--claude-bg-available-height', `${opensAbove ? above : below}px`);
       root.style.setProperty('--claude-bg-popover-top', opensAbove ? 'auto' : '16px');
-      root.style.setProperty('--claude-bg-popover-bottom', opensAbove ? '16px' : 'auto');
+      root.style.setProperty('--claude-bg-popover-bottom', opensAbove ? '38px' : 'auto');
     };
     fitToWindow();
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(fitToWindow);

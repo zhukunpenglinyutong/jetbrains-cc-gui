@@ -11,7 +11,8 @@
 .claude-bg-pill {
   position: absolute;
   right: 12px;
-  top: -11px;
+  /* Fully above the tabs so it never covers the last tab. */
+  top: -32px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -57,7 +58,7 @@
   position: absolute;
   right: 0;
   top: var(--claude-bg-popover-top, auto);
-  bottom: var(--claude-bg-popover-bottom, 16px);
+  bottom: var(--claude-bg-popover-bottom, 38px);
   display: flex;
   flex-direction: column;
   width: min(420px, 100%);
