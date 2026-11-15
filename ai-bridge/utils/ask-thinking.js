@@ -113,3 +113,35 @@ export async function createWithThinkingFallback(create, request, { onRetry } = 
     return create(retry);
   }
 }
+
+const NON_STREAMING_ATTEMPTS = 2;
+const NON_STREAMING_RETRY_DELAY_MS = 500;
+
+/**
+ * Fallback for an ask whose stream came back with no text. Some
+ * Anthropic-compatible relays (e.g. DeepSeek, #1805) intermittently stream
+ * empty text while the plain create() JSON answer maps text blocks reliably.
+ * Tries twice; returns '' when both answers are empty. Does not log, for the
+ * same daemon-stdout reason as createWithThinkingFallback.
+ * @param {() => Promise<any>} createOnce sends one non-streaming request
+ * @param {{ onAttempt?: (attempt: number, textLength: number) => void }} [options]
+ * @returns {Promise<string>}
+ */
+export async function askNonStreamingText(createOnce, { onAttempt } = {}) {
+  for (let attempt = 1; attempt <= NON_STREAMING_ATTEMPTS; attempt += 1) {
+    const response = await createOnce();
+    const content = Array.isArray(response?.content) ? response.content : [];
+    const text = content
+      .filter((block) => block?.type === 'text' && block.text)
+      .map((block) => block.text)
+      .join('');
+    onAttempt?.(attempt, text.length);
+    if (text.trim()) {
+      return text;
+    }
+    if (attempt < NON_STREAMING_ATTEMPTS) {
+      await new Promise((resolve) => setTimeout(resolve, NON_STREAMING_RETRY_DELAY_MS));
+    }
+  }
+  return '';
+}

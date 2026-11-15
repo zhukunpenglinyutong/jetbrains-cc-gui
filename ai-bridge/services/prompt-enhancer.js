@@ -22,7 +22,7 @@ import {
   getCliUserAgent,
 } from '../config/api-config.js';
 import { resolveModelFromSettings, resolveSdkModelName } from '../utils/model-utils.js';
-import { buildAskThinkingFields, createWithThinkingFallback } from '../utils/ask-thinking.js';
+import { askNonStreamingText, buildAskThinkingFields, createWithThinkingFallback } from '../utils/ask-thinking.js';
 import { getRealHomeDir, isMainEntryModule } from '../utils/path-utils.js';
 import { getClaudeCliPathOverride } from '../utils/claude-cli-path.js';
 import { ensureAnthropicSdk } from './claude/message-utils.js';
@@ -427,6 +427,47 @@ export function buildEnhanceAskRequest(modelId, fullPrompt, systemPrompt, maxTok
 }
 
 /**
+ * Stream one enhancement ask, falling back to a non-streaming call when the
+ * stream carries no text (same relay quirk as commit-message.js, #1805).
+ * Exposed for tests.
+ * @returns {Promise<string>} the answer text, '' when both paths were empty
+ */
+export async function runEnhanceAsk(client, request) {
+  const onRetry = (err) =>
+    console.log(`[PromptEnhancer] ${request.model} rejected the thinking setting, retrying without it: ${String(err.message).slice(0, 200)}`);
+  console.log('[PromptEnhancer] Streaming via Anthropic SDK messages.create({stream: true})...');
+
+  let streamedText = '';
+  // Not messages.stream(): its message accumulator assumes the official SSE shape and
+  // throws "Cannot read properties of undefined (reading 'push')" when an upstream omits
+  // `content` from message_start (observed on OpenCode Go behind a local proxy). Iterating
+  // the raw events only needs the deltas we care about, and ignores thinking blocks.
+  const stream = await createWithThinkingFallback(
+    (req) => client.messages.create({ ...req, stream: true }),
+    request,
+    { onRetry },
+  );
+
+  for await (const event of stream) {
+    if (event.type === 'content_block_delta' && event.delta && event.delta.type === 'text_delta' && event.delta.text) {
+      emitContentDelta(event.delta.text);
+      streamedText += event.delta.text;
+    }
+  }
+
+  console.log(`[PromptEnhancer] Claude ask response length: ${streamedText.length}`);
+  if (streamedText.trim()) {
+    return streamedText;
+  }
+
+  console.log('[PromptEnhancer] Empty stream, retrying with non-streaming messages.create()...');
+  return askNonStreamingText(
+    () => createWithThinkingFallback((req) => client.messages.create(req), request, { onRetry }),
+    { onAttempt: (attempt, length) => console.log(`[PromptEnhancer] Non-streaming attempt ${attempt} text length: ${length}`) },
+  );
+}
+
+/**
  * Fast Claude path: Anthropic SDK messages.stream (no Agent SDK cold start).
  * Native SSE token streaming via .on('text').
  */
@@ -468,31 +509,9 @@ async function enhancePromptWithClaudeAsk(originalPrompt, systemPrompt, model, c
   }
   const client = new Anthropic(clientOpts);
 
-  console.log('[PromptEnhancer] Streaming via Anthropic SDK messages.create({stream: true})...');
-
-  let streamedText = '';
-  // Not messages.stream(): its message accumulator assumes the official SSE shape and
-  // throws "Cannot read properties of undefined (reading 'push')" when an upstream omits
-  // `content` from message_start (observed on OpenCode Go behind a local proxy). Iterating
-  // the raw events only needs the deltas we care about, and ignores thinking blocks.
-  const stream = await createWithThinkingFallback(
-    (request) => client.messages.create({ ...request, stream: true }),
-    buildEnhanceAskRequest(modelId, fullPrompt, systemPrompt, maxTokens),
-    {
-      onRetry: (err) => console.log(`[PromptEnhancer] ${modelId} rejected the thinking setting, retrying without it: ${String(err.message).slice(0, 200)}`),
-    },
-  );
-
-  for await (const event of stream) {
-    if (event.type === 'content_block_delta' && event.delta && event.delta.type === 'text_delta' && event.delta.text) {
-      emitContentDelta(event.delta.text);
-      streamedText += event.delta.text;
-    }
-  }
-
-  console.log(`[PromptEnhancer] Claude ask response length: ${streamedText.length}`);
-  if (streamedText.trim()) {
-    return streamedText.trim();
+  const text = await runEnhanceAsk(client, buildEnhanceAskRequest(modelId, fullPrompt, systemPrompt, maxTokens));
+  if (text.trim()) {
+    return text.trim();
   }
   throw new Error('Claude enhancement response is empty');
 }

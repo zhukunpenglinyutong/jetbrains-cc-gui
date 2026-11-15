@@ -29,7 +29,7 @@ import {
   getCliUserAgent,
 } from '../config/api-config.js';
 import { resolveModelFromSettings, resolveSdkModelName } from '../utils/model-utils.js';
-import { buildAskThinkingFields, createWithThinkingFallback } from '../utils/ask-thinking.js';
+import { askNonStreamingText, buildAskThinkingFields, createWithThinkingFallback } from '../utils/ask-thinking.js';
 import { getRealHomeDir, isMainEntryModule } from '../utils/path-utils.js';
 import { getClaudeCliPathOverride } from '../utils/claude-cli-path.js';
 import { ensureAnthropicSdk } from './claude/message-utils.js';
@@ -209,29 +209,13 @@ async function generateWithClaudeAsk(prompt, model, config) {
  * Exposed for tests.
  */
 export async function askClaudeNonStreaming(client, modelId, prompt) {
-  const ATTEMPTS = 2;
-  for (let attempt = 1; attempt <= ATTEMPTS; attempt += 1) {
-    console.log(`[CommitMessage] Non-streaming messages.create() attempt ${attempt}/${ATTEMPTS}...`);
-    // Same request shape as the streaming ask path: reasoning models (DeepSeek)
-    // otherwise spend the whole budget on thinking blocks and emit no text.
-    const response = await createCommitAsk((request) => client.messages.create(request), modelId, prompt);
-    let text = '';
-    if (response && Array.isArray(response.content)) {
-      for (const block of response.content) {
-        if (block && block.type === 'text' && block.text) {
-          text += block.text;
-        }
-      }
-    }
-    console.log(`[CommitMessage] Non-streaming attempt ${attempt} text length: ${text.length}`);
-    if (text.trim()) {
-      return text;
-    }
-    if (attempt < ATTEMPTS) {
-      await new Promise((resolve) => setTimeout(resolve, 500));
-    }
-  }
-  return '';
+  console.log('[CommitMessage] Empty stream, retrying with non-streaming messages.create()...');
+  // Same request shape as the streaming ask path: reasoning models (DeepSeek)
+  // otherwise spend the whole budget on thinking blocks and emit no text.
+  return askNonStreamingText(
+    () => createCommitAsk((request) => client.messages.create(request), modelId, prompt),
+    { onAttempt: (attempt, length) => console.log(`[CommitMessage] Non-streaming attempt ${attempt} text length: ${length}`) },
+  );
 }
 
 /**
