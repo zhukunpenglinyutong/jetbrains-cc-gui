@@ -104,10 +104,6 @@ interface Window {
    */
   onContextUsageError?: (message: string, requestId?: string) => void;
 
-  /**
-   * Add single history message (used for Codex session loading)
-   */
-  addHistoryMessage?: (message: any) => void;
   onSubagentHistoryChunk?: (transferId: string, chunk: string, isFinal: string | boolean) => void;
   beginCodexHistoryPage?: (json: string) => void;
   appendCodexHistoryPageBatch?: (pageId: string, json: string) => void;
@@ -390,8 +386,6 @@ interface Window {
   /** Update Codex MCP server tools list. */
   updateCodexMcpServerTools?: (json: string) => void;
 
-  mcpServerToggled?: (json: string) => void;
-
   /**
    * Update Codex MCP servers list (from ~/.codex/config.toml)
    */
@@ -513,11 +507,6 @@ interface Window {
    * Update permission dialog timeout setting
    */
   updatePermissionDialogTimeout?: (json: string) => void;
-
-  /**
-   * Update current Claude config
-   */
-  updateCurrentClaudeConfig?: (json: string) => void;
 
   /**
    * Show error message

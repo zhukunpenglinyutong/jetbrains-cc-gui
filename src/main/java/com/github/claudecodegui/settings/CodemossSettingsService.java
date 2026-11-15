@@ -808,34 +808,6 @@ public class CodemossSettingsService {
 
     // ==================== Claude Settings Management ====================
 
-    public JsonObject getCurrentClaudeConfig() throws IOException {
-        JsonObject currentConfig = claudeSettingsManager.getCurrentClaudeConfig();
-
-        // If codemossProviderId exists, try to get provider name from codemoss config
-        if (currentConfig.has("providerId")) {
-            String providerId = currentConfig.get("providerId").getAsString();
-            try {
-                JsonObject config = readConfig();
-                if (config.has("claude")) {
-                    JsonObject claude = config.getAsJsonObject("claude");
-                    if (claude.has("providers")) {
-                        JsonObject providers = claude.getAsJsonObject("providers");
-                        if (providers.has(providerId)) {
-                            JsonObject provider = providers.getAsJsonObject(providerId);
-                            if (provider.has("name")) {
-                                currentConfig.addProperty("providerName", provider.get("name").getAsString());
-                            }
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                // Ignore error - provider name is optional
-            }
-        }
-
-        return currentConfig;
-    }
-
     public JsonObject readClaudeSettings() throws IOException {
         return claudeSettingsManager.readClaudeSettings();
     }
@@ -1491,10 +1463,6 @@ public class CodemossSettingsService {
         return withConfigTransaction(() -> mcpServerManager.deleteMcpServer(serverId));
     }
 
-    public Map<String, Object> validateMcpServer(JsonObject server) {
-        return mcpServerManager.validateMcpServer(server);
-    }
-
     // ==================== Codex MCP Server Management ====================
 
     public CodexMcpServerManager getCodexMcpServerManager() {
@@ -1511,10 +1479,6 @@ public class CodemossSettingsService {
 
     public boolean deleteCodexMcpServer(String serverId) throws IOException {
         return codexMcpServerManager.deleteMcpServer(serverId);
-    }
-
-    public Map<String, Object> validateCodexMcpServer(JsonObject server) {
-        return codexMcpServerManager.validateMcpServer(server);
     }
 
     // ==================== Skills Management ====================

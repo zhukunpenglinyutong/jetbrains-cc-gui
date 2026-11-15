@@ -11,7 +11,6 @@ import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.util.concurrency.AppExecutorUtil;
 
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -31,8 +30,7 @@ public class CodexMcpServerHandler extends BaseMessageHandler {
         "add_codex_mcp_server",
         "update_codex_mcp_server",
         "delete_codex_mcp_server",
-        "toggle_codex_mcp_server",
-        "validate_codex_mcp_server"
+        "toggle_codex_mcp_server"
     };
 
     private final CodexMcpServerManager codexMcpServerManager;
@@ -71,9 +69,6 @@ public class CodexMcpServerHandler extends BaseMessageHandler {
                 return true;
             case "toggle_codex_mcp_server":
                 handleToggleMcpServer(content);
-                return true;
-            case "validate_codex_mcp_server":
-                handleValidateMcpServer(content);
                 return true;
             default:
                 return false;
@@ -408,25 +403,6 @@ public class CodexMcpServerHandler extends BaseMessageHandler {
                 String errorMsg = escapeJs("Failed to toggle Codex MCP server: " + e.getMessage());
                 callJavaScript("window.showError", errorMsg);
             });
-        }
-    }
-
-    /**
-     * Validate Codex MCP server configuration
-     */
-    private void handleValidateMcpServer(String content) {
-        try {
-            Gson gson = new Gson();
-            JsonObject server = gson.fromJson(content, JsonObject.class);
-
-            Map<String, Object> validation = codexMcpServerManager.validateMcpServer(server);
-            String validationJson = gson.toJson(validation);
-
-            ApplicationManager.getApplication().invokeLater(() -> {
-                callJavaScript("window.codexMcpServerValidated", escapeJs(validationJson));
-            });
-        } catch (Exception e) {
-            LOG.error("[CodexMcpServerHandler] Failed to validate Codex MCP server: " + e.getMessage(), e);
         }
     }
 }

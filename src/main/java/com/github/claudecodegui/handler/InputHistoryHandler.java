@@ -5,7 +5,6 @@ import com.github.claudecodegui.bridge.NodeProcessRunner;
 import com.github.claudecodegui.bridge.ProcessManager;
 import com.github.claudecodegui.handler.core.HandlerContext;
 
-import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 
 import java.util.List;
@@ -35,35 +34,13 @@ public class InputHistoryHandler {
     }
 
     /**
-     * Get input history records.
-     */
-    public void handleGetInputHistory() {
-        CompletableFuture.runAsync(() -> {
-            try {
-                String result = callInputHistoryService("getAllHistoryData", null);
-                ApplicationManager.getApplication().invokeLater(() -> {
-                    context.callJavaScript("window.onInputHistoryLoaded", context.escapeJs(result));
-                });
-            } catch (Exception e) {
-                LOG.error("[InputHistoryHandler] Failed to get input history: " + e.getMessage(), e);
-                ApplicationManager.getApplication().invokeLater(() -> {
-                    context.callJavaScript("window.onInputHistoryLoaded", context.escapeJs("{\"items\":[],\"counts\":{}}"));
-                });
-            }
-        });
-    }
-
-    /**
      * Record input history.
      * @param content JSON array of fragments
      */
     public void handleRecordInputHistory(String content) {
         CompletableFuture.runAsync(() -> {
             try {
-                String result = callInputHistoryServiceWithArray("recordHistory", content);
-                ApplicationManager.getApplication().invokeLater(() -> {
-                    context.callJavaScript("window.onInputHistoryRecorded", context.escapeJs(result));
-                });
+                callInputHistoryServiceWithArray("recordHistory", content);
             } catch (Exception e) {
                 LOG.error("[InputHistoryHandler] Failed to record input history: " + e.getMessage(), e);
             }
@@ -77,10 +54,7 @@ public class InputHistoryHandler {
     public void handleDeleteInputHistoryItem(String content) {
         CompletableFuture.runAsync(() -> {
             try {
-                String result = callInputHistoryService("deleteHistoryItem", content);
-                ApplicationManager.getApplication().invokeLater(() -> {
-                    context.callJavaScript("window.onInputHistoryDeleted", context.escapeJs(result));
-                });
+                callInputHistoryService("deleteHistoryItem", content);
             } catch (Exception e) {
                 LOG.error("[InputHistoryHandler] Failed to delete input history item: " + e.getMessage(), e);
             }
@@ -93,10 +67,7 @@ public class InputHistoryHandler {
     public void handleClearInputHistory() {
         CompletableFuture.runAsync(() -> {
             try {
-                String result = callInputHistoryService("clearAllHistory", null);
-                ApplicationManager.getApplication().invokeLater(() -> {
-                    context.callJavaScript("window.onInputHistoryCleared", context.escapeJs(result));
-                });
+                callInputHistoryService("clearAllHistory", null);
             } catch (Exception e) {
                 LOG.error("[InputHistoryHandler] Failed to clear input history: " + e.getMessage(), e);
             }

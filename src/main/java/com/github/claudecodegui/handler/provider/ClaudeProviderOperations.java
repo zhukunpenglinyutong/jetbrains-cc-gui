@@ -103,22 +103,6 @@ public class ClaudeProviderOperations {
     }
 
     /**
-     * Get current Claude CLI configuration (~/.claude/settings.json).
-     */
-    public void handleGetCurrentClaudeConfig() {
-        try {
-            JsonObject config = context.getSettingsService().getCurrentClaudeConfig();
-            String configJson = GSON.toJson(config);
-
-            ApplicationManager.getApplication().invokeLater(() -> {
-                context.callJavaScript("window.updateCurrentClaudeConfig", context.escapeJs(configJson));
-            });
-        } catch (Exception e) {
-            LOG.error("[ProviderHandler] Failed to get current claude config: " + e.getMessage(), e);
-        }
-    }
-
-    /**
      * Add a provider.
      */
     public void handleAddProvider(String content) {
