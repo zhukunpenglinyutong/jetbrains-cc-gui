@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, normalize } from 'node:path';
+import { delimiter, dirname, join, normalize } from 'node:path';
 import {
   decodeCliOutput,
   isWindowsCmdShim,
@@ -12,6 +12,7 @@ import {
   selectWindowsWhereMatch,
   resolveWindowsSpawnableBin,
   resolveOmpCliPath,
+  resolveOpenCodeCliPath,
   resolveCliPath,
   commonCliBinDirs,
   versionManagerBinDirs,
@@ -539,4 +540,23 @@ test('resolveCliPath skips a dead home shim and falls through to the next candid
     homeCandidates: [`${root}/stale/{bin}`, `${root}/fresh/{bin}`],
   });
   assert.equal(normalize(resolved), normalize(join(freshDir, `${name}.cmd`)));
+});
+
+test('resolveOpenCodeCliPath falls back to the desktop app binary opencode-cli on PATH (#2019)', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ccgui-opencode-cli-'));
+  const file = join(dir, process.platform === 'win32' ? 'opencode-cli.exe' : 'opencode-cli');
+  writeFileSync(file, '', { mode: 0o755 });
+  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toLowerCase() !== 'path'));
+  const systemDirs = process.platform === 'win32' ? [join(process.env.SystemRoot, 'System32')] : ['/usr/bin', '/bin'];
+  env[process.platform === 'win32' ? 'Path' : 'PATH'] = [dir, ...systemDirs].join(delimiter);
+  const resolved = resolveOpenCodeCliPath(env);
+  assert.equal(normalize(resolved).toLowerCase(), normalize(file).toLowerCase());
+});
+
+test('resolveOpenCodeCliPath honors the OPENCODE_CLI_PATH override', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ccgui-opencode-override-'));
+  const file = join(dir, process.platform === 'win32' ? 'custom.exe' : 'custom');
+  writeFileSync(file, '', { mode: 0o755 });
+  const resolved = resolveOpenCodeCliPath({ ...process.env, OPENCODE_CLI_PATH: file });
+  assert.equal(normalize(resolved).toLowerCase(), normalize(file).toLowerCase());
 });
