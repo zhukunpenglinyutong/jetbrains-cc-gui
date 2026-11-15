@@ -14,7 +14,7 @@ export interface ChangelogEntry {
 export const CHANGELOG_DATA: ChangelogEntry[] = [
   {
     version: '0.6.6',
-    date: '2026-11-14',
+    date: '2026-11-15',
     content: {
       en: `✨ Features
 - **Choose the API supplier per conversation** (#2067): Claude and Codex chats can each be bound to their own supplier from the provider menu in the input box. The menu now changes only the current conversation, not the global active provider in Settings. A change made while a turn is running applies from the next turn, and restored history reopens with its supplier (by @GGMGG, @zhukunpenglinyutong)
