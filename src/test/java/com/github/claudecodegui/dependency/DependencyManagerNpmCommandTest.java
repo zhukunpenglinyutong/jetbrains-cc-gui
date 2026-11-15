@@ -47,6 +47,43 @@ public class DependencyManagerNpmCommandTest {
     }
 
     @Test
+    public void wslNpmFromTheTarballLayoutRunsThroughTheConfiguredNode() {
+        DependencyManager.WslNpm npm = DependencyManager.resolveWslNpm(WSL_NODE, null, WSL_NPM_CLI::equals);
+
+        assertEquals(new DependencyManager.WslNpm(WSL_NPM, false), npm);
+    }
+
+    @Test
+    public void wslShimWithoutNpmCliRunsTheColocatedNpmDirectly() {
+        String voltaNode = "/home/debian/.volta/bin/node";
+        DependencyManager.WslNpm npm = DependencyManager.resolveWslNpm(voltaNode, null, path -> false);
+
+        assertEquals(new DependencyManager.WslNpm("/home/debian/.volta/bin/npm", true), npm);
+        assertEquals(List.of("wsl", "/home/debian/.volta/bin/npm"),
+                DependencyManager.npmInvocation(true, voltaNode, npm.path(), npm.runDirectly()));
+    }
+
+    @Test
+    public void wslNpmOnWslPathRunsDirectlyWithoutProbingNpmCli() {
+        DependencyManager.WslNpm npm = DependencyManager.resolveWslNpm("/usr/bin/node", "/usr/bin/npm", path -> {
+            throw new AssertionError("probed " + path);
+        });
+
+        assertEquals(new DependencyManager.WslNpm("/usr/bin/npm", true), npm);
+    }
+
+    @Test
+    public void wslWhichResultsThatAreNotALinuxNpmAreIgnored() {
+        DependencyManager.WslNpm expected = new DependencyManager.WslNpm(WSL_NPM, false);
+
+        // A Windows npm on WSL's appended Windows PATH runs node.exe, which cannot use a Linux --prefix.
+        assertEquals(expected, DependencyManager.resolveWslNpm(
+                WSL_NODE, "/mnt/c/Program Files/nodejs/npm", WSL_NPM_CLI::equals));
+        assertEquals(expected, DependencyManager.resolveWslNpm(
+                WSL_NODE, "wsl: Failed to translate 'C:\\tools'", WSL_NPM_CLI::equals));
+    }
+
+    @Test
     public void nativeInstallRunsTheResolvedNpm() {
         List<String> invocation = DependencyManager.npmInvocation(false, "/usr/local/bin/node", "/usr/local/bin/npm", false);
 
