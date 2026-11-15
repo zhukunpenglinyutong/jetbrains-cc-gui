@@ -87,6 +87,10 @@ public class MessageJsonConverterTest {
         raw.addProperty("type", "assistant");
         raw.addProperty("sessionId", "session-1");
         raw.addProperty("parentUuid", "parent-1");
+        raw.addProperty("timestamp", "2026-11-15T10:00:05.000Z");
+        JsonObject sessionUsage = new JsonObject();
+        sessionUsage.addProperty("input_tokens", 99999);
+        raw.add("usage", sessionUsage);
         raw.add("message", message);
         JsonObject turnUsage = new JsonObject();
         turnUsage.addProperty("input_tokens", 1200);
@@ -110,6 +114,10 @@ public class MessageJsonConverterTest {
         assertEquals("assistant", transportRaw.get("type").getAsString());
         assertFalse(transportRaw.has("sessionId"));
         assertFalse(transportRaw.has("parentUuid"));
+        // Top-level usage is session-cumulative status-bar data, never per message.
+        assertFalse(transportRaw.has("usage"));
+        // The transcript timestamp lets the webview rebuild a restored turn's duration.
+        assertEquals("2026-11-15T10:00:05.000Z", transportRaw.get("timestamp").getAsString());
 
         // turnUsage (whole-turn aggregate) is transported for the per-turn token display
         assertTrue(transportRaw.has("turnUsage"));
@@ -119,10 +127,11 @@ public class MessageJsonConverterTest {
 
         JsonObject transportMessage = transportRaw.getAsJsonObject("message");
         assertTrue(transportMessage.has("content"));
-        assertFalse(transportMessage.has("id"));
         assertFalse(transportMessage.has("model"));
-        // message.usage feeds the status bar only and must NOT be transported per message
-        assertFalse(transportMessage.has("usage"));
+        // message.id + message.usage let turnMetadataReconstruction.ts rebuild turnUsage
+        // for restored turns (deduped by id); the footer itself only renders turnUsage.
+        assertEquals("msg-1", transportMessage.get("id").getAsString());
+        assertEquals(321, transportMessage.getAsJsonObject("usage").get("input_tokens").getAsInt());
     }
 
     @Test

@@ -204,6 +204,8 @@ public class MessageJsonConverter {
         copyFieldIfPresent(raw, transport, "codexAuthoritative");
         copyFieldIfPresent(raw, transport, "isMeta");
         copyFieldIfPresent(raw, transport, "text");
+        // Transcript time; turnMetadataReconstruction.ts derives a restored turn's duration from it.
+        copyFieldIfPresent(raw, transport, "timestamp");
         // Compact-related fields for filtering compact summary messages
         copyFieldIfPresent(raw, transport, "isCompactSummary");
         copyFieldIfPresent(raw, transport, "isVisibleInTranscriptOnly");
@@ -214,9 +216,10 @@ public class MessageJsonConverter {
         // CodexMessageHandler.handleResultMessage, for the per-turn token display.
         // Whole-turn estimated cost is calculated by the backend from the same pricing
         // configuration used by Usage Statistics; the frontend only formats it.
-        // Deliberately NOT copying the top-level usage or message.usage fields:
-        // those carry per-call / session-cumulative values for the status bar and
-        // would be misleading if rendered per message.
+        // Deliberately NOT copying the top-level usage field: it carries
+        // session-cumulative values for the status bar. message.id/usage (per API
+        // call) are copied below only so the webview can rebuild turnUsage for
+        // restored turns; the footer never renders them directly.
         copyFieldIfPresent(raw, transport, "turnUsage");
         copyFieldIfPresent(raw, transport, "turnCostUsd");
         // Agent/Task tool metadata (agentId, totalDurationMs, totalTokens,
@@ -235,6 +238,8 @@ public class MessageJsonConverter {
             if (sourceMessage.has("content")) {
                 transportMessage.add("content", sourceMessage.get("content").deepCopy());
             }
+            copyFieldIfPresent(sourceMessage, transportMessage, "id");
+            copyFieldIfPresent(sourceMessage, transportMessage, "usage");
             if (transportMessage.size() > 0) {
                 transport.add("message", transportMessage);
             }
