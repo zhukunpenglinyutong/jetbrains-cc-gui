@@ -16,6 +16,7 @@ import { setupDollarCommandsCallback } from './components/ChatInputBox/providers
 import { applyLinkifyCapabilitiesPayload } from './utils/linkifyCapabilities';
 import { installRuntimeProviderDispatchers } from './utils/runtimeProviderCapabilities';
 import { sendBridgeEvent } from './utils/bridge';
+import { installSessionSupplierCallbacks } from './utils/sessionSupplierEvents';
 import { debugLog } from './utils/debug';
 import { forceWebviewRepaint, repaintRemoteWebview } from './utils/forceWebviewRepaint';
 import { fontSizeLevelToScale } from './utils/fontScale';
@@ -43,10 +44,11 @@ if (!import.meta.env.DEV) {
 }
 
 // Install the runtime provider dispatcher exactly once so that every
-// consumer (Settings, RuntimeProviderSelect, …) receives provider events
+// consumer (Settings, provider state, …) receives provider events
 // through a deterministic subscriber registry instead of overriding
 // `window.update*Provider*` callbacks ad-hoc.
 installRuntimeProviderDispatchers();
+installSessionSupplierCallbacks();
 
 function createBridgeHeartbeatStarter() {
   let started = false;
@@ -520,8 +522,8 @@ if (typeof window !== 'undefined' && !window.updateMessages) {
 // message count is distinguishable from no pending callback.
 if (typeof window !== 'undefined' && !window.historyLoadComplete) {
   debugLog('[Main] Pre-registering historyLoadComplete placeholder');
-  window.historyLoadComplete = (expectedMessageCount?: string | number) => {
-    window.__pendingHistoryLoadComplete = { expectedMessageCount };
+  window.historyLoadComplete = (expectedMessageCount?: string | number, transitionToken?: string) => {
+    window.__pendingHistoryLoadComplete = { expectedMessageCount, transitionToken };
   };
 }
 
@@ -659,6 +661,14 @@ if (typeof window !== 'undefined' && !window.restoreSessionTitle) {
 if (typeof window !== 'undefined' && !window.applyBackendTabState) {
   window.applyBackendTabState = (json: string) => {
     window.__pendingBackendTabState = json;
+  };
+}
+
+// Java puts the tab's OMP approval mode back right after frontend_ready. A page
+// that missed it would stay on "Default", so keep it until the provider hook mounts.
+if (typeof window !== 'undefined' && !window.onOmpApprovalModeReceived) {
+  window.onOmpApprovalModeReceived = (mode: string) => {
+    window.__pendingOmpApprovalMode = mode;
   };
 }
 

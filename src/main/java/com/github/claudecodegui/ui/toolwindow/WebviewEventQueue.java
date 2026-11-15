@@ -480,6 +480,7 @@ final class WebviewEventQueue<T> {
         classes.put("historyLoadComplete", EnumSet.of(
                 EventClass.RESET_BOUNDARY, EventClass.CRITICAL, EventClass.LIFECYCLE));
         classes.put("onStreamEnd", EnumSet.of(EventClass.CRITICAL, EventClass.LIFECYCLE));
+        classes.put("notifySessionSupplierBindingChanged", EnumSet.of(EventClass.CRITICAL, EventClass.LIFECYCLE));
         classes.put("onBlockReset", EnumSet.of(EventClass.CRITICAL, EventClass.LIFECYCLE));
         classes.put("onTaskEvent", EnumSet.of(EventClass.LIFECYCLE));
         // A page is meaningful only when every slice arrives. Keep its slices

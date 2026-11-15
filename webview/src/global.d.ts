@@ -87,7 +87,7 @@ interface Window {
    * post-reset updateSequence) advances __minAcceptedUpdateSequence so stale
    * in-flight updateMessages from the previous session are rejected.
    */
-  clearMessages?: (barrierSequence?: string | number) => void;
+  clearMessages?: (barrierSequence?: string | number, transitionToken?: string) => void;
 
   /**
    * Add error message
@@ -156,11 +156,15 @@ interface Window {
    * History load complete callback - invoked when history messages finish loading.
    * Triggers Markdown re-rendering to fix incorrect rendering on first history load.
    */
-  historyLoadComplete?: (expectedMessageCount?: string | number) => void;
+  historyLoadComplete?: (expectedMessageCount?: string | number, transitionToken?: string) => void;
+  /** A rejected session transition preserves the existing binding and draft/queue. */
+  sessionTransitionFailed?: (error: string, transitionToken?: string) => void;
+  /** IDE-initiated transitions pause frontend sends before stopping the old session. */
+  sessionTransitionStarted?: (nextSessionId: string, nextTitle: string, transitionToken?: string) => void;
   updateStartupHistoryLoadState?: (json: string) => void;
   __pendingStartupHistoryLoadState?: string;
   /** Early history completion buffered before React installs the real callback. */
-  __pendingHistoryLoadComplete?: { expectedMessageCount?: string | number };
+  __pendingHistoryLoadComplete?: { expectedMessageCount?: string | number; transitionToken?: string };
   /** Number of messages in the latest full backend snapshot accepted by this page. */
   __lastAcceptedMessageCount?: number;
   /** Restored-history snapshot size that still needs a React commit acknowledgment. */
@@ -184,6 +188,16 @@ interface Window {
    * StatusPanel uses to mark a background (run_in_background) Agent subagent as completed.
    */
   onTaskEvent?: (eventJson: string) => void;
+
+  /**
+   * Inter-turn rows from a background follow-up turn. Payload:
+   * { sessionId, message }, built by ClaudeChatWindow (the daemon already
+   * carries sessionId, and dropping it here would make every event fail the
+   * session guard). An assistant message appends a live bubble; a user row
+   * carrying tool_result blocks settles the matching tool card instead of
+   * rendering. A later updateMessages snapshot supersedes the appended copy.
+   */
+  onInterTurnMessage?: (json: string) => void;
 
   /** Structured native Codex app-server event envelope. */
   onCodexRuntimeEvent?: (eventJson: string) => void;
@@ -225,7 +239,7 @@ interface Window {
   /**
    * Set current session ID (for rewind feature)
    */
-  setSessionId?: (sessionId: string) => void;
+  setSessionId?: (sessionId: string, transitionToken?: string) => void;
 
   /**
    * Add toast notification (called from backend)
@@ -472,6 +486,7 @@ interface Window {
   /**
    * Update status bar widget enabled state
    */
+  updateSessionGitRepositoryMatchingEnabled?: (json: string) => void;
   updateStatusBarWidgetEnabled?: (json: string) => void;
 
   /**
@@ -718,6 +733,10 @@ interface Window {
    * Update agents list
    */
   updateAgents?: (json: string) => void;
+  updateHooks?: (json: string) => void;
+  hookSourceResult?: (json: string) => void;
+  hookMutationResult?: (json: string) => void;
+  hookToggleResult?: (json: string) => void;
 
   /**
    * Agent operation result callback
@@ -1152,6 +1171,12 @@ interface Window {
    */
   __INITIAL_TAB_MODEL__?: string;
 
+  /** Explicit per-tab effort; null or unset inherits the last-used preference. */
+  __INITIAL_TAB_REASONING_EFFORT__?: string | null;
+
+  /** Native Claude workflow preference for this tab, including explicit off. */
+  __INITIAL_TAB_CLAUDE_ULTRACODE__?: boolean;
+
   /** User-installed DSH agent preset ids discovered from the DSH home. */
   __INITIAL_DSH_PRESETS__?: string[];
 
@@ -1175,6 +1200,12 @@ interface Window {
 
   /** Buffers backend tab state when Java responds before React callbacks mount. */
   __pendingBackendTabState?: string;
+
+  /** Java's copy of this tab's OMP approval mode, pushed after every page (re)load. */
+  onOmpApprovalModeReceived?: (mode: string) => void;
+
+  /** Buffers the OMP approval mode when Java responds before the provider hook mounts. */
+  __pendingOmpApprovalMode?: string;
 
   // ============================================================================
   // Provider settings panel callbacks (registered by ProviderList)

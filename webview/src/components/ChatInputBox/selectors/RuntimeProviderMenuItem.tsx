@@ -10,7 +10,7 @@ import {
 
 /**
  * Runtime provider switching is only implemented for the Claude and Codex
- * harnesses (see RuntimeProviderSelect's providerKind). Hide the menu entry
+ * harnesses. Hide the menu entry
  * for the other CLI providers (grok/kimi/opencode/pi/omp/dsh).
  */
 const RUNTIME_PROVIDER_SUPPORTED: Record<string, true> = { claude: true, codex: true };
@@ -20,7 +20,7 @@ interface RuntimeProviderMenuItemProps {
   active: boolean;
   onEnter: () => void;
   onLeave: () => void;
-  onProviderSwitched: (providerName: string) => void;
+  onProviderSwitched: (providerName: string, appliesNextTurn: boolean) => void;
   onClose: () => void;
 }
 
@@ -52,6 +52,17 @@ export const RuntimeProviderMenuItem = ({
         ref={runtimeProviderTriggerRef}
         className="selector-option"
         data-testid="config-option-runtime-provider"
+        role="menuitem"
+        tabIndex={0}
+        aria-haspopup="listbox"
+        aria-expanded={active}
+        onClick={onEnter}
+        onKeyDown={event => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onEnter();
+          }
+        }}
         onMouseEnter={onEnter}
         onMouseLeave={onLeave}
         style={SELECTOR_OPTION_RELATIVE_STYLE}

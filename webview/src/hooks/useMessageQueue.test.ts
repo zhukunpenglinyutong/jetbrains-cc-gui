@@ -11,8 +11,58 @@ import {
 } from '../components/ChatInputBox/utils/quoteRegistry';
 
 describe('useMessageQueue', () => {
+  it('retains the full queued item when dispatch refuses it, and retries only after readiness changes', () => {
+    const attachment: Attachment = { id: 'held', fileName: 'held.txt', mediaType: 'text/plain', data: 'aGk=' };
+    const onExecute = vi.fn(() => 'blocked' as 'blocked' | 'started');
+    const { result, rerender } = renderHook(({ ready }) => useMessageQueue({
+      isLoading: false, onExecute, retryKey: ready,
+    }), { initialProps: { ready: false } });
+    act(() => result.current.enqueue('must survive', [attachment]));
+    const held = result.current.queue[0];
+    expect(held).toMatchObject({ content: 'must survive', attachments: [attachment] });
+    expect(onExecute).toHaveBeenCalledTimes(1);
+    rerender({ ready: false });
+    expect(onExecute).toHaveBeenCalledTimes(1);
+    onExecute.mockReturnValue('started');
+    rerender({ ready: true });
+    expect(onExecute).toHaveBeenCalledTimes(2);
+    expect(result.current.queue).toEqual([]);
+  });
+
+  it('keeps refused quoted text editable without losing order or quote contents', () => {
+    const onExecute = vi.fn(() => 'blocked' as const);
+    const { result } = renderHook(() => useMessageQueue({ isLoading: false, onExecute }));
+    const quoteId = registerQuote('the complete quoted source');
+    const content = `inspect ${makeQuoteToken(quoteId)}`;
+    act(() => { result.current.enqueue(content); result.current.enqueue('second'); });
+    pruneQuoteRegistry(new Set());
+    let edited: QueuedMessage | undefined;
+    act(() => { edited = result.current.dequeueForEdit(result.current.queue[0].id); });
+    expect(edited?.content).toBe(content);
+    expect(edited?.quotes).toBeDefined();
+    expect(result.current.queue.map(item => item.content)).toEqual(['second']);
+  });
+
+  it('drains locally handled commands without waiting for a model turn', () => {
+    const onExecute = vi.fn((_content: string) => 'handled' as const);
+    const { result } = renderHook(() => useMessageQueue({ isLoading: false, onExecute }));
+    act(() => { result.current.enqueue('/plugins'); result.current.enqueue('/context'); });
+    expect(onExecute.mock.calls.map(([content]) => content)).toEqual(['/plugins', '/context']);
+    expect(result.current.queue).toEqual([]);
+  });
+
+  it('does not resurrect or drop queue changes made by an accepted callback', () => {
+    let clearAndEnqueue: () => void = () => {};
+    const onExecute = vi.fn(() => { clearAndEnqueue(); return 'started' as const; });
+    const { result } = renderHook(() => useMessageQueue({ isLoading: false, onExecute }));
+    clearAndEnqueue = () => { result.current.clearQueue(); result.current.enqueue('new session work'); };
+    act(() => { result.current.enqueue('old first'); result.current.enqueue('old second'); });
+    expect(result.current.queue.map(item => item.content)).toEqual(['new session work']);
+    expect(onExecute).toHaveBeenCalledOnce();
+  });
+
   const renderQueue = (initialLoading: boolean) => {
-    const onExecute = vi.fn();
+    const onExecute = vi.fn((_content: string, _attachments?: Attachment[]) => 'started' as const);
     const hook = renderHook(() => {
       // Drive `isLoading` through real component state so the auto-execute
       // path sees the same setState semantics as production, where
@@ -23,6 +73,7 @@ describe('useMessageQueue', () => {
         onExecute: (content: string, attachments?: Attachment[]) => {
           onExecute(content, attachments);
           setLoading(true);
+          return 'started';
         },
       });
       return { queueApi, setLoading };
@@ -186,7 +237,7 @@ describe('useMessageQueue', () => {
   });
 
   it('dispatches at most one message per idle period until loading flips', () => {
-    const onExecute = vi.fn();
+    const onExecute = vi.fn((_content: string, _attachments?: Attachment[]) => 'started' as const);
     const hook = renderHook(() => useMessageQueue({ isLoading: false, onExecute }));
 
     act(() => {
@@ -203,7 +254,7 @@ describe('useMessageQueue', () => {
   });
 
   it('reopens the single-flight gate through a loading cycle', () => {
-    const onExecute = vi.fn();
+    const onExecute = vi.fn((_content: string, _attachments?: Attachment[]) => 'started' as const);
     const hook = renderHook(() => {
       const [loading, setLoading] = useState(false);
       const queueApi = useMessageQueue({ isLoading: loading, onExecute });
@@ -320,7 +371,7 @@ describe('useMessageQueue', () => {
   it('never dispatches a message taken for editing just as the turn ended', () => {
     // A click can land after the idle render commits but before its passive
     // effects run; a layout effect fires in exactly that window.
-    const onExecute = vi.fn();
+    const onExecute = vi.fn((_content: string, _attachments?: Attachment[]) => 'started' as const);
     const taken: Array<QueuedMessage | undefined> = [];
     const { result, rerender } = renderHook(({ isLoading }: { isLoading: boolean }) => {
       const queueApi = useMessageQueue({ isLoading, onExecute });
@@ -351,6 +402,7 @@ describe('useMessageQueue', () => {
     let sent = '';
     onExecute.mockImplementation((content: string) => {
       sent = expandQuoteTokens(content);
+      return 'started';
     });
 
     act(() => {

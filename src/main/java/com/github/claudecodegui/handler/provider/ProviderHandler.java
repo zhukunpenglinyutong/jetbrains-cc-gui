@@ -11,6 +11,8 @@ import com.github.claudecodegui.handler.core.HandlerContext;
 public class ProviderHandler extends BaseMessageHandler {
 
     private static final String[] SUPPORTED_TYPES = {
+            "get_session_suppliers",
+            "set_session_supplier",
             "provider_backup",
             // Claude provider operations
             "get_providers",
@@ -64,6 +66,10 @@ public class ProviderHandler extends BaseMessageHandler {
     @Override
     public boolean handle(String type, String content) {
         switch (type) {
+            case "get_session_suppliers":
+            case "set_session_supplier":
+                new SessionSupplierOperations(context).handle(content, "set_session_supplier".equals(type));
+                return true;
             case "provider_backup":
                 backupSupport.handle(content);
                 return true;

@@ -173,7 +173,7 @@ public class SessionIndexCache {
 
     /**
      * Clears all Codex caches.
-     * Codex uses "__all__" as the cache key, so deleting a session requires clearing the entire Codex cache.
+     * Codex caches session lists per history directory; clear every root after deleting a session.
      */
     public void clearAllCodexCache() {
         codexCache.clear();

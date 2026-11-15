@@ -13,6 +13,41 @@ import { getClaudeCliPathOverride } from '../../utils/claude-cli-path.js';
 import { isUserTextMessage } from './session-service.js';
 import { selectConversationChain } from './conversation-chain.js';
 
+export function buildRewindQueryOptions(sessionId, workingDirectory) {
+  const claudeCliOverride = getClaudeCliPathOverride();
+  return {
+    resume: sessionId,
+    cwd: workingDirectory,
+    permissionMode: 'default',
+    enableFileCheckpointing: true,
+    maxTurns: 1,
+    env: buildCliEnv(),
+    // Rewind is a maxTurns:1 file-checkpointing call — no inference output,
+    // so 1M context state is irrelevant; only neutralize effort/thinking.
+    // settingsEnv is deliberately omitted as well: no subagent can run here,
+    // so tier resolution cannot apply.
+    settings: buildWebviewControlledSettingsOverride(),
+    tools: { type: 'preset', preset: 'claude_code' },
+    settingSources: ['user'],
+    strictMcpConfig: true,
+    additionalDirectories: Array.from(
+      new Set(
+        [workingDirectory, process.env.IDEA_PROJECT_PATH, process.env.PROJECT_PATH].filter(Boolean)
+      )
+    ),
+    canUseTool: async () => ({
+      behavior: 'deny',
+      message: 'Rewind operation'
+    }),
+    stderr: (data) => {
+      if (data && data.trim()) {
+        console.log(`[SDK-STDERR] ${data.trim()}`);
+      }
+    },
+    ...(claudeCliOverride && { pathToClaudeCodeExecutable: claudeCliOverride })
+  };
+}
+
 export async function rewindFiles(sessionId, userMessageId, cwd = null) {
   let result = null;
   try {
@@ -49,37 +84,7 @@ export async function rewindFiles(sessionId, userMessageId, cwd = null) {
           await waitForClaudeProjectSessionFile(sessionId, workingDirectory, 2500, 100);
         }
 
-        const claudeCliOverride = getClaudeCliPathOverride();
-        const options = {
-          resume: sessionId,
-          cwd: workingDirectory,
-          permissionMode: 'default',
-          enableFileCheckpointing: true,
-          maxTurns: 1,
-          env: buildCliEnv(),
-          // Rewind is a maxTurns:1 file-checkpointing call — no inference output,
-          // so 1M context state is irrelevant; only neutralize effort/thinking.
-          // settingsEnv is deliberately omitted as well: no subagent can run here,
-          // so tier resolution cannot apply.
-          settings: buildWebviewControlledSettingsOverride(),
-          tools: { type: 'preset', preset: 'claude_code' },
-          settingSources: ['user', 'project', 'local'],
-          additionalDirectories: Array.from(
-            new Set(
-              [workingDirectory, process.env.IDEA_PROJECT_PATH, process.env.PROJECT_PATH].filter(Boolean)
-            )
-          ),
-          canUseTool: async () => ({
-            behavior: 'deny',
-            message: 'Rewind operation'
-          }),
-          stderr: (data) => {
-            if (data && data.trim()) {
-              console.log(`[SDK-STDERR] ${data.trim()}`);
-            }
-          },
-          ...(claudeCliOverride && { pathToClaudeCodeExecutable: claudeCliOverride })
-        };
+        const options = buildRewindQueryOptions(sessionId, workingDirectory);
 
         console.log('[REWIND] Resuming session with options:', JSON.stringify(options));
 

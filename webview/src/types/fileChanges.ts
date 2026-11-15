@@ -9,6 +9,8 @@ export type FileChangeStatus = 'A' | 'M' | 'D' | 'R';
 export interface EditOperation {
   toolUseId?: string;
   ledgerKey?: string;
+  /** Keep All fingerprint of this operation, set by useFileChanges */
+  editKey?: string;
   oldStringKnown?: boolean;
   fileChangeKind?: 'add' | 'update' | 'delete';
   moveFrom?: string;

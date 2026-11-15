@@ -1,3 +1,4 @@
+import { normalizeCodexMetadataKeys } from './codex-history-metadata.js';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { getCodemossDir } from '../../utils/path-utils.js';
@@ -6,7 +7,7 @@ import { isTitleGenerationEnabled, SESSION_TITLE_PROMPT } from '../session-title
 export async function readCodexCustomTitles() {
   try {
     const titles = JSON.parse(await readFile(join(getCodemossDir(), 'session-titles.json'), 'utf8'));
-    return titles && typeof titles === 'object' && !Array.isArray(titles) ? titles : {};
+    return normalizeCodexMetadataKeys(titles);
   } catch {
     return {};
   }

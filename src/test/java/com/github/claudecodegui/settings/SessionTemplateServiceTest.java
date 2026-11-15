@@ -11,6 +11,24 @@ import java.util.List;
 public class SessionTemplateServiceTest {
 
     @Test
+    public void ultracodeRoundTripRemainsIndependentOfReasoningEffort() {
+        SessionTemplate template = new SessionTemplate("ultra", "claude", "claude-sonnet-5",
+                "default", "high", "/workspace", false);
+        template.setClaudeUltracode(true);
+        SessionTemplateService original = new SessionTemplateService();
+        original.saveTemplate(template);
+        SessionTemplateService restored = new SessionTemplateService();
+        restored.loadState(XmlSerializer.deserialize(XmlSerializer.serialize(original.getState()),
+                SessionTemplateService.State.class));
+        SessionTemplate loaded = restored.getTemplate("ultra");
+        Assert.assertTrue(loaded.isClaudeUltracode());
+        Assert.assertEquals("high", loaded.getReasoningEffort());
+        loaded.setClaudeUltracode(false);
+        restored.saveTemplate(loaded);
+        Assert.assertFalse(restored.getTemplate("ultra").isClaudeUltracode());
+    }
+
+    @Test
     public void saveGetDeleteAndExistsWork() {
         SessionTemplateService service = new SessionTemplateService();
         SessionTemplate template = new SessionTemplate(

@@ -286,3 +286,24 @@ describe('BehaviorTab permission dialog timeout', () => {
     expect(onPermissionDialogTimeoutChange).toHaveBeenCalledWith(3600);
   });
 });
+
+
+describe('BehaviorTab Git repository history matching', () => {
+  it('defaults to disabled and lets the user enable repository-name matching', () => {
+    const onSessionGitRepositoryMatchingEnabledChange = vi.fn();
+    renderBehaviorTab({ onSessionGitRepositoryMatchingEnabledChange });
+    const toggle = screen.getByRole('checkbox', { name: 'settings.basic.sessionGitRepositoryMatching.disabled' });
+    expect((toggle as HTMLInputElement).checked).toBe(false);
+    fireEvent.click(toggle);
+    expect(onSessionGitRepositoryMatchingEnabledChange).toHaveBeenCalledWith(true);
+  });
+
+  it('reflects a saved enabled preference and allows disabling it', () => {
+    const onSessionGitRepositoryMatchingEnabledChange = vi.fn();
+    renderBehaviorTab({ sessionGitRepositoryMatchingEnabled: true, onSessionGitRepositoryMatchingEnabledChange });
+    const toggle = screen.getByRole('checkbox', { name: 'settings.basic.sessionGitRepositoryMatching.enabled' });
+    expect((toggle as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(toggle);
+    expect(onSessionGitRepositoryMatchingEnabledChange).toHaveBeenCalledWith(false);
+  });
+});

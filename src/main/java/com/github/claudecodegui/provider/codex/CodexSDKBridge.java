@@ -40,6 +40,15 @@ import java.util.function.Supplier;
  * communication to the long-running Node daemon.
  */
 public class CodexSDKBridge extends BaseSDKBridge {
+    private java.util.function.Supplier<String> sessionSupplierResolver = () -> null;
+
+    public void setSessionSupplierResolver(java.util.function.Supplier<String> resolver) {
+        this.sessionSupplierResolver = resolver;
+    }
+
+    public boolean hasSessionSupplier() {
+        return sessionSupplierResolver.get() != null;
+    }
 
     private static final String IMAGE_STORAGE_DIR_NAME = "codex-images";
     private final CodexHistoryReader historyReader;
@@ -617,15 +626,9 @@ public class CodexSDKBridge extends BaseSDKBridge {
             boolean claimedThreadForSend = false;
             boolean daemonDispatchAttempted = false;
             try {
-                String accessMode = CodemossSettingsService.CODEX_RUNTIME_ACCESS_INACTIVE;
-                try {
-                    accessMode = this.settingsService.getCodexRuntimeAccessMode();
-                } catch (Exception e) {
-                    LOG.warn("[Codex] Failed to resolve runtime access mode before app-server send: "
-                            + e.getMessage());
-                }
-                if (!isCodexRuntimeAccessAllowed(accessMode)) {
-                    String error = ClaudeCodeGuiBundle.message("error.codexLocalAccessNotAuthorized");
+                if (!this.isCodexRuntimeAccessAllowed()) {
+                    String error = ClaudeCodeGuiBundle.message(hasSessionSupplier()
+                            ? "error.sessionSupplierUnavailable" : "error.codexLocalAccessNotAuthorized");
                     streamedResult.success = false;
                     streamedResult.error = error;
                     callback.onError(error);
@@ -980,6 +983,11 @@ public class CodexSDKBridge extends BaseSDKBridge {
         params.addProperty("clientMessageId", UUID.randomUUID().toString());
         params.addProperty("sessionEpoch", this.runtimeSessionEpochs.computeIfAbsent(
                 safeChannelId, ignored -> UUID.randomUUID().toString()));
+        try {
+            this.captureRuntimeConfiguration(params);
+        } catch (Exception error) {
+            return CompletableFuture.completedFuture(interactionError(error.getMessage()));
+        }
         return this.dispatchCodexLongOperation(daemon, "codex.executePlan", params,
                 this.callbackSubscriptions.get(safeChannelId));
     }
@@ -1092,12 +1100,23 @@ public class CodexSDKBridge extends BaseSDKBridge {
         if (requestParams != null) {
             params.add("params", requestParams.deepCopy());
         }
-        boolean transcriptRead = "codex.readHistoryPage".equals(method) || "codex.readSubagent".equals(method)
-                || "codex.countThreadMessages".equals(method);
-        long timeoutMs = transcriptRead ? 120_000L : 30_000L;
+        long timeoutMs = readOnlyTimeoutMillis(method, requestParams);
         return CompletableFuture.supplyAsync(() -> this.appServerRequestExecutor
                 .sendReadOnlyCommand(daemon, method, params, timeoutMs),
                 CodexAppServerRequestExecutor.turnWaitExecutor());
+    }
+
+    static long readOnlyTimeoutMillis(String method, JsonObject requestParams) {
+        // Status polls need a short RPC deadline too: cancelling a CompletableFuture
+        // does not interrupt supplyAsync's worker waiting on the native response.
+        if ("codex.readSubagent".equals(method) && requestParams != null
+                && requestParams.has("includeHistory") && requestParams.get("includeHistory").isJsonPrimitive()
+                && !requestParams.get("includeHistory").getAsBoolean()) {
+            return 8_000L;
+        }
+        boolean transcriptRead = "codex.readHistoryPage".equals(method) || "codex.readSubagent".equals(method)
+                || "codex.countThreadMessages".equals(method);
+        return transcriptRead ? 120_000L : 30_000L;
     }
 
     /**
@@ -1244,6 +1263,10 @@ public class CodexSDKBridge extends BaseSDKBridge {
 
     private boolean isCodexRuntimeAccessAllowed() {
         try {
+            String supplierId = sessionSupplierResolver.get();
+            if (supplierId != null) {
+                return com.github.claudecodegui.settings.SessionSupplierCatalog.available(this.settingsService, "codex", supplierId);
+            }
             String mode = this.settingsService.getCodexRuntimeAccessMode();
             return isCodexRuntimeAccessAllowed(mode);
         } catch (Exception e) {
@@ -1342,10 +1365,32 @@ public class CodexSDKBridge extends BaseSDKBridge {
                 safeChannelId, ignored -> UUID.randomUUID().toString());
         params.addProperty("sessionEpoch", sessionEpoch);
         payloadWriter.accept(params);
+        if ("codex.updateSettings".equals(method)) {
+            try {
+                this.captureRuntimeConfiguration(params);
+            } catch (RuntimeException error) {
+                LOG.warn("[Codex] Could not prepare the settings update", error);
+                return interactionError("Codex provider configuration could not be captured");
+            }
+        }
         return this.appServerRequestExecutor.sendControlCommand(daemon, method, params, 10_000L);
     }
 
     private void captureRuntimeConfiguration(JsonObject params) {
+        // Bound conversations read the same native config.toml, so separate plugin aliases first.
+        try {
+            new com.github.claudecodegui.settings.CodexSettingsManager(this.gson, Path.of(this.ownerScope))
+                    .prepareNativeConfig(this::isCodexRuntimeAccessAllowed);
+        } catch (Exception error) {
+            // Separating plugin aliases only removes a CLI warning; it must never block a turn.
+            LOG.warn("[Codex] Skipped plugin alias separation: " + error.getMessage());
+        }
+        String supplierId = sessionSupplierResolver.get();
+        if (supplierId != null) {
+            params.addProperty("supplierId", supplierId);
+            // The daemon owns the native environment, including WSL path normalization.
+            return;
+        }
         // Managed credentials never travel per request: the daemon resolves them
         // from its sanitized environment (config.toml env_key, see
         // codex-native-runtime-config.js). Only the auth mode and a provider
@@ -1815,8 +1860,12 @@ public class CodexSDKBridge extends BaseSDKBridge {
     }
 
     private static String resolveOwnerScope() {
-        String codexHome = System.getenv("CODEX_HOME");
-        return codexHome == null || codexHome.trim().isEmpty() ? "default" : codexHome.trim();
+        Path home = com.github.claudecodegui.util.CodexHomeResolver.resolve();
+        try {
+            return home.toRealPath().toString();
+        } catch (java.io.IOException error) {
+            return home.toString();
+        }
     }
 
     /**

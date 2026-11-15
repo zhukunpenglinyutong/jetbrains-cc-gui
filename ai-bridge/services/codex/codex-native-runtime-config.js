@@ -17,6 +17,7 @@
  */
 
 import { createHash } from 'node:crypto';
+import { stringify } from 'smol-toml';
 
 import { buildCodexCliEnvironment } from './codex-utils.js';
 
@@ -68,6 +69,7 @@ export function buildProjectDocFallbackConfig(extraConfig = null, fallbackNames 
  * @param {Record<string,string>|null} [opts.headers] extra HTTP headers for the provider
  * @param {Record<string,string>|null} [opts.baseEnv] environment for the child
  * @param {object|null} [opts.extraConfig] additional native config entries merged in
+ * @param {string|null} [opts.modelProvider] selected provider table id for a bound session
  * @returns {{
  *   env: Record<string,string>,
  *   removedEnvKeys: string[],
@@ -84,6 +86,7 @@ export function buildCodexNativeRuntime({
   headers = null,
   baseEnv = process.env,
   extraConfig = null,
+  modelProvider: requestedModelProvider = null,
   projectDocFallbackFilenames = null,
 } = {}) {
   const mode = normalizeAuthMode(authMode);
@@ -116,7 +119,7 @@ export function buildCodexNativeRuntime({
     hasValue(apiKey) || hasValue(baseUrl) || (headers && Object.keys(headers).length > 0)
   );
   if (providerConfigured) {
-    modelProvider = CODEX_MANAGED_PROVIDER_ID;
+    modelProvider = hasValue(requestedModelProvider) ? requestedModelProvider.trim() : CODEX_MANAGED_PROVIDER_ID;
     const providerEntry = { name: 'Codemoss', wire_api: 'responses' };
     if (hasValue(providerLabel)) {
       providerEntry.name = providerLabel.trim();
@@ -130,7 +133,7 @@ export function buildCodexNativeRuntime({
     }
     config = {
       model_providers: {
-        [CODEX_MANAGED_PROVIDER_ID]: providerEntry,
+        [modelProvider]: providerEntry,
       },
       ...(nativeExtraConfig && Object.keys(nativeExtraConfig).length > 0 ? nativeExtraConfig : {}),
     };
@@ -148,11 +151,63 @@ export function buildCodexNativeRuntime({
 }
 
 /**
- * Build the argv used to spawn the app-server transport.
- * The transport argv is fixed; per-request parameters travel through RPC.
+ * Build the transport argv with process-level provider overrides.
+ * Per-turn settings still travel through RPC.
  */
-export function buildAppServerArgv(cliCommand) {
-  return [...cliCommand, 'app-server', '--listen', 'stdio://'];
+export function buildAppServerArgv(cliCommand, configArgs = []) {
+  return [...cliCommand, 'app-server', '--listen', 'stdio://', ...configArgs];
+}
+
+function inlineToml(value) {
+  if (typeof value === 'string') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(inlineToml).join(',')}]`;
+  if (value && typeof value === 'object' && !(value instanceof Date)) {
+    return `{${Object.entries(value).map(([key, entry]) => `${JSON.stringify(key)}=${inlineToml(entry)}`).join(',')}}`;
+  }
+  return stringify({ value }).trim().slice('value = '.length);
+}
+
+/** Native turn validation also reads the process provider, not just thread overrides. */
+export function buildCodexProviderLaunchConfig({ modelProvider, config, env } = {}) {
+  if (!hasValue(modelProvider)) return { configArgs: [], env, sensitiveEnvNames: [] };
+  const configured = config?.model_providers?.[modelProvider];
+  if (!configured || typeof configured !== 'object' || Array.isArray(configured)) {
+    throw new Error('Codex provider launch configuration is unavailable');
+  }
+  const provider = structuredClone(configured);
+  const childEnv = { ...(env ?? process.env) };
+  const sensitiveEnvNames = [];
+  // Header values and bearer tokens must stay out of process arguments.
+  if (provider.http_headers) {
+    const headers = { ...provider.env_http_headers };
+    for (const [name, value] of Object.entries(provider.http_headers)) {
+      if (typeof value !== 'string') throw new Error('Codex provider header configuration is invalid');
+      if (headers[name] && childEnv[headers[name]] !== undefined) continue;
+      const key = `CCGUI_CODEX_HTTP_HEADER_${sensitiveEnvNames.length}`;
+      childEnv[key] = value;
+      headers[name] = key;
+      sensitiveEnvNames.push(key);
+    }
+    provider.env_http_headers = headers;
+    delete provider.http_headers;
+  }
+  if (typeof provider.experimental_bearer_token === 'string' && provider.experimental_bearer_token) {
+    const key = 'CCGUI_CODEX_BEARER_TOKEN';
+    childEnv[key] = provider.experimental_bearer_token;
+    provider.env_key = key;
+    sensitiveEnvNames.push(key);
+  }
+  delete provider.experimental_bearer_token;
+  try {
+    return {
+      configArgs: ['-c', `model_provider=${inlineToml(modelProvider)}`,
+        '-c', `model_providers=${inlineToml({ [modelProvider]: provider })}`],
+      env: childEnv,
+      sensitiveEnvNames,
+    };
+  } catch {
+    throw new Error('Codex provider launch configuration is invalid');
+  }
 }
 
 function hashCredential(value) {

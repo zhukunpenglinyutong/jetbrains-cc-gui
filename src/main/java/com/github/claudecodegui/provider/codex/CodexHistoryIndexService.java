@@ -64,7 +64,7 @@ class CodexHistoryIndexService {
      * @return list of session info
      */
     List<CodexHistoryReader.SessionInfo> readAllSessionsWithPagination(int limit, int offset) throws IOException {
-        String cacheKey = "__all__";
+        String cacheKey = "__all__:" + sessionsDir.toAbsolutePath().normalize();
 
         if (!Files.exists(sessionsDir) || !Files.isDirectory(sessionsDir)) {
             LOG.info("[CodexHistoryIndexService] Codex sessions directory not found: " + sessionsDir);

@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import type { TFunction } from 'i18next';
 import type { HistorySessionSummary } from '../../types';
 import { extractCommandMessageContent } from '../../utils/messageUtils';
+import { AVAILABLE_PROVIDERS } from '../ChatInputBox/types';
 import { ProviderModelIcon } from '../shared/ProviderModelIcon';
 import { highlightText, stopPropagationHandler } from './historyItemUtils';
 
@@ -63,7 +64,7 @@ export const HistoryItemTitle = ({
         <span
           className="history-provider-badge"
           style={PROVIDER_BADGE_STYLE}
-          title={session.provider === 'claude' ? 'Claude' : 'Codex'}
+          title={AVAILABLE_PROVIDERS.find((provider) => provider.id === session.provider)?.label ?? session.provider}
         >
           <ProviderModelIcon providerId={session.provider} size={20} colored />
         </span>

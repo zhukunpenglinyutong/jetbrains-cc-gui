@@ -31,6 +31,15 @@ public class HandlerContext {
     private final BooleanSupplier activeContentSupplier;
     private final Supplier<String> contentTitleSupplier;
     private volatile Runnable contentActivator = () -> { };
+    private volatile Runnable sessionPreferencesChanged = () -> { };
+
+    public void setSessionPreferencesChanged(Runnable callback) {
+        this.sessionPreferencesChanged = callback;
+    }
+
+    public void sessionPreferencesChanged() {
+        sessionPreferencesChanged.run();
+    }
 
     // Mutable state accessed via getters/setters — volatile for thread safety
     private volatile ClaudeSession session;

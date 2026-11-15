@@ -3,6 +3,8 @@ package com.github.claudecodegui.provider.omp;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.provider.common.HistoryPathMatcher;
 import com.github.claudecodegui.provider.common.HistoryCancellation;
+import com.github.claudecodegui.util.PlatformUtils;
+import com.github.claudecodegui.util.WslPathUtil;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -160,6 +162,9 @@ public class OmpHistoryReader {
             SessionHeader header = null;
             String firstUserPrompt = null;
             int messageCount = 0;
+            // Line 1 is omp's fixed-size title slot; empty or absent means omp never titled the session.
+            String ompTitle = null;
+            boolean firstLineSeen = false;
             long lastTs = 0L;
 
             try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
@@ -176,6 +181,16 @@ public class OmpHistoryReader {
                         continue;
                     }
                     String type = text(obj, "type");
+                    if (!firstLineSeen) {
+                        firstLineSeen = true;
+                        if ("title".equals(type)) {
+                            String slotTitle = text(obj, "title");
+                            if (slotTitle != null && !slotTitle.isBlank()) {
+                                ompTitle = slotTitle.trim();
+                            }
+                            continue;
+                        }
+                    }
                     if ("session".equals(type) && header == null) {
                         header = parseHeader(obj, file);
                         continue;
@@ -226,7 +241,9 @@ public class OmpHistoryReader {
             if (info.firstTimestamp <= 0) {
                 info.firstTimestamp = info.lastTimestamp;
             }
-            if (firstUserPrompt != null && !firstUserPrompt.isBlank()) {
+            if (ompTitle != null) {
+                info.title = ompTitle;
+            } else if (firstUserPrompt != null && !firstUserPrompt.isBlank()) {
                 info.title = truncate(firstUserPrompt, MAX_TITLE_CHARS);
             } else {
                 info.title = "OMP session " + shortId(info.sessionId);
@@ -397,6 +414,8 @@ public class OmpHistoryReader {
 
     private List<JsonObject> parseMessages(Path file,
                                            BooleanSupplier cancellation) throws IOException {
+        ToolContext ctx = collectToolContext(file, cancellation);
+        OmpHistoryUsage usage = new OmpHistoryUsage();
         List<JsonObject> messages = new ArrayList<>();
         int counter = 0;
         try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
@@ -429,27 +448,130 @@ public class OmpHistoryReader {
                     if (text.isBlank()) {
                         continue;
                     }
+                    usage.finishTurn();
                     counter++;
                     messages.add(buildUserTextMessage(text, entryId != null ? entryId : "omp-user-" + counter));
                 } else if ("assistant".equals(role)) {
-                    List<JsonObject> fromAssistant = convertAssistantMessage(message, entryId, counter);
+                    List<JsonObject> fromAssistant = convertAssistantMessage(message, entryId, counter, ctx);
                     counter += fromAssistant.size();
                     messages.addAll(fromAssistant);
+                    usage.onAssistantMessage(message, fromAssistant);
                 } else if ("toolResult".equals(role)) {
                     String callId = text(message, "toolCallId");
                     if (callId == null || callId.isBlank()) {
                         callId = "omp-tool-" + (++counter);
                     }
-                    String content = truncate(extractTextBlocks(message.get("content")), MAX_TOOL_RESULT_CHARS);
-                    boolean isError = message.has("isError") && message.get("isError").getAsBoolean();
-                    messages.add(buildToolResultMessage(callId, content, isError));
+                    OmpToolMapper.Mapped mapped = ctx.pending.remove(callId);
+                    if (mapped != null && !mapped.toolResults.isEmpty()) {
+                        for (JsonObject result : mapped.toolResults) {
+                            messages.add(buildToolResultMessage(
+                                    result.get("tool_use_id").getAsString(),
+                                    result.get("content").getAsString(),
+                                    result.get("is_error").getAsBoolean()));
+                        }
+                    } else {
+                        OmpToolMapper.ToolResult result = toToolResult(message);
+                        messages.add(buildToolResultMessage(callId, result.text, result.isError));
+                    }
                 }
             }
         }
+        usage.finishTurn();
         return messages;
     }
 
-    private static List<JsonObject> convertAssistantMessage(JsonObject message, String entryId, int counterBase) {
+    /**
+     * Tool-call/result pairing state for one session read. A call id can be reused (providers that
+     * number calls per response), so results are slotted per call, in file order, not per id.
+     */
+    private static final class ToolContext {
+        /** Per call id: one slot per call carrying it, holding that call's own result or null. */
+        final Map<String, List<OmpToolMapper.ToolResult>> results = new HashMap<>();
+        /** Second pass: how many calls with each id were already emitted. */
+        final Map<String, Integer> callsSeen = new HashMap<>();
+        final Map<String, OmpToolMapper.Mapped> pending = new HashMap<>();
+        String cwd;
+        String home;
+    }
+
+    /**
+     * First pass: give each tool call a slot and put every result into the slot of the latest call
+     * with its id that precedes it, so each call can be mapped with its own result.
+     */
+    private ToolContext collectToolContext(Path file, BooleanSupplier cancellation) throws IOException {
+        ToolContext ctx = new ToolContext();
+        try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                HistoryCancellation.check(cancellation);
+                line = line.trim();
+                if (line.isEmpty()) {
+                    continue;
+                }
+                // Only the session header, tool calls and tool results matter in this pass; skip parsing the rest.
+                if (!line.contains("toolResult") && !line.contains("toolCall") && !line.contains("\"session\"")) {
+                    continue;
+                }
+                JsonObject obj;
+                try {
+                    obj = JsonParser.parseString(line).getAsJsonObject();
+                } catch (Exception e) {
+                    continue;
+                }
+                String type = text(obj, "type");
+                if ("session".equals(type) && ctx.cwd == null) {
+                    ctx.cwd = text(obj, "cwd");
+                    continue;
+                }
+                if (!"message".equals(type) || !obj.has("message") || !obj.get("message").isJsonObject()) {
+                    continue;
+                }
+                JsonObject message = obj.getAsJsonObject("message");
+                String role = text(message, "role");
+                if ("assistant".equals(role) && message.get("content") != null && message.get("content").isJsonArray()) {
+                    for (JsonElement el : message.getAsJsonArray("content")) {
+                        if (el.isJsonObject() && "toolCall".equals(text(el.getAsJsonObject(), "type"))) {
+                            String toolId = text(el.getAsJsonObject(), "id");
+                            if (toolId != null && !toolId.isBlank()) {
+                                ctx.results.computeIfAbsent(toolId, k -> new ArrayList<>()).add(null);
+                            }
+                        }
+                    }
+                } else if ("toolResult".equals(role)) {
+                    String callId = text(message, "toolCallId");
+                    List<OmpToolMapper.ToolResult> slots = callId == null ? null : ctx.results.get(callId);
+                    // First result wins for its call; a result with no preceding call has no slot.
+                    if (slots != null && !slots.isEmpty() && slots.get(slots.size() - 1) == null) {
+                        slots.set(slots.size() - 1, toToolResult(message));
+                    }
+                }
+            }
+        }
+        if (ctx.cwd != null && ctx.cwd.startsWith("/") && PlatformUtils.isWindows()) {
+            // omp runs in WSL: `~` is the home of the WSL user whose sessions are being read, not the
+            // Windows one. Without a WSL home `~` stays as written.
+            String fileOpsHome = NodeDetector.resolveHomeForFileOps();
+            ctx.home = WslPathUtil.uncDistroName(fileOpsHome) != null
+                    ? WslPathUtil.convertToWslPath(fileOpsHome)
+                    : null;
+        } else {
+            ctx.home = PlatformUtils.getHomeDirectory();
+        }
+        return ctx;
+    }
+
+    private static OmpToolMapper.ToolResult toToolResult(JsonObject message) {
+        String content = truncate(extractTextBlocks(message.get("content")), MAX_TOOL_RESULT_CHARS);
+        JsonElement err = message.get("isError");
+        boolean isError = err != null && err.isJsonPrimitive() && err.getAsBoolean();
+        JsonObject details = message.has("details") && message.get("details").isJsonObject()
+                ? message.getAsJsonObject("details")
+                : null;
+        return new OmpToolMapper.ToolResult(content, details, isError);
+    }
+
+    private static List<JsonObject> convertAssistantMessage(JsonObject message, String entryId, int counterBase,
+                                                            ToolContext ctx) {
         List<JsonObject> out = new ArrayList<>();
         JsonElement contentEl = message.get("content");
         if (contentEl == null || !contentEl.isJsonArray()) {
@@ -495,7 +617,8 @@ public class OmpHistoryReader {
                     textBuf.setLength(0);
                 }
                 String toolId = text(block, "id");
-                if (toolId == null || toolId.isBlank()) {
+                boolean hasRecordedId = toolId != null && !toolId.isBlank();
+                if (!hasRecordedId) {
                     toolId = "omp-tool-" + (++n);
                 }
                 String name = text(block, "name");
@@ -506,7 +629,29 @@ public class OmpHistoryReader {
                 if (block.has("arguments") && block.get("arguments").isJsonObject()) {
                     input = block.getAsJsonObject("arguments");
                 }
-                out.add(buildToolUseMessage(toolId, name, input));
+                // omp lifts the model's `i` argument into `intent` before running the tool, and the
+                // live stream reports the arguments without it.
+                if (input.has("i") && text(block, "intent") != null) {
+                    input = input.deepCopy();
+                    input.remove("i");
+                }
+                // The result is known up front (first pass), so the call can be mapped before it is emitted.
+                // A reused id means the n-th call with it gets the n-th slot: its own result, or none.
+                OmpToolMapper.ToolResult callResult = null;
+                if (hasRecordedId) {
+                    int occurrence = ctx.callsSeen.merge(toolId, 1, Integer::sum) - 1;
+                    List<OmpToolMapper.ToolResult> slots = ctx.results.get(toolId);
+                    callResult = slots != null && occurrence < slots.size() ? slots.get(occurrence) : null;
+                }
+                OmpToolMapper.Mapped mapped = OmpToolMapper.map(
+                        toolId, name, input, callResult, ctx.cwd, ctx.home);
+                ctx.pending.put(toolId, mapped);
+                for (JsonObject use : mapped.toolUses) {
+                    out.add(buildToolUseMessage(
+                            use.get("id").getAsString(),
+                            use.get("name").getAsString(),
+                            use.getAsJsonObject("input")));
+                }
             }
         }
         if (thinkBuf.length() > 0) {

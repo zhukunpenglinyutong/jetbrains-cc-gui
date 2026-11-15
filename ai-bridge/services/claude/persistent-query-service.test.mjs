@@ -519,6 +519,7 @@ test('abortCurrentTurn still disposes an active runtime explicitly', async () =>
     message: 'abort me'
   }, false);
   const runtime = await __testing.acquireRuntime(context);
+  runtime.query.interrupt = async () => {};
   const turnPromise = __testing.executeTurn(runtime, context);
   await enteredDeferred.promise;
 

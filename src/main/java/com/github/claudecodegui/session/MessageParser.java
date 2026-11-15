@@ -1,5 +1,6 @@
 package com.github.claudecodegui.session;
 
+import com.github.claudecodegui.util.PluginIdeContext;
 import com.github.claudecodegui.util.UserMessageSanitizer;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -55,7 +56,7 @@ public class MessageParser {
         }
 
         if ("user".equals(type)) {
-            String content = UserMessageSanitizer.sanitizeUserFacingText(extractMessageContent(msg));
+            String content = UserMessageSanitizer.sanitizeClaudeUserFacingText(extractMessageContent(msg));
             JsonObject sanitizedRaw = sanitizeUserRawMessage(rawMessage);
             // Check if it contains a tool_result
             if (content == null || content.trim().isEmpty()) {
@@ -92,7 +93,7 @@ public class MessageParser {
     /**
      * Sanitize user-facing text blocks inside the raw message payload so
      * frontend renderers (which inspect {@code raw.message.content}) do not
-     * display appended system/IDE/Grok rules context.
+     * display appended IDE/Grok rules context. Literal user XML is kept.
      */
     private static JsonObject sanitizeUserRawMessage(JsonObject rawMessage) {
         if (rawMessage == null) {
@@ -107,7 +108,7 @@ public class MessageParser {
         JsonElement contentEl = target.get("content");
         if (contentEl.isJsonPrimitive() && contentEl.getAsJsonPrimitive().isString()) {
             String original = contentEl.getAsString();
-            String sanitized = UserMessageSanitizer.sanitizeUserFacingText(original);
+            String sanitized = UserMessageSanitizer.sanitizeClaudeUserFacingText(original);
             if (sanitized != null && !sanitized.equals(original)) {
                 JsonObject copy = rawMessage.deepCopy();
                 JsonObject copyTarget = copy.has("message") && copy.get("message").isJsonObject()
@@ -128,7 +129,7 @@ public class MessageParser {
                     if (block.has("type") && "text".equals(block.get("type").getAsString())
                             && block.has("text") && !block.get("text").isJsonNull()) {
                         String orig = block.get("text").getAsString();
-                        String san = UserMessageSanitizer.sanitizeUserFacingText(orig);
+                        String san = UserMessageSanitizer.sanitizeClaudeUserFacingText(orig);
                         if (san != null && !san.equals(orig)) {
                             changed = true;
                             break;
@@ -151,7 +152,7 @@ public class MessageParser {
                     if (block.has("type") && "text".equals(block.get("type").getAsString())
                             && block.has("text") && !block.get("text").isJsonNull()) {
                         String orig = block.get("text").getAsString();
-                        String san = UserMessageSanitizer.sanitizeUserFacingText(orig);
+                        String san = UserMessageSanitizer.sanitizeClaudeUserFacingText(orig);
                         block.addProperty("text", san != null ? san : "");
                     }
                 }
@@ -291,6 +292,9 @@ public class MessageParser {
      * Extract the message content.
      */
     public String extractMessageContent(JsonObject msg) {
+        if (msg.has("type") && "user".equals(msg.get("type").getAsString())) {
+            msg = PluginIdeContext.visibleMessage(msg);
+        }
         if (!msg.has("message")) {
             if (msg.has("content")) {
                 return extractContentFromElement(msg.get("content"));

@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ButtonArea } from './ButtonArea';
 import { DEFAULT_CLAUDE_MODEL_ID, type ModelInfo } from './types';
 import { __resetCliModelsCacheForTests } from '../../hooks/providers/useCliModels';
+import { setSessionClaudeModelCatalog } from '../../utils/sessionClaudeModelCatalog';
+import { setSessionClaudeModelMapping, type ClaudeModelMapping } from '../../utils/claudeModelMapping';
 
 vi.mock('../../utils/bridge', () => ({ sendBridgeEvent: vi.fn() }));
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
@@ -16,13 +18,22 @@ const models = [
   { id: 'ccs-claude-provider-a--grok-4.7', label: 'grok-4.7（供应商 A）' },
   { id: 'ccs-claude-provider-b--glm-5.3', label: 'glm-5.3（供应商 B）' },
 ];
-const emit = (payload: unknown) => act(() => window.setCliModels?.(JSON.stringify(payload)));
+// The session selector publishes this catalog after its binding-fenced backend reply.
+const emit = (payload: { success: boolean; provider: string; models: ModelInfo[]; defaultModel?: string;
+  replaceBuiltInOptions?: boolean; modelMapping?: ClaudeModelMapping; error?: string }) => act(() => {
+  if (!payload.success) return;
+  setSessionClaudeModelMapping(payload.modelMapping ?? {});
+  setSessionClaudeModelCatalog({ models: payload.models, defaultModel: payload.defaultModel ?? null,
+    replaceBuiltInOptions: payload.replaceBuiltInOptions === true });
+});
 const emitPicker = () => emit({ success: true, provider: 'claude', models, defaultModel: models[1].id, replaceBuiltInOptions: true });
 
 describe('cc-switch aggregation in the chat toolbar', () => {
   beforeEach(() => {
     localStorage.clear();
     __resetCliModelsCacheForTests();
+    setSessionClaudeModelCatalog(null);
+    setSessionClaudeModelMapping(null);
   });
 
   it('replaces family slots and selects the configured route only after the picker arrives', () => {

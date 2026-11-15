@@ -2,6 +2,8 @@ package com.github.claudecodegui.handler;
 
 import com.github.claudecodegui.handler.core.HandlerContext;
 
+import com.github.claudecodegui.skill.OmpSlashCommandService;
+import com.github.claudecodegui.skill.SlashCommandRegistry;
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.action.SendShortcutSync;
@@ -196,6 +198,11 @@ public class ProjectConfigHandler {
                 this.context.getSession().setCwd(this.settingsService.getEffectiveWorkingDirectory(projectPath));
                 this.context.getSession().getState().setCodexCwdExplicit(true);
             }
+            if (this.context.getSession() != null
+                    && OmpSlashCommandService.isOmp(this.context.getSession().getProvider())) {
+                this.refreshOmpSlashCommandsForWorkingDirectory(
+                        this.settingsService.getEffectiveWorkingDirectory(projectPath));
+            }
             JsonObject response = new JsonObject();
             response.addProperty("projectPath", projectPath);
             response.addProperty("customWorkingDir", customWorkingDir == null ? "" : customWorkingDir);
@@ -206,6 +213,25 @@ public class ProjectConfigHandler {
             LOG.error("[ProjectConfigHandler] Failed to set working directory: " + e.getMessage(), e);
             showError("Failed to save working directory config: " + e.getMessage());
         }
+    }
+
+    /**
+     * OMP resolves skills and custom commands relative to its working directory, so a
+     * directory change needs a new catalog. The session adopts the directory now (the
+     * next send would do it anyway) so later refreshes target the same one.
+     */
+    private void refreshOmpSlashCommandsForWorkingDirectory(String workingDirectory) {
+        this.context.getSession().setCwd(workingDirectory);
+        String cachedJson = SlashCommandRegistry.toJson(OmpSlashCommandService.getCached(workingDirectory));
+        this.uiDispatcher.accept(() -> this.context.callJavaScript("updateSlashCommands", this.context.escapeJs(cachedJson)));
+        OmpSlashCommandService.refreshAndPush(
+                workingDirectory,
+                () -> this.context.getSession() != null
+                        && OmpSlashCommandService.isOmp(this.context.getSession().getProvider())
+                        && OmpSlashCommandService.cacheKey(workingDirectory)
+                                .equals(OmpSlashCommandService.cacheKey(this.context.getSession().getCwd())),
+                fetchedJson -> this.uiDispatcher.accept(
+                        () -> this.context.callJavaScript("updateSlashCommands", this.context.escapeJs(fetchedJson))));
     }
 
     public void handleGetStreamingEnabled() {
@@ -793,6 +819,20 @@ public class ProjectConfigHandler {
             settingsService::setAiTitleGenerationEnabled,
             "window.updateAiTitleGenerationEnabled",
             "Failed to save AI title generation config");
+    }
+
+    public void handleGetSessionGitRepositoryMatchingEnabled() {
+        respondWithJson("window.updateSessionGitRepositoryMatchingEnabled",
+            () -> jsonOf("sessionGitRepositoryMatchingEnabled", settingsService.getSessionGitRepositoryMatchingEnabled()),
+            jsonOf("sessionGitRepositoryMatchingEnabled", false),
+            "Failed to get session repository matching config");
+    }
+
+    public void handleSetSessionGitRepositoryMatchingEnabled(String content) {
+        handleBooleanToggle(content, "sessionGitRepositoryMatchingEnabled", false, "session repository matching",
+            settingsService::setSessionGitRepositoryMatchingEnabled,
+            "window.updateSessionGitRepositoryMatchingEnabled",
+            "Failed to save session repository matching config");
     }
 
     public void handleGetStatusBarWidgetEnabled() {

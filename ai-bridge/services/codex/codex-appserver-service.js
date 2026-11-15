@@ -235,7 +235,10 @@ export class CodexAppServerService extends EventEmitter {
         this.#setState('starting');
         try {
           if (this.privacyIndex?.load) await this.privacyIndex.load();
-          const candidate = await this.clientFactory();
+          const candidate = await this.clientFactory({
+            nativeConfig: this.launchOptions?.nativeConfig,
+            modelProvider: this.launchOptions?.modelProvider,
+          });
           if (this.runtimeGeneration !== generation || this.state !== 'starting') {
             candidate.close();
             throw new ClassifiedError('RUNTIME_RESET', 'Codex runtime was released during client preparation');
@@ -567,7 +570,7 @@ export class CodexAppServerService extends EventEmitter {
     if (this.#isThreadLoaded(threadId)) {
       return;
     }
-    const client = this.client;
+    let client = this.client;
     const pending = this.threadResumes.get(threadId);
     if (pending?.client === client) {
       pending.consumers.add(operation);
@@ -581,6 +584,8 @@ export class CodexAppServerService extends EventEmitter {
     // Preconnect and FIFO operations can arrive together while history loads.
     // Sharing the resume prevents two native requests from claiming one writer.
     const entry = { client, consumers: new Set([operation]), promise: null };
+    const launchOptions = this.launchOptions;
+    const clientFactory = this.clientFactory;
     // Launch changes belong to the idle rebuild, not to an in-flight recovery.
     const params = {
       threadId,
@@ -591,6 +596,7 @@ export class CodexAppServerService extends EventEmitter {
     };
     const promise = (async () => {
       let response;
+      let providerRecovered = false;
       for (let attempt = 0; ; attempt += 1) {
         if (this.client !== client || !client.alive) {
           throw new ClassifiedError('RUNTIME_RESET', 'Codex runtime changed while resuming the thread');
@@ -603,6 +609,19 @@ export class CodexAppServerService extends EventEmitter {
           response = await client.request('thread/resume', params);
           break;
         } catch (error) {
+          // A native mismatch is a definitive rejection before any turn starts.
+          // Retain the historical provider id while routing it through this
+          // conversation's captured supplier, without rewriting its history.
+          const recovered = !providerRecovered && await this.#recoverResumeProvider(
+            error, client, params, entry, launchOptions, clientFactory);
+          if (recovered) {
+            providerRecovered = true;
+            bootstrap = true;
+            client = recovered.client;
+            params.modelProvider = recovered.modelProvider;
+            params.config = recovered.nativeConfig;
+            continue;
+          }
           const delay = THREAD_RESUME_RETRY_DELAYS_MS[attempt];
           if (delay === undefined || error?.code !== 'RPC_ERROR' || error?.rpcCode !== -32600
               || error?.method !== 'thread/resume'
@@ -644,6 +663,56 @@ export class CodexAppServerService extends EventEmitter {
       if (bootstrap && this.client === client) {
         this.bootstrapInFlight = false;
       }
+    }
+  }
+
+  async #recoverResumeProvider(error, client, params, entry, launchOptions, clientFactory) {
+    const mismatch = error?.data;
+    const modelProvider = mismatch?.modelProvider;
+    const provider = params.config?.model_providers?.[params.modelProvider];
+    if (error?.code !== 'RPC_ERROR' || error?.rpcCode !== -32600 || error?.method !== 'thread/resume'
+        || mismatch?.type !== 'modelProviderMismatch' || typeof modelProvider !== 'string' || !modelProvider.trim()
+        || mismatch.currentModelProvider !== params.modelProvider || modelProvider === params.modelProvider
+        || !provider || typeof provider !== 'object' || Array.isArray(provider)
+        || !clientFactory || this.pendingInteractions.size > 0
+        || [...this.threadResumes.keys()].some(threadId => threadId !== params.threadId)
+        || [...this.operations.values()].some(op => !op.settled && op.dispatchPhase !== 'notWritten')
+        || [...this.threads.values()].some(thread => !['unloaded', 'loading'].includes(thread.state))) {
+      return null;
+    }
+    const nativeConfig = { ...params.config, model_provider: modelProvider,
+      model_providers: { ...params.config.model_providers, [modelProvider]: structuredClone(provider) } };
+    const replacement = await clientFactory({ nativeConfig, modelProvider });
+    if (this.client !== client || !client.alive
+        || ![...entry.consumers].some(consumer => !consumer || (!consumer.cancelRequested && !consumer.settled))) {
+      replacement.close();
+      await replacement.waitForExit();
+      throw new ClassifiedError('RUNTIME_RESET', 'Codex runtime changed during provider recovery');
+    }
+    // Detach the old generation before closing it; its exit must not settle the
+    // pending send. The shared resume still owns the same native thread id.
+    this.client = replacement;
+    entry.client = replacement;
+    this.runtimeGeneration += 1;
+    this.bootstrapInFlight = true;
+    this.#attachClientHandlers(replacement);
+    if (this.launchOptions === launchOptions) {
+      this.launchOptions = { ...launchOptions, nativeConfig, modelProvider };
+    }
+    this.#setState('initializing');
+    try {
+      client.close();
+      await client.waitForExit();
+      if (this.client !== replacement) throw new ClassifiedError('RUNTIME_RESET', 'Codex runtime changed during provider recovery');
+      await replacement.ensureInitialized();
+      if (this.client !== replacement || !replacement.alive) {
+        throw new ClassifiedError('RUNTIME_RESET', 'Codex runtime changed during provider recovery');
+      }
+      this.#setState('ready');
+      return { client: replacement, nativeConfig, modelProvider };
+    } catch (failure) {
+      if (this.client === replacement) this.#failRuntime(failure);
+      throw failure;
     }
   }
 
@@ -1473,7 +1542,7 @@ export class CodexAppServerService extends EventEmitter {
     }
     if (operation && (method === 'item/completed' || method === 'item/updated'
         || method === 'item/started' && ['reasoning', 'commandExecution', 'mcpToolCall', 'fileChange', 'contextCompaction',
-          'dynamicToolCall', 'collabAgentToolCall', 'imageView', 'imageGeneration', 'webSearch'].includes(itemType))) {
+          'dynamicToolCall', 'collabAgentToolCall', 'subAgentActivity', 'imageView', 'imageGeneration', 'webSearch'].includes(itemType))) {
       this.#emitItemMarkers(operation, this.itemSnapshots.get(this.#itemSnapshotKey(threadId, itemId)) ?? safeItem, {
         authoritative: method === 'item/completed',
       });

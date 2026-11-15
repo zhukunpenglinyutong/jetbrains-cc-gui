@@ -27,6 +27,8 @@ export interface BehaviorTabProps {
   onEditGroupCollapsedByDefaultChange?: (collapsed: boolean) => void;
   commitGenerationEnabled?: boolean;
   onCommitGenerationEnabledChange?: (enabled: boolean) => void;
+  sessionGitRepositoryMatchingEnabled?: boolean;
+  onSessionGitRepositoryMatchingEnabledChange?: (enabled: boolean) => void;
   statusBarWidgetEnabled?: boolean;
   onStatusBarWidgetEnabledChange?: (enabled: boolean) => void;
   aiTitleGenerationEnabled?: boolean;
@@ -83,6 +85,8 @@ const BehaviorTab = ({
   onEditGroupCollapsedByDefaultChange = () => {},
   commitGenerationEnabled = true,
   onCommitGenerationEnabledChange = () => {},
+  sessionGitRepositoryMatchingEnabled = false,
+  onSessionGitRepositoryMatchingEnabledChange = () => {},
   statusBarWidgetEnabled = true,
   onStatusBarWidgetEnabledChange = () => {},
   aiTitleGenerationEnabled = true,
@@ -275,6 +279,16 @@ const BehaviorTab = ({
         onSystemNotificationOnlyWhenUnfocusedChange={onSystemNotificationOnlyWhenUnfocusedChange}
         askUserQuestionSoundNotificationEnabled={askUserQuestionSoundNotificationEnabled}
         onAskUserQuestionSoundNotificationEnabledChange={onAskUserQuestionSoundNotificationEnabledChange}
+      />
+
+      <ToggleSettingSection
+        icon="codicon-repo"
+        label={t('settings.basic.sessionGitRepositoryMatching.label')}
+        checked={sessionGitRepositoryMatchingEnabled}
+        onChange={onSessionGitRepositoryMatchingEnabledChange}
+        enabledLabel={t('settings.basic.sessionGitRepositoryMatching.enabled')}
+        disabledLabel={t('settings.basic.sessionGitRepositoryMatching.disabled')}
+        hint={t('settings.basic.sessionGitRepositoryMatching.hint')}
       />
     </div>
   );

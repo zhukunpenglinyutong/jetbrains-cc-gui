@@ -29,6 +29,7 @@ import {
   getCliUserAgent,
 } from '../config/api-config.js';
 import { resolveModelFromSettings, resolveSdkModelName } from '../utils/model-utils.js';
+import { buildAskThinkingFields, createWithThinkingFallback } from '../utils/ask-thinking.js';
 import { getRealHomeDir, isMainEntryModule } from '../utils/path-utils.js';
 import { getClaudeCliPathOverride } from '../utils/claude-cli-path.js';
 import { ensureAnthropicSdk } from './claude/message-utils.js';
@@ -106,18 +107,27 @@ async function generateWithClaude(prompt, model) {
 
 /**
  * Build the request for the commit ask path.
- * Reasoning models (e.g. DeepSeek) otherwise emit only `thinking` blocks and
- * never a `text` answer, leaving the commit message empty. The budget keeps
- * headroom for relays that ignore thinking:{type:'disabled'}.
+ * Thinking is turned off where the model allows it: reasoning models (e.g.
+ * DeepSeek) otherwise emit only `thinking` blocks and leave the message empty
+ * (#1693). Models that reject `disabled` get the form they accept (#1949), see
+ * ask-thinking.js. The budget keeps headroom for relays that ignore the flag.
  * Exposed for tests.
  */
 export function buildCommitAskRequest(modelId, prompt) {
   return {
     model: modelId,
-    max_tokens: 2048,
-    thinking: { type: 'disabled' },
+    ...buildAskThinkingFields(modelId, 2048),
     messages: [{ role: 'user', content: prompt }],
   };
+}
+
+/**
+ * Send a commit ask request, retrying once without `thinking` when the endpoint rejects it.
+ */
+function createCommitAsk(create, modelId, prompt) {
+  return createWithThinkingFallback(create, buildCommitAskRequest(modelId, prompt), {
+    onRetry: (err) => console.log(`[CommitMessage] ${modelId} rejected the thinking setting, retrying without it: ${String(err.message).slice(0, 200)}`),
+  });
 }
 
 /**
@@ -161,10 +171,11 @@ async function generateWithClaudeAsk(prompt, model, config) {
   // throws "Cannot read properties of undefined (reading 'push')" when an upstream omits
   // `content` from message_start (observed on OpenCode Go behind a local proxy). Iterating
   // the raw events only needs the deltas we care about, and ignores thinking blocks.
-  const stream = await client.messages.create({
-    ...buildCommitAskRequest(modelId, prompt),
-    stream: true,
-  });
+  const stream = await createCommitAsk(
+    (request) => client.messages.create({ ...request, stream: true }),
+    modelId,
+    prompt,
+  );
 
   for await (const event of stream) {
     if (event.type === 'content_block_delta' && event.delta && event.delta.type === 'text_delta' && event.delta.text) {
@@ -203,7 +214,7 @@ export async function askClaudeNonStreaming(client, modelId, prompt) {
     console.log(`[CommitMessage] Non-streaming messages.create() attempt ${attempt}/${ATTEMPTS}...`);
     // Same request shape as the streaming ask path: reasoning models (DeepSeek)
     // otherwise spend the whole budget on thinking blocks and emit no text.
-    const response = await client.messages.create(buildCommitAskRequest(modelId, prompt));
+    const response = await createCommitAsk((request) => client.messages.create(request), modelId, prompt);
     let text = '';
     if (response && Array.isArray(response.content)) {
       for (const block of response.content) {

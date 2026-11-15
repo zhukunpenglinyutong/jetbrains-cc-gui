@@ -1,5 +1,7 @@
 // Isolate credentials before the runtime caches the user's home directory.
 import './testing/cli-login-home.js';
+import fs from 'node:fs';
+import path from 'node:path';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -518,5 +520,44 @@ test('settings override keeps the [1m] suffix on the tier the request resolved',
     } else {
       process.env.ANTHROPIC_DEFAULT_SONNET_MODEL = previousSonnetModel;
     }
+  }
+});
+
+test('getContextUsagePersistent reuses an idle runtime built for the same supplier', async () => {
+  const { testHomeDir } = await import('./testing/cli-login-home.js');
+  const { createScriptedQuery, RESULT_OK, settleReader } = await import('./testing/scripted-query.js');
+  const { sendMessagePersistent } = await import('./persistent-query-service.js');
+  const configPath = path.join(testHomeDir, '.codemoss', 'config.json');
+  const original = fs.readFileSync(configPath, 'utf8');
+  fs.writeFileSync(configPath, JSON.stringify({ claude: { current: '__cli_login__', providers: {
+    p1: { settingsConfig: { env: { ANTHROPIC_API_KEY: 'sk-test', ANTHROPIC_BASE_URL: 'http://127.0.0.1:9',
+      ANTHROPIC_DEFAULT_OPUS_MODEL: 'supplier-only-opus' } } },
+  } } }));
+  const daemonOpus = process.env.ANTHROPIC_DEFAULT_OPUS_MODEL;
+  const queries = [];
+  __testing.setQueryFn(args => {
+    const query = createScriptedQuery(args, [[RESULT_OK], [RESULT_OK]]);
+    query.getContextUsage = async () => ({ totalTokens: 1 });
+    query.interrupt = async () => {};
+    queries.push(query);
+    return query;
+  });
+  try {
+    const params = { sessionId: 'supplier-ctx', runtimeSessionEpoch: 'e1', message: 'hi', cwd: process.cwd(),
+      supplierId: 'p1', permissionMode: 'acceptEdits', model: 'claude-opus-4-6' };
+    assert.deepEqual(await sendMessagePersistent(params), { outcome: 'completed' });
+    await settleReader();
+    const before = __testing.getRuntimeForSession('supplier-ctx');
+    // Java's get_context_usage carries only the supplier, session, cwd and model.
+    await getContextUsagePersistent({ sessionId: 'supplier-ctx', cwd: process.cwd(), supplierId: 'p1', model: 'claude-opus-4-6' });
+    assert.equal(__testing.getRuntimeForSession('supplier-ctx'), before);
+    // The supplier's model routing stays in its child env, never the shared daemon env.
+    assert.equal(process.env.ANTHROPIC_DEFAULT_OPUS_MODEL, daemonOpus);
+    assert.equal(before.closed, false);
+    assert.deepEqual(await sendMessagePersistent({ ...params, message: 'next' }), { outcome: 'completed' });
+    assert.equal(queries.length, 1);
+  } finally {
+    fs.writeFileSync(configPath, original);
+    await __testing.resetState();
   }
 });

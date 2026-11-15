@@ -69,6 +69,8 @@ public class SaveAsTemplateAction extends ChatToolWindowAction {
             session.getState().isPsiContextEnabled()
         );
 
+        template.setClaudeUltracode(session.isClaudeUltracode());
+
         // Save template
         templateService.saveTemplate(template);
 

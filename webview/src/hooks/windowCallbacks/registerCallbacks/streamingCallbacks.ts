@@ -16,6 +16,7 @@ import {
   isPendingStreamStartActive,
   scheduleLoadingResyncAfterImmunity,
 } from '../../../utils/streamLifecycle';
+import { isSessionTransitionPreparing } from '../../../utils/sessionTransitionState';
 import { THROTTLE_INTERVAL } from '../../useStreamingMessages';
 import { parseSequence } from '../parseSequence';
 import { chooseEndedStreamingContent, ensureRawTextCovers, getStreamEndHandlingMode, getRawUuid, isCodexMessageSnapshot, mergeRawBlocksForFinalization } from '../messageSync';
@@ -474,7 +475,9 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
   };
 
   window.onStreamEnd = (sequence?: string | number) => {
-    if (window.__sessionTransitioning) return;
+    // Before cleanup is accepted the old conversation still owns its stream.
+    // Its observed terminal must remain valid if the attempted swap fails.
+    if (window.__sessionTransitioning && !isSessionTransitionPreparing()) return;
 
     // Idempotency guard: dual-path delivery (primary via flush callback +
     // fallback via Alarm) may send onStreamEnd twice for the same turn.
@@ -511,7 +514,7 @@ export function registerStreamingCallbacks(options: UseWindowCallbacksOptions): 
     // down and re-arm the message-queue drain mid-boot (repeat sends).
     // Finalize the old turn's bubble below, but keep the marker and the
     // loading state; the dispatched turn's own stream end will reset both.
-    const suppressLoadingReset = isPendingStreamStartActive();
+    const suppressLoadingReset = isPendingStreamStartActive() && !isSessionTransitionPreparing();
     if (suppressLoadingReset) scheduleLoadingResyncAfterImmunity();
 
     clearStallWatchdog();

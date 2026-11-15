@@ -61,6 +61,7 @@ class ClaudeProcessInvoker {
         this.streamAdapter = streamAdapter;
     }
 
+
     CompletableFuture<SDKResult> sendMessage(
             String channelId,
             String message,
@@ -75,6 +76,8 @@ class ClaudeProcessInvoker {
             Boolean streaming,
             Boolean disableThinking,
             String reasoningEffort,
+            boolean ultracode,
+            boolean projectTrusted,
             MessageCallback callback
     ) {
         AtomicBoolean errorAlreadyReported = new AtomicBoolean(false);
@@ -113,7 +116,9 @@ class ClaudeProcessInvoker {
                         agentPrompt,
                         streaming,
                         disableThinking,
-                        reasoningEffort
+                        reasoningEffort,
+                        ultracode,
+                        projectTrusted
                 );
                 stdinInput.addProperty("executionScope", callback.executionScope());
                 String stdinJson = gson.toJson(stdinInput);
@@ -208,7 +213,7 @@ class ClaudeProcessInvoker {
                 callback.onError(e.getMessage());
                 return result;
             }
-        }).exceptionally(ex -> {
+        }, ClaudeSDKBridge.claudeExecutor()).exceptionally(ex -> {
             if (errorAlreadyReported.get()) {
                 log.debug("[ProcessInvoker] Skipping duplicate onError in exceptionally (already reported by catch)");
                 return new SDKResult();

@@ -102,8 +102,16 @@ test('async choices use the bottom dialog and display the selected answer after 
   await expect(page.locator('.ask-user-question-dialog')).toHaveCount(0);
 });
 
-test('async questions accept custom answers', async ({ page }) => {
+test('configuration warnings retain details and do not prevent custom answers', async ({ page }) => {
   const dialog = await openQuestion(page);
+  await page.evaluate(() => window.onCodexRuntimeEvent?.(JSON.stringify({ kind: 'nativeWarning',
+    threadId: 'question-thread', payload: { method: 'configWarning',
+      message: 'Codex is ignoring old settings.\ndisable_response_storage is ignored.\nnetwork_access is ignored.' } })));
+  await expect(page.locator('.toast-message')).not.toContainText('disable_response_storage');
+  await page.locator('.toast-action').click();
+  await expect(page.locator('.ant-modal-confirm-content')).toContainText('disable_response_storage is ignored.');
+  await page.locator('.ant-modal-confirm-btns button').click();
+  await expect(dialog).toBeVisible();
   await dialog.locator('textarea').fill('A custom answer');
   await dialog.locator('.action-button.primary').click();
   const replies = await page.evaluate(() => (window as QuestionWindow).__questionMessages
@@ -179,4 +187,35 @@ test('completed native edits retain a successful receipt when the stream ends', 
   await expect(page.locator('.file-changes-tool-block .tool-status-indicator.completed')).toHaveCount(1);
   await expect(page.locator('.tool-status-indicator.error')).toHaveCount(0);
   await expect(page.getByText('Count updated to 9.', { exact: true })).toBeVisible();
+});
+
+test('ordinary chat stays usable through native notices and refreshes edits without full hydration', async ({ page }) => {
+  await page.evaluate(value => {
+    window.updateMessages?.(JSON.stringify(value));
+    window.onStreamStart?.(); window.showLoading?.('true');
+    for (const method of ['configWarning', 'deprecationNotice']) window.onCodexRuntimeEvent?.(JSON.stringify({
+      kind: 'nativeWarning', threadId: 'question-thread', payload: { method,
+        message: method === 'configWarning' ? 'Old setting is ignored.' : 'Full-history hydration is deprecated for paginated threads.' },
+    }));
+  }, messages([{ type: 'userMessage', id: 'hello', content: [{ type: 'text', text: '你好' }] }]));
+  await expect(page.locator('.ask-user-question-dialog')).toHaveCount(0);
+  await expect(page.locator('.stop-button')).toBeVisible();
+  await expect(page.locator('.toast-message')).toHaveCount(1);
+  await expect(page.locator('.toast-message')).not.toContainText('Full-history hydration is deprecated');
+  await page.locator('.toast-action').click();
+  await expect(page.locator('.ant-modal-confirm-content')).toContainText('Old setting is ignored.');
+  await expect(page.locator('.ant-modal-confirm-content')).not.toContainText('Full-history hydration is deprecated');
+  await page.locator('.ant-modal-confirm-btns button').click();
+  await page.evaluate(value => {
+    window.updateMessages?.(JSON.stringify(value)); window.onStreamEnd?.(); window.showLoading?.('false');
+  }, messages([{ type: 'userMessage', id: 'hello', content: [{ type: 'text', text: '你好' }] },
+    { type: 'agentMessage', id: 'greeting', text: '你好，有什么可以帮你？' }]));
+  await expect(page.getByText('你好，有什么可以帮你？', { exact: true })).toBeVisible();
+  await expect(page.locator('.stop-button')).toHaveCount(0);
+  await expect.poll(async () => page.evaluate(() => (window as QuestionWindow).__questionMessages
+    .filter(message => message.startsWith('codex_native_read_thread:')).length)).toBeGreaterThan(0);
+  const reads = await page.evaluate(() => (window as QuestionWindow).__questionMessages
+    .filter(message => message.startsWith('codex_native_read_thread:'))
+    .map(message => JSON.parse(message.slice('codex_native_read_thread:'.length))));
+  expect(reads.every(read => read.params.fileChangesOnly === true && read.params.includeTurns !== true)).toBe(true);
 });

@@ -84,6 +84,8 @@ interface BasicConfigSectionProps {
   commitGenerationEnabled?: boolean;
   onCommitGenerationEnabledChange?: (enabled: boolean) => void;
   // Status bar widget configuration
+  sessionGitRepositoryMatchingEnabled?: boolean;
+  onSessionGitRepositoryMatchingEnabledChange?: (enabled: boolean) => void;
   statusBarWidgetEnabled?: boolean;
   onStatusBarWidgetEnabledChange?: (enabled: boolean) => void;
   // AI title generation configuration
@@ -192,6 +194,8 @@ const BasicConfigSection = (props: BasicConfigSectionProps) => {
           onEditGroupCollapsedByDefaultChange={props.onEditGroupCollapsedByDefaultChange}
           commitGenerationEnabled={props.commitGenerationEnabled}
           onCommitGenerationEnabledChange={props.onCommitGenerationEnabledChange}
+          sessionGitRepositoryMatchingEnabled={props.sessionGitRepositoryMatchingEnabled}
+          onSessionGitRepositoryMatchingEnabledChange={props.onSessionGitRepositoryMatchingEnabledChange}
           statusBarWidgetEnabled={props.statusBarWidgetEnabled}
           onStatusBarWidgetEnabledChange={props.onStatusBarWidgetEnabledChange}
           aiTitleGenerationEnabled={props.aiTitleGenerationEnabled}

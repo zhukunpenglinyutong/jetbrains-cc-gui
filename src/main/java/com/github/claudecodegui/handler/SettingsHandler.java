@@ -42,6 +42,7 @@ public class SettingsHandler extends BaseMessageHandler {
         "set_model",
         "set_provider",
         "set_reasoning_effort",
+        "set_claude_ultracode",
         "set_codex_fast_mode",
         "set_dsh_preset",
         "get_node_path",
@@ -80,6 +81,8 @@ public class SettingsHandler extends BaseMessageHandler {
         "set_permission_dialog_timeout",
         "get_commit_generation_enabled",
         "set_commit_generation_enabled",
+        "get_session_git_repository_matching_enabled",
+        "set_session_git_repository_matching_enabled",
         "get_status_bar_widget_enabled",
         "set_status_bar_widget_enabled",
 
@@ -184,6 +187,9 @@ public class SettingsHandler extends BaseMessageHandler {
                 return true;
             case "set_reasoning_effort":
                 modelProviderHandler.handleSetReasoningEffort(content);
+                return true;
+            case "set_claude_ultracode":
+                modelProviderHandler.handleSetClaudeUltracode(content);
                 return true;
             case "set_codex_fast_mode":
                 modelProviderHandler.handleSetCodexFastMode(content);
@@ -298,6 +304,12 @@ public class SettingsHandler extends BaseMessageHandler {
                 return true;
             case "set_commit_generation_enabled":
                 projectConfigHandler.handleSetCommitGenerationEnabled(content);
+                return true;
+            case "get_session_git_repository_matching_enabled":
+                projectConfigHandler.handleGetSessionGitRepositoryMatchingEnabled();
+                return true;
+            case "set_session_git_repository_matching_enabled":
+                projectConfigHandler.handleSetSessionGitRepositoryMatchingEnabled(content);
                 return true;
             case "get_status_bar_widget_enabled":
                 projectConfigHandler.handleGetStatusBarWidgetEnabled();

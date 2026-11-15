@@ -68,6 +68,18 @@ test.beforeEach(async ({ page }) => {
     bridge.__sentMessages = [];
     bridge.__sentAttachments = [];
     bridge.sendToJava = (message) => {
+      if (message.startsWith('create_new_session:')) {
+        const { transitionToken } = JSON.parse(message.slice('create_new_session:'.length)) as {
+          transitionToken: string;
+        };
+        // Provider selection replaces the session. Model the backend's accepted
+        // transition before these tests start a turn in the selected provider.
+        setTimeout(() => {
+          window.sessionTransitionStarted?.('', '', transitionToken);
+          window.clearMessages?.(undefined, transitionToken);
+          window.historyLoadComplete?.(0, transitionToken);
+        }, 0);
+      }
       if (message.startsWith('send_message:')) {
         const payload = JSON.parse(message.slice('send_message:'.length)) as { text: string };
         bridge.__sentMessages.push(payload.text);
@@ -169,6 +181,7 @@ async function selectProvider(page: Page, providerId: string) {
   await page.locator(`[data-provider-id="${providerId}"]`).click();
 
   await expect(page.locator('.button-area').first()).toHaveAttribute('data-provider', providerId);
+  await expect.poll(() => page.evaluate(() => window.__sessionTransitioning === true)).toBe(false);
 }
 
 test('queueing and editing behave the same on a non-Claude provider', async ({ page }) => {

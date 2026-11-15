@@ -28,6 +28,16 @@ describe('codexStatusRequestTracker', () => {
     expect(isLatestCodexStatusRequest('session-1:3')).toBe(false);
   });
 
+  it('accepts disjoint batches out of order but rejects a superseded child poll', () => {
+    trackCodexStatusRequest('session:1', ['child-a']);
+    trackCodexStatusRequest('session:2', ['child-b']);
+    expect(isLatestCodexStatusRequest('session:1', 'child-a')).toBe(true);
+    expect(isLatestCodexStatusRequest('session:2', 'child-b')).toBe(true);
+    trackCodexStatusRequest('session:3', ['child-a']);
+    expect(isLatestCodexStatusRequest('session:1', 'child-a')).toBe(false);
+    expect(isLatestCodexStatusRequest('session:3', 'child-a')).toBe(true);
+  });
+
   it('accepts responses without a requestId (older bridge builds)', () => {
     trackCodexStatusRequest('session-1:5');
     expect(isLatestCodexStatusRequest(undefined)).toBe(true);

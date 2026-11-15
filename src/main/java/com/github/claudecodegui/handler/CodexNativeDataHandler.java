@@ -5,6 +5,9 @@ import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.handler.history.CodexHistoryActivity;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.session.ClaudeSession;
+import com.github.claudecodegui.provider.common.GitRepositorySessionMatcher;
+import com.google.gson.JsonArray;
+import com.intellij.util.concurrency.AppExecutorUtil;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
@@ -70,8 +73,19 @@ public class CodexNativeDataHandler extends BaseMessageHandler {
             this.publish(type, failure);
             return true;
         }
+        boolean matchRepository = "codex.listThreads".equals(method)
+                && GitRepositorySessionMatcher.isEnabled(this.context.getSettingsService());
+        String projectPath = this.context.getProject() == null ? cwd : this.context.getProject().getBasePath();
+        String historyRoot = nonEmpty(this.context.resolveEffectiveWorkingDirectory(), projectPath);
+        if (matchRepository) {
+            params.add("projectPath", new JsonArray());
+        }
         CompletableFuture<JsonObject> result = bridge.readCodexNative(
                 method, channelId, cwd, threadId, params);
+        if (matchRepository) {
+            result = result.thenApplyAsync(response -> new GitRepositorySessionMatcher(projectPath)
+                    .filterNativeThreads(response, historyRoot), AppExecutorUtil.getAppExecutorService());
+        }
         result.whenComplete((response, failure) -> {
             JsonObject output = response == null ? new JsonObject() : response.deepCopy();
             if (payload != null && payload.has("requestId")) {

@@ -2,6 +2,7 @@ package com.github.claudecodegui.ui;
 
 import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.settings.CodemossSettingsService;
+import com.github.claudecodegui.settings.SessionSupplierCatalog;
 import com.github.claudecodegui.handler.AgentHandler;
 import com.github.claudecodegui.handler.ClipboardHandler;
 import com.github.claudecodegui.handler.ContextHandler;
@@ -30,9 +31,12 @@ import com.github.claudecodegui.handler.provider.ModelProviderHandler;
 import com.github.claudecodegui.handler.provider.ProviderHandler;
 import com.github.claudecodegui.handler.provider.claude.ClaudePlanUsageHandler;
 import com.github.claudecodegui.handler.provider.grok.GrokPlanUsageHandler;
+import com.github.claudecodegui.handler.provider.omp.OmpApprovalModeHandler;
+import com.github.claudecodegui.handler.provider.omp.OmpPlanUsageHandler;
 import com.github.claudecodegui.handler.RewindHandler;
 import com.github.claudecodegui.handler.SessionHandler;
 import com.github.claudecodegui.handler.SettingsHandler;
+import com.github.claudecodegui.handler.HookHandler;
 import com.github.claudecodegui.handler.SkillHandler;
 import com.github.claudecodegui.handler.TabHandler;
 import com.github.claudecodegui.handler.UsagePushService;
@@ -567,6 +571,8 @@ public class ChatWindowDelegate {
         messageDispatcher.registerHandler(new ProviderHandler(handlerContext));
         messageDispatcher.registerHandler(new ClaudePlanUsageHandler(handlerContext));
         messageDispatcher.registerHandler(new GrokPlanUsageHandler(handlerContext));
+        messageDispatcher.registerHandler(new OmpPlanUsageHandler(handlerContext));
+        messageDispatcher.registerHandler(new OmpApprovalModeHandler(handlerContext, host::persistTabSessionState));
         messageDispatcher.registerHandler(new CustomModelPricingHandler(handlerContext, settingsService));
         messageDispatcher.registerHandler(new McpServerHandler(handlerContext));
         messageDispatcher.registerHandler(new McpMarketplaceHandler(handlerContext));
@@ -574,6 +580,7 @@ public class ChatWindowDelegate {
         messageDispatcher.registerHandler(new CodexMcpServerHandler(handlerContext, settingsService.getCodexMcpServerManager()));
         messageDispatcher.registerHandler(new CodexPetHandler(handlerContext));
         messageDispatcher.registerHandler(new SkillHandler(handlerContext));
+        messageDispatcher.registerHandler(new HookHandler(handlerContext));
         messageDispatcher.registerHandler(new FileHandler(handlerContext));
         this.settingsHandler = new SettingsHandler(handlerContext);
         messageDispatcher.registerHandler(this.settingsHandler);
@@ -619,6 +626,20 @@ public class ChatWindowDelegate {
             @Override public void onCreateNewSession() {
                 host.getSessionLifecycleManager().createNewSession();
             }
+            @Override public void onCreateNewSession(String transitionToken) {
+                if (transitionToken == null) {
+                    onCreateNewSession();
+                } else {
+                    host.getSessionLifecycleManager().createNewSession(transitionToken);
+                }
+            }
+            @Override public void onCreateNewSession(String transitionToken, String provider) {
+                if (provider == null) {
+                    onCreateNewSession(transitionToken);
+                } else {
+                    host.getSessionLifecycleManager().createNewSession(transitionToken, provider);
+                }
+            }
             @Override public void onFrontendReady() { handleFrontendReady(); }
             @Override public void onHistoryRenderComplete(long commitEpoch) {
                 host.onHistoryRenderComplete(commitEpoch);
@@ -631,7 +652,7 @@ public class ChatWindowDelegate {
                 host.onSurfaceDamageApplied(token, phase, applied);
             }
             @Override public void onRefreshSlashCommands() {
-                host.getSessionLifecycleManager().fetchSlashCommandsOnStartup();
+                host.getSessionLifecycleManager().fetchSlashCommandsOnStartup(true);
             }
         }));
 
@@ -641,14 +662,19 @@ public class ChatWindowDelegate {
         messageDispatcher.registerHandler(permissionHandler);
 
         HistoryHandler historyHandler = new HistoryHandler(handlerContext);
-        historyHandler.setSessionLoadCallback((sessionId, projectPath, provider, model) -> {
+        historyHandler.setSessionLoadCallback(new HistoryHandler.SessionLoadCallback() {
+            @Override public void onLoadSession(String sessionId, String projectPath, String provider, String model) {
+                onLoadSession(sessionId, projectPath, provider, model, null);
+            }
+
+            @Override public void onLoadSession(String sessionId, String projectPath, String provider, String model, String transitionToken) {
             ClaudeSession current = host.getSession();
             boolean sameSession = current != null
                     && sessionId != null
                     && sessionId.equals(current.getSessionId())
                     && (provider == null || provider.trim().isEmpty()
                                 || provider.equals(current.getProvider()));
-            if (sameSession) {
+            if (sameSession && transitionToken == null) {
                 // Re-opening the very session already active: soft-reload its transcript
                 // instead of interrupting the in-flight turn.
                 LOG.info("[HistoryHandler] Same-session resume, soft-reloading transcript: " + sessionId);
@@ -659,7 +685,12 @@ public class ChatWindowDelegate {
                 }
                 host.reloadActiveSessionMessages();
             } else {
-                host.getSessionLifecycleManager().loadHistorySession(sessionId, projectPath, provider, model);
+                if (transitionToken == null) {
+                    host.getSessionLifecycleManager().loadHistorySession(sessionId, projectPath, provider, model);
+                } else {
+                    host.getSessionLifecycleManager().loadHistorySession(sessionId, projectPath, provider, model, transitionToken);
+                }
+            }
             }
         });
         historyHandler.setRestoredHistoryCallback(new HistoryHandler.RestoredHistoryCallback() {
@@ -675,6 +706,7 @@ public class ChatWindowDelegate {
 
             @Override
             public void onCodexSessionSelected() {
+                host.getSessionLifecycleManager().invalidatePendingTransition();
                 host.retireRestoredHistory();
             }
         });
@@ -897,6 +929,7 @@ public class ChatWindowDelegate {
             pushCurrentTabStateToFrontend();
         }
         host.getSessionLifecycleManager().sendCurrentPermissionMode();
+        host.getSessionLifecycleManager().sendCurrentOmpApprovalMode();
         // A page (re)load can silently drop the one-shot dialog-show injection,
         // leaving the future blocked until the safety net fires with the dialog
         // never shown. The webview is now ready, so replay whatever is pending.
@@ -944,7 +977,8 @@ public class ChatWindowDelegate {
                 session.getModel(),
                 session.getPermissionMode(),
                 session.getReasoningEffort(),
-                session.getCodexServiceTier()
+                session.getCodexServiceTier(),
+                session.isClaudeUltracode()
         );
         host.callJavaScript("window.applyBackendTabState", JsUtils.escapeJs(payload));
     }
@@ -960,11 +994,24 @@ public class ChatWindowDelegate {
             String reasoningEffort,
             String codexServiceTier
     ) {
+        return buildBackendTabStateJson(provider, model, permissionMode, reasoningEffort,
+                codexServiceTier, false);
+    }
+
+    static String buildBackendTabStateJson(
+            String provider,
+            String model,
+            String permissionMode,
+            String reasoningEffort,
+            String codexServiceTier,
+            boolean claudeUltracode
+    ) {
         JsonObject state = new JsonObject();
         state.addProperty("provider", provider);
         state.addProperty("model", model);
         state.addProperty("permissionMode", permissionMode);
         state.addProperty("reasoningEffort", reasoningEffort);
+        state.addProperty("claudeUltracode", claudeUltracode);
         state.addProperty("codexFastMode", "fast".equals(codexServiceTier) ? "fast" : "normal");
         return state.toString();
     }
@@ -986,30 +1033,35 @@ public class ChatWindowDelegate {
                 session.getProvider(),
                 session.getModel(),
                 session.getCwd(),
-                context.getSettingsService()
+                context.getSettingsService(),
+                session.getState().getRuntimeSupplierId(session.getProvider())
         ));
         usagePushService.refreshContextBar();
     }
 
     /**
-     * Resolves the same configured Claude model mapping used by an explicit model selection,
-     * while retaining v0.5's provider-aware Codex/static context-window behavior.
+     * Resolves the same configured Claude model mapping used by an explicit model selection
+     * (from the conversation's supplier), while retaining v0.5's provider-aware Codex
+     * behavior and the per-provider resolvers (OMP, OpenCode, Grok, custom windows).
      */
     static int resolveModelContextLimitForRecovery(
             String provider,
             String model,
             String cwd,
-            CodemossSettingsService settingsService
+            CodemossSettingsService settingsService,
+            String supplierId
     ) {
         if ("codex".equalsIgnoreCase(provider)) {
             return SettingsHandler.getModelContextLimit(provider, model);
         }
+        if (!"claude".equalsIgnoreCase(provider)) {
+            return ModelProviderHandler.resolveContextLimit(provider, model, cwd);
+        }
 
-        boolean isClaude = "claude".equalsIgnoreCase(provider);
         String resolvedModel = model;
-        if (isClaude && settingsService != null) {
+        if (settingsService != null) {
             try {
-                JsonObject settings = settingsService.readClaudeSettings();
+                JsonObject settings = SessionSupplierCatalog.claudeSettings(settingsService, supplierId);
                 if (settings != null && settings.has("env") && settings.get("env").isJsonObject()) {
                     resolvedModel = ModelProviderHandler.resolveConfiguredClaudeModel(
                             model,
@@ -1021,9 +1073,7 @@ public class ChatWindowDelegate {
                         + e.getMessage());
             }
         }
-        return isClaude
-                ? ModelProviderHandler.getClaudeContextLimit(resolvedModel, cwd)
-                : SettingsHandler.getModelContextLimit(resolvedModel);
+        return ModelProviderHandler.getClaudeContextLimit(resolvedModel, cwd);
     }
 
     private void replayCurrentSessionStateToFrontend() {

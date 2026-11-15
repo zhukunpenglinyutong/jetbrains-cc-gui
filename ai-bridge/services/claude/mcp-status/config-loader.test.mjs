@@ -14,7 +14,7 @@ const tempHome = fs.realpathSync(tempHomeRaw);
 process.env.HOME = tempHome;
 process.env.USERPROFILE = tempHome;
 
-const { loadMcpServersConfigAsRecord, loadMcpServersConfig } = await import('./config-loader.js');
+const { loadMcpServersConfigAsRecord, loadMcpServersConfig, loadAllMcpServersInfo } = await import('./config-loader.js');
 
 const claudeJsonPath = path.join(tempHome, '.claude.json');
 
@@ -113,7 +113,7 @@ test('loadMcpServersConfigAsRecord expands ${VAR} from .claude/settings.local.js
       }
     });
 
-    const result = await loadMcpServersConfigAsRecord(projectDir);
+    const result = await loadMcpServersConfigAsRecord(projectDir, true);
     assert.ok(result, 'expected a non-null record');
     assert.equal(result.postgres.env.DATABASE_URI, 'postgres://user:pass@localhost/db');
     assert.equal(result.postgres.env.STATIC, 'plain');
@@ -170,7 +170,7 @@ test('loadMcpServersConfigAsRecord prefers project env over user settings.json e
       }
     });
 
-    const result = await loadMcpServersConfigAsRecord(projectDir);
+    const result = await loadMcpServersConfigAsRecord(projectDir, true);
     assert.ok(result, 'expected a non-null record');
     assert.equal(result.layered.env.A, 'project-value');
     assert.equal(result.layered.env.B, 'user-only-value');
@@ -179,3 +179,55 @@ test('loadMcpServersConfigAsRecord prefers project env over user settings.json e
     fs.rmSync(path.join(tempHome, '.claude'), { recursive: true, force: true });
   }
 });
+
+function withRepoEnvOverridingUserEnv(run) {
+  return async () => {
+    fs.mkdirSync(path.join(tempHome, '.claude'), { recursive: true });
+    fs.writeFileSync(path.join(tempHome, '.claude', 'settings.json'), JSON.stringify({
+      env: { TARGET_URL: 'https://good.example/user' }
+    }));
+    const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccg-mcp-untrusted-'));
+    try {
+      fs.mkdirSync(path.join(projectDir, '.claude'), { recursive: true });
+      fs.writeFileSync(path.join(projectDir, '.claude', 'settings.local.json'), JSON.stringify({
+        env: { TARGET_URL: 'https://attacker.example/steal' }
+      }));
+      writeConfig({
+        mcpServers: {
+          remote: { command: 'node', env: { TARGET_URL: '${TARGET_URL}' } }
+        }
+      });
+      await run(projectDir);
+    } finally {
+      fs.rmSync(projectDir, { recursive: true, force: true });
+      fs.rmSync(path.join(tempHome, '.claude'), { recursive: true, force: true });
+    }
+  };
+}
+
+test('an untrusted project cannot override the user env behind ${VAR} placeholders', withRepoEnvOverridingUserEnv(async (projectDir) => {
+  const untrusted = await loadMcpServersConfigAsRecord(projectDir, false);
+  assert.equal(untrusted.remote.env.TARGET_URL, 'https://good.example/user');
+}));
+
+test('a project whose trust is not stated is treated as untrusted when expanding ${VAR}',withRepoEnvOverridingUserEnv(async (projectDir) => {
+  const unstated = await loadMcpServersConfigAsRecord(projectDir);
+  assert.equal(unstated.remote.env.TARGET_URL, 'https://good.example/user');
+}));
+
+test('a trusted project still overrides the user env behind ${VAR} placeholders', withRepoEnvOverridingUserEnv(async (projectDir) => {
+  const trusted = await loadMcpServersConfigAsRecord(projectDir, true);
+  assert.equal(trusted.remote.env.TARGET_URL, 'https://attacker.example/steal');
+}));
+
+test('the MCP list and the status info apply the same trust gate to ${VAR} expansion', withRepoEnvOverridingUserEnv(async (projectDir) => {
+  const untrustedList = await loadMcpServersConfig(projectDir, false);
+  assert.equal(untrustedList[0].config.env.TARGET_URL, 'https://good.example/user');
+  const trustedList = await loadMcpServersConfig(projectDir, true);
+  assert.equal(trustedList[0].config.env.TARGET_URL, 'https://attacker.example/steal');
+
+  const untrustedInfo = await loadAllMcpServersInfo(projectDir, false);
+  assert.equal(untrustedInfo.enabled[0].config.env.TARGET_URL, 'https://good.example/user');
+  const trustedInfo = await loadAllMcpServersInfo(projectDir, true);
+  assert.equal(trustedInfo.enabled[0].config.env.TARGET_URL, 'https://attacker.example/steal');
+}));

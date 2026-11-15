@@ -68,4 +68,61 @@ public class CodexNativeDataHandlerTest {
             bridge.cleanupAllProcesses();
         }
     }
+
+    @Test
+    public void confirmationRemainsRelativeToProjectAfterOpeningACrossDirectoryThread() throws Exception {
+        org.junit.rules.TemporaryFolder temporary = new org.junit.rules.TemporaryFolder();
+        temporary.create();
+        CodexSDKBridge bridge = null;
+        try {
+            var root = temporary.getRoot().toPath();
+            var project = com.github.claudecodegui.provider.common.GitHistoryTestRepositories.create(
+                    root.resolve("project"), "https://host/team/game.git");
+            var clone = com.github.claudecodegui.provider.common.GitHistoryTestRepositories.create(
+                    root.resolve("clone"), "git@host:team/game.git");
+            JsonObject response = new JsonObject();
+            JsonArray rows = new JsonArray();
+            for (var path : List.of(project, clone)) {
+                JsonObject row = new JsonObject();
+                row.addProperty("id", path.getFileName().toString());
+                row.addProperty("cwd", path.toString());
+                rows.add(row);
+            }
+            response.add("data", rows);
+            var done = new java.util.concurrent.CountDownLatch(1);
+            var result = new java.util.concurrent.atomic.AtomicReference<JsonObject>();
+            bridge = new CodexSDKBridge() {
+                @Override public CompletableFuture<JsonObject> readCodexNative(
+                        String method, String channel, String cwd, String thread, JsonObject params) {
+                    assertEquals(clone.toString(), cwd);
+                    return CompletableFuture.completedFuture(response);
+                }
+            };
+            var settings = new com.github.claudecodegui.settings.CodemossSettingsService() {
+                @Override public boolean getSessionGitRepositoryMatchingEnabled() { return true; }
+            };
+            var ideProject = (com.intellij.openapi.project.Project) java.lang.reflect.Proxy.newProxyInstance(
+                    getClass().getClassLoader(), new Class<?>[]{com.intellij.openapi.project.Project.class},
+                    (proxy, method, args) -> method.getName().equals("getBasePath") ? project.toString() : null);
+            HandlerContext context = new HandlerContext(ideProject, null, bridge, settings, new HandlerContext.JsCallback() {
+                @Override public void callJavaScript(String function, String... args) {
+                    result.set(JsonParser.parseString(args[0]).getAsJsonObject()); done.countDown();
+                }
+                @Override public String escapeJs(String value) { return value; }
+            }) {
+                @Override public String resolveEffectiveWorkingDirectory() { return project.toString(); }
+            };
+            JsonObject payload = new JsonObject(); payload.addProperty("cwd", clone.toString());
+            assertTrue(new CodexNativeDataHandler(context).handle("codex_native_list_threads", payload.toString()));
+            assertTrue(done.await(5, java.util.concurrent.TimeUnit.SECONDS));
+            assertFalse(result.get().has("error"));
+            JsonArray listed = result.get().getAsJsonArray("data");
+            assertEquals(2, listed.size());
+            assertFalse(listed.get(0).getAsJsonObject().get("requiresCwdConfirmation").getAsBoolean());
+            assertTrue(listed.get(1).getAsJsonObject().get("requiresCwdConfirmation").getAsBoolean());
+        } finally {
+            if (bridge != null) bridge.cleanupAllProcesses();
+            temporary.delete();
+        }
+    }
 }

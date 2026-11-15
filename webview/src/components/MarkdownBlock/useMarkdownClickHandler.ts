@@ -64,6 +64,8 @@ export function useMarkdownClickHandler(
 
     const img = target?.closest('img');
     if (img && img.getAttribute('src')) {
+      // A linked image (e.g. a badge) would otherwise navigate the webview to the link.
+      event.preventDefault();
       onImagePreview(img.getAttribute('src'));
       return;
     }

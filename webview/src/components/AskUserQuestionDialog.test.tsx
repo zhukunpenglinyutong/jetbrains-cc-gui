@@ -82,6 +82,20 @@ describe('AskUserQuestionDialog provider label', () => {
     expect(screen.queryByText(/Claude/)).toBeNull();
   });
 
+  it('identifies OMP requests without rendering Claude title', () => {
+    render(
+      <AskUserQuestionDialog
+        isOpen
+        request={buildRequest({ provider: 'omp' })}
+        onSubmit={() => {}}
+        onCancel={() => {}}
+      />,
+    );
+
+    expect(screen.getByText('OMP has some questions for you')).toBeTruthy();
+    expect(screen.queryByText(/Claude/)).toBeNull();
+  });
+
   it('omits the question chip when the header is empty', () => {
     const { container } = render(
       <AskUserQuestionDialog
@@ -103,6 +117,31 @@ describe('AskUserQuestionDialog provider label', () => {
 
     expect(container.querySelector('.question-tag')).toBeNull();
     expect(screen.getByText('Pick a color')).toBeTruthy();
+  });
+
+  it('opens with a form\'s preselected checkboxes checked and submits them untouched', () => {
+    const onSubmit = vi.fn();
+    const { container } = render(<AskUserQuestionDialog isOpen onSubmit={onSubmit} onCancel={() => {}}
+      request={buildRequest({ provider: 'omp', questions: [{
+        id: 'props', question: 'Which properties?', header: '', multiSelect: true, required: false,
+        options: [{ label: 'Height', description: '' }, { label: 'Width', description: '', selected: true }],
+      }] })} />);
+    expect([...container.querySelectorAll('.question-option.selected .option-label')].map((node) => node.textContent))
+      .toEqual(['Width']);
+    fireEvent.click(screen.getByText('提交'));
+    expect(onSubmit).toHaveBeenCalledExactlyOnceWith('req-test-1', { props: ['Width'] });
+  });
+
+  it('lets an optional checkbox question be submitted with nothing checked', () => {
+    const onSubmit = vi.fn();
+    render(<AskUserQuestionDialog isOpen onSubmit={onSubmit} onCancel={() => {}}
+      request={buildRequest({ provider: 'omp', questions: [{
+        id: 'props', question: 'Which properties?', header: '', multiSelect: true, required: false,
+        options: [{ label: 'Height', description: '' }, { label: 'Width', description: '', selected: true }],
+      }] })} />);
+    fireEvent.click(screen.getByText('Width'));
+    fireEvent.click(screen.getByText('提交'));
+    expect(onSubmit).toHaveBeenCalledExactlyOnceWith('req-test-1', {});
   });
 });
 

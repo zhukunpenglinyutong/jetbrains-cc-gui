@@ -431,7 +431,7 @@ function readClaudeSettingsFromDisk() {
   return readJsonFile(join(getClaudeDir(), 'settings.json'));
 }
 
-function loadCodemossConfig() {
+export function loadCodemossConfig() {
   return readJsonFile(join(getCodemossDir(), 'config.json'));
 }
 

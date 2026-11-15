@@ -6,12 +6,14 @@ name: Tests
 #   - Java unit tests (Linux)
 #   - WSL integration tests (Windows + WSL)
 # All jobs run in parallel and are intentionally independent of build.yml, so a
-# test failure can never block the Build Plugin job.
+# test failure can never block the Build Plugin job. build.yml calls this
+# workflow on tag pushes so a release is only published after tests pass.
 on:
   push:
     branches: [ '**' ]
   pull_request:
     branches: [ '**' ]
+  workflow_call:
 
 jobs:
   # ai-bridge tests use Node's built-in test runner (node:test). They are
@@ -113,7 +115,8 @@ jobs:
   # resolveWslHomeUncPath / resolveHomeForFileOps behave as on a developer's
   # Windows+WSL machine. The tests still Assume WSL availability, so they
   # self-skip if the distro fails to come up rather than producing false
-  # failures.
+  # failures. It also runs OmpHistoryRestoreTest, whose Windows-host path
+  # rules (a WSL session restored on Windows) the Linux job cannot reach.
   java-wsl:
     name: WSL integration tests (Windows)
     runs-on: windows-latest
@@ -165,3 +168,4 @@ jobs:
           --tests "com.github.claudecodegui.cli.CliStatusDetectorCodexWslTest"
           --tests "com.github.claudecodegui.handler.history.HistoryMessageInjectorTest.restoresLocalImageRecordedByCodexInWsl"
           --tests "com.github.claudecodegui.provider.codex.CodexSDKBridgeWslCwdTest"
+          --tests "com.github.claudecodegui.provider.omp.OmpHistoryRestoreTest"

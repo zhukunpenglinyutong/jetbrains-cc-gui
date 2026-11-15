@@ -9,6 +9,7 @@ import { join } from 'path';
 import { setupApiKey, loadClaudeSettings, getCliUserAgent } from '../config/api-config.js';
 import { ensureAnthropicSdk, ensureBedrockSdk } from './claude/message-utils.js';
 import { resolveModelFromSettings } from '../utils/model-utils.js';
+import { buildAskThinkingFields, createWithThinkingFallback } from '../utils/ask-thinking.js';
 import { getExistingClaudeProjectSessionFilePath, getCodemossDir } from '../utils/path-utils.js';
 
 const DEFAULT_HAIKU_MODEL = 'claude-haiku-4-5-20251001';
@@ -144,8 +145,8 @@ function getSessionFilePath(sessionId, cwd) {
  * checking ANTHROPIC_DEFAULT_HAIKU_MODEL before falling back to the default.
  * @returns {string} Model ID
  */
-function resolveHaikuModel() {
-  const settings = loadClaudeSettings();
+function resolveHaikuModel(supplier = null) {
+  const settings = supplier?.settings ?? loadClaudeSettings();
   return resolveModelFromSettings(DEFAULT_HAIKU_MODEL, settings?.env) || DEFAULT_HAIKU_MODEL;
 }
 
@@ -155,7 +156,7 @@ function resolveHaikuModel() {
  * @param {string} [sessionId] - Session id, forwarded as the upstream session header
  * @returns {Promise<object>} Anthropic client instance
  */
-async function createAnthropicClient(config, sessionId) {
+async function createAnthropicClient(config, sessionId, { anthropicSdk = ensureAnthropicSdk, bedrockSdk = ensureBedrockSdk } = {}) {
   const cliHeaders = {
     'x-app': 'cli',
     'User-Agent': getCliUserAgent()
@@ -170,12 +171,12 @@ async function createAnthropicClient(config, sessionId) {
   }
 
   if (config.authType === 'aws_bedrock') {
-    const bedrockModule = await ensureBedrockSdk();
+    const bedrockModule = await bedrockSdk();
     const AnthropicBedrock = bedrockModule.AnthropicBedrock || bedrockModule.default || bedrockModule;
-    return new AnthropicBedrock({ defaultHeaders: cliHeaders });
+    return new AnthropicBedrock({ ...config.bedrockOptions, defaultHeaders: cliHeaders });
   }
 
-  const anthropicModule = await ensureAnthropicSdk();
+  const anthropicModule = await anthropicSdk();
   const Anthropic = anthropicModule.default || anthropicModule.Anthropic || anthropicModule;
 
   if (config.authType === 'auth_token') {
@@ -196,17 +197,18 @@ async function createAnthropicClient(config, sessionId) {
 
 /**
  * Build the messages.create() request for title generation.
- * thinking is disabled: the Haiku alias can be user-mapped to a reasoning
- * model (e.g. DeepSeek via relay), which would otherwise spend the budget on
- * `thinking` blocks and return an empty title. The budget keeps headroom for
- * relays that ignore the flag (observed: thinking block, stop_reason max_tokens).
+ * Thinking is turned off where the model allows it: the Haiku alias can be
+ * user-mapped to a reasoning model (e.g. DeepSeek via relay), which would
+ * otherwise spend the budget on `thinking` blocks and return an empty title
+ * (#1693). Models that reject `disabled` get the form they accept (#1949), see
+ * ask-thinking.js. The budget keeps headroom for relays that ignore the flag
+ * (observed: thinking block, stop_reason max_tokens).
  * Exposed for tests.
  */
 export function buildSessionTitleRequest(model, userMessage) {
   return {
     model,
-    max_tokens: 2048,
-    thinking: { type: 'disabled' },
+    ...buildAskThinkingFields(model, 2048),
     messages: [{ role: 'user', content: userMessage }],
     system: SESSION_TITLE_PROMPT,
   };
@@ -218,8 +220,36 @@ export function buildSessionTitleRequest(model, userMessage) {
  * @param {string} sessionId - Session id, forwarded as the upstream session header
  * @returns {Promise<string|null>} Generated title or null
  */
-async function callHaikuApi(userMessage, sessionId) {
-  const config = setupApiKey();
+function resolveTitleApiConfig(supplier) {
+  if (!supplier) return setupApiKey();
+  const env = supplier.env;
+  if (['1', 'true'].includes(String(env.CLAUDE_CODE_USE_BEDROCK).toLowerCase())) {
+    // A direct title client must never resolve another profile's default credential chain.
+    if (!env.AWS_BEARER_TOKEN_BEDROCK && !(env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY)) {
+      return { authType: 'bound_cloud_credential_chain' };
+    }
+    const awsRegion = env.AWS_REGION || env.AWS_DEFAULT_REGION || 'us-east-1';
+    return { authType: 'aws_bedrock', bedrockOptions: {
+      apiKey: env.AWS_BEARER_TOKEN_BEDROCK || null,
+      awsAccessKey: env.AWS_ACCESS_KEY_ID || null,
+      awsSecretKey: env.AWS_SECRET_ACCESS_KEY || null,
+      awsSessionToken: env.AWS_SESSION_TOKEN || null,
+      awsRegion,
+      baseURL: env.ANTHROPIC_BEDROCK_BASE_URL || `https://bedrock-runtime.${awsRegion}.amazonaws.com`,
+    } };
+  }
+  if (['VERTEX', 'FOUNDRY'].some(name => ['1', 'true'].includes(String(env[`CLAUDE_CODE_USE_${name}`]).toLowerCase()))) {
+    return { authType: 'bound_cloud_credential_chain' };
+  }
+  return {
+    apiKey: supplier.env.ANTHROPIC_AUTH_TOKEN || supplier.env.ANTHROPIC_API_KEY,
+    baseUrl: supplier.env.ANTHROPIC_BASE_URL || supplier.env.ANTHROPIC_API_URL || 'https://api.anthropic.com',
+    authType: supplier.env.ANTHROPIC_AUTH_TOKEN ? 'auth_token' : 'api_key',
+  };
+}
+
+async function callHaikuApi(userMessage, sessionId, supplier = null, dependencies = {}) {
+  const config = resolveTitleApiConfig(supplier);
 
   // CLI login uses SDK-native OAuth which the direct Anthropic SDK doesn't support.
   if (config.authType === 'cli_login') {
@@ -227,13 +257,13 @@ async function callHaikuApi(userMessage, sessionId) {
     return null;
   }
 
-  if (!config.apiKey && config.authType !== 'api_key_helper') {
+  if (!config.apiKey && !['api_key_helper', 'aws_bedrock'].includes(config.authType)) {
     logTitleEvent('info', 'Skipping title generation: no API key available (authType: ' + config.authType + ')');
     return null;
   }
 
-  const client = await createAnthropicClient(config, sessionId);
-  const model = resolveHaikuModel();
+  const client = await createAnthropicClient(config, sessionId, dependencies);
+  const model = resolveHaikuModel(supplier);
   logTitleEvent('info', 'Calling Haiku API, model: ' + model);
 
   const controller = new AbortController();
@@ -241,9 +271,12 @@ async function callHaikuApi(userMessage, sessionId) {
 
   let response;
   try {
-    response = await client.messages.create(
+    response = await createWithThinkingFallback(
+      (request) => client.messages.create(request, { signal: controller.signal }),
       buildSessionTitleRequest(model, userMessage),
-      { signal: controller.signal }
+      {
+        onRetry: (err) => logTitleEvent('warn', 'Model rejected the thinking setting, retrying without it: ' + String(err.message).slice(0, 200)),
+      }
     );
   } catch (err) {
     if (controller.signal.aborted) {
@@ -290,6 +323,8 @@ async function callHaikuApi(userMessage, sessionId) {
   }
 }
 
+export const __testing = { callHaikuApi };
+
 /**
  * Save AI title to the JSONL session file.
  * @param {string} sessionId
@@ -330,7 +365,7 @@ async function saveAiTitle(sessionId, title, cwd) {
  * @param {string} sessionId - Session ID
  * @param {string|null} cwd - Working directory
  */
-export async function generateSessionTitle(userMessage, sessionId, cwd) {
+export async function generateSessionTitle(userMessage, sessionId, cwd, supplier = null) {
   if (!userMessage || !userMessage.trim() || !sessionId) {
     logTitleEvent('info', 'Skipping title generation: missing userMessage or sessionId');
     // Treat invalid input as "do not retry" — return true so callers don't
@@ -373,7 +408,7 @@ export async function generateSessionTitle(userMessage, sessionId, cwd) {
       }
     }
 
-    const title = await callHaikuApi(input, sessionId);
+    const title = await callHaikuApi(input, sessionId, supplier);
     if (title) {
       // saveAiTitle returning false signals an FS error; don't retry — disk
       // problems are usually persistent and a retry storm helps no one.

@@ -160,8 +160,8 @@ const isValidFqcn = (className: string): boolean => {
 const callBridge = (payload: string) => {
   try {
     if (window.sendToJava) {
-      window.sendToJava(payload);
-      return true;
+      const delivered: unknown = window.sendToJava(payload);
+      return delivered !== false;
     }
   } catch {
     // Host/page replacement may throw; callers need a refused dispatch to preserve retries.

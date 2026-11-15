@@ -1,6 +1,9 @@
 import { renderHook } from '@testing-library/react';
 import type { Attachment } from '../types.js';
 import { useSubmitHandler } from './useSubmitHandler.js';
+import { updateCodexReasoningCapabilities } from '../../../utils/codexReasoningCapabilities';
+
+beforeEach(() => updateCodexReasoningCapabilities([], true));
 
 it.each(['/compact', '/review', '/diff', '/approvals'])('dispatches Codex control %s while CLI discovery is pending', (command) => {
   vi.useFakeTimers();
@@ -28,6 +31,62 @@ function createAttachment(id: string): Attachment {
 }
 
 describe('useSubmitHandler', () => {
+  it('preserves the text and attachment draft while restored Ultra awaits native capabilities', () => {
+    vi.useFakeTimers();
+    try {
+      const clearInput = vi.fn();
+      const setInternalAttachments = vi.fn();
+      const clearAttachmentsDraft = vi.fn();
+      const invalidateImagePastes = vi.fn();
+      const recordInputHistory = vi.fn();
+      const onSubmit = vi.fn();
+      const addToast = vi.fn();
+      const close = vi.fn();
+      const attachments = [createAttachment('a1')];
+      const { result } = renderHook(() => useSubmitHandler({
+        getTextContent: () => 'keep this draft', invalidateCache: vi.fn(), attachments,
+        sdkStatusLoading: false, sdkInstalled: true, currentProvider: 'codex',
+        selectedModel: 'native-model', reasoningEffort: 'ultra',
+        clearInput, externalAttachments: undefined, setInternalAttachments,
+        clearAttachmentsDraft, invalidateImagePastes, recordInputHistory, onSubmit, addToast,
+        fileCompletion: { close }, commandCompletion: { close }, agentCompletion: { close },
+        promptCompletion: { close }, dollarCommandCompletion: { close }, t: key => key,
+      }));
+      result.current();
+      vi.runAllTimers();
+      expect(addToast).toHaveBeenCalledWith('chat.codexUltraCapabilitiesLoading', 'info');
+      for (const mutation of [clearInput, setInternalAttachments, clearAttachmentsDraft, invalidateImagePastes, recordInputHistory, close, onSubmit]) {
+        expect(mutation).not.toHaveBeenCalled();
+      }
+      updateCodexReasoningCapabilities([{ id: 'native-model', supportedReasoningEfforts: ['high', 'ultra'] }]);
+      result.current();
+      vi.runAllTimers();
+      expect(onSubmit).toHaveBeenCalledWith('keep this draft', attachments);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it.each(['/new', '/resume', '/plan', '/compact', '/review', '/context'])('does not block local/native control %s during Ultra lookup', command => {
+    vi.useFakeTimers();
+    try {
+      const onSubmit = vi.fn();
+      const addToast = vi.fn();
+      const close = vi.fn();
+      const { result } = renderHook(() => useSubmitHandler({
+        getTextContent: () => command, invalidateCache: vi.fn(), attachments: [],
+        sdkStatusLoading: false, sdkInstalled: true, currentProvider: 'codex',
+        selectedModel: 'native-model', reasoningEffort: 'ultra', clearInput: vi.fn(),
+        externalAttachments: undefined, setInternalAttachments: vi.fn(),
+        fileCompletion: { close }, commandCompletion: { close }, agentCompletion: { close },
+        promptCompletion: { close }, dollarCommandCompletion: { close }, recordInputHistory: vi.fn(),
+        onSubmit, addToast, t: key => key,
+      }));
+      result.current();
+      vi.runAllTimers();
+      expect(onSubmit).toHaveBeenCalledWith(command, undefined);
+      expect(addToast).not.toHaveBeenCalled();
+    } finally { vi.useRealTimers(); }
+  });
+
   it('does nothing when input is empty and no attachments', () => {
     const clearInput = vi.fn();
     const close = vi.fn();

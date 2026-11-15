@@ -1,5 +1,6 @@
 package com.github.claudecodegui.util;
 
+import com.github.claudecodegui.bridge.EnvironmentConfigurator;
 import com.github.claudecodegui.bridge.NodeDetector;
 
 import java.nio.file.Path;
@@ -14,7 +15,11 @@ public final class CodexHomeResolver {
     }
 
     public static Path resolve(String configuredHome, String userHome) {
-        return (configuredHome == null || configuredHome.isBlank()
-                ? Path.of(userHome, ".codex") : Path.of(configuredHome.trim())).toAbsolutePath().normalize();
+        if (configuredHome == null || configuredHome.isBlank()) {
+            return Path.of(userHome, ".codex").toAbsolutePath().normalize();
+        }
+        String home = configuredHome.trim();
+        String windowsHome = EnvironmentConfigurator.convertWslMountPathToWindowsPath(home);
+        return Path.of(windowsHome != null ? windowsHome : home).toAbsolutePath().normalize();
     }
 }

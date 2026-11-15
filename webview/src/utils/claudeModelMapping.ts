@@ -16,6 +16,14 @@ export interface ClaudeModelMapping {
   [key: string]: string | undefined;
 }
 
+let sessionModelMapping: ClaudeModelMapping | null = null;
+
+/** The active conversation's display mapping stays local to its webview. */
+export function setSessionClaudeModelMapping(mapping: ClaudeModelMapping | null): void {
+  sessionModelMapping = mapping;
+  window.dispatchEvent(new CustomEvent('localStorageChange', { detail: { key: STORAGE_KEYS.CLAUDE_MODEL_MAPPING } }));
+}
+
 /** Parse only model ids and names from a provider's settings.env payload. */
 export function parseClaudeModelMappingEnv(raw: unknown): ClaudeModelMapping {
   const env = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
@@ -48,6 +56,12 @@ export function resolveClaudeModelMappingLabel(
  * Read the Claude model mapping.
  */
 export function readClaudeModelMapping(): ClaudeModelMapping {
+  if (sessionModelMapping !== null) return sessionModelMapping;
+  return readGlobalClaudeModelMapping();
+}
+
+/** Auxiliary features keep using their configured global default. */
+export function readGlobalClaudeModelMapping(): ClaudeModelMapping {
   try {
     const stored = localStorage.getItem(STORAGE_KEYS.CLAUDE_MODEL_MAPPING);
     if (!stored) {

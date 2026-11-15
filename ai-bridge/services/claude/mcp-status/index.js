@@ -57,11 +57,12 @@ export async function verifyMcpServerStatus(serverName, serverConfig) {
  * Get the connection status of all MCP servers
  * Includes enabled, disabled, and invalid servers so the frontend gets a complete picture
  * @param {string} cwd - Current working directory (used to detect project config)
+ * @param {boolean} projectTrusted - Whether the IDE trusts the project
  * @returns {Promise<Object[]>} List of MCP server statuses
  */
-export async function getMcpServersStatus(cwd = null) {
+export async function getMcpServersStatus(cwd = null, projectTrusted = false) {
   try {
-    const allServers = await loadAllMcpServersInfo(cwd);
+    const allServers = await loadAllMcpServersInfo(cwd, projectTrusted);
 
     log('info', 'Found', allServers.enabled.length, 'enabled,',
       allServers.disabled.length, 'disabled,',
