@@ -268,14 +268,15 @@ async function buildRequestContext(params, withAttachments, overrides = {}) {
   const options = buildQueryOptions(
     workingDirectory, sdkModelName, permissionMode,
     maxThinkingTokens, reasoningEffort, streamingEnabled, systemPromptAppend, requestedSessionId,
-    mcpServers, modelId, settings?.env, resolvedModelId, params.ultracode, supplier?.env, projectTrusted
+    mcpServers, modelId, settings?.env, resolvedModelId, params.ultracode, supplier?.env, projectTrusted, params.envFile
   );
   options.settings = buildSessionClaudeSettingsOverride(supplier, options.settings);
 
   const userMessage = await buildUserMessage(params, withAttachments, requestedSessionId);
 
   const runtimeSignature = buildRuntimeSignature(
-    options, systemPromptAppend, streamingEnabled, runtimeSessionEpoch, modelId, supplier?.revision
+    options, systemPromptAppend, streamingEnabled, runtimeSessionEpoch, modelId,
+    { ...process.env, ...options.env }, mcpServers, params.envFile
   );
   console.log('[LIFECYCLE] buildRequestContext sessionId=' + (requestedSessionId || '(new)')
     + ' epoch=' + (runtimeSessionEpoch || '(none)')

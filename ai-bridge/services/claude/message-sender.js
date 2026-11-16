@@ -78,7 +78,7 @@ function resolveThinkingConfig(settings) {
 /**
  * Build query options object shared by both send functions.
  */
-function buildQueryOptions({ workingDirectory, permissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines, mcpServers, modelId, settingsEnv, resolvedModelId, ultracode, childEnv, projectTrusted }) {
+function buildQueryOptions({ workingDirectory, permissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines, mcpServers, modelId, settingsEnv, resolvedModelId, ultracode, childEnv, projectTrusted, envFile }) {
   const claudeCliOverride = getClaudeCliPathOverride();
   return {
     cwd: workingDirectory,
@@ -102,6 +102,7 @@ function buildQueryOptions({ workingDirectory, permissionMode, sdkModelName, max
     ...(permissionMode === 'bypassPermissions' && { allowDangerouslySkipPermissions: true }),
     ...(mcpServers && { mcpServers }),
     ...(claudeCliOverride && { pathToClaudeCodeExecutable: claudeCliOverride }),
+    ...(envFile && { envFile }),
     systemPrompt: {
       type: 'preset',
       preset: 'claude_code',
@@ -539,7 +540,7 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
     const preToolUseHook = createPreToolUseHook(effectivePermissionMode, workingDirectory);
     const trusted = projectTrustFor(projectTrusted, cwd, workingDirectory);
     const mcpServers = await loadMcpServersConfigAsRecord(workingDirectory, trusted);
-    const options = buildQueryOptions({ workingDirectory, permissionMode: effectivePermissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines, mcpServers, modelId: model, settingsEnv: settings?.env, resolvedModelId: resolvedModel, ultracode, childEnv: supplier?.env, projectTrusted: trusted });
+    const options = buildQueryOptions({ workingDirectory, permissionMode: effectivePermissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines, mcpServers, modelId: model, settingsEnv: settings?.env, resolvedModelId: resolvedModel, ultracode, childEnv: supplier?.env, projectTrusted: trusted, envFile: params.envFile });
     options.settings = buildSessionClaudeSettingsOverride(supplier, options.settings);
 
     if (normalizedReasoningEffort) {
@@ -624,7 +625,7 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
 
     const trusted = projectTrustFor(stdinData?.projectTrusted, cwd, workingDirectory);
     const mcpServers = await loadMcpServersConfigAsRecord(workingDirectory, trusted);
-    const options = buildQueryOptions({ workingDirectory, permissionMode: normalizedPermissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines, mcpServers, modelId: model, settingsEnv: settings?.env, resolvedModelId: resolvedAttachModel, ultracode: stdinData?.ultracode, childEnv: supplier?.env, projectTrusted: trusted });
+    const options = buildQueryOptions({ workingDirectory, permissionMode: normalizedPermissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines, mcpServers, modelId: model, settingsEnv: settings?.env, resolvedModelId: resolvedAttachModel, ultracode: stdinData?.ultracode, childEnv: supplier?.env, projectTrusted: trusted, envFile: stdinData?.envFile });
     options.settings = buildSessionClaudeSettingsOverride(supplier, options.settings);
 
     if (reasoningEffort) {

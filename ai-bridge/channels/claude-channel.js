@@ -75,7 +75,7 @@ async function handleScopedClaudeCommand(command, args, stdinData) {
     case 'send': {
       if (stdinData && stdinData.message !== undefined) {
         // Include streaming and disableThinking when destructuring
-        const { message, sessionId, cwd, permissionMode, model, openedFiles, agentPrompt, streaming, disableThinking, reasoningEffort, ultracode, projectTrusted } = stdinData;
+        const { message, sessionId, cwd, permissionMode, model, openedFiles, agentPrompt, streaming, disableThinking, reasoningEffort, ultracode, projectTrusted, envFile } = stdinData;
         await claudeSendMessage(
           message,
           sessionId || '',
@@ -89,10 +89,11 @@ async function handleScopedClaudeCommand(command, args, stdinData) {
           reasoningEffort || null,  // Pass reasoning effort level
           ultracode,
           stdinData.supplierId,
-          projectTrusted === true
+          projectTrusted === true,
+          envFile
         );
       } else {
-        await claudeSendMessage(args[0], args[1], args[2], args[3], args[4]);
+        await claudeSendMessage(args[0], args[1], args[2], args[3], args[3], args[4]);
       }
       break;
     }
@@ -100,14 +101,14 @@ async function handleScopedClaudeCommand(command, args, stdinData) {
     case 'sendWithAttachments': {
       if (stdinData && stdinData.message !== undefined) {
         // Include streaming when destructuring
-        const { message, sessionId, cwd, permissionMode, model, attachments, openedFiles, agentPrompt, streaming, reasoningEffort, ultracode, projectTrusted } = stdinData;
+        const { message, sessionId, cwd, permissionMode, model, attachments, openedFiles, agentPrompt, streaming, reasoningEffort, ultracode, projectTrusted, envFile } = stdinData;
         await claudeSendMessageWithAttachments(
           message,
           sessionId || '',
           cwd || '',
           permissionMode || '',
           model || '',
-          { ...(attachments ? { attachments } : {}), openedFiles, agentPrompt, streaming, reasoningEffort, ultracode, supplierId: stdinData.supplierId, projectTrusted }
+          { ...(attachments ? { attachments } : {}), openedFiles, agentPrompt, streaming, reasoningEffort, ultracode, supplierId: stdinData.supplierId, projectTrusted, envFile }
         );
       } else {
         await claudeSendMessageWithAttachments(args[0], args[1], args[2], args[3], args[4], stdinData);

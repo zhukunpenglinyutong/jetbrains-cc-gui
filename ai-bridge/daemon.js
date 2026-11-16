@@ -121,6 +121,9 @@ setCodexPristineBaseEnv(process.env);
 const DAEMON_VERSION = '1.0.0';
 const DAEMON_IDLE_TIMEOUT_MS = 3 * 60 * 1000;
 const DAEMON_IDLE_CHECK_INTERVAL_MS = 15 * 1000;
+// Maximum line length for incoming NDJSON requests (16 MB) to prevent
+// oversized requests from causing memory issues or being silently dropped.
+const MAX_REQUEST_LINE_LENGTH = 16 * 1024 * 1024;
 
 // =============================================================================
 // State
@@ -541,6 +544,12 @@ async function processRequest(request) {
     // Build stdinData from params (mimics what channel-manager.js does)
     const stdinData = { ...params };
     delete stdinData.env; // env is handled separately
+    // Load env file BEFORE command dispatch so ${VAR} placeholders
+    // in MCP server env blocks resolve correctly.
+    if (stdinData.envFile) {
+      const envVars = await loadEnvFile(stdinData.envFile, stdinData.cwd || null);
+      applyEnvFileVars(envVars, { savedEnv });
+    }
 
     if (provider === 'claude' && command === 'send') {
       providerResult = await sendMessagePersistent(stdinData);
@@ -777,6 +786,33 @@ async function runDaemonMain() {
   const handleInputLine = (line) => {
     // Skip empty lines
     if (!line.trim()) return;
+
+    // Reject oversized requests to prevent memory issues and ensure the caller
+    // receives a proper protocol response instead of silently dropping the request.
+    if (line.length > MAX_REQUEST_LINE_LENGTH) {
+      _originalStderrWrite(
+        `[daemon] Request too large (${line.length} bytes, max ${MAX_REQUEST_LINE_LENGTH}), rejecting\n`,
+        'utf8'
+      );
+      // Try to extract request ID for a proper error response
+      let requestId = '0';
+      try {
+        const parsed = JSON.parse(line.substring(0, 1000));
+        if (parsed && parsed.id) {
+          requestId = String(parsed.id);
+        }
+      } catch {
+        // Ignore parse errors, use default ID
+      }
+      writeRawLine({
+        id: requestId,
+        done: true,
+        success: false,
+        error: `Request too large (${Math.round(line.length / 1024 / 1024)} MB, max ${MAX_REQUEST_LINE_LENGTH / 1024 / 1024} MB)`,
+        code: 'REQUEST_TOO_LARGE',
+      });
+      return;
+    }
 
     let request;
     try {
