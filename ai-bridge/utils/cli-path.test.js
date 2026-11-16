@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, mkdirSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, join, normalize } from 'node:path';
@@ -9,6 +10,7 @@ import {
   isDeadCmdShim,
   quoteCmdArg,
   resolveCliSpawn,
+  resolveCmdShimNodeTarget,
   selectWindowsWhereMatch,
   resolveWindowsSpawnableBin,
   resolveOmpCliPath,
@@ -589,4 +591,71 @@ test('resolveOpenCodeCliPath honors the OPENCODE_CLI_PATH override', () => {
   writeFileSync(file, '', { mode: 0o755 });
   const resolved = resolveOpenCodeCliPath({ ...envWithoutOpenCodeOverrides(), OPENCODE_CLI_PATH: file });
   assert.equal(realpathSync.native(resolved).toLowerCase(), realpathSync.native(file).toLowerCase());
+});
+
+// The shim path walk (%~dp0 expansion, win32 separators) only exists on Windows.
+const windowsOnly = process.platform !== 'win32';
+
+test('resolveCmdShimNodeTarget resolves the npm shim delegation entry', { skip: windowsOnly }, () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ccgui-shim-entry-'));
+  const entry = join(dir, 'cli.js');
+  writeFileSync(entry, '');
+  const shim = join(dir, 'cli.cmd');
+  writeFileSync(shim, [
+    '@ECHO off',
+    'SETLOCAL',
+    'SET "_prog=node"',
+    '"%_prog%" "%~dp0cli.js" %*',
+  ].join('\r\n'));
+  assert.equal(resolveCmdShimNodeTarget(shim), entry);
+});
+
+test('resolveCmdShimNodeTarget rejects shims it cannot resolve statically', { skip: windowsOnly }, () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ccgui-shim-reject-'));
+  const nativeShim = join(dir, 'native.cmd');
+  writeFileSync(nativeShim, ['@echo off', '"%~dp0tool.exe" %*'].join('\r\n'));
+  assert.equal(resolveCmdShimNodeTarget(nativeShim), null);
+
+  writeFileSync(join(dir, 'a.js'), '');
+  writeFileSync(join(dir, 'b.js'), '');
+  const conditional = join(dir, 'conditional.cmd');
+  writeFileSync(conditional, [
+    '@echo off',
+    'if exist "%~dp0a.js" ( "%_prog%" "%~dp0a.js" %* ) else ( "%_prog%" "%~dp0b.js" %* )',
+  ].join('\r\n'));
+  assert.equal(resolveCmdShimNodeTarget(conditional), null);
+
+  const bunShim = join(dir, 'bun.cmd');
+  writeFileSync(bunShim, ['@echo off', '"bun" "%~dp0a.js" %*'].join('\r\n'));
+  assert.equal(resolveCmdShimNodeTarget(bunShim), null);
+});
+
+test('resolveCliSpawn passes a multi-line argument to a Node shim entry intact', { skip: windowsOnly }, () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ccgui-shim-multiline-'));
+  const entry = join(dir, 'cli.js');
+  writeFileSync(entry, 'console.log(JSON.stringify({ argv: process.argv.slice(2) }));\n');
+  const shim = join(dir, 'cli.cmd');
+  writeFileSync(shim, ['@ECHO off', '"%_prog%" "%~dp0cli.js" %*'].join('\r\n'));
+
+  const args = ['run', '--format', 'json', 'first line\nsecond line'];
+  const invocation = resolveCliSpawn(shim, args, { cwd: dir }, true);
+  assert.equal(invocation.file, process.execPath);
+  assert.deepEqual(invocation.args, [entry, ...args]);
+  assert.equal(invocation.options.shell, false);
+
+  const result = spawnSync(invocation.file, invocation.args, { ...invocation.options, encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout).argv, args);
+});
+
+test('resolveCliSpawn keeps the cmd.exe path for single-line arguments and unresolved shims', { skip: windowsOnly }, () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ccgui-shim-cmd-'));
+  writeFileSync(join(dir, 'cli.js'), '');
+  const shim = join(dir, 'cli.cmd');
+  writeFileSync(shim, ['@ECHO off', '"%_prog%" "%~dp0cli.js" %*'].join('\r\n'));
+  assert.match(resolveCliSpawn(shim, ['run', 'single line'], {}, true).file, /cmd(\.exe)?$/i);
+
+  const nativeShim = join(dir, 'native.cmd');
+  writeFileSync(nativeShim, ['@echo off', '"%~dp0tool.exe" %*'].join('\r\n'));
+  assert.match(resolveCliSpawn(nativeShim, ['run', 'a\nb'], {}, true).file, /cmd(\.exe)?$/i);
 });
