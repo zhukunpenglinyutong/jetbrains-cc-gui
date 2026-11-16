@@ -130,6 +130,7 @@ public final class JBCefBrowserFactory {
                     value -> {
                         configureKeyboardWorkaround(value);
                         configureContextMenu(value, isDevMode);
+                        OsrFrameRateLimiter.install(value);
                     },
                     failure -> {
                         LOG.warn("JBCefBrowser builder failed; creating a default browser after cleanup", failure);
