@@ -105,7 +105,7 @@ export function buildSessionCodexConfig(supplierId, { baseEnv = process.env, ...
     }
     if (!apiKey) throw unavailable();
     // A dedicated child-only key prevents the global auth.json from selecting another supplier.
-    const providerId = 'codemoss_session';
+    const providerId = 'ccgui_session';
     const providerEntry = entry ? { ...entry } : { name: 'OpenAI', wire_api: 'responses' };
     providerEntry.env_key = 'CODEX_API_KEY';
     providerEntry.requires_openai_auth = false;
