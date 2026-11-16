@@ -114,22 +114,55 @@ export function quoteCmdArg(value) {
 
 /** JavaScript entry extensions a Node-based npm shim delegates to. */
 const SHIM_JS_EXT = /\.(js|mjs|cjs)$/i;
+/** npm's runtime assignment: `SET "_prog=<shim dir>\node.exe"` or `SET "_prog=node"`. */
+const SHIM_PROG_RE = /^\s*SET\s+"?_prog=([^"\r\n]+)"?\s*$/i;
+/** A delegate target is an absolute drive path or npm's `%dp0%` / legacy `%~dp0` form. */
+const SHIM_TARGET_PREFIX = /^(?:[A-Za-z]:\\|%dp0%|%~dp0)/i;
+
+/** True when an npm shim's `_prog` runtime is Node (`node` / `node.exe`). */
+function isNodeProgram(program) {
+  const trimmed = program.trim().replace(/^"+|"+$/g, '');
+  if (!trimmed) return false;
+  return /(?:^|[\\/])node(?:\.exe)?$/i.test(trimmed);
+}
 
 /**
- * Resolve the JavaScript entry a Windows npm-style `.cmd`/`.bat` shim delegates
- * to, so a caller can spawn `node <entry>` instead of building a `cmd.exe`
- * command line.
+ * True when the shim's target is a Node entry: a `.js`/`.mjs`/`.cjs` file, or an
+ * extensionless script whose shebang runs Node (npm publishes `bin/opencode`
+ * that way).
+ */
+function isNodeEntry(entry) {
+  if (SHIM_JS_EXT.test(entry)) return true;
+  try {
+    const firstLine = readFileSync(entry, 'utf8').split(/\r?\n/, 1)[0] || '';
+    return /^#!.*\bnode(?:\.exe)?\b/i.test(firstLine) && !/\bbun\b/i.test(firstLine);
+  } catch {
+    return false;
+  }
+}
+
+/** Split a cmd command tail into quoted/unquoted tokens. */
+function tokenizeCmdLine(text) {
+  return text.match(/"[^"]*"|\S+/g) || [];
+}
+
+/**
+ * Resolve the Node entry a Windows npm-style `.cmd`/`.bat` shim delegates to, so
+ * a caller can spawn `node <entry>` instead of building a `cmd.exe` command line.
  *
  * cmd.exe receives one command-line string and a line break inside it ends the
  * command, so a multi-line prompt passed as an argument is silently truncated
  * at the first newline (the cmd path in `resolveCliSpawn` cannot carry it).
- * Only the standard single delegation line is trusted: exactly one line
- * forwards `%*` and carries one quoted JavaScript path. Anything else —
- * conditional dispatch, a native `.exe` target, an unresolved `%VAR%` — returns
- * null so the caller keeps the cmd.exe path.
+ *
+ * The parser follows what npm's cmd-shim actually writes (npm 11 / cmd-shim
+ * 8): `SET "_prog=%dp0%\node.exe"` or `SET "_prog=node"`, then one delegation
+ * line `"%_prog%"  "%dp0%\node_modules\...\bin\entry" %*`. Everything is
+ * rejected unless the shape is unambiguous — a non-Node runtime (bun/deno), a
+ * shebang flag between the runtime and the target, conditional dispatch, an
+ * unresolved `%VAR%`, or a target that is not a Node script.
  *
  * @param {string} bin - shim path (quotes already stripped)
- * @returns {string|null} absolute JavaScript entry path, or null when unresolved
+ * @returns {string|null} absolute Node entry path, or null when unresolved
  */
 export function resolveCmdShimNodeTarget(bin) {
   if (typeof bin !== 'string' || !/\.(cmd|bat)$/i.test(bin.trim())) return null;
@@ -140,28 +173,47 @@ export function resolveCmdShimNodeTarget(bin) {
   } catch {
     return null;
   }
+  const lines = content.split(/\r?\n/);
+
+  // npm sets the runtime in an IF/ELSE pair; every assignment must point at Node,
+  // otherwise the fast path would run a bun/deno entry under process.execPath.
+  const programs = lines
+    .map((line) => SHIM_PROG_RE.exec(line))
+    .filter((match) => match !== null)
+    .map((match) => match[1]);
+  if (programs.length === 0 || !programs.every(isNodeProgram)) return null;
+
   let target = null;
   let delegationLines = 0;
-  for (const line of content.split(/\r?\n/)) {
+  const progToken = '"%_prog%"';
+  for (const line of lines) {
     if (!line.includes('%*')) continue;
-    // Only a Node runner can be re-launched with process.execPath; a bun/deno
-    // shim needs its own runtime and flags.
-    if (!/%_prog%/i.test(line) && !/(^|[\s(])"?node(?:\.exe)?"?\s/i.test(line)) continue;
-    const quoted = (line.match(/"((?:[A-Za-z]:\\|%~dp0)[^"\r\n]+)"/g) || [])
-      .filter((token) => SHIM_JS_EXT.test(token.slice(1, -1)));
-    if (quoted.length === 0) continue;
-    // Two JavaScript targets on one delegation line mean conditional dispatch:
-    // which one runs cannot be decided statically.
-    if (quoted.length !== 1) return null;
+    const progIndex = line.indexOf(progToken);
+    if (progIndex < 0) continue;
+    const tokens = tokenizeCmdLine(line.slice(progIndex + progToken.length));
+    // Exactly `<quoted target> %*`: a flag between the runtime and the target
+    // (`"%_prog%" --no-warnings "entry" %*`) cannot be reproduced here.
+    if (tokens.length !== 2 || tokens[1] !== '%*') return null;
+    const quotedTarget = tokens[0];
+    if (!quotedTarget.startsWith('"') || !quotedTarget.endsWith('"')) return null;
+    if (!SHIM_TARGET_PREFIX.test(quotedTarget.slice(1, -1))) return null;
     delegationLines += 1;
     if (delegationLines > 1) return null;
-    target = quoted[0].slice(1, -1);
+    target = quotedTarget.slice(1, -1);
   }
   if (!target || delegationLines !== 1) return null;
+
   const shimDir = pathWin32.dirname(shimPath);
-  const resolved = target.replace(/%~dp0/gi, shimDir.endsWith('\\') ? shimDir : `${shimDir}\\`);
-  if (/%[^%]*%/.test(resolved)) return null;
-  return existsSync(resolved) ? resolved : null;
+  const shimDirWithSlash = shimDir.endsWith('\\') ? shimDir : `${shimDir}\\`;
+  const entry = target
+    .replace(/%~dp0/gi, shimDirWithSlash)
+    .replace(/%dp0%/gi, shimDirWithSlash);
+  if (/%[^%]*%/.test(entry)) return null;
+  // npm writes `%dp0%\node_modules\...` while dp0 already ends in a separator, so
+  // collapse the doubled separator instead of handing it to the consumer.
+  const normalizedEntry = pathWin32.normalize(entry);
+  if (!existsSync(normalizedEntry)) return null;
+  return isNodeEntry(normalizedEntry) ? normalizedEntry : null;
 }
 
 function prependPathDir(env, dir) {
@@ -218,9 +270,10 @@ export function resolveCliSpawn(
   if (needsCmd) {
     // cmd.exe ends the command at an embedded line break, so a multi-line prompt
     // reaches the CLI truncated at its first newline (opencode/grok/kimi/pi all
-    // take the prompt as an argument). For the standard npm shim, run its Node
-    // entry directly instead: CreateProcess passes argv with newlines intact.
-    if (isShim && args.some((arg) => typeof arg === 'string' && /[\r\n]/.test(arg))) {
+    // take the prompt as an argument). For npm's Node shim, run its entry
+    // directly instead: CreateProcess passes argv with newlines intact. A
+    // redirected command must stay on cmd.exe — the redirect lives in that line.
+    if (!redirectTo && isShim && args.some((arg) => typeof arg === 'string' && /[\r\n]/.test(arg))) {
       const nodeEntry = resolveCmdShimNodeTarget(normalized);
       if (nodeEntry) {
         return {
