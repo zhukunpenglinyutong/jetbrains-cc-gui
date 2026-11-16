@@ -3071,6 +3071,22 @@
         }
       }
     },
+    "codexCliAppServerTooOld": {
+      "title": "Codex CLI 版本过低，无法启动",
+      "intro": "本机的 Codex CLI 能正常输出版本号，但版本太旧，不认识插件启动 codex app-server 时传入的 --listen 参数，所以一启动就退出了。",
+      "reason": "插件使用本机识别到的 Codex CLI，更新插件不会同时更新 CLI。如果更新后仍然报错，可能是 PATH 上还有一个更旧的 codex 排在前面。",
+      "solutions": {
+        "updateCodexCli": {
+          "title": "方案一：按官方说明安装或更新 CLI",
+          "step0": "1. 打开官方说明，选择适合当前运行环境的独立安装器、npm 或 Homebrew。更新时沿用原安装渠道，不要直接对独立安装版执行 npm 卸载：",
+          "step1": "2. 在新终端中确认版本已经更新，然后重启 IDE，让插件换用新的 CLI："
+        },
+        "pointCodexBin": {
+          "title": "方案二：让插件指向可用的二进制",
+          "step0": "列出 PATH 上所有的 codex（Windows 使用 where codex）。如果可用的那个不在最前面，把 CODEX_BIN 环境变量设置为它的完整路径，然后重启 IDE。插件现在也会自动回退到后面可用的安装。"
+        }
+      }
+    },
     "codexCliUnavailable": {
       "title": "Codex CLI 无法启动",
       "intro": "插件启动的 Codex CLI 运行时还没来得及响应就退出了。上方错误里列出了失败的 CLI 路径和它自己输出的内容。这通常是 Codex CLI 安装不完整，而不是插件的问题。",

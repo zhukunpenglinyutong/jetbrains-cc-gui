@@ -2558,6 +2558,22 @@
         }
       }
     },
+    "codexCliAppServerTooOld": {
+      "title": "Codex CLI 版本過低，無法啟動",
+      "intro": "本機的 Codex CLI 能正常輸出版本號，但版本太舊，不認得外掛啟動 codex app-server 時傳入的 --listen 參數，所以一啟動就結束了。",
+      "reason": "外掛使用本機識別到的 Codex CLI，更新外掛不會同時更新 CLI。如果更新後仍然報錯，可能是 PATH 上還有一個更舊的 codex 排在前面。",
+      "solutions": {
+        "updateCodexCli": {
+          "title": "方案一：按官方說明安裝或更新 CLI",
+          "step0": "1. 開啟官方說明，選擇適合目前執行環境的獨立安裝器、npm 或 Homebrew。更新時沿用原安裝管道，不要對獨立安裝版執行 npm 解除安裝：",
+          "step1": "2. 在新終端機中確認版本已經更新，然後重新啟動 IDE，讓外掛換用新的 CLI："
+        },
+        "pointCodexBin": {
+          "title": "方案二：讓外掛指向可用的執行檔",
+          "step0": "列出 PATH 上所有的 codex（Windows 使用 where codex）。如果可用的那個不在最前面，請把 CODEX_BIN 環境變數設為它的完整路徑，然後重新啟動 IDE。外掛現在也會自動回退到後面可用的安裝。"
+        }
+      }
+    },
     "codexCliUnavailable": {
       "title": "Codex CLI 無法啟動",
       "intro": "外掛啟動的 Codex CLI 執行環境還沒回應就結束了。上方錯誤中列出了失敗的 CLI 路徑與它自己輸出的內容。這通常是 Codex CLI 安裝不完整，而不是外掛的問題。",

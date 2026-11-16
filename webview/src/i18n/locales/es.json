@@ -2476,6 +2476,22 @@
         }
       }
     },
+    "codexCliAppServerTooOld": {
+      "title": "Codex CLI es demasiado antiguo para iniciarse",
+      "intro": "El Codex CLI local muestra su versión con normalidad, pero es demasiado antiguo para aceptar la opción --listen que el plugin pasa a codex app-server, así que se cierra de inmediato.",
+      "reason": "El plugin ejecuta el Codex CLI que encuentra en tu equipo, por lo que actualizar el plugin no actualiza el CLI. Si el error continúa después de actualizar, puede haber un codex más antiguo primero en tu PATH.",
+      "solutions": {
+        "updateCodexCli": {
+          "title": "Opción 1: instalar o actualizar el CLI con las instrucciones oficiales",
+          "step0": "1. Abre las instrucciones oficiales y elige el instalador independiente, npm o Homebrew según tu entorno de ejecución. Actualiza siempre por el canal de instalación original; no ejecutes npm uninstall en una instalación independiente:",
+          "step1": "2. En una terminal nueva, confirma que la versión ha cambiado y reinicia el IDE para que el plugin use el nuevo CLI:"
+        },
+        "pointCodexBin": {
+          "title": "Opción 2: apuntar el plugin a un binario que funcione",
+          "step0": "Lista todos los codex de tu PATH (en Windows: where codex). Si el que funciona no es el primero, define la variable de entorno CODEX_BIN con su ruta completa y reinicia el IDE. El plugin también usa automáticamente las instalaciones posteriores."
+        }
+      }
+    },
     "codexCliUnavailable": {
       "title": "No se pudo iniciar el Codex CLI",
       "intro": "El runtime del Codex CLI terminó antes de poder responder. El error de arriba muestra la ruta del CLI que falló y su propia salida. Normalmente se debe a una instalación incompleta del Codex CLI, no a un fallo del plugin.",
