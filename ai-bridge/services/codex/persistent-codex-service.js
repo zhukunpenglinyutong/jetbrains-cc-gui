@@ -668,7 +668,8 @@ export async function codexListThreadsPersistent(stdinData, { loadFavorites = fa
   const visited = new Set();
   do {
     result = await codexReadOnlyPersistent('thread/list', { ...stdinData, params });
-    threads = await filterAvailableCodexThreads(result.data ?? []);
+    // thread/list is global (cwd: null); skip pages with no row for this project so an empty list never offers "Load more".
+    threads = filterCodexProjectThreads(await filterAvailableCodexThreads(result.data ?? []), projectPath);
     if (threads.length > 0 || result.nextCursor == null || visited.has(result.nextCursor)) break;
     visited.add(result.nextCursor);
     params.cursor = result.nextCursor;

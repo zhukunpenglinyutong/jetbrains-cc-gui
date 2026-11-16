@@ -21,6 +21,8 @@ const ROOT_STYLE: React.CSSProperties = {
   flexDirection: 'column',
 };
 
+const LOAD_MORE_STYLE: React.CSSProperties = { margin: '8px auto' };
+
 interface HistoryViewProps {
   historyData: HistoryData | null;
   currentProvider?: string; // Current provider (claude or codex)
@@ -298,10 +300,12 @@ const HistoryView = ({ historyData, currentProvider, currentSessionId, currentSe
         searchQuery={searchQuery}
         t={t}
       />
-      {historyData.source === 'native' && historyData.partial && historyData.cursor !== null
-        && historyData.cursor !== undefined && window.loadCodexHistoryPage && (
+      {currentProvider === 'codex' && historyData.source === 'native' && historyData.partial
+        && historyData.cursor !== null && historyData.cursor !== undefined && window.loadCodexHistoryPage && (
         <button
           type="button"
+          className="history-toolbar-btn"
+          style={LOAD_MORE_STYLE}
           onClick={() => window.loadCodexHistoryPage?.(historyData.cursor)}
         >
           {t('history.loadMore', { defaultValue: 'Load more' })}
