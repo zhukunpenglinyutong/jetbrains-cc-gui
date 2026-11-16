@@ -42,6 +42,22 @@ import { CODEX_CLI_RECOMMENDED_MIN_VERSION, isCodexCliOutdated, parseCodexCliVer
 // Only an explicit closing rejection proves that retrying resume replays no work.
 const THREAD_RESUME_RETRY_DELAYS_MS = [250, 750];
 
+// Codex refuses to redefine these ids (validate_reserved_model_provider_ids), so a
+// replacement process aliasing a supplier onto them could never start.
+const RESERVED_PROVIDER_IDS = new Set(['openai', 'ollama', 'lmstudio']);
+
+const PROVIDER_MISMATCH_MESSAGE = /Cannot change this thread's model provider from `([^`]+)` to `([^`]+)` on resume/;
+
+/**
+ * Codex 0.166 attaches the resume provider mismatch as structured data. 0.169 moved the
+ * check into config loading (app-server config_manager.rs) and reports it only as text.
+ */
+function resumeProviderMismatch(error) {
+  if (error?.data?.type === 'modelProviderMismatch') return error.data;
+  const match = PROVIDER_MISMATCH_MESSAGE.exec(error?.message ?? '');
+  return match ? { type: 'modelProviderMismatch', modelProvider: match[1], currentModelProvider: match[2] } : null;
+}
+
 export const SERVICE_STATES = Object.freeze([
   'stopped',
   'starting',
@@ -597,6 +613,7 @@ export class CodexAppServerService extends EventEmitter {
     const promise = (async () => {
       let response;
       let providerRecovered = false;
+      let providerChecked = false;
       for (let attempt = 0; ; attempt += 1) {
         if (this.client !== client || !client.alive) {
           throw new ClassifiedError('RUNTIME_RESET', 'Codex runtime changed while resuming the thread');
@@ -604,6 +621,20 @@ export class CodexAppServerService extends EventEmitter {
         // An independent preconnect can still need recovery after a joined send is cancelled.
         if (![...entry.consumers].some(consumer => !consumer || (!consumer.cancelRequested && !consumer.settled))) {
           throw new ClassifiedError('CANCELLED', 'cancelled while waiting to resume the thread');
+        }
+        if (!providerChecked) {
+          providerChecked = true;
+          // Start under the thread's recorded provider instead of waiting for the CLI to
+          // reject the change; the wording and shape of that rejection vary by version.
+          const recovered = await this.#aliasRecordedProvider(client, params, entry, launchOptions, clientFactory);
+          if (recovered) {
+            providerRecovered = true;
+            bootstrap = true;
+            client = recovered.client;
+            params.modelProvider = recovered.modelProvider;
+            params.config = recovered.nativeConfig;
+            continue;
+          }
         }
         try {
           response = await client.request('thread/resume', params);
@@ -666,13 +697,39 @@ export class CodexAppServerService extends EventEmitter {
     }
   }
 
+  /** Fallback when the recorded provider could not be read: parse the CLI's rejection instead. */
   async #recoverResumeProvider(error, client, params, entry, launchOptions, clientFactory) {
-    const mismatch = error?.data;
-    const modelProvider = mismatch?.modelProvider;
-    const provider = params.config?.model_providers?.[params.modelProvider];
+    const mismatch = resumeProviderMismatch(error);
     if (error?.code !== 'RPC_ERROR' || error?.rpcCode !== -32600 || error?.method !== 'thread/resume'
-        || mismatch?.type !== 'modelProviderMismatch' || typeof modelProvider !== 'string' || !modelProvider.trim()
-        || mismatch.currentModelProvider !== params.modelProvider || modelProvider === params.modelProvider
+        || mismatch?.type !== 'modelProviderMismatch' || mismatch.currentModelProvider !== params.modelProvider) {
+      return null;
+    }
+    return this.#replaceProviderRuntime(mismatch.modelProvider, client, params, entry, launchOptions, clientFactory);
+  }
+
+  /** Reads the provider id the thread was recorded with, without loading it. */
+  async #aliasRecordedProvider(client, params, entry, launchOptions, clientFactory) {
+    // Only a managed supplier has a provider table to alias; CLI login resumes as before.
+    if (!params.config?.model_providers?.[params.modelProvider]) return null;
+    let recorded;
+    try {
+      const response = await client.request('thread/read',
+        { threadId: params.threadId, includeTurns: false, excludeTurns: true });
+      recorded = response?.thread?.modelProvider;
+    } catch {
+      return null; // The resume rejection path still recovers when this read is unavailable.
+    }
+    return this.#replaceProviderRuntime(recorded, client, params, entry, launchOptions, clientFactory);
+  }
+
+  /**
+   * Restarts the runtime with the historical provider id mapped to this conversation's
+   * captured supplier, so the CLI never sees a provider change and history is not rewritten.
+   */
+  async #replaceProviderRuntime(modelProvider, client, params, entry, launchOptions, clientFactory) {
+    const provider = params.config?.model_providers?.[params.modelProvider];
+    if (typeof modelProvider !== 'string' || !modelProvider.trim() || modelProvider === params.modelProvider
+        || RESERVED_PROVIDER_IDS.has(modelProvider)
         || !provider || typeof provider !== 'object' || Array.isArray(provider)
         || !clientFactory || this.pendingInteractions.size > 0
         || [...this.threadResumes.keys()].some(threadId => threadId !== params.threadId)

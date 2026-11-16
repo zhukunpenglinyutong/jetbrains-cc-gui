@@ -742,16 +742,28 @@ export function resolveKimiCliPath() {
   });
 }
 
-export function resolveOpenCodeCliPath() {
-  return resolveCliPath({
-    binaryName: 'opencode',
-    envKeys: ['OPENCODE_BIN', 'OPENCODE_PATH', 'OPENCODE_CLI_PATH'],
-    homeCandidates: [
-      '{home}/.opencode/bin/{bin}',
-      '{home}/.local/bin/{bin}',
-      '{home}/.local/share/opencode/bin/{bin}',
-    ],
-  });
+/**
+ * The npm / official installers expose `opencode`; the OpenCode desktop app
+ * ships its bundled CLI as `opencode-cli` (e.g. `opencode-cli.exe` on Windows).
+ * Try `opencode` first, then fall back to `opencode-cli`.
+ * @param {NodeJS.ProcessEnv} [env]
+ * @returns {string}
+ */
+export function resolveOpenCodeCliPath(env = process.env) {
+  const envKeys = ['OPENCODE_BIN', 'OPENCODE_PATH', 'OPENCODE_CLI_PATH'];
+  const homeCandidates = [
+    '{home}/.opencode/bin/{bin}',
+    '{home}/.local/bin/{bin}',
+    '{home}/.local/share/opencode/bin/{bin}',
+  ];
+  const opencode = resolveCliPath({ binaryName: 'opencode', envKeys, env, homeCandidates });
+  if (opencode !== 'opencode') {
+    return opencode;
+  }
+  const desktopCli = resolveCliPath({ binaryName: 'opencode-cli', envKeys, env, homeCandidates });
+  // resolveCliPath returns the bare name when nothing resolved; keep `opencode`
+  // as the unresolved fallback so error messages stay unchanged.
+  return desktopCli !== 'opencode-cli' ? desktopCli : opencode;
 }
 
 export function resolvePiCliPath() {

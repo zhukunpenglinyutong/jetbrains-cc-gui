@@ -16,7 +16,6 @@ public class ProviderHandler extends BaseMessageHandler {
             "provider_backup",
             // Claude provider operations
             "get_providers",
-            "get_current_claude_config",
             "get_thinking_enabled",
             "set_thinking_enabled",
             "add_provider",
@@ -76,9 +75,6 @@ public class ProviderHandler extends BaseMessageHandler {
             // Claude provider operations
             case "get_providers":
                 claudeOps.handleGetProviders();
-                return true;
-            case "get_current_claude_config":
-                claudeOps.handleGetCurrentClaudeConfig();
                 return true;
             case "get_thinking_enabled":
                 claudeOps.handleGetThinkingEnabled();

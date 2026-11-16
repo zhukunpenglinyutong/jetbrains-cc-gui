@@ -645,3 +645,33 @@ test('Review items 5 & 6: release() gives grandchild SIGTERM handler time to cle
 });
 
 
+
+test('a broken stdin pipe fails pending requests and marks the client unhealthy instead of throwing', {
+  // Closing fd 0 in the fake agent breaks the pipe on POSIX only; on Windows the
+  // parent's write still succeeds, so the listener under test is never reached.
+  skip: process.platform === 'win32' && 'closing fd 0 does not break the pipe on Windows',
+}, async (t) => {
+  // The agent closes its stdin but stays alive, so the next write gets EPIPE
+  // while no exit event has rejected the pending requests yet.
+  createFakeGrokCli(
+    t,
+    `
+    if (msg.method === 'close-stdin') {
+      rl.close();
+      process.stdin.destroy();
+      import('node:fs').then((fs) => fs.closeSync(0));
+      setInterval(() => {}, 1000);
+    }
+    `,
+  );
+  const client = await startWarmClient(t);
+
+  const first = client.request('close-stdin', {}, 3000, { recycleOnTimeout: false });
+  const firstSettled = first.then(() => null, (err) => err);
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  const second = client.request('after-close', {}, 3000, { recycleOnTimeout: false });
+
+  await assert.rejects(second, /stdin write failed/);
+  assert.match(String((await firstSettled)?.message), /stdin write failed/);
+  assert.equal(client.isUnhealthy(), true);
+});

@@ -838,6 +838,26 @@ test('resetRuntime drains and disposes the session entry', async () => {
   assert.equal(getCodexRuntimeSnapshot().sessionCount, 0);
 });
 
+test('pages holding only other projects advance the native cursor', async () => {
+  const original = CodexAppServerService.prototype.readOnly;
+  const cursors = [];
+  CodexAppServerService.prototype.readOnly = async (method, params) => {
+    cursors.push(params.cursor);
+    return params.cursor === 'mine'
+      ? { data: [{ id: 'here', cwd: testCwd }], nextCursor: null }
+      : { data: [{ id: 'elsewhere', cwd: join(testCwd, '..', 'other-project') }], nextCursor: 'mine' };
+  };
+  try {
+    const result = await codexListThreadsPersistent({ channelId: 'other-project-page', cwd: testCwd,
+      codexCommandPrefix: peerCommandPrefix('early-notification'), params: { projectPath: testCwd } }, { loadFavorites: () => ({}) });
+    assert.deepEqual(result.data.map(thread => thread.id), ['here']);
+    assert.equal(result.nextCursor, null);
+    assert.deepEqual(cursors, [undefined, 'mine']);
+  } finally {
+    CodexAppServerService.prototype.readOnly = original;
+  }
+});
+
 test('deleted rollout index rows stay absent after reopening history', async () => {
   const original = CodexAppServerService.prototype.readOnly;
   const path = join(testCwd, 'deleted-rollout.jsonl');

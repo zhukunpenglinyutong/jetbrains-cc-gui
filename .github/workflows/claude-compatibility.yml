@@ -1,0 +1,41 @@
+name: Claude compatibility
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/claude-compatibility.yml'
+      - 'ai-bridge/services/claude/**'
+      - 'src/main/java/com/github/claudecodegui/dependency/SdkDefinition.java'
+
+permissions:
+  contents: read
+
+jobs:
+  command-dispatch:
+    name: Claude Agent SDK ${{ matrix.sdk }} command dispatch
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # The minRequiredVersion floor in SdkDefinition and a recent release.
+        sdk: ['0.3.182', '0.3.311']
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22.12.0'
+      - name: Install bridge dependencies
+        working-directory: ai-bridge
+        run: npm ci
+      - name: Install the Claude Agent SDK in an isolated directory
+        env:
+          SDK_VERSION: ${{ matrix.sdk }}
+        run: npm install --prefix "$RUNNER_TEMP/claude-sdk-test" --ignore-scripts --no-audit --no-fund "@anthropic-ai/claude-agent-sdk@$SDK_VERSION"
+      - name: Verify slash commands dispatch with per-turn IDE context
+        run: |
+          export CLAUDE_COMMAND_TEST_SDK_PATH="$RUNNER_TEMP/claude-sdk-test/node_modules/@anthropic-ai/claude-agent-sdk/sdk.mjs"
+          # The test skips itself without an SDK; fail here instead of passing silently.
+          test -f "$CLAUDE_COMMAND_TEST_SDK_PATH"
+          node --test ai-bridge/services/claude/persistent-query-service.commands.integration.test.mjs

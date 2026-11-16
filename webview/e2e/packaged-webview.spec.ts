@@ -1,6 +1,6 @@
 import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
-import { gunzipSync } from 'node:zlib';
+import { gunzipSync, gzipSync } from 'node:zlib';
 import { expect, test } from '@playwright/test';
 import { APP_VERSION } from '../src/version/version';
 
@@ -208,3 +208,37 @@ const testPackagedTabs = (cacheMode: 'enabled' | 'unavailable' | 'write-denied')
 testPackagedTabs('enabled');
 testPackagedTabs('unavailable');
 testPackagedTabs('write-denied');
+
+// A failed start must explain itself on the page: users report with a screenshot, not DevTools.
+for (const failure of ['missing-entry', 'throwing-entry'] as const) {
+  test(`packaged startup failure page reports diagnostics for ${failure}`, async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'chromium-desktop', 'JCEF resource startup is a desktop flow');
+    const resources = path.resolve(process.cwd(), '../src/main/resources');
+    const html = await readFile(path.join(resources, 'html/claude-chat.html'), 'utf8');
+    await page.route('https://cc-gui-webview.local/assets/**', async (route) => {
+      const fileName = path.posix.basename(new URL(route.request().url()).pathname);
+      if (!/^index-.*\.js\.gz$/.test(fileName)) {
+        await route.fulfill({ status: 200, contentType: 'text/css', body: 'body {}' });
+      } else if (failure === 'missing-entry') {
+        await route.fulfill({ status: 404, body: '' });
+      } else {
+        // Raw .gz bytes, as WebviewAssetRequestHandler serves them.
+        await route.fulfill({ status: 200, body: gzipSync('throw new TypeError("fixture boom");') });
+      }
+    });
+    await page.route('**/packaged-webview', (route) => route.fulfill({
+      contentType: 'text/html',
+      body: html.replace('<head>', "<head><script>window.__CCGUI_HOST_INFO__ = 'CC GUI fixture | IDE fixture';</script>"),
+    }));
+    await page.goto('/packaged-webview');
+
+    const report = page.locator('pre');
+    await expect(page.getByText('聊天界面加载失败 / Chat UI failed to load')).toBeVisible();
+    await expect(report).toContainText(failure === 'missing-entry'
+      ? /Stage: fetch\nError: Error: HTTP 404 \(https:\/\/cc-gui-webview\.local\/assets\/index-[\w-]+\.js\.gz\)/
+      : /Stage: import\nError: TypeError: fixture boom/);
+    await expect(report).toContainText('Host: CC GUI fixture | IDE fixture');
+    await expect(report).toContainText('Browser: Mozilla/5.0');
+    await expect(report).toContainText('Features: caches=yes locks=yes gzip=yes subtle=yes importmap=yes');
+  });
+}

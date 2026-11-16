@@ -37,7 +37,7 @@ public class HtmlLoaderTest {
                 + "<script>const sample = '<body class=\\\"embedded\\\">';</script>"
                 + "</head><body></body></html>";
 
-        String injected = HtmlLoader.injectIdeTheme(html, "dark", "#1e1e1e");
+        String injected = HtmlLoader.injectIdeTheme(html, "dark", "#1e1e1e", "host");
 
         assertTrue(injected.contains("<html lang=\"zh-CN\" style=\"background-color:var(--bg-chat,#1e1e1e);\">"));
         assertTrue(injected.contains("<body style=\"background-color:var(--bg-chat,#1e1e1e);\"></body>"));
@@ -45,13 +45,25 @@ public class HtmlLoaderTest {
         assertTrue(injected.contains("window.__INITIAL_IDE_THEME__ = 'dark'"));
     }
 
+    /** Verifies that the failure-page host line stays inside its script string literal. */
+    @Test
+    public void injectsEscapedHostInfoForTheStartupFailurePage() {
+        String injected = HtmlLoader.injectIdeTheme("<html><head></head><body></body></html>",
+                "light", "#ffffff", "IDE 'x' </script>");
+
+        assertTrue(injected.contains("window.__CCGUI_HOST_INFO__ = 'IDE \\'x\\' \\u003c/script\\u003e';"));
+        String host = HtmlLoader.describeHost();
+        assertTrue(host.startsWith("CC GUI "));
+        assertTrue(host.contains(System.getProperty("os.name")));
+    }
+
     /** Verifies that a custom chat background can repaint the document root after startup. */
     @Test
     public void rootBackgroundFallsBackToTheStartupColor() {
         String html = "<html><head></head><body></body></html>";
 
-        String dark = HtmlLoader.injectIdeTheme(html, "dark", "#1e1e1e");
-        String light = HtmlLoader.injectIdeTheme(html, "light", "#ffffff");
+        String dark = HtmlLoader.injectIdeTheme(html, "dark", "#1e1e1e", "host");
+        String light = HtmlLoader.injectIdeTheme(html, "light", "#ffffff", "host");
 
         // The variable must stay first and the startup color must stay a fallback, otherwise the
         // inline declaration wins over the stylesheet and the status-panel gap keeps the old color.

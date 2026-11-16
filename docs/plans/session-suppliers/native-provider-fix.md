@@ -16,6 +16,8 @@ API keys remain in the child environment. Static HTTP headers and experimental b
 
 On a structured native provider mismatch, the resume path now retains the historical custom provider id and maps the captured selected supplier's provider table to that id in a replacement process. Its factory accepts the effective native configuration so later cold starts retain the alias. This recovery is attempted once, only before work has been dispatched and with no other loaded thread, pending interaction or independent resume. Shared preconnect/send consumers retain their original thread id; cancellation and runtime reset can retire a pending replacement. Native authorization, ownership and provider validation remain enforced; reserved built-in provider ids cannot be redefined through this mechanism.
 
+Update (2026-11-16): Codex 0.169 reports the mismatch only as text (`failed to load configuration: Cannot change this thread's model provider ...`), without the structured data, so the recovery above stopped triggering. Resume now reads the thread's recorded `modelProvider` with `thread/read` first and starts the replacement under that id before any resume request; this read is available and returns the field on 0.146, 0.163, 0.166 and 0.169. The rejection-based recovery remains as a fallback and accepts both the structured data and the 0.169 message. Recorded `openai`, `ollama` and `lmstudio` ids are never aliased, because Codex rejects redefining them. The bound provider id is now `ccgui_session`; chats created under `codemoss_session` resume under their recorded id through the same path.
+
 ## Verification
 
 - Reproduced the original provider mismatch with the installed Codex CLI before the fix; no model request reached the local fixture backend.

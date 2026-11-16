@@ -51,6 +51,8 @@ const injectCompressedModuleBootstrap = async (html) => {
   })));
   // A classic inline script starts fetching before CSS can block deferred module execution.
   const bootstrap = `<script>
+      // Startup step shown on the failure page; a unique global name avoids clashing with page scripts.
+      let ccguiBootStage = 'start';
       (async () => {
         const domReady = document.readyState === 'loading'
           ? new Promise((resolve) => document.addEventListener('DOMContentLoaded', resolve, { once: true }))
@@ -74,8 +76,10 @@ const injectCompressedModuleBootstrap = async (html) => {
                 await cache.delete(url);
               }
             } catch {}
-            const response = await fetch(url);
-            if (!response.ok) throw new Error(\`Failed to load webview asset: \${response.status}\`);
+            const response = await fetch(url).catch((error) => {
+              throw new Error(\`\${error} (\${url})\`);
+            });
+            if (!response.ok) throw new Error(\`HTTP \${response.status} (\${url})\`);
             try {
               await cache?.put(url, response.clone());
             } catch {}
@@ -95,6 +99,7 @@ const injectCompressedModuleBootstrap = async (html) => {
           }
           return load();
         };
+        ccguiBootStage = 'fetch';
         const [[response, ...stylesheets]] = await Promise.all([
           Promise.all([${JSON.stringify(compressedModuleUrl)}, ...${JSON.stringify(stylesheetUrls)}].map(loadAsset)),
           domReady,
@@ -102,6 +107,7 @@ const injectCompressedModuleBootstrap = async (html) => {
         if (!response.ok || !response.body) {
           throw new Error(\`Failed to load compressed webview module: \${response.status}\`);
         }
+        ccguiBootStage = 'decompress';
         const sourceStream = response.body.pipeThrough(new DecompressionStream('gzip'));
         const [source, ...styles] = await Promise.all([
           new Response(sourceStream).text(),
@@ -119,6 +125,7 @@ const injectCompressedModuleBootstrap = async (html) => {
           style.textContent = css;
           document.head.appendChild(style);
         }
+        ccguiBootStage = 'import';
         const objectUrl = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
         try {
           // Lazy chunks import the canonical entry URL. Remap it to this blob so the
@@ -142,11 +149,35 @@ const injectCompressedModuleBootstrap = async (html) => {
         if (!document.body) {
           await new Promise((resolve) => document.addEventListener('DOMContentLoaded', resolve, { once: true }));
         }
-        // A blank chat tab is indistinguishable from a slow one; surface the failure.
-        const fallback = document.createElement('p');
-        fallback.style.cssText = 'padding:16px;font-family:sans-serif';
-        fallback.textContent = '聊天界面资源加载失败，请关闭此标签页后重试。';
-        document.body.appendChild(fallback);
+        // A blank chat tab is indistinguishable from a slow one. Show everything a bug report
+        // needs, so a screenshot of this page is enough to diagnose the user's environment.
+        const has = (value) => (value ? 'yes' : 'no');
+        const details = [
+          'Stage: ' + ccguiBootStage,
+          'Error: ' + String(error?.stack || error).split('\\n').slice(0, 4).join('\\n'),
+          'Host: ' + (window.__CCGUI_HOST_INFO__ || 'unknown'),
+          'Browser: ' + navigator.userAgent,
+          'Page: ' + location.href.split('#')[0],
+          'Features: caches=' + has(window.caches) + ' locks=' + has(navigator.locks)
+            + ' gzip=' + has(window.DecompressionStream) + ' subtle=' + has(window.crypto?.subtle)
+            + ' importmap=' + has(HTMLScriptElement.supports?.('importmap')),
+          'Time: ' + new Date().toISOString(),
+        ].join('\\n');
+        const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+        const fallback = document.createElement('div');
+        fallback.style.cssText = 'padding:16px;font-family:sans-serif;color:' + (dark ? '#d4d4d4' : '#1f1f1f');
+        const title = document.createElement('p');
+        title.style.fontWeight = 'bold';
+        title.textContent = '聊天界面加载失败 / Chat UI failed to load';
+        const hint = document.createElement('p');
+        hint.textContent = '请把本页截图发给开发者，然后关闭此标签页重试。'
+          + ' / Please send a screenshot of this page to the developers, then close this tab and retry.';
+        const report = document.createElement('pre');
+        report.style.cssText = 'white-space:pre-wrap;word-break:break-all;user-select:text;font-size:12px';
+        report.textContent = details;
+        fallback.append(title, hint, report);
+        // Prepend: if the app stylesheet already applied, a full-height #app would push it out of view.
+        document.body.prepend(fallback);
       });
     </script>`;
   return html.replace(stylesheetPattern, '').replace(moduleScriptPattern, bootstrap);

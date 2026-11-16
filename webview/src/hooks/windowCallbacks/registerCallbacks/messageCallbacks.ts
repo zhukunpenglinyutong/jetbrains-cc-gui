@@ -3,7 +3,7 @@
  *
  * Registers window bridge callbacks for message management:
  * updateMessages, updateStatus, showLoading, showThinkingStatus,
- * setHistoryData, clearMessages, addErrorMessage, addHistoryMessage,
+ * setHistoryData, clearMessages, addErrorMessage,
  * historyLoadComplete, addUserMessage.
  */
 
@@ -384,9 +384,9 @@ export function registerMessageCallbacks(
     // timer-deferred path (window.updateMessages → setTimeout → processUpdateMessages)
     // cannot resurrect cleared messages when a transition starts between the
     // entry-point check and the deferred fire. This also catches synchronous
-    // callers that bypass the entry point — addHistoryMessage / addUserMessage
-    // already guard, but processUpdateMessages is the canonical setter and
-    // should be self-defending.
+    // callers that bypass the entry point — addUserMessage already guards,
+    // but processUpdateMessages is the canonical setter and should be
+    // self-defending.
     //
     // FIX: Do not silently drop history snapshots. While transitioning, stash
     // the latest payload and apply it when historyLoadComplete / setSessionId
@@ -1054,11 +1054,6 @@ export function registerMessageCallbacks(
     if (closeContextUsageDialog(requestId)) {
       addToast(message, 'error');
     }
-  };
-
-  window.addHistoryMessage = (message: ClaudeMessage) => {
-    if (window.__sessionTransitioning) return;
-    setMessages((prev) => [...prev, message]);
   };
 
   window.beginCodexHistoryPage = (json: string) => {
