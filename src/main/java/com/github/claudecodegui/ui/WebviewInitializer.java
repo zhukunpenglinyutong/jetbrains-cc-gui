@@ -440,15 +440,14 @@ public class WebviewInitializer {
             host.setBrowser(createdBrowser);
             host.getHandlerContext().setBrowser(createdBrowser);
 
+            // One registration: JBCefClient 2024.1 keeps only the last handler's answer (see CombinedRequestHandler).
             createdBrowser.getJBCefClient().addRequestHandler(
-                    new UiFontResourceRequestHandler(),
+                    new CombinedRequestHandler(
+                            new UiFontResourceRequestHandler(),
+                            new WebviewAssetRequestHandler(),
+                            ExternalNavigationGuard.install(createdBrowser)),
                     createdBrowser.getCefBrowser()
             );
-            createdBrowser.getJBCefClient().addRequestHandler(
-                    new WebviewAssetRequestHandler(),
-                    createdBrowser.getCefBrowser()
-            );
-            ExternalNavigationGuard.install(createdBrowser);
 
             // JCEF JS bridges must be created and registered before loadHTML,
             // because the window.sendToJava / shortcut / clipboard handlers

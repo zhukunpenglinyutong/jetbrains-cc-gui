@@ -8,6 +8,7 @@ import com.intellij.ui.jcef.JBCefClient;
 import org.cef.browser.CefBrowser;
 import org.cef.browser.CefFrame;
 import org.cef.handler.CefLifeSpanHandlerAdapter;
+import org.cef.handler.CefRequestHandler;
 import org.cef.handler.CefRequestHandlerAdapter;
 import org.cef.network.CefRequest;
 
@@ -37,12 +38,23 @@ final class ExternalNavigationGuard {
         this.externalOpener = externalOpener;
     }
 
-    /** Registers the guard on the browser's own client. */
-    static void install(JBCefBrowser browser) {
+    /**
+     * Registers the popup guard on the browser's own client and returns the navigation handler.
+     * The caller must register that handler through {@link CombinedRequestHandler}, together with
+     * the browser's other request handlers.
+     */
+    static CefRequestHandler install(JBCefBrowser browser) {
         ExternalNavigationGuard guard = new ExternalNavigationGuard(ExternalNavigationGuard::openInSystemBrowser);
         JBCefClient client = browser.getJBCefClient();
         CefBrowser cefBrowser = browser.getCefBrowser();
-        client.addRequestHandler(new CefRequestHandlerAdapter() {
+        client.addLifeSpanHandler(new CefLifeSpanHandlerAdapter() {
+            @Override
+            public boolean onBeforePopup(CefBrowser target, CefFrame frame, String targetUrl,
+                                         String targetFrameName) {
+                return guard.handlePopup(targetUrl);
+            }
+        }, cefBrowser);
+        return new CefRequestHandlerAdapter() {
             @Override
             public boolean onBeforeBrowse(CefBrowser target, CefFrame frame, CefRequest request,
                                           boolean userGesture, boolean isRedirect) {
@@ -55,14 +67,7 @@ final class ExternalNavigationGuard {
                                             boolean userGesture) {
                 return guard.handleNavigation(targetUrl, userGesture);
             }
-        }, cefBrowser);
-        client.addLifeSpanHandler(new CefLifeSpanHandlerAdapter() {
-            @Override
-            public boolean onBeforePopup(CefBrowser target, CefFrame frame, String targetUrl,
-                                         String targetFrameName) {
-                return guard.handlePopup(targetUrl);
-            }
-        }, cefBrowser);
+        };
     }
 
     /**
