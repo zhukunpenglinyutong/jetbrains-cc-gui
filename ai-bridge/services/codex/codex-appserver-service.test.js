@@ -89,25 +89,29 @@ function eventsOf(events, kind) {
   return events.filter((event) => event.kind === kind);
 }
 
-function legacyProviderFixture({ rejectedError = null, beforeReplacement = null } = {}) {
-  const nativeConfig = { model_providers: { codemoss_session: { name: 'Selected supplier',
+function legacyProviderFixture({ rejectedError = null, beforeReplacement = null, recordedProvider,
+  acceptedProvider = 'OpenAI' } = {}) {
+  const nativeConfig = { model_providers: { ccgui_session: { name: 'Selected supplier',
     base_url: 'https://bound.example.invalid/v1', wire_api: 'responses', env_key: 'CODEX_API_KEY' } } };
-  const fixture = makeService({ serviceOpts: { launchOptions: { nativeConfig, modelProvider: 'codemoss_session' } } });
+  const fixture = makeService({ serviceOpts: { launchOptions: { nativeConfig, modelProvider: 'ccgui_session' } } });
   const factory = fixture.service.clientFactory;
   const clients = [];
   const resumes = [];
   fixture.service.clientFactory = async options => {
-    if (options.modelProvider === 'OpenAI') await beforeReplacement?.();
+    if (options.modelProvider === acceptedProvider) await beforeReplacement?.();
     const client = factory(options);
     clients.push({ client, options });
     const request = client.request.bind(client);
     client.request = async (method, params, ...rest) => {
+      if (method === 'thread/read' && recordedProvider !== undefined) {
+        return { thread: { id: params.threadId, modelProvider: recordedProvider } };
+      }
       if (method === 'thread/resume') {
         resumes.push(structuredClone(params));
-        if (options.modelProvider !== 'OpenAI') {
+        if (options.modelProvider !== acceptedProvider) {
           throw rejectedError ?? new ClassifiedError('RPC_ERROR', 'This chat uses OpenAI, but the current provider differs', {
             method, rpcCode: -32600, data: { type: 'modelProviderMismatch',
-              modelProvider: 'OpenAI', currentModelProvider: 'codemoss_session' },
+              modelProvider: 'OpenAI', currentModelProvider: 'ccgui_session' },
           });
         }
       }
@@ -132,7 +136,7 @@ test('a legacy provider resume shared by preconnect and send keeps the thread an
     assert.equal(clients.length, 2);
     assert.equal(clients[0].client.closeRequested, true);
     assert.equal(clients[1].options.modelProvider, 'OpenAI');
-    assert.deepEqual(clients[1].options.nativeConfig.model_providers.OpenAI, nativeConfig.model_providers.codemoss_session);
+    assert.deepEqual(clients[1].options.nativeConfig.model_providers.OpenAI, nativeConfig.model_providers.ccgui_session);
     assert.deepEqual(nativeConfig, beforeConfig);
     assert.equal(service.rootThreadId, THREAD_ID);
     assert.equal(service.bootstrapInFlight, false);
@@ -146,6 +150,49 @@ test('a legacy provider resume shared by preconnect and send keeps the thread an
     assert.equal(resumes.length, 3, 'cold restore does not repeat the rejected provider');
     assert.equal((await service.send({ threadId: THREAD_ID, input: [] })).outcome, 'completed');
     assert.equal(dispatchCounts.get('turn/start'), 2);
+  } finally { await service.resetRuntime(); }
+});
+
+for (const recordedProvider of ['OpenAI', 'codemoss_session']) {
+  test(`a thread recorded under ${recordedProvider} resumes under that id without a rejected resume`, async () => {
+    // Pre-supplier chats used OpenAI; chats from 0.6.6 used codemoss_session before the rename.
+    const fixture = legacyProviderFixture({ recordedProvider, acceptedProvider: recordedProvider });
+    const { service, clients, resumes, nativeConfig } = fixture;
+    try {
+      await service.preconnect({ threadId: THREAD_ID });
+      assert.deepEqual(resumes.map(params => params.modelProvider), [recordedProvider]);
+      assert.equal(clients.length, 2);
+      assert.equal(clients[1].options.modelProvider, recordedProvider);
+      assert.deepEqual(clients[1].options.nativeConfig.model_providers[recordedProvider],
+        nativeConfig.model_providers.ccgui_session);
+      assert.equal((await service.send({ threadId: THREAD_ID, input: [] })).outcome, 'completed');
+    } finally { await service.resetRuntime(); }
+  });
+}
+
+test('a thread recorded under a reserved built-in provider keeps the bound supplier id', async () => {
+  // Codex rejects redefining openai, so aliasing would only stop a resume older CLIs accept.
+  const fixture = legacyProviderFixture({ recordedProvider: 'openai', acceptedProvider: 'ccgui_session' });
+  const { service, clients, resumes } = fixture;
+  try {
+    await service.preconnect({ threadId: THREAD_ID });
+    assert.deepEqual(resumes.map(params => params.modelProvider), ['ccgui_session']);
+    assert.equal(clients.length, 1);
+  } finally { await service.resetRuntime(); }
+});
+
+test('a provider mismatch reported only in the Codex 0.169 message still resumes the legacy thread', async () => {
+  // 0.169 moved the check into config loading and no longer attaches the structured mismatch data.
+  const fixture = legacyProviderFixture({ rejectedError: new ClassifiedError('RPC_ERROR',
+    "failed to load configuration: Cannot change this thread's model provider from `OpenAI` to `ccgui_session` on resume.",
+    { method: 'thread/resume', rpcCode: -32600 }) });
+  const { service, clients } = fixture;
+  try {
+    await service.preconnect({ threadId: THREAD_ID });
+    assert.equal(clients.length, 2);
+    assert.equal(clients[1].options.modelProvider, 'OpenAI');
+    assert.equal((await service.send({ threadId: THREAD_ID, input: [] })).outcome, 'completed');
+    assert.equal(service.rootThreadId, THREAD_ID);
   } finally { await service.resetRuntime(); }
 });
 

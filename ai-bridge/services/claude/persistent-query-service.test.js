@@ -385,6 +385,60 @@ test('executeTurn resets abortRequested at the start of a new turn', async () =>
 });
 
 // ============================================================================
+// Regression (#2069): a follow-up result arriving in-turn must be skipped
+// without losing the reload notification
+// ============================================================================
+
+test('executeTurn skips in-turn task-notification results but emits session_updated (#2069)', async () => {
+  // P1: a background follow-up result that lands while a user turn is active
+  // must not end the turn (the skip), but the skip must still emit
+  // session_updated so the Java reload recovers the follow-up content that
+  // already streamed into this turn. Previously the skip also suppressed the
+  // reload, so the follow-up answer could stay invisible forever.
+  const runtime = {
+    closed: false,
+    abortRequested: false,
+    sessionId: 'sess-p1',
+    runtimeSessionEpoch: null,
+    activeTurnCount: 0,
+    inputStream: { enqueue() {}, done() {} },
+    query: { close() {} },
+  };
+
+  const events = captureDaemonEvents();
+  try {
+    const turnPromise = __testing.executeTurn(runtime, {
+      requestedSessionId: 'sess-p1',
+      runtimeSessionEpoch: null,
+      options: { cwd: '/tmp' },
+      permissionMode: 'default',
+      streamingEnabled: false,
+      userMessage: { type: 'user', message: { role: 'user', content: 'hi' } },
+    });
+
+    // executeTurn awaits waitForReaderQuiescent before creating the turnSink.
+    while (!runtime.turnSink) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    // A background follow-up result lands mid-turn: skipped, turn stays live.
+    runtime.turnSink.push({ type: 'result', is_error: false, origin: { kind: 'task-notification' } });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    // The user turn's own result then ends it normally.
+    runtime.turnSink.push({ type: 'result', is_error: false });
+    await turnPromise;
+  } finally {
+    events.restore();
+    await __testing.resetState();
+  }
+
+  const updates = events.list.filter((e) => e.event === 'session_updated');
+  assert.equal(updates.length, 1, 'skipped follow-up result must emit exactly one session_updated');
+  assert.equal(updates[0].sessionId, 'sess-p1');
+});
+
+// ============================================================================
 // Regression: a fresh send must never reuse a closed runtime
 // ============================================================================
 

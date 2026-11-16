@@ -192,6 +192,30 @@
     "backgroundTasksRunning_one": "백그라운드 작업 {{count}}개 실행 중",
     "backgroundTasksRunning_other": "백그라운드 작업 {{count}}개 실행 중",
     "stopBackgroundTasks": "백그라운드 작업 중지",
+    "backgroundTasksPill": "백그라운드 작업 {{count}}개",
+    "backgroundTasksPill_one": "백그라운드 작업 {{count}}개",
+    "backgroundTasksPill_other": "백그라운드 작업 {{count}}개",
+    "backgroundTasksTitle": "백그라운드 작업",
+    "backgroundTasksActive": "{{count}}개 실행 중",
+    "backgroundTasksActive_one": "{{count}}개 실행 중",
+    "backgroundTasksActive_other": "{{count}}개 실행 중",
+    "backgroundTasksStopAfterAnswer": "답변이 끝나면 중지할 수 있음",
+    "backgroundTaskDetails": {
+      "type": "유형",
+      "taskId": "작업 ID",
+      "runId": "실행 ID",
+      "parent": "상위 작업",
+      "elapsed": "실행 시간"
+    },
+    "backgroundTaskTypes": {
+      "local_bash": "명령",
+      "local_agent": "서브에이전트",
+      "remote_agent": "원격 에이전트",
+      "local_workflow": "워크플로",
+      "in_process_teammate": "팀원",
+      "monitor_mcp": "모니터",
+      "other": "작업"
+    },
     "planUsage": {
       "balanceLabel": "잔액: ",
       "balanceRemaining": "잔액: {{value}}",
@@ -1435,7 +1459,10 @@
     "providerAdded": "제공자 추가됨",
     "providerUpdated": "제공자 업데이트됨",
     "providerDeleted": "제공자 삭제됨",
-    "codexSettingsDispatchFailed": "Codex 설정을 IDE로 보낼 수 없습니다. 대화를 다시 열고 재시도하세요."
+    "codexSettingsDispatchFailed": "Codex 설정을 IDE로 보낼 수 없습니다. 대화를 다시 열고 재시도하세요.",
+    "codexSettingsRuntimeInactive": "Codex 실행 환경이 비활성 상태입니다. 채팅을 다시 열고 재시도하세요.",
+    "codexSettingsServiceUnavailable": "Codex 서비스를 사용할 수 없습니다. 채팅을 다시 열고 재시도하세요.",
+    "codexSettingsUpdateFailed": "Codex 설정을 확인하지 못했습니다. 채팅을 다시 열고 재시도하세요."
   },
   "config": {
     "clickToCopy": "클릭하여 복사",
@@ -2582,6 +2609,22 @@
         "useDefaultMode": {
           "title": "방법 2: 권한 모드를 임시로 전환",
           "step0": "기본 모드로 전환하세요. 이 모드는 자동 검토를 사용하지 않으므로 CLI를 업데이트할 때까지 계속 작업할 수 있습니다. 그래도 오류가 계속되면 방법 1에 따라 CLI를 업데이트하세요."
+        }
+      }
+    },
+    "codexCliAppServerTooOld": {
+      "title": "Codex CLI 버전이 낮아 시작할 수 없습니다",
+      "intro": "로컬 Codex CLI는 버전을 정상적으로 출력하지만, 너무 오래된 버전이라 플러그인이 codex app-server를 시작할 때 전달하는 --listen 옵션을 인식하지 못해 바로 종료됩니다.",
+      "reason": "플러그인은 컴퓨터에서 찾은 Codex CLI를 실행하므로 플러그인을 업데이트해도 CLI는 업데이트되지 않습니다. 업데이트 후에도 오류가 계속되면 더 오래된 codex가 PATH 앞쪽에 있을 수 있습니다.",
+      "solutions": {
+        "updateCodexCli": {
+          "title": "방법 1: 공식 안내에 따라 CLI 설치 또는 업데이트",
+          "step0": "1. 공식 안내를 열고 실행 환경에 맞게 독립 설치 관리자, npm 또는 Homebrew를 선택하세요. 업데이트는 원래 설치 경로로 진행하고, 독립 설치 버전에 npm uninstall을 실행하지 마세요:",
+          "step1": "2. 새 터미널에서 버전이 변경되었는지 확인한 다음, IDE를 다시 시작하여 플러그인이 새 CLI를 사용하도록 합니다:"
+        },
+        "pointCodexBin": {
+          "title": "방법 2: 동작하는 바이너리를 플러그인에 지정",
+          "step0": "PATH에 있는 모든 codex를 확인하세요(Windows: where codex). 동작하는 것이 첫 번째가 아니면 CODEX_BIN 환경 변수를 전체 경로로 설정하고 IDE를 다시 시작하세요. 플러그인은 뒤의 설치로도 자동 폴백합니다."
         }
       }
     },

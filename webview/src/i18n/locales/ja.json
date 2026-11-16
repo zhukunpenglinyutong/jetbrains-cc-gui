@@ -192,6 +192,30 @@
     "backgroundTasksRunning_one": "{{count}} 件のバックグラウンドタスクを実行中",
     "backgroundTasksRunning_other": "{{count}} 件のバックグラウンドタスクを実行中",
     "stopBackgroundTasks": "バックグラウンドタスクを停止",
+    "backgroundTasksPill": "{{count}} 件のバックグラウンドタスク",
+    "backgroundTasksPill_one": "{{count}} 件のバックグラウンドタスク",
+    "backgroundTasksPill_other": "{{count}} 件のバックグラウンドタスク",
+    "backgroundTasksTitle": "バックグラウンドタスク",
+    "backgroundTasksActive": "{{count}} 件実行中",
+    "backgroundTasksActive_one": "{{count}} 件実行中",
+    "backgroundTasksActive_other": "{{count}} 件実行中",
+    "backgroundTasksStopAfterAnswer": "回答終了後に停止できます",
+    "backgroundTaskDetails": {
+      "type": "種類",
+      "taskId": "タスク ID",
+      "runId": "実行 ID",
+      "parent": "親タスク",
+      "elapsed": "実行時間"
+    },
+    "backgroundTaskTypes": {
+      "local_bash": "コマンド",
+      "local_agent": "サブエージェント",
+      "remote_agent": "リモートエージェント",
+      "local_workflow": "ワークフロー",
+      "in_process_teammate": "チームメイト",
+      "monitor_mcp": "モニター",
+      "other": "タスク"
+    },
     "planUsage": {
       "balanceLabel": "残高：",
       "balanceRemaining": "残高：{{value}}",
@@ -1345,7 +1369,10 @@
     "providerAdded": "プロバイダーを追加しました",
     "providerUpdated": "プロバイダーを更新しました",
     "providerDeleted": "プロバイダーを削除しました",
-    "codexSettingsDispatchFailed": "Codex の設定を IDE に送信できません。チャットを開き直して、もう一度お試しください。"
+    "codexSettingsDispatchFailed": "Codex の設定を IDE に送信できません。チャットを開き直して、もう一度お試しください。",
+    "codexSettingsRuntimeInactive": "Codex の実行環境が無効です。チャットを開き直して、もう一度お試しください。",
+    "codexSettingsServiceUnavailable": "Codex サービスを利用できません。チャットを開き直して、もう一度お試しください。",
+    "codexSettingsUpdateFailed": "Codex の設定を確認できませんでした。チャットを開き直して、もう一度お試しください。"
   },
   "config": {
     "clickToCopy": "クリックしてコピー",
@@ -2485,6 +2512,22 @@
         "useDefaultMode": {
           "title": "方法 2：権限モードを一時的に切り替える",
           "step0": "デフォルトモードに切り替えます。このモードは自動審査を使用しないため、CLI を更新するまで作業を続けられます。それでもエラーが続く場合は、方法 1 で CLI を更新してください。"
+        }
+      }
+    },
+    "codexCliAppServerTooOld": {
+      "title": "Codex CLI が古いため起動できません",
+      "intro": "ローカルの Codex CLI はバージョンを正常に表示しますが、古いため、プラグインが codex app-server の起動時に渡す --listen オプションを認識できず、すぐに終了します。",
+      "reason": "プラグインはマシン上で検出した Codex CLI を実行するため、プラグインを更新しても CLI は更新されません。更新後もエラーが続く場合は、より古い codex が PATH の先頭にある可能性があります。",
+      "solutions": {
+        "updateCodexCli": {
+          "title": "方法 1：公式の手順に従って CLI をインストールまたは更新",
+          "step0": "1. 公式の手順を開き、実行環境に合わせてスタンドアロンインストーラー、npm、Homebrew のいずれかを選択します。更新は元のインストール経路で行い、スタンドアロン版に対して npm uninstall を実行しないでください：",
+          "step1": "2. 新しいターミナルでバージョンが更新されたことを確認し、IDE を再起動して新しい CLI を読み込みます："
+        },
+        "pointCodexBin": {
+          "title": "方法 2：動作するバイナリをプラグインに指定する",
+          "step0": "PATH 上のすべての codex を一覧表示します（Windows では where codex）。動作するものが先頭でない場合は、そのフルパスを環境変数 CODEX_BIN に設定して IDE を再起動してください。プラグインは後ろのインストールにも自動でフォールバックします。"
         }
       }
     },

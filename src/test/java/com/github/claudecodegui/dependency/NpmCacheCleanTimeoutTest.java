@@ -8,6 +8,7 @@ import org.junit.rules.TemporaryFolder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertFalse;
@@ -28,7 +29,7 @@ public class NpmCacheCleanTimeoutTest {
         assertTrue(npm.toFile().setExecutable(true));
 
         long started = System.nanoTime();
-        boolean cleaned = NpmPermissionHelper.cleanNpmCache(npm.toString(), 1500);
+        boolean cleaned = NpmPermissionHelper.cleanNpmCache(List.of(npm.toString()), 1500);
 
         assertFalse(cleaned);
         assertTrue(TimeUnit.NANOSECONDS.toSeconds(System.nanoTime() - started) < 10);
@@ -40,6 +41,15 @@ public class NpmCacheCleanTimeoutTest {
         Files.writeString(npm, "#!/bin/sh\necho 'npm warn using --force' >&2\nexit 0\n", StandardCharsets.UTF_8);
         assertTrue(npm.toFile().setExecutable(true));
 
-        assertTrue(NpmPermissionHelper.cleanNpmCache(npm.toString(), 10_000));
+        assertTrue(NpmPermissionHelper.cleanNpmCache(List.of(npm.toString()), 10_000));
+    }
+
+    /** A WSL npm runs as {@code wsl <npm>} or {@code wsl <node> <npm-cli.js>}, so the clean must keep that prefix. */
+    @Test public void theCacheCleanRunsAfterTheWholeNpmInvocation() throws Exception {
+        assumeFalse("POSIX shell fixture", PlatformUtils.isWindows());
+        Path npmCli = temporary.getRoot().toPath().resolve("npm-cli.sh");
+        Files.writeString(npmCli, "[ \"$1 $2 $3\" = 'cache clean --force' ]\n", StandardCharsets.UTF_8);
+
+        assertTrue(NpmPermissionHelper.cleanNpmCache(List.of("/bin/sh", npmCli.toString()), 10_000));
     }
 }

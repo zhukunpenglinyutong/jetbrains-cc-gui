@@ -1,6 +1,8 @@
 package com.github.claudecodegui.util;
 
+import com.intellij.openapi.application.ApplicationInfo;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.util.registry.Registry;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -53,7 +55,7 @@ public class HtmlLoader {
 
                     // Prepare the complete static page once per theme. Per-tab state is added
                     // later, after this shared result is returned.
-                    html = injectIdeTheme(html, theme, bgColor);
+                    html = injectIdeTheme(html, theme, bgColor, describeHost());
                     CHAT_HTML_CACHE.put(cacheKey, html);
                     return html;
                 }
@@ -74,9 +76,10 @@ public class HtmlLoader {
      * @param html the static HTML document.
      * @param theme the IDE theme name.
      * @param bgColor the startup background color, used as the CSS variable fallback.
+     * @param hostInfo plugin/IDE description shown if the frontend fails to start.
      * @return the HTML with the initial theme bootstrap.
      */
-    static String injectIdeTheme(String html, String theme, String bgColor) {
+    static String injectIdeTheme(String html, String theme, String bgColor, String hostInfo) {
         int htmlTagEnd = findOpeningTagEnd(html, "<html", 0);
         int headTagEnd = findOpeningTagEnd(html, "<head", htmlTagEnd + 1);
         int htmlClosingTagStart = html.lastIndexOf("</html>");
@@ -89,7 +92,7 @@ public class HtmlLoader {
         // a custom chat background.
         String styleAttribute = " style=\"background-color:var(--bg-chat," + bgColor + ");\"";
         String scriptInjection = "\n    <script>window.__INITIAL_IDE_THEME__ = '"
-                + theme + "';</script>";
+                + theme + "';window.__CCGUI_HOST_INFO__ = '" + escapeForSingleQuotedJs(hostInfo) + "';</script>";
         StringBuilder result = new StringBuilder(html.length() + styleAttribute.length() * 2
                 + scriptInjection.length());
         int cursor = 0;
@@ -113,6 +116,24 @@ public class HtmlLoader {
 
         LOG.info("Successfully injected IDE theme (inline styles): " + theme + ", background: " + bgColor);
         return result.toString();
+    }
+
+    /** One line for the startup failure page, so a user's screenshot identifies their setup. */
+    static String describeHost() {
+        StringBuilder info = new StringBuilder("CC GUI ").append(PluginMetadata.getPluginVersion());
+        try {
+            ApplicationInfo app = ApplicationInfo.getInstance();
+            info.append(" | ").append(app.getFullApplicationName())
+                    .append(" (").append(app.getBuild().asString()).append(')')
+                    .append(" | JCEF out-of-process=")
+                    .append(Registry.is("ide.browser.jcef.out-of-process.enabled", false));
+        } catch (Exception | LinkageError e) {
+            // No application in unit tests; the remaining fields are still useful.
+        }
+        return info.append(" | ").append(System.getProperty("os.name"))
+                .append(' ').append(System.getProperty("os.version"))
+                .append(" | JBR ").append(System.getProperty("java.runtime.version"))
+                .toString();
     }
 
     private static int findOpeningTagEnd(String html, String tagPrefix, int fromIndex) {

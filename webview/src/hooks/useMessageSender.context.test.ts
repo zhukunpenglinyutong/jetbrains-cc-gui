@@ -58,6 +58,23 @@ describe('useMessageSender - /context command', () => {
     window.sendToJava = vi.fn();
   });
 
+  it.each(['/compact', '/compact Keep unresolved issues.\nPreserve the API decisions.', '/init', '/review 123',
+    '/mcp', '/goal Fix the regression', '/simplify', '/team:review src/main', '/my-skill task'])
+  ('forwards Claude native command %s unchanged in both send paths', command => {
+    for (const attachments of [undefined, [{ id: 'notes', fileName: 'notes.txt', mediaType: 'text/plain', data: 'bm90ZXM=' }]]) {
+      window.sendToJava = vi.fn();
+      const options = createOptions();
+      const { result, unmount } = renderHook(() => useMessageSender(options));
+      act(() => expect(result.current.handleSubmit(command, attachments)).toBe('started'));
+      expect(getBridgePayload(attachments ? 'send_message_with_attachments' : 'send_message').text).toBe(command);
+      expect((window.sendToJava as any).mock.calls.filter(([event]: [string]) => event.startsWith('send_message'))).toHaveLength(1);
+      expect(options.startCodexCompaction).not.toHaveBeenCalled();
+      expect(options.handleModeSelect).not.toHaveBeenCalled();
+      expect(options.openContextUsageDialog).not.toHaveBeenCalled();
+      unmount();
+    }
+  });
+
   it.each([false, true])('captures explicit Claude Ultracode=%s without changing effort in both send paths', claudeUltracode => {
     for (const attachments of [undefined, [{ id: 'a', fileName: 'a.txt', mediaType: 'text/plain', data: 'aGk=' }]]) {
       window.sendToJava = vi.fn();

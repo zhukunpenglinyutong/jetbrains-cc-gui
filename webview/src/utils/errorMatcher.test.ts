@@ -66,7 +66,7 @@ describe('matchErrorPattern', () => {
     });
     const recoveryPatterns = patternsData.patterns.filter(pattern =>
       pattern.code === 'codexWriterConflict' || pattern.code === 'codexCliVersionTooOld'
-        || pattern.code.startsWith('codexThread'));
+        || pattern.code === 'codexCliAppServerTooOld' || pattern.code.startsWith('codexThread'));
     expect(Object.keys(locales)).toHaveLength(10);
     for (const [locale, { errorDiagnostic }] of Object.entries(locales)) {
       for (const pattern of recoveryPatterns) {
@@ -149,6 +149,19 @@ describe('matchErrorPattern', () => {
     expect(matchErrorPattern('SPAWN EBUSY')?.code).toBe('spawnEbusy');
     expect(matchErrorPattern('something failed: spawn ebusy at line 42')?.code).toBe('spawnEbusy');
   });
+  it('tells a user whose Codex CLI predates app-server --listen to update it', () => {
+    // Reported with codex-cli 0.93.0: `codex --version` works, so "incomplete install" misleads.
+    const text = [
+      'codex runtime failure: codex app-server exited (code=2, signal=null)',
+      '',
+      "- C:\\Users\\dev\\.codex\\codex.exe: codex app-server exited (code=2, signal=null) - error: unexpected argument '--listen' found Usage: codex app-server [OPTIONS] [COMMAND] For more information, try '--help'.",
+      '- Codex CLI check: run "codex --version"; install or update the CLI using https://learn.chatgpt.com/docs/codex/cli#getting-started, or point CODEX_BIN at a working binary (Settings > Provider Management > CLI).',
+    ].join('\n');
+    const result = matchErrorPattern(text);
+    expect(result?.code).toBe('codexCliAppServerTooOld');
+    expect(result?.solutions.map((s) => s.key)).toEqual(['updateCodexCli', 'pointCodexBin']);
+  });
+
   it('matches a Codex CLI startup failure and offers the reinstall path', () => {
     const text = [
       'codex runtime failure: codex app-server exited (code=1, signal=null)',

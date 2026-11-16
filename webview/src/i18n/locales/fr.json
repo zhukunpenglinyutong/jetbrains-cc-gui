@@ -192,6 +192,30 @@
     "backgroundTasksRunning_one": "{{count}} tâche en arrière-plan en cours",
     "backgroundTasksRunning_other": "{{count}} tâches en arrière-plan en cours",
     "stopBackgroundTasks": "Arrêter les tâches en arrière-plan",
+    "backgroundTasksPill": "{{count}} tâches en arrière-plan",
+    "backgroundTasksPill_one": "{{count}} tâche en arrière-plan",
+    "backgroundTasksPill_other": "{{count}} tâches en arrière-plan",
+    "backgroundTasksTitle": "Tâches en arrière-plan",
+    "backgroundTasksActive": "{{count}} en cours",
+    "backgroundTasksActive_one": "{{count}} en cours",
+    "backgroundTasksActive_other": "{{count}} en cours",
+    "backgroundTasksStopAfterAnswer": "Arrêt possible après la réponse",
+    "backgroundTaskDetails": {
+      "type": "Type",
+      "taskId": "ID de tâche",
+      "runId": "ID d'exécution",
+      "parent": "Tâche parente",
+      "elapsed": "En cours depuis"
+    },
+    "backgroundTaskTypes": {
+      "local_bash": "Commande",
+      "local_agent": "Sous-agent",
+      "remote_agent": "Agent distant",
+      "local_workflow": "Workflow",
+      "in_process_teammate": "Coéquipier",
+      "monitor_mcp": "Moniteur",
+      "other": "Tâche"
+    },
     "planUsage": {
       "balanceLabel": "Solde : ",
       "balanceRemaining": "Solde : {{value}}",
@@ -1350,7 +1374,10 @@
     "providerAdded": "Fournisseur ajouté",
     "providerUpdated": "Fournisseur mis à jour",
     "providerDeleted": "Fournisseur supprimé",
-    "codexSettingsDispatchFailed": "Impossible d'envoyer les paramètres Codex à l'IDE. Rouvrez la discussion et réessayez."
+    "codexSettingsDispatchFailed": "Impossible d'envoyer les paramètres Codex à l'IDE. Rouvrez la discussion et réessayez.",
+    "codexSettingsRuntimeInactive": "L’environnement d’exécution de Codex est inactif. Rouvrez la conversation et réessayez.",
+    "codexSettingsServiceUnavailable": "Le service Codex est indisponible. Rouvrez la conversation et réessayez.",
+    "codexSettingsUpdateFailed": "Impossible de confirmer les paramètres de Codex. Rouvrez la conversation et réessayez."
   },
   "config": {
     "clickToCopy": "Cliquer pour copier",
@@ -2493,6 +2520,22 @@
         "useDefaultMode": {
           "title": "Option 2 : changer de mode d'autorisation pour l'instant",
           "step0": "Passez en Default Mode. Ce mode n'utilise pas le réviseur automatique : vous pouvez continuer à travailler en attendant de mettre à jour le CLI. Si l'erreur persiste, mettez à jour le CLI comme indiqué dans l'option 1."
+        }
+      }
+    },
+    "codexCliAppServerTooOld": {
+      "title": "Codex CLI est trop ancien pour démarrer",
+      "intro": "Le CLI Codex local affiche bien sa version, mais il est trop ancien pour accepter l'option --listen que le plugin passe à codex app-server, et il s'arrête donc immédiatement.",
+      "reason": "Le plugin exécute le Codex CLI trouvé sur votre machine : mettre à jour le plugin ne met donc pas à jour le CLI. Si l'erreur persiste après la mise à jour, un codex plus ancien se trouve peut-être en tête de votre PATH.",
+      "solutions": {
+        "updateCodexCli": {
+          "title": "Option 1 : installer ou mettre à jour le CLI en suivant les instructions officielles",
+          "step0": "1. Ouvrez les instructions officielles et choisissez l'installateur autonome, npm ou Homebrew selon votre environnement d'exécution. Mettez à jour par le canal d'installation d'origine ; n'exécutez pas npm uninstall sur une installation autonome :",
+          "step1": "2. Dans un nouveau terminal, vérifiez que la version a changé, puis redémarrez l'IDE pour que le plugin utilise le nouveau CLI :"
+        },
+        "pointCodexBin": {
+          "title": "Option 2 : pointer le plugin vers un binaire fonctionnel",
+          "step0": "Listez tous les codex de votre PATH (sous Windows : where codex). Si celui qui fonctionne n'est pas le premier, définissez la variable d'environnement CODEX_BIN avec son chemin complet, puis redémarrez l'IDE. Le plugin bascule aussi automatiquement vers les installations suivantes."
         }
       }
     },

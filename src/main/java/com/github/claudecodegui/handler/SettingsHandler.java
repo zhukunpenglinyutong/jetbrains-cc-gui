@@ -105,7 +105,6 @@ public class SettingsHandler extends BaseMessageHandler {
         "set_prompt_enhancer_config",
         "get_project_commit_prompt",
         "set_project_commit_prompt",
-        "get_input_history",
         "record_input_history",
         "delete_input_history_item",
         "clear_input_history",
@@ -119,7 +118,6 @@ public class SettingsHandler extends BaseMessageHandler {
         "browse_sound_file",
         // User language preference
         "set_user_language",
-        "get_user_language",
         "clear_user_language"
     };
 
@@ -384,9 +382,6 @@ public class SettingsHandler extends BaseMessageHandler {
                 projectConfigHandler.handleSetProjectCommitPrompt(content);
                 return true;
             // Input history
-            case "get_input_history":
-                inputHistoryHandler.handleGetInputHistory();
-                return true;
             case "record_input_history":
                 inputHistoryHandler.handleRecordInputHistory(content);
                 return true;
@@ -422,9 +417,6 @@ public class SettingsHandler extends BaseMessageHandler {
             case "set_user_language":
                 handleSetUserLanguage(content);
                 return true;
-            case "get_user_language":
-                handleGetUserLanguage();
-                return true;
             case "clear_user_language":
                 handleClearUserLanguage();
                 return true;
@@ -455,17 +447,6 @@ public class SettingsHandler extends BaseMessageHandler {
             LOG.error("[SettingsHandler] Failed to save user language: " + e.getMessage(), e);
             pushLanguageConfig();
         }
-    }
-
-    /**
-     * Handle get_user_language: return user's saved language preference.
-     */
-    private void handleGetUserLanguage() {
-        String userLanguage = LanguageConfigService.getUserLanguage(context.getSettingsService());
-        JsonObject response = new JsonObject();
-        response.addProperty("language", userLanguage != null ? userLanguage : "");
-        response.addProperty("manuallySet", userLanguage != null);
-        callJavaScript("window.onUserLanguage", escapeJs(response.toString()));
     }
 
     /**

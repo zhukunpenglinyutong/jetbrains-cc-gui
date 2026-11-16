@@ -13,10 +13,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
@@ -579,47 +577,5 @@ public class McpServerManager {
         JsonArray created = new JsonArray();
         owner.add(key, created);
         return created;
-    }
-
-    /**
-     * Validate MCP server configuration.
-     */
-    public Map<String, Object> validateMcpServer(JsonObject server) {
-        List<String> errors = new ArrayList<>();
-
-        if (!server.has("name") || server.get("name").getAsString().isEmpty()) {
-            errors.add("Server name must not be empty");
-        }
-
-        if (server.has("server")) {
-            JsonObject serverSpec = server.getAsJsonObject("server");
-            String type = serverSpec.has("type") ? serverSpec.get("type").getAsString() : "stdio";
-
-            if ("stdio".equals(type)) {
-                if (!serverSpec.has("command") || serverSpec.get("command").getAsString().isEmpty()) {
-                    errors.add("Command must not be empty");
-                }
-            } else if ("http".equals(type) || "sse".equals(type)) {
-                if (!serverSpec.has("url") || serverSpec.get("url").getAsString().isEmpty()) {
-                    errors.add("URL must not be empty");
-                } else {
-                    String url = serverSpec.get("url").getAsString();
-                    try {
-                        new java.net.URI(url).toURL();
-                    } catch (Exception e) {
-                        errors.add("Invalid URL format");
-                    }
-                }
-            } else {
-                errors.add("Unsupported connection type: " + type);
-            }
-        } else {
-            errors.add("Missing server configuration details");
-        }
-
-        Map<String, Object> result = new HashMap<>();
-        result.put("valid", errors.isEmpty());
-        result.put("errors", errors);
-        return result;
     }
 }

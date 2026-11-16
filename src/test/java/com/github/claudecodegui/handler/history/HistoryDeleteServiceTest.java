@@ -3,6 +3,7 @@ package com.github.claudecodegui.handler.history;
 import com.github.claudecodegui.handler.NodeJsServiceCaller;
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.session.ClaudeSession;
+import com.github.claudecodegui.settings.SessionSupplierStateService;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.google.gson.JsonObject;
 import com.github.claudecodegui.testing.SessionMetadataBridgeFixture;
@@ -29,6 +30,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertThrows;
 
@@ -553,6 +555,38 @@ public class HistoryDeleteServiceTest {
         assertEquals("DELETE_FAILED", HistoryDeletionGuard.errorCode(new IllegalStateException("boom")));
     }
 
+    @Test
+    public void confirmedDeletionPrunesOnlyItsProviderBindingsEvenWhenOtherMetadataCannotBeSaved() {
+        SessionSupplierStateService suppliers = new SessionSupplierStateService();
+        suppliers.saveSupplier("codex", "deleted-history", "codex-a");
+        suppliers.saveSupplier("claude", "deleted-history", "claude-b");
+        suppliers.saveSupplier("codex", "retained-history", "codex-c");
+        RecordingNodeJsServiceCaller caller = new RecordingNodeJsServiceCaller(null, null);
+        HistoryDeleteService service = new HistoryDeleteService(null, caller, null, suppliers);
+
+        assertFalse(service.cleanupSessionMetadata("codex", List.of("deleted-history")));
+
+        assertNull(suppliers.getSupplier("codex", "deleted-history"));
+        assertEquals("claude-b", suppliers.getSupplier("claude", "deleted-history"));
+        assertEquals("codex-c", suppliers.getSupplier("codex", "retained-history"));
+    }
+
+    @Test
+    public void refusedHistoryDeletionPreservesItsSupplierBinding() throws Exception {
+        SessionSupplierStateService suppliers = new SessionSupplierStateService();
+        suppliers.saveSupplier("codex", "busy-history", "codex-a");
+        RecordingClaudeSession session = new RecordingClaudeSession("busy-history", "codex");
+        session.getState().beginTurn();
+        HandlerContext context = new HandlerContext(null, null, null, null, null);
+        context.setSession(session);
+        RecordingDeleteService service = new RecordingDeleteService(context, new RecordingHistoryLoadService(context), suppliers);
+
+        service.handleDeleteSession("{\"provider\":\"codex\",\"sessionIds\":[\"busy-history\"]}", "codex");
+
+        assertEquals("SESSION_RUNNING", service.awaitResult());
+        assertEquals("codex-a", suppliers.getSupplier("codex", "busy-history"));
+    }
+
     private static HistoryDeleteRequest request(String provider, String... sessionIds) {
         return new HistoryDeleteRequest(List.of(sessionIds), provider, "request-1");
     }
@@ -718,6 +752,11 @@ public class HistoryDeleteServiceTest {
 
         private RecordingDeleteService(HandlerContext context, HistoryLoadService historyLoadService) {
             super(context, null, historyLoadService);
+        }
+
+        private RecordingDeleteService(HandlerContext context, HistoryLoadService historyLoadService,
+                                       SessionSupplierStateService suppliers) {
+            super(context, null, historyLoadService, suppliers);
         }
 
         @Override

@@ -29,4 +29,13 @@ describe('Codex settings dispatch failure translations', () => {
     expect(text).not.toMatch(/[?\uFFFD]/u);
     expect(text).toMatch(language);
   });
+
+  it.each([en, es, fr, hi, ja, ko, ptBR, ru, zhTW, zh])('provides readable translations for known backend failures', messages => {
+    for (const key of ['codexSettingsRuntimeInactive', 'codexSettingsServiceUnavailable', 'codexSettingsUpdateFailed'] as const) {
+      const text = messages.toast[key];
+      expect(text).toContain('Codex');
+      expect(text).not.toMatch(/[?\uFFFD]/u);
+      expect(text.length).toBeGreaterThan(20);
+    }
+  });
 });

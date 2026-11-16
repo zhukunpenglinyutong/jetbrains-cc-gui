@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ClaudeMessage } from '../types';
+import { reconstructTurnMetadata } from './turnMetadataReconstruction';
 import {
   getMessageKey,
   reconcileMessageKeys,
@@ -298,6 +299,36 @@ describe('mergeConsecutiveAssistantMessages', () => {
       makeMsg('assistant', 'Two', { raw: { ...metadata, uuid: 'two', content: [{ type: 'text', text: 'Two' }] } }),
     ];
     expect(mergeConsecutiveAssistantMessages(messages, normalizeBlocks)[0].durationMs).toBeUndefined();
+  });
+
+  it('gives a restored multi-row turn the same footer fields as the live turn', () => {
+    // History shape: one row per transcript line, no __turnId, footer data only
+    // recoverable from the transcript timestamps and per-call usage.
+    const line = (type: 'user' | 'assistant', at: string, content: unknown[], id?: string) => ({
+      type, timestamp: at,
+      message: { ...(id ? { id, usage: { input_tokens: 10, cache_read_input_tokens: 90, output_tokens: 5 } } : {}), content },
+    });
+    const restored = [
+      makeMsg('user', 'list files', { raw: line('user', '2026-11-15T10:00:00.000Z', [{ type: 'text', text: 'list files' }]) as any }),
+      makeMsg('assistant', 'Tool: bash', { raw: line('assistant', '2026-11-15T10:00:03.000Z',
+        [{ type: 'tool_use', id: 'tool-1', name: 'bash', input: { command: 'ls' } }], 'msg-1') as any }),
+      makeMsg('user', '[tool_result]', { raw: line('user', '2026-11-15T10:00:04.000Z',
+        [{ type: 'tool_result', tool_use_id: 'tool-1', content: 'a.txt' }]) as any }),
+      makeMsg('assistant', 'One file.', { raw: line('assistant', '2026-11-15T10:00:07.500Z',
+        [{ type: 'text', text: 'One file.' }], 'msg-2') as any }),
+    ];
+    const restoredTurn = mergeConsecutiveAssistantMessages(reconstructTurnMetadata(restored), normalizeBlocks)
+      .filter((m) => m.type === 'assistant');
+
+    // Live shape: the backend stamps turnUsage on the turn's row and the
+    // webview stamps durationMs at stream end.
+    const liveTurnUsage = { input_tokens: 20, cache_creation_input_tokens: 0, cache_read_input_tokens: 180, output_tokens: 10 };
+    const live = makeMsg('assistant', 'One file.', { __turnId: 3, durationMs: 7500,
+      raw: { turnUsage: liveTurnUsage, content: [{ type: 'text', text: 'One file.' }] } as any });
+
+    expect(restoredTurn).toHaveLength(1);
+    expect(restoredTurn[0].durationMs).toBe(live.durationMs);
+    expect((restoredTurn[0].raw as Record<string, unknown>).turnUsage).toEqual(liveTurnUsage);
   });
 
   const normalizeBlocks = (raw: unknown): any[] => {

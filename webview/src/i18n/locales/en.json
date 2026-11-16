@@ -238,7 +238,31 @@
     "backgroundTasksRunning": "{{count}} background tasks running",
     "backgroundTasksRunning_one": "{{count}} background task running",
     "backgroundTasksRunning_other": "{{count}} background tasks running",
-    "stopBackgroundTasks": "Stop background tasks"
+    "stopBackgroundTasks": "Stop background tasks",
+    "backgroundTasksPill": "{{count}} background tasks",
+    "backgroundTasksPill_one": "{{count}} background task",
+    "backgroundTasksPill_other": "{{count}} background tasks",
+    "backgroundTasksTitle": "Background tasks",
+    "backgroundTasksActive": "{{count}} running",
+    "backgroundTasksActive_one": "{{count}} running",
+    "backgroundTasksActive_other": "{{count}} running",
+    "backgroundTasksStopAfterAnswer": "Can stop after the answer",
+    "backgroundTaskDetails": {
+      "type": "Type",
+      "taskId": "Task ID",
+      "runId": "Run ID",
+      "parent": "Parent",
+      "elapsed": "Running for"
+    },
+    "backgroundTaskTypes": {
+      "local_bash": "Command",
+      "local_agent": "Subagent",
+      "remote_agent": "Remote agent",
+      "local_workflow": "Workflow",
+      "in_process_teammate": "Teammate",
+      "monitor_mcp": "Monitor",
+      "other": "Task"
+    }
   },
   "settings": {
     "title": "Settings",
@@ -1800,7 +1824,10 @@
     "providerAdded": "Provider added",
     "providerUpdated": "Provider updated",
     "providerDeleted": "Provider deleted",
-    "codexSettingsDispatchFailed": "Cannot send Codex settings to the IDE. Reopen the chat and try again."
+    "codexSettingsDispatchFailed": "Cannot send Codex settings to the IDE. Reopen the chat and try again.",
+    "codexSettingsRuntimeInactive": "The Codex runtime is inactive. Reopen the chat and try again.",
+    "codexSettingsServiceUnavailable": "The Codex service is unavailable. Reopen the chat and try again.",
+    "codexSettingsUpdateFailed": "Could not confirm Codex settings. Reopen the chat and try again."
   },
   "config": {
     "clickToCopy": "Click to copy",
@@ -3100,6 +3127,22 @@
         "useDefaultMode": {
           "title": "Option 2: Switch the permission mode for now",
           "step0": "Switch to Default Mode. It does not use the automatic reviewer, so you can keep working until the CLI is updated. If the error continues, update the CLI as described in Option 1."
+        }
+      }
+    },
+    "codexCliAppServerTooOld": {
+      "title": "Codex CLI is too old to start",
+      "intro": "The local Codex CLI prints its version, but it is too old to accept the --listen option the plugin passes to codex app-server, so it exits right away.",
+      "reason": "The plugin runs the Codex CLI found on your machine, so updating the plugin does not update the CLI. If the error continues after updating, an older codex may come first on your PATH.",
+      "solutions": {
+        "updateCodexCli": {
+          "title": "Option 1: Install or update the CLI using the official instructions",
+          "step0": "1. Open the official instructions and choose the standalone installer, npm, or Homebrew for your runtime environment. Update through the original installation channel; do not use npm uninstall for a standalone installation:",
+          "step1": "2. In a new terminal, confirm the version has changed, then restart the IDE so the plugin picks up the new CLI:"
+        },
+        "pointCodexBin": {
+          "title": "Option 2: Point the plugin at a working binary",
+          "step0": "List every codex on your PATH (on Windows: where codex). If the working one is not first, set the CODEX_BIN environment variable to its full path and restart the IDE. The plugin also falls back to later installs automatically."
         }
       }
     },

@@ -104,10 +104,6 @@ interface Window {
    */
   onContextUsageError?: (message: string, requestId?: string) => void;
 
-  /**
-   * Add single history message (used for Codex session loading)
-   */
-  addHistoryMessage?: (message: any) => void;
   onSubagentHistoryChunk?: (transferId: string, chunk: string, isFinal: string | boolean) => void;
   beginCodexHistoryPage?: (json: string) => void;
   appendCodexHistoryPageBatch?: (pageId: string, json: string) => void;
@@ -188,6 +184,16 @@ interface Window {
    * StatusPanel uses to mark a background (run_in_background) Agent subagent as completed.
    */
   onTaskEvent?: (eventJson: string) => void;
+
+  /**
+   * Inter-turn rows from a background follow-up turn. Payload:
+   * { sessionId, message }, built by ClaudeChatWindow (the daemon already
+   * carries sessionId, and dropping it here would make every event fail the
+   * session guard). An assistant message appends a live bubble; a user row
+   * carrying tool_result blocks settles the matching tool card instead of
+   * rendering. A later updateMessages snapshot supersedes the appended copy.
+   */
+  onInterTurnMessage?: (json: string) => void;
 
   /** Structured native Codex app-server event envelope. */
   onCodexRuntimeEvent?: (eventJson: string) => void;
@@ -380,8 +386,6 @@ interface Window {
   /** Update Codex MCP server tools list. */
   updateCodexMcpServerTools?: (json: string) => void;
 
-  mcpServerToggled?: (json: string) => void;
-
   /**
    * Update Codex MCP servers list (from ~/.codex/config.toml)
    */
@@ -508,11 +512,6 @@ interface Window {
    * Update the Gemini idle-reap window (minutes) setting
    */
   updateGeminiIdleReapMinutes?: (json: string) => void;
-
-  /**
-   * Update current Claude config
-   */
-  updateCurrentClaudeConfig?: (json: string) => void;
 
   /**
    * Show error message

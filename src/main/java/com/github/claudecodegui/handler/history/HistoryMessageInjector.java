@@ -1542,15 +1542,6 @@ public class HistoryMessageInjector {
         return 0;
     }
 
-    /**
-     * 将 Codex 历史消息恢复到后端 SessionState，保证历史加载后继续发送时，
-     * 后端内存态与前端显示态使用同一份消息基线。
-     */
-    static void restoreCodexMessagesToSessionState(SessionState state, JsonArray messages) {
-        restoreCodexFrontendMessagesToSessionState(
-                state, convertCodexMessagesToFrontendBatch(messages));
-    }
-
     private static void restoreCodexFrontendMessagesToSessionState(SessionState state,
                                                                     List<JsonObject> frontendMessages) {
         List<ClaudeSession.Message> restoredMessages = new ArrayList<>(frontendMessages.size());

@@ -32,6 +32,38 @@
       ]
     },
     {
+      "code": "codexCliAppServerTooOld",
+      "match": {
+        "regex": "unexpected argument '--listen'"
+      },
+      "solutions": [
+        {
+          "key": "updateCodexCli",
+          "recommended": true,
+          "steps": [
+            {
+              "kind": "link",
+              "url": "https://learn.chatgpt.com/docs/codex/cli#getting-started"
+            },
+            {
+              "kind": "command",
+              "command": "codex --version"
+            }
+          ]
+        },
+        {
+          "key": "pointCodexBin",
+          "recommended": false,
+          "steps": [
+            {
+              "kind": "command",
+              "command": "which -a codex"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "code": "codexWriterConflict",
       "match": {
         "regex": "already has (?:an active|a live local) writer|already owned by another (?:chat )?window"

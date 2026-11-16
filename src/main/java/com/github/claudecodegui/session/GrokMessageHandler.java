@@ -31,6 +31,7 @@ public class GrokMessageHandler implements MessageCallback {
     private static final String KEY_TURN_USAGE = "turnUsage";
 
     private final SessionState state;
+    private final TurnGuard turnGuard;
     private final CallbackHandler callbackHandler;
     private final GrokUsageLedger usageLedger;
     private final Gson gson = new Gson();
@@ -67,7 +68,13 @@ public class GrokMessageHandler implements MessageCallback {
     }
 
     GrokMessageHandler(SessionState state, CallbackHandler callbackHandler, GrokUsageLedger usageLedger) {
+        this(state, callbackHandler, usageLedger, state.getTurnOwner());
+    }
+
+    GrokMessageHandler(SessionState state, CallbackHandler callbackHandler, GrokUsageLedger usageLedger,
+                       Object expectedTurnOwner) {
         this.state = state;
+        this.turnGuard = new TurnGuard(state, expectedTurnOwner);
         this.callbackHandler = callbackHandler;
         this.usageLedger = usageLedger != null ? usageLedger : new GrokUsageLedger();
     }
@@ -75,6 +82,9 @@ public class GrokMessageHandler implements MessageCallback {
     @Override
     public void onMessage(String type, String content) {
         synchronized (state.getMessageStateLock()) {
+            if (!turnGuard.ownsCurrentTurn()) {
+                return;
+            }
             LOG.debug("GrokMessageHandler.onMessage: type=" + type);
 
             switch (type) {
@@ -137,6 +147,9 @@ public class GrokMessageHandler implements MessageCallback {
     @Override
     public void onError(String error) {
         synchronized (state.getMessageStateLock()) {
+            if (!turnGuard.ownsCurrentTurn()) {
+                return;
+            }
             isStreaming = false;
             streamEndedThisTurn = false;
             if (isThinking) {
@@ -161,6 +174,9 @@ public class GrokMessageHandler implements MessageCallback {
     @Override
     public void onComplete(SDKResult result) {
         synchronized (state.getMessageStateLock()) {
+            if (!turnGuard.ownsCurrentTurn()) {
+                return;
+            }
             boolean streamEndedBeforeComplete = streamEndedThisTurn;
             boolean wasStreaming = isStreaming;
 

@@ -213,28 +213,6 @@ public class ClaudeSettingsManager {
     }
 
     /**
-     * Read managed settings from the platform-specific managed-settings.json.
-     * Returns null if the file does not exist or cannot be parsed.
-     */
-    public JsonObject readManagedSettings() {
-        try {
-            Path managedPath = pathManager.getManagedSettingsPath();
-            File managedFile = managedPath.toFile();
-
-            if (!managedFile.exists()) {
-                return null;
-            }
-
-            try (FileReader reader = new FileReader(managedFile)) {
-                return JsonParser.parseReader(reader).getAsJsonObject();
-            }
-        } catch (Exception e) {
-            LOG.debug("[ClaudeSettingsManager] Failed to read managed-settings.json: " + e.getMessage());
-            return null;
-        }
-    }
-
-    /**
      * Write Claude Settings.
      */
     public void writeClaudeSettings(JsonObject settings) throws IOException {
@@ -459,93 +437,6 @@ public class ClaudeSettingsManager {
         if (removed.get()) {
             LOG.info("[ClaudeSettingsManager] Removed CLI login authorization flag from settings.json");
         }
-    }
-
-    /**
-     * Detect apiKeyHelper in user settings or managed settings.
-     * @return true if apiKeyHelper is configured, false otherwise
-     */
-    private boolean hasApiKeyHelper(JsonObject claudeSettings) {
-        if (claudeSettings.has("apiKeyHelper") && !claudeSettings.get("apiKeyHelper").isJsonNull()) {
-            return true;
-        }
-        JsonObject managedSettings = readManagedSettings();
-        return managedSettings != null && managedSettings.has("apiKeyHelper") && !managedSettings.get("apiKeyHelper").isJsonNull();
-    }
-
-    /**
-     * Get the current configuration used by Claude CLI (~/.claude/settings.json).
-     * Used to display the currently applied configuration on the settings page.
-     */
-    public JsonObject getCurrentClaudeConfig() throws IOException {
-        JsonObject claudeSettings = readClaudeSettings();
-        JsonObject result = new JsonObject();
-
-        // Extract key settings from the env object
-        if (claudeSettings.has("env")) {
-            JsonObject env = claudeSettings.getAsJsonObject("env");
-
-            // Support both auth methods: prefer ANTHROPIC_AUTH_TOKEN, fall back to ANTHROPIC_API_KEY
-            String apiKey = "";
-            String authType = "none";
-
-            if (env.has("ANTHROPIC_AUTH_TOKEN") && !env.get("ANTHROPIC_AUTH_TOKEN").getAsString().isEmpty()) {
-                apiKey = env.get("ANTHROPIC_AUTH_TOKEN").getAsString();
-                authType = "auth_token";  // Bearer authentication
-            } else if (env.has("ANTHROPIC_API_KEY") && !env.get("ANTHROPIC_API_KEY").getAsString().isEmpty()) {
-                apiKey = env.get("ANTHROPIC_API_KEY").getAsString();
-                authType = "api_key";  // x-api-key authentication
-            }
-
-            String baseUrl = env.has("ANTHROPIC_BASE_URL") ? env.get("ANTHROPIC_BASE_URL").getAsString() : "";
-
-            // Check for CLI login authorization
-            if (apiKey.isEmpty() && "none".equals(authType) &&
-                    env.has("CCGUI_CLI_LOGIN_AUTHORIZED") &&
-                    "1".equals(env.get("CCGUI_CLI_LOGIN_AUTHORIZED").getAsString())) {
-                authType = "cli_login";
-            }
-
-            // If no API key found, check for apiKeyHelper in user settings or managed settings
-            if (apiKey.isEmpty() && "none".equals(authType) && hasApiKeyHelper(claudeSettings)) {
-                authType = "api_key_helper";
-            }
-
-            // Mask credentials – never expose full API keys to the webview.
-            // Show only a safe prefix/suffix so the user can identify the key.
-            result.addProperty("apiKey", maskCredential(apiKey));
-            result.addProperty("authType", authType);  // Add auth type identifier
-            result.addProperty("baseUrl", baseUrl);
-        } else {
-            // No env object — still check for apiKeyHelper
-            String authType = hasApiKeyHelper(claudeSettings) ? "api_key_helper" : "none";
-            result.addProperty("apiKey", "");
-            result.addProperty("authType", authType);
-            result.addProperty("baseUrl", "");
-        }
-
-        // If codemossProviderId exists, try to retrieve the provider name
-        if (claudeSettings.has("codemossProviderId")) {
-            String providerId = claudeSettings.get("codemossProviderId").getAsString();
-            result.addProperty("providerId", providerId);
-        }
-
-        return result;
-    }
-
-    /**
-     * Mask a credential string for safe display.
-     * Shows the first 4 and last 4 characters with asterisks in between.
-     * Returns empty string for null/empty input.
-     */
-    private static String maskCredential(String credential) {
-        if (credential == null || credential.isEmpty()) {
-            return "";
-        }
-        if (credential.length() <= 8) {
-            return "****";
-        }
-        return credential.substring(0, 4) + "****" + credential.substring(credential.length() - 4);
     }
 
     /**

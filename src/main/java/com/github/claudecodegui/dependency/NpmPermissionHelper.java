@@ -89,22 +89,25 @@ public class NpmPermissionHelper {
     /**
      * Cleans the npm cache (strategy 1).
      *
-     * @param npmPath path to the npm executable
+     * @param npmInvocation the command prefix that runs npm (for WSL: {@code wsl <npm>} or
+     *                      {@code wsl <node> <npm-cli.js>}), so the WSL cache is the one cleaned
      * @return true if the cleanup succeeded
      */
-    public static boolean cleanNpmCache(String npmPath) {
-        return cleanNpmCache(npmPath, TimeUnit.SECONDS.toMillis(60));
+    public static boolean cleanNpmCache(List<String> npmInvocation) {
+        return cleanNpmCache(npmInvocation, TimeUnit.SECONDS.toMillis(60));
     }
 
     /**
      * @param timeoutMillis hard deadline; it runs under the install lock, so a stalled clean
      *                      (e.g. a locked cache file on Windows) must not hold the lock forever
      */
-    static boolean cleanNpmCache(String npmPath, long timeoutMillis) {
+    static boolean cleanNpmCache(List<String> npmInvocation, long timeoutMillis) {
         try {
             LOG.info("[NpmPermissionHelper] Attempting to clean npm cache using: npm cache clean --force");
 
-            ProcessBuilder pb = new ProcessBuilder(npmPath, "cache", "clean", "--force");
+            List<String> command = new ArrayList<>(npmInvocation);
+            command.addAll(List.of("cache", "clean", "--force"));
+            ProcessBuilder pb = new ProcessBuilder(command);
             pb.redirectErrorStream(true);
 
             // Output may contain warning messages

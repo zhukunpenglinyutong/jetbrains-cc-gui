@@ -192,6 +192,30 @@
     "backgroundTasksRunning_one": "Выполняется {{count}} фоновая задача",
     "backgroundTasksRunning_other": "Фоновых задач выполняется: {{count}}",
     "stopBackgroundTasks": "Остановить фоновые задачи",
+    "backgroundTasksPill": "Фоновых задач: {{count}}",
+    "backgroundTasksPill_one": "Фоновых задач: {{count}}",
+    "backgroundTasksPill_other": "Фоновых задач: {{count}}",
+    "backgroundTasksTitle": "Фоновые задачи",
+    "backgroundTasksActive": "Выполняется: {{count}}",
+    "backgroundTasksActive_one": "Выполняется: {{count}}",
+    "backgroundTasksActive_other": "Выполняется: {{count}}",
+    "backgroundTasksStopAfterAnswer": "Можно остановить после ответа",
+    "backgroundTaskDetails": {
+      "type": "Тип",
+      "taskId": "ID задачи",
+      "runId": "ID запуска",
+      "parent": "Родительская задача",
+      "elapsed": "Выполняется"
+    },
+    "backgroundTaskTypes": {
+      "local_bash": "Команда",
+      "local_agent": "Субагент",
+      "remote_agent": "Удалённый агент",
+      "local_workflow": "Рабочий процесс",
+      "in_process_teammate": "Напарник",
+      "monitor_mcp": "Монитор",
+      "other": "Задача"
+    },
     "planUsage": {
       "balanceLabel": "Баланс: ",
       "balanceRemaining": "Баланс: {{value}}",
@@ -1362,7 +1386,10 @@
     "providerAdded": "Провайдер добавлен",
     "providerUpdated": "Провайдер обновлён",
     "providerDeleted": "Провайдер удалён",
-    "codexSettingsDispatchFailed": "Не удалось отправить настройки Codex в IDE. Откройте чат заново и повторите попытку."
+    "codexSettingsDispatchFailed": "Не удалось отправить настройки Codex в IDE. Откройте чат заново и повторите попытку.",
+    "codexSettingsRuntimeInactive": "Среда выполнения Codex неактивна. Откройте чат заново и повторите попытку.",
+    "codexSettingsServiceUnavailable": "Сервис Codex недоступен. Откройте чат заново и повторите попытку.",
+    "codexSettingsUpdateFailed": "Не удалось подтвердить настройки Codex. Откройте чат заново и повторите попытку."
   },
   "config": {
     "clickToCopy": "Нажмите для копирования",
@@ -2505,6 +2532,22 @@
         "useDefaultMode": {
           "title": "Вариант 2: временно сменить режим разрешений",
           "step0": "Переключитесь на «Обычный режим». Он не использует автоматическую проверку, поэтому можно продолжать работу до обновления CLI. Если ошибка сохраняется, обновите CLI, как описано в варианте 1."
+        }
+      }
+    },
+    "codexCliAppServerTooOld": {
+      "title": "Codex CLI слишком старый и не запускается",
+      "intro": "Локальный Codex CLI нормально выводит версию, но он слишком старый и не понимает параметр --listen, который плагин передаёт codex app-server, поэтому сразу завершается.",
+      "reason": "Плагин запускает Codex CLI, найденный на вашем компьютере, поэтому обновление плагина не обновляет CLI. Если ошибка сохраняется после обновления, возможно, в PATH раньше находится более старый codex.",
+      "solutions": {
+        "updateCodexCli": {
+          "title": "Вариант 1: установить или обновить CLI по официальной инструкции",
+          "step0": "1. Откройте официальную инструкцию и выберите подходящий для вашей среды вариант: автономный установщик, npm или Homebrew. Обновляйте тем же способом, каким установили; не выполняйте npm uninstall для автономной установки:",
+          "step1": "2. В новом терминале убедитесь, что версия изменилась, затем перезапустите IDE, чтобы плагин начал использовать новый CLI:"
+        },
+        "pointCodexBin": {
+          "title": "Вариант 2: указать плагину рабочий бинарник",
+          "step0": "Перечислите все codex в PATH (в Windows: where codex). Если рабочий не первый, задайте переменную окружения CODEX_BIN с полным путём к нему и перезапустите IDE. Плагин также автоматически переходит к более поздним установкам."
         }
       }
     },

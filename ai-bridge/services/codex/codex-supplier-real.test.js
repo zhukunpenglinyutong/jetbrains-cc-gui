@@ -93,7 +93,8 @@ test('native supplier processes send, cold-resume and switch suppliers without g
         // On Windows, HOME/USERPROFILE alone may not isolate the native profile.
         // Verify the native home and loopback route before starting any thread.
         assert.ok(userLayer?.name?.file, 'The native CLI must report its fixture configuration layer');
-        assert.equal(realpathSync(userLayer.name.file), realpathSync(join(home, 'config.toml')),
+        // Native realpath also expands Windows 8.3 aliases used by hosted runners.
+        assert.equal(realpathSync.native(userLayer.name.file), realpathSync.native(join(home, 'config.toml')),
           'The native CLI must use the isolated fixture home');
         assert.equal(actual.config?.model_providers?.[modelProvider ?? 'OpenAI']?.base_url,
           `${endpoint}/${supplierId ?? 'global'}/v1`, 'Model requests must stay on the fixture server');
@@ -149,7 +150,11 @@ test('native supplier processes send, cold-resume and switch suppliers without g
   assert.equal(requests.at(-1).path, '/a/v1/responses');
   assert.equal(requests.at(-1).authorization, 'Bearer fixture-key-a');
   assert.match(JSON.stringify(requests.at(-1).body.input), /Bound supplier fixture finished/);
-  assert.equal(migrated.launchOptions.modelProvider, 'OpenAI');
+  // Older CLIs accept the bound provider directly; newer ones may retain the historical id.
+  // Both must route that id through the selected supplier's isolated configuration.
+  const migratedProvider = migrated.launchOptions.nativeConfig?.model_providers?.[migrated.launchOptions.modelProvider];
+  assert.equal(migratedProvider?.base_url, `${endpoint}/a/v1`);
+  assert.equal(migratedProvider?.env_key, 'CODEX_API_KEY');
   await migrated.resetRuntime();
   await migrated.preconnect({ threadId: legacyThreadId });
   assert.equal((await send(migrated)).outcome, 'completed');

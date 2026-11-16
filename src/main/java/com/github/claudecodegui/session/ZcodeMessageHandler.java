@@ -25,6 +25,7 @@ public class ZcodeMessageHandler implements MessageCallback {
     private static final Logger LOG = Logger.getInstance(ZcodeMessageHandler.class);
 
     private final SessionState state;
+    private final TurnGuard turnGuard;
     private final CallbackHandler callbackHandler;
     private final Gson gson = new Gson();
     /** Same merger as Claude: preserves mid-turn tool_use when final text snapshots arrive. */
@@ -45,13 +46,21 @@ public class ZcodeMessageHandler implements MessageCallback {
     private boolean isThinking = false;
 
     public ZcodeMessageHandler(SessionState state, CallbackHandler callbackHandler) {
+        this(state, callbackHandler, state.getTurnOwner());
+    }
+
+    ZcodeMessageHandler(SessionState state, CallbackHandler callbackHandler, Object expectedTurnOwner) {
         this.state = state;
+        this.turnGuard = new TurnGuard(state, expectedTurnOwner);
         this.callbackHandler = callbackHandler;
     }
 
     @Override
     public void onMessage(String type, String content) {
         synchronized (state.getMessageStateLock()) {
+            if (!turnGuard.ownsCurrentTurn()) {
+                return;
+            }
             LOG.debug("ZcodeMessageHandler.onMessage: type=" + type);
 
             switch (type) {
@@ -114,6 +123,9 @@ public class ZcodeMessageHandler implements MessageCallback {
     @Override
     public void onError(String error) {
         synchronized (state.getMessageStateLock()) {
+            if (!turnGuard.ownsCurrentTurn()) {
+                return;
+            }
             isStreaming = false;
             streamEndedThisTurn = false;
             if (isThinking) {
@@ -138,6 +150,9 @@ public class ZcodeMessageHandler implements MessageCallback {
     @Override
     public void onComplete(SDKResult result) {
         synchronized (state.getMessageStateLock()) {
+            if (!turnGuard.ownsCurrentTurn()) {
+                return;
+            }
             boolean streamEndedBeforeComplete = streamEndedThisTurn;
             boolean wasStreaming = isStreaming;
 

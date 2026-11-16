@@ -238,7 +238,31 @@
     "backgroundTasksRunning": "{{count}} 个后台任务正在运行",
     "backgroundTasksRunning_one": "{{count}} 个后台任务正在运行",
     "backgroundTasksRunning_other": "{{count}} 个后台任务正在运行",
-    "stopBackgroundTasks": "停止后台任务"
+    "stopBackgroundTasks": "全部停止",
+    "backgroundTasksPill": "{{count}} 个后台任务",
+    "backgroundTasksPill_one": "{{count}} 个后台任务",
+    "backgroundTasksPill_other": "{{count}} 个后台任务",
+    "backgroundTasksTitle": "后台任务",
+    "backgroundTasksActive": "{{count}} 个运行中",
+    "backgroundTasksActive_one": "{{count}} 个运行中",
+    "backgroundTasksActive_other": "{{count}} 个运行中",
+    "backgroundTasksStopAfterAnswer": "回答结束后可停止",
+    "backgroundTaskDetails": {
+      "type": "类型",
+      "taskId": "任务 ID",
+      "runId": "运行 ID",
+      "parent": "父任务",
+      "elapsed": "已运行"
+    },
+    "backgroundTaskTypes": {
+      "local_bash": "命令",
+      "local_agent": "子代理",
+      "remote_agent": "远程代理",
+      "local_workflow": "工作流",
+      "in_process_teammate": "队友",
+      "monitor_mcp": "监控",
+      "other": "任务"
+    }
   },
   "settings": {
     "title": "设置",
@@ -1795,7 +1819,10 @@
     "providerAdded": "供应商添加成功",
     "providerUpdated": "供应商更新成功",
     "providerDeleted": "供应商删除成功",
-    "codexSettingsDispatchFailed": "无法将 Codex 设置发送到 IDE，请重新打开对话后重试。"
+    "codexSettingsDispatchFailed": "无法将 Codex 设置发送到 IDE，请重新打开对话后重试。",
+    "codexSettingsRuntimeInactive": "Codex 运行环境未启用，请重新打开对话后重试。",
+    "codexSettingsServiceUnavailable": "Codex 服务当前不可用，请重新打开对话后重试。",
+    "codexSettingsUpdateFailed": "无法确认 Codex 设置，请重新打开对话后重试。"
   },
   "config": {
     "clickToCopy": "点击复制",
@@ -3094,6 +3121,22 @@
         "useDefaultMode": {
           "title": "方案二：暂时切换权限模式",
           "step0": "切换到默认模式。这个模式不使用自动审查器，可以在更新 CLI 之前继续工作。如果仍然报错，请按方案一更新 CLI。"
+        }
+      }
+    },
+    "codexCliAppServerTooOld": {
+      "title": "Codex CLI 版本过低，无法启动",
+      "intro": "本机的 Codex CLI 能正常输出版本号，但版本太旧，不认识插件启动 codex app-server 时传入的 --listen 参数，所以一启动就退出了。",
+      "reason": "插件使用本机识别到的 Codex CLI，更新插件不会同时更新 CLI。如果更新后仍然报错，可能是 PATH 上还有一个更旧的 codex 排在前面。",
+      "solutions": {
+        "updateCodexCli": {
+          "title": "方案一：按官方说明安装或更新 CLI",
+          "step0": "1. 打开官方说明，选择适合当前运行环境的独立安装器、npm 或 Homebrew。更新时沿用原安装渠道，不要直接对独立安装版执行 npm 卸载：",
+          "step1": "2. 在新终端中确认版本已经更新，然后重启 IDE，让插件换用新的 CLI："
+        },
+        "pointCodexBin": {
+          "title": "方案二：让插件指向可用的二进制",
+          "step0": "列出 PATH 上所有的 codex（Windows 使用 where codex）。如果可用的那个不在最前面，把 CODEX_BIN 环境变量设置为它的完整路径，然后重启 IDE。插件现在也会自动回退到后面可用的安装。"
         }
       }
     },

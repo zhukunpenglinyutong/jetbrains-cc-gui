@@ -30,9 +30,7 @@ public class ClaudeMessageHandler implements MessageCallback {
     private static final Logger LOG = Logger.getInstance(ClaudeMessageHandler.class);
     private final Project project;
     private final SessionState state;
-    private final Object turnOwner;
-    private final String runtimeSessionEpoch;
-    private final String executionBindingEpoch;
+    private final TurnGuard turnGuard;
     private final SessionExecutionState.Turn executionTurn;
     private final CallbackHandler callbackHandler;
     private final MessageParser messageParser;
@@ -105,9 +103,7 @@ public class ClaudeMessageHandler implements MessageCallback {
                          CodemossSettingsService settingsService, Object expectedTurnOwner) {
         this.project = project;
         this.state = state;
-        this.turnOwner = expectedTurnOwner;
-        this.runtimeSessionEpoch = state.getRuntimeSessionEpoch();
-        this.executionBindingEpoch = state.getExecutionSnapshot().bindingEpoch();
+        this.turnGuard = new TurnGuard(state, expectedTurnOwner);
         this.executionTurn = state.executionTurnForOwner(expectedTurnOwner);
         this.callbackHandler = callbackHandler;
         this.messageParser = messageParser;
@@ -356,8 +352,7 @@ public class ClaudeMessageHandler implements MessageCallback {
     // ===== Private methods: handle different message types =====
 
     private boolean ownsCurrentTurn() {
-        return state.isCurrentTurn(turnOwner) && runtimeSessionEpoch.equals(state.getRuntimeSessionEpoch())
-                && state.getExecutionState().isCurrentBinding(executionBindingEpoch);
+        return turnGuard.ownsCurrentTurn();
     }
 
     @Override

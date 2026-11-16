@@ -9,6 +9,7 @@ import com.github.claudecodegui.notifications.ClaudeNotifier;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.provider.grok.GrokSDKBridge;
+import com.github.claudecodegui.provider.grok.GrokUsageLedger;
 import com.github.claudecodegui.provider.common.MarkerCliBridge;
 import com.github.claudecodegui.provider.zcode.ZcodeSDKBridge;
 import com.github.claudecodegui.provider.common.MessageCallback;
@@ -398,7 +399,7 @@ public class SessionSendService {
         if (cliTool != null && !cliBridges.containsKey(currentProvider)) {
             LOG.warn("[Lifecycle] provider=" + currentProvider
                     + " has no CLI bridge; rejecting send instead of falling through to claude");
-            MessageCallback handler = createCliMessageHandler(currentProvider);
+            MessageCallback handler = createCliMessageHandler(currentProvider, expectedTurnOwner);
             handler.onError(ClaudeCodeGuiBundle.message(
                     "error.cliProviderNotImplemented",
                     cliTool.getDisplayName()
@@ -633,7 +634,8 @@ public class SessionSendService {
             callbackFacade.notifyStateChange(false, false, "Grok bridge not available");
             return CompletableFuture.completedFuture(null);
         }
-        GrokMessageHandler handler = new GrokMessageHandler(state, callbackFacade.getCallbackHandler());
+        GrokMessageHandler handler = new GrokMessageHandler(state, callbackFacade.getCallbackHandler(),
+                new GrokUsageLedger(), expectedTurnOwner);
         Boolean streaming = readStreamingEnabled();
         final String runtimeSessionEpoch = state.getRuntimeSessionEpoch();
         final String currentModel = state.getModel();
@@ -686,7 +688,8 @@ public class SessionSendService {
             callbackFacade.notifyStateChange(false, false, "ZCode bridge not available");
             return CompletableFuture.completedFuture(null);
         }
-        ZcodeMessageHandler handler = new ZcodeMessageHandler(state, callbackFacade.getCallbackHandler());
+        ZcodeMessageHandler handler = new ZcodeMessageHandler(state, callbackFacade.getCallbackHandler(),
+                expectedTurnOwner);
         Boolean streaming = readStreamingEnabled();
         final String runtimeSessionEpoch = state.getRuntimeSessionEpoch();
         final String currentModel = state.getModel();
@@ -758,14 +761,14 @@ public class SessionSendService {
     ) {
         MarkerCliBridge bridge = cliBridges.get(provider);
         if (bridge == null) {
-            MessageCallback missingHandler = createCliMessageHandler(provider);
+            MessageCallback missingHandler = createCliMessageHandler(provider, expectedTurnOwner);
             missingHandler.onError("CLI provider not registered: " + provider);
             return CompletableFuture.completedFuture(null);
         }
 
         // Grok has a dedicated handler (multi-turn assistant ownership + no user-echo
         // dupes). Other CLI providers reuse Codex streaming marker handling.
-        MessageCallback handler = createCliMessageHandler(provider);
+        MessageCallback handler = createCliMessageHandler(provider, expectedTurnOwner);
 
         String contextAppend = this.contextService.buildLegacyContextAppend(openedFilesJson, fileTagPaths);
         String finalInput = (input != null ? input : "") + contextAppend;
@@ -881,15 +884,15 @@ public class SessionSendService {
      * Grok uses {@link GrokMessageHandler} so each stream owns a dedicated assistant
      * bubble and ACP user echoes never re-append the send-time user message.
      */
-    MessageCallback createCliMessageHandler(String provider) {
+    MessageCallback createCliMessageHandler(String provider, Object expectedTurnOwner) {
         CallbackHandler callbacks = callbackFacade.getCallbackHandler();
         if ("grok".equals(provider)) {
-            return new GrokMessageHandler(state, callbacks);
+            return new GrokMessageHandler(state, callbacks, new GrokUsageLedger(), expectedTurnOwner);
         }
         if ("zcode".equals(provider)) {
-            return new ZcodeMessageHandler(state, callbacks);
+            return new ZcodeMessageHandler(state, callbacks, expectedTurnOwner);
         }
-        return new CodexMessageHandler(state, callbacks);
+        return new CodexMessageHandler(state, callbacks, null, expectedTurnOwner);
     }
 
     /**

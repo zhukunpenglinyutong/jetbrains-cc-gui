@@ -7,7 +7,8 @@ public enum CliToolId {
     CODEX("codex", "Codex CLI", "codex", null),
     GROK("grok", "Grok CLI", "grok", null),
     KIMI("kimi", "Kimi CLI", "kimi", null),
-    OPENCODE("opencode", "OpenCode", "opencode", null),
+    // npm / official installers expose `opencode`; the desktop app bundles `opencode-cli`.
+    OPENCODE("opencode", "OpenCode", "opencode", "opencode-cli"),
     PI("pi", "PI CLI", "pi", null),
     OMP("omp", "OMP CLI", "omp", null),
     DSH("dsh", "DeepSeek Harness", "dsh", null),

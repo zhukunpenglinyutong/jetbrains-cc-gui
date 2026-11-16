@@ -194,7 +194,31 @@
     "backgroundTasksRunning": "{{count}} 個背景工作正在執行",
     "backgroundTasksRunning_one": "{{count}} 個背景工作正在執行",
     "backgroundTasksRunning_other": "{{count}} 個背景工作正在執行",
-    "stopBackgroundTasks": "停止背景工作"
+    "stopBackgroundTasks": "全部停止",
+    "backgroundTasksPill": "{{count}} 個背景工作",
+    "backgroundTasksPill_one": "{{count}} 個背景工作",
+    "backgroundTasksPill_other": "{{count}} 個背景工作",
+    "backgroundTasksTitle": "背景工作",
+    "backgroundTasksActive": "{{count}} 個執行中",
+    "backgroundTasksActive_one": "{{count}} 個執行中",
+    "backgroundTasksActive_other": "{{count}} 個執行中",
+    "backgroundTasksStopAfterAnswer": "回答結束後可停止",
+    "backgroundTaskDetails": {
+      "type": "類型",
+      "taskId": "工作 ID",
+      "runId": "執行 ID",
+      "parent": "父工作",
+      "elapsed": "已執行"
+    },
+    "backgroundTaskTypes": {
+      "local_bash": "指令",
+      "local_agent": "子代理",
+      "remote_agent": "遠端代理",
+      "local_workflow": "工作流程",
+      "in_process_teammate": "隊友",
+      "monitor_mcp": "監控",
+      "other": "工作"
+    }
   },
   "settings": {
     "title": "設定",
@@ -1372,7 +1396,10 @@
     "providerAdded": "供應商新增成功",
     "providerUpdated": "供應商更新成功",
     "providerDeleted": "供應商刪除成功",
-    "codexSettingsDispatchFailed": "無法將 Codex 設定傳送到 IDE，請重新開啟對話後再試。"
+    "codexSettingsDispatchFailed": "無法將 Codex 設定傳送到 IDE，請重新開啟對話後再試。",
+    "codexSettingsRuntimeInactive": "Codex 執行環境未啟用，請重新開啟對話後重試。",
+    "codexSettingsServiceUnavailable": "Codex 服務目前無法使用，請重新開啟對話後重試。",
+    "codexSettingsUpdateFailed": "無法確認 Codex 設定，請重新開啟對話後重試。"
   },
   "config": {
     "clickToCopy": "點選複製",
@@ -2579,6 +2606,22 @@
         "useDefaultMode": {
           "title": "方案二：暫時切換權限模式",
           "step0": "切換到預設模式。這個模式不使用自動審查器，可以在更新 CLI 之前繼續工作。如果仍然報錯，請按方案一更新 CLI。"
+        }
+      }
+    },
+    "codexCliAppServerTooOld": {
+      "title": "Codex CLI 版本過低，無法啟動",
+      "intro": "本機的 Codex CLI 能正常輸出版本號，但版本太舊，不認得外掛啟動 codex app-server 時傳入的 --listen 參數，所以一啟動就結束了。",
+      "reason": "外掛使用本機識別到的 Codex CLI，更新外掛不會同時更新 CLI。如果更新後仍然報錯，可能是 PATH 上還有一個更舊的 codex 排在前面。",
+      "solutions": {
+        "updateCodexCli": {
+          "title": "方案一：按官方說明安裝或更新 CLI",
+          "step0": "1. 開啟官方說明，選擇適合目前執行環境的獨立安裝器、npm 或 Homebrew。更新時沿用原安裝管道，不要對獨立安裝版執行 npm 解除安裝：",
+          "step1": "2. 在新終端機中確認版本已經更新，然後重新啟動 IDE，讓外掛換用新的 CLI："
+        },
+        "pointCodexBin": {
+          "title": "方案二：讓外掛指向可用的執行檔",
+          "step0": "列出 PATH 上所有的 codex（Windows 使用 where codex）。如果可用的那個不在最前面，請把 CODEX_BIN 環境變數設為它的完整路徑，然後重新啟動 IDE。外掛現在也會自動回退到後面可用的安裝。"
         }
       }
     },
