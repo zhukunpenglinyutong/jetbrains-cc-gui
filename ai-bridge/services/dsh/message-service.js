@@ -323,14 +323,18 @@ export async function cancelBeforeExit(client, sessionId, timeoutMs = SHUTDOWN_C
 }
 
 /** Cancel on interrupt (SIGTERM from Java process manager), then exit. */
-function registerShutdownCancel(client, sessionId, mux) {
+function registerShutdownCancel(client, sessionId, mux, turn) {
   let shuttingDown = false;
   const onShutdownSignal = async () => {
     if (shuttingDown) {
       return;
     }
     shuttingDown = true;
-    await cancelBeforeExit(client, sessionId);
+    // The plugin usually cancelled already; a second cancel after the turn ended
+    // could hit a turn the host starts next from its pending inbox.
+    if (!turn.settled) {
+      await cancelBeforeExit(client, sessionId);
+    }
     mux.close();
     process.exit(143);
   };
@@ -561,7 +565,7 @@ async function runModernTurn(client, sessionId, text, images) {
     return;
   }
 
-  registerShutdownCancel(client, sessionId, mux);
+  registerShutdownCancel(client, sessionId, mux, turn);
   if (!(await promptTurn(client, sessionId, mux, text, images))) {
     return;
   }
@@ -620,7 +624,7 @@ export async function sendMessage(options = {}) {
     return;
   }
 
-  registerShutdownCancel(client, sessionId, mux);
+  registerShutdownCancel(client, sessionId, mux, turn);
   if (!(await promptTurn(client, sessionId, mux, text, images))) {
     return;
   }

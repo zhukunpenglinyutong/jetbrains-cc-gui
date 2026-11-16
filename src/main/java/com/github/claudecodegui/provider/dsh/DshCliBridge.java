@@ -38,8 +38,8 @@ public class DshCliBridge extends MarkerCliBridge {
 
     private final CodemossSettingsService settingsService = new CodemossSettingsService();
 
-    /** DSH session id of the turn running on each channel; needed to cancel it on the host. */
-    private final Map<String, String> sessionByChannel = new ConcurrentHashMap<>();
+    /** The turn running on each channel; Stop needs its DSH session id to cancel it on the host. */
+    private final Map<String, Turn> turns = new ConcurrentHashMap<>();
 
     public DshCliBridge() {
         super(DshCliBridge.class);
@@ -90,39 +90,25 @@ public class DshCliBridge extends MarkerCliBridge {
             Boolean thinking,
             MessageCallback callback
     ) {
-        trackSession(channelId, sessionId);
-        MessageCallback tracking = new MessageCallback() {
-            @Override
-            public String executionScope() {
-                return callback.executionScope();
-            }
-
-            @Override
-            public void onMessage(String type, String content) {
-                if ("session_id".equals(type)) {
-                    trackSession(channelId, content);
-                }
-                callback.onMessage(type, content);
-            }
-
-            @Override
-            public void onError(String error) {
-                callback.onError(error);
-            }
-
-            @Override
-            public void onComplete(SDKResult result) {
-                callback.onComplete(result);
-            }
-        };
+        Turn turn = startTurn(channelId, sessionId, callback);
         return super.sendMessage(channelId, message, sessionId, cwd, model, reasoningEffort,
-                attachments, permissionMode, dshPreset, ompApprovalMode, thinking, tracking)
-                .whenComplete((result, error) -> sessionByChannel.remove(channelId));
+                attachments, permissionMode, dshPreset, ompApprovalMode, thinking, turn)
+                .whenComplete((result, error) -> forgetTurn(channelId, turn))
+                .thenApply(turn::settle);
     }
 
-    void trackSession(String channelId, String sessionId) {
-        if (channelId != null && sessionId != null && !sessionId.isBlank()) {
-            sessionByChannel.put(channelId, sessionId.trim());
+    Turn startTurn(String channelId, String sessionId, MessageCallback callback) {
+        Turn turn = new Turn(sessionId, callback);
+        if (channelId != null) {
+            turns.put(channelId, turn);
+        }
+        return turn;
+    }
+
+    /** Only drops this turn: a newer send on the same channel may already be registered. */
+    void forgetTurn(String channelId, Turn turn) {
+        if (channelId != null) {
+            turns.remove(channelId, turn);
         }
     }
 
@@ -133,11 +119,80 @@ public class DshCliBridge extends MarkerCliBridge {
      */
     @Override
     public void interruptChannel(String channelId) {
-        String sessionId = channelId != null ? sessionByChannel.get(channelId) : null;
-        if (sessionId != null) {
-            requestHostCancel(sessionId);
+        Turn turn = channelId != null ? turns.get(channelId) : null;
+        if (turn != null) {
+            turn.stopping = true;
+            String sessionId = turn.sessionId;
+            if (sessionId != null) {
+                requestHostCancel(sessionId);
+            }
         }
         super.interruptChannel(channelId);
+    }
+
+    /**
+     * One send on one channel. Remembers the DSH session id for Stop, and once Stop
+     * is pressed treats the host's "cancelled" turn end as the stop working, not as an
+     * error: the send process can report it and exit before it is killed.
+     */
+    static final class Turn implements MessageCallback {
+        private final MessageCallback delegate;
+        private volatile String sessionId;
+        private volatile boolean stopping;
+        private volatile boolean finished;
+
+        Turn(String sessionId, MessageCallback delegate) {
+            this.delegate = delegate;
+            track(sessionId);
+        }
+
+        private void track(String id) {
+            if (id != null && !id.isBlank()) {
+                sessionId = id.trim();
+            }
+        }
+
+        @Override
+        public String executionScope() {
+            return delegate.executionScope();
+        }
+
+        @Override
+        public void onMessage(String type, String content) {
+            if ("session_id".equals(type)) {
+                track(content);
+            }
+            delegate.onMessage(type, content);
+        }
+
+        @Override
+        public void onError(String error) {
+            if (stopping) {
+                return;
+            }
+            finished = true;
+            delegate.onError(error);
+        }
+
+        @Override
+        public void onComplete(SDKResult result) {
+            finished = true;
+            delegate.onComplete(result);
+        }
+
+        /** Ends a stopped turn whose process exited before reporting the interrupt itself. */
+        SDKResult settle(SDKResult result) {
+            if (!stopping || finished) {
+                return result;
+            }
+            SDKResult stopped = new SDKResult();
+            stopped.success = false;
+            stopped.cancelled = true;
+            stopped.processExited = result != null && result.processExited;
+            stopped.error = "User interrupted";
+            onComplete(stopped);
+            return stopped;
+        }
     }
 
     /** Best effort: run {@code dsh cancel} and wait a bounded time; never throws. */
@@ -154,7 +209,6 @@ public class DshCliBridge extends MarkerCliBridge {
                 pb.directory(bridgeDir);
             }
             pb.redirectErrorStream(true);
-            pb.redirectOutput(ProcessBuilder.Redirect.DISCARD);
             DshEnvSupport.inject(pb.environment(), settingsService);
             pb.environment().put(getStdinEnvKey(), "true");
             envConfigurator.updateProcessEnvironment(pb, nodeDetector.findNodeExecutable());
@@ -167,6 +221,13 @@ public class DshCliBridge extends MarkerCliBridge {
             }
             if (!process.waitFor(HOST_CANCEL_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
                 LOG.warn("[DSH] Host cancel timed out for session " + sessionId);
+                return;
+            }
+            // The output is a few log lines and one JSON result, far below the pipe buffer.
+            String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8).strip();
+            if (!output.contains("\"success\":true")) {
+                LOG.warn("[DSH] Host cancel failed for session " + sessionId + ": "
+                        + output.substring(output.lastIndexOf('\n') + 1));
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
