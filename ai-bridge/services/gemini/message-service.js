@@ -555,7 +555,8 @@ export function isSubagentChildLive(id, cliHome, idleReapMinutes, now = Date.now
     try {
       if (fs.existsSync(walPath)) {
         const stat = fs.statSync(walPath);
-        if (stat.mtimeMs >= cutoff) {
+        // An empty -wal is what a read-only open leaves behind, not a write.
+        if (stat.size > 0 && stat.mtimeMs >= cutoff) {
           return true;
         }
       }
@@ -800,6 +801,7 @@ export function isTurnActivityLive({
     for (const candidatePath of [dbPath, walPath]) {
       try {
         const stat = fs.statSync(candidatePath);
+        if (candidatePath === walPath && stat.size === 0) continue;
         if (checkActivity && stat.mtimeMs >= cutoff && stat.mtimeMs > minTurnMtime) {
           dbActive = true;
         }
@@ -1230,7 +1232,7 @@ export function getConversationDbSignature(convId, cliHome) {
   let walPart = '-';
   try {
     const walStat = fs.statSync(`${dbPath}-wal`);
-    walPart = `${walStat.mtimeMs}:${walStat.size}`;
+    if (walStat.size > 0) walPart = `${walStat.mtimeMs}:${walStat.size}`;
   } catch {
     // -wal sidecar is optional
   }
@@ -1588,6 +1590,13 @@ export async function sendMessage({
   // SUCCESS with an empty response. Hold that tail until the result (or the
   // process close, if the notice arrives after the result line).
   let stderrText = '';
+  // A notice explains only the tool it was attached to; later tools look at newer stderr.
+  let stderrSeenLength = 0;
+  let stderrUsedLength = 0;
+  const unusedStderr = () => {
+    const fresh = stderrSeenLength - stderrUsedLength;
+    return fresh > 0 ? stderrText.slice(-fresh) : '';
+  };
   let deniedToolText = '';
   let emptyAnswerPending = false;
   let successReady = false;
@@ -1747,7 +1756,12 @@ export async function sendMessage({
     let emittedThinkingNorm = '';
     let streamThinkingSnapshot = '';
     let lastThinkingPollStamp = '';
-    const THINKING_POLL_MS = 200;
+    let lastThinkingReadAt = 0;
+    let lastWatchedStepKey = '';
+    // Every read copies the whole conversation DB, so reads are spaced out.
+    const THINKING_POLL_MS = 500;
+    // A little under the interval, so timer jitter never makes a tick skip its read.
+    const THINKING_MIN_READ_GAP_MS = THINKING_POLL_MS - 50;
     const turnStartMs = Date.now();
     const trackedWorkCwd = (normalizeSentinelPath(cwd) || process.env.IDEA_PROJECT_PATH || process.env.PROJECT_PATH)
       ? workCwd
@@ -1811,50 +1825,6 @@ export async function sendMessage({
       if (novel) emitThinking(novel);
     };
 
-    const conversationsDir = () => join(
-      cliHome || homedir(),
-      '.gemini',
-      'antigravity-cli',
-      'conversations',
-    );
-
-    const discoverTurnConversationId = () => {
-      try {
-        const dir = conversationsDir();
-        const entries = fs.readdirSync(dir);
-        let bestId = '';
-        let bestMtime = -1;
-        for (const name of entries) {
-          if (!name.endsWith('.db')) continue;
-          const id = normalizeConversationId(name.slice(0, -3));
-          if (!id) continue;
-          const dbPath = join(dir, name);
-          let dbStat;
-          try {
-            dbStat = fs.statSync(dbPath);
-          } catch {
-            continue;
-          }
-          if (!cliHome && dbStat.birthtimeMs < turnStartMs - 50) continue;
-          let mtime = dbStat.mtimeMs;
-          try {
-            const walStat = fs.statSync(`${dbPath}-wal`);
-            if (walStat.mtimeMs > mtime) mtime = walStat.mtimeMs;
-          } catch {
-            // ignore missing -wal sidecar
-          }
-          const minMtime = cliHome ? turnStartMs - 1000 : turnStartMs - 50;
-          if (mtime >= minMtime && mtime > bestMtime) {
-            bestMtime = mtime;
-            bestId = id;
-          }
-        }
-        return bestId;
-      } catch {
-        return '';
-      }
-    };
-
     const summarizeStoredStep = (step, streamed) => {
       const answer = typeof step.answer === 'string' ? step.answer.trim() : '';
       const parts = [];
@@ -1885,10 +1855,11 @@ export async function sendMessage({
     // Field 20.3 is the narration. Skip it when it is the answer itself
     // (field 20.1 or the text already streamed). A row whose text grows is
     // emitted again as a suffix. `force` bypasses the unchanged-file skip so
-    // a terminal read cannot miss the last write.
+    // a terminal read cannot miss the last write; `unthrottled` only skips the
+    // time throttle.
     // A missing database is not an error: a new conversation has no file
     // until agy creates it.
-    const pollStoredThinking = (convIdRaw, streamedAnswer, force = false) => {
+    const pollStoredThinking = (convIdRaw, streamedAnswer, force = false, unthrottled = false) => {
       if (!showThinking) return;
       const convId = normalizeConversationId(convIdRaw);
       if (!convId) return;
@@ -1896,6 +1867,8 @@ export async function sendMessage({
       if (!rawSig) return;
       const stamp = `${convId}|${rawSig}`;
       if (!force && stamp === lastThinkingPollStamp) return;
+      if (!force && !unthrottled && Date.now() - lastThinkingReadAt < THINKING_MIN_READ_GAP_MS) return;
+      lastThinkingReadAt = Date.now();
       const stored = readStoredThinkingSteps(convId, cliHome);
       if (!stored) return;
       const hadPriorStamp = Boolean(lastThinkingPollStamp);
@@ -1940,7 +1913,8 @@ export async function sendMessage({
           stopThinkingPoll();
           return;
         }
-        const targetId = polledSessionId || currentSessionId || discoverTurnConversationId();
+        // Before init a fresh turn has no id; the newest DB in the shared folder may be another window's.
+        const targetId = polledSessionId || currentSessionId;
         if (targetId) {
           pollStoredThinking(targetId, emittedAgentText, false);
         }
@@ -1957,7 +1931,8 @@ export async function sendMessage({
     // close every unresolved tool_use with an error result before the stream
     // ends.
     const flushUnresolvedTools = () => {
-      const notice = extractHeadlessDenyNotice(stderrText);
+      const notice = extractHeadlessDenyNotice(unusedStderr());
+      if (notice) stderrUsedLength = stderrSeenLength;
       for (const id of emittedToolUseIds) {
         if (emittedToolResultIds.has(id)) continue;
         emittedToolResultIds.add(id);
@@ -1979,7 +1954,7 @@ export async function sendMessage({
       if (!hadResult && !failureEmitted) {
         const now = Date.now();
         const silenceMs = idleReapMinutes * 60 * 1000;
-        const activeSessionId = polledSessionId || currentSessionId || discoverTurnConversationId();
+        const activeSessionId = polledSessionId || currentSessionId;
         // Project file changes cannot be told apart from the user's own edits in the
         // IDE, so they may only extend a silent turn up to WORK_CWD_MAX_SILENCE_WINDOWS.
         const workCwdMayDefer = now - lastCliActivityAt < silenceMs * WORK_CWD_MAX_SILENCE_WINDOWS;
@@ -2065,6 +2040,7 @@ export async function sendMessage({
           resetIdleReapTimer();
         }
         stderrText = (stderrText + text).slice(-8000);
+        stderrSeenLength += String(text || '').length;
         if (!emptyAnswerPending) return;
         const notice = extractHeadlessDenyNotice(stderrText);
         if (!notice) return;
@@ -2140,10 +2116,15 @@ export async function sendMessage({
             || step.step_type === 'error_message';
           if (watchedStep) {
             const terminal = step.state === 'DONE' || step.state === 'ERROR';
+            // A step's first line is read unthrottled so its thinking precedes its text.
+            const stepKey = `${step.step_type}:${step.step_index}`;
+            const newStep = stepKey !== lastWatchedStepKey;
+            lastWatchedStepKey = stepKey;
             pollStoredThinking(
               step.conversation_id || polledSessionId || currentSessionId,
               emittedAgentText,
               terminal,
+              newStep,
             );
           }
 
@@ -2244,6 +2225,8 @@ export async function sendMessage({
             if (isKnownState && !emittedToolUseIds.has(toolIndex)) {
               emittedToolUseIds.add(toolIndex);
               emitToolUseMessage({ id: toolIndex, name: toolName, input: toolParams });
+              // stderr from before this tool started explains an earlier step, never this one.
+              if (step.state === 'ACTIVE') stderrUsedLength = stderrSeenLength;
             }
             if ((step.state === 'DONE' || step.state === 'ERROR') && !emittedToolResultIds.has(toolIndex)) {
               emittedToolResultIds.add(toolIndex);
@@ -2255,10 +2238,11 @@ export async function sendMessage({
               // A soft-denied command arrives as DONE with an empty output.
               // The explanation is on stderr; attach it when it is already here.
               if (!String(resultText || '').trim()) {
-                const notice = extractHeadlessDenyNotice(stderrText);
+                const notice = extractHeadlessDenyNotice(unusedStderr());
                 if (notice) {
                   resultText = notice;
                   isError = true;
+                  stderrUsedLength = stderrSeenLength;
                 }
               }
               noteToolDenial(resultText, isError);

@@ -356,6 +356,49 @@ public class GeminiHistoryReaderTest {
     }
 
     @Test
+    public void listAllSessionsKeepsIdleWalDatabaseTimesAcrossRepeatedReads() throws Exception {
+        Path home = cliHome();
+        createConversationDb(home, UUID_A, userStep("older chat"));
+        createConversationDb(home, UUID_B, userStep("newer chat"));
+        Path conversations = home.resolve("conversations");
+        // agy keeps its databases in WAL mode and removes -wal when it closes them.
+        for (String id : List.of(UUID_A, UUID_B)) {
+            try (Connection conn = DriverManager.getConnection(
+                    "jdbc:sqlite:" + conversations.resolve(id + ".db").toAbsolutePath());
+                 Statement statement = conn.createStatement()) {
+                statement.execute("PRAGMA journal_mode=WAL");
+            }
+        }
+        Files.setLastModifiedTime(conversations.resolve(UUID_A + ".db"), FileTime.from(Instant.parse(T_OLD)));
+        Files.setLastModifiedTime(conversations.resolve(UUID_B + ".db"), FileTime.from(Instant.parse(T_NEW)));
+        GeminiHistoryReader reader = new GeminiHistoryReader(home, new Gson());
+
+        reader.listAllSessions();
+        reader.getSessionMessages(UUID_A, null);
+        List<GeminiHistoryReader.SessionInfo> sessions = reader.listAllSessions();
+
+        assertEquals(UUID_B, sessions.get(0).sessionId);
+        assertEquals(Instant.parse(T_NEW).toEpochMilli(), sessions.get(0).lastTimestamp);
+        assertEquals(UUID_A, sessions.get(1).sessionId);
+        assertEquals(Instant.parse(T_OLD).toEpochMilli(), sessions.get(1).lastTimestamp);
+    }
+
+    @Test
+    public void listAllSessionsDatesASessionByItsNonEmptyWal() throws Exception {
+        Path home = cliHome();
+        createConversationDb(home, UUID_A, userStep("live chat"));
+        Path conversations = home.resolve("conversations");
+        Files.setLastModifiedTime(conversations.resolve(UUID_A + ".db"), FileTime.from(Instant.parse(T_OLD)));
+        Path wal = conversations.resolve(UUID_A + ".db-wal");
+        Files.write(wal, new byte[]{1, 2, 3});
+        Files.setLastModifiedTime(wal, FileTime.from(Instant.parse(T_NEW)));
+
+        List<GeminiHistoryReader.SessionInfo> sessions = new GeminiHistoryReader(home, new Gson()).listAllSessions();
+
+        assertEquals(Instant.parse(T_NEW).toEpochMilli(), sessions.get(0).lastTimestamp);
+    }
+
+    @Test
     public void matchesProjectOnWindowsFileUriWithLeadingSlash() throws Exception {
         Path home = cliHome();
         String winWorkspaceUri = "file:///C:/Users/me/proj";

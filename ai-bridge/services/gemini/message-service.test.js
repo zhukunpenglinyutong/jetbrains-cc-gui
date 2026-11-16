@@ -230,6 +230,38 @@ if (mode) {
     await new Promise((res) => setTimeout(res, 1700));
     await write(result);
     process.exit(0);
+  } else if (mode === 'think-burst') {
+    // A fast answer stream; agy writes the conversation DB before every line.
+    const conv = process.env.FAKE_CONV_ID || CONV;
+    const { DatabaseSync } = await import('node:sqlite');
+    const db = new DatabaseSync(process.env.SVC_CLI_HOME + '/.gemini/antigravity-cli/conversations/' + conv + '.db');
+    const delta = (i) => JSON.stringify({ event: 'step_update', step_update: { conversation_id: conv, step_index: 1, state: 'ACTIVE', step_type: 'agent_response', text_delta: 'w' + i + ' ' } });
+    await write(JSON.stringify({ event: 'init', conversation_id: conv, init: { cwd: process.cwd(), tools: [], permission_mode: 'default' } }));
+    for (let i = 1; i <= 30; i++) {
+      db.prepare('INSERT INTO steps (idx, step_type, step_payload) VALUES (?, 99, ?)').run(100 + i, Buffer.from('x'.repeat(4096)));
+      await write(delta(i));
+      await new Promise((res) => setTimeout(res, 20));
+    }
+    db.close();
+    await write(JSON.stringify({ event: 'step_update', step_update: { conversation_id: conv, step_index: 1, state: 'DONE', step_type: 'agent_response' } }));
+    await write(JSON.stringify({ event: 'result', result: { conversation_id: conv, status: 'SUCCESS', response: '', duration_seconds: 1, num_turns: 1, error: null } }));
+    process.exit(0);
+  } else if (mode === 'deny-then-empty') {
+    // Tool 1 is soft-denied (notice on stderr before its DONE, or after it when late); tool 2 succeeds with no output.
+    const conv = process.env.FAKE_CONV_ID || CONV;
+    const tool = (index, state, command) => JSON.stringify({ event: 'step_update', step_update: { conversation_id: conv, step_index: index, state, step_type: 'tool', tool_name: 'run_command', tool_info: { name: 'run_command', parameters: { CommandLine: command } } } });
+    await write(JSON.stringify({ event: 'init', conversation_id: conv, init: { cwd: process.cwd(), tools: [], permission_mode: 'default' } }));
+    const late = process.env.FAKE_DENY_LATE === '1';
+    const pause = () => new Promise((res) => setTimeout(res, 300));
+    await write(tool(1, 'ACTIVE', 'rm -rf dist'));
+    await pause();
+    if (!late) { process.stderr.write(process.env.FAKE_DENY_STDERR || ''); await pause(); }
+    await write(tool(1, 'DONE', 'rm -rf dist'));
+    if (late) { await pause(); process.stderr.write(process.env.FAKE_DENY_STDERR || ''); await pause(); }
+    await write(tool(2, 'ACTIVE', 'mkdir -p out'));
+    await write(tool(2, 'DONE', 'mkdir -p out'));
+    await write(JSON.stringify({ event: 'result', result: { conversation_id: conv, status: 'SUCCESS', response: 'Done.', duration_seconds: 1, num_turns: 1, error: null } }));
+    process.exit(0);
   } else {
     process.exit(43); // unknown mode: visible in the exit code, never a silent hang
   }
@@ -905,6 +937,32 @@ test('a headless soft-deny with an empty SUCCESS renders the stderr notice', asy
   const payload = finalPayload(stdout);
   assert.equal(payload.success, true);
   assert.equal(payload.sessionId, 'de161c4c-c8d1-49b4-bc2f-3cc0fcbe822d');
+});
+
+test('a soft-deny notice marks only the tool it explains, not a later tool with empty output', async () => {
+  const { stdout } = await runService({
+    mode: 'deny-then-empty',
+    extraEnv: { FAKE_DENY_STDERR: HEADLESS_DENY_STDERR },
+    timeoutMs: 8000,
+  });
+  const toolResults = messageMarkers(stdout).filter((m) => m.type === 'tool_result');
+  assert.equal(toolResults.length, 2);
+  assert.equal(toolResults[0].is_error, true);
+  assert.match(String(toolResults[0].content), /headless mode cannot prompt/);
+  assert.equal(toolResults[1].is_error, false, 'mkdir succeeded; the earlier notice is not its result');
+  assert.doesNotMatch(String(toolResults[1].content), /headless mode cannot prompt/);
+});
+
+test('a soft-deny notice that arrives after its tool finished is not given to the next tool', async () => {
+  const { stdout } = await runService({
+    mode: 'deny-then-empty',
+    extraEnv: { FAKE_DENY_STDERR: HEADLESS_DENY_STDERR, FAKE_DENY_LATE: '1' },
+    timeoutMs: 8000,
+  });
+  const toolResults = messageMarkers(stdout).filter((m) => m.type === 'tool_result');
+  assert.equal(toolResults.length, 2);
+  assert.equal(toolResults[1].is_error, false, 'mkdir started after the notice; it is not its result');
+  assert.doesNotMatch(String(toolResults[1].content), /headless mode cannot prompt/);
 });
 
 test('a real SUCCESS answer is not replaced by a headless deny notice on stderr', async () => {
@@ -3079,7 +3137,7 @@ test('Thinking on: a stored narration that grows while the turn is quiet is stre
   }
 });
 
-test('Thinking on: a fresh turn with no initial sessionId streams stored thinking even before init arrives', async () => {
+test('Thinking on: a fresh turn reads no conversation database before init, then streams its stored thinking before the answer', async () => {
   const tempDir = mkdtempSync(join(tmpdir(), 'gemini-think-fresh-'));
   try {
     const convId = 'c0190000-0000-4000-8000-000000000019';
@@ -3108,13 +3166,48 @@ test('Thinking on: a fresh turn with no initial sessionId streams stored thinkin
     const firstThought = lines.findIndex((line) => line.startsWith('[THINKING_DELTA]'));
     const sessionLine = lines.findIndex((line) => line.startsWith('[SESSION_ID]'));
     const firstAnswer = lines.findIndex((line) => line.startsWith('[CONTENT_DELTA]'));
-    assert.ok(firstThought >= 0 && firstThought < sessionLine, 'thinking must stream before delayed init');
+    // Before init the turn has no id of its own; any database it picked could be another window's.
+    assert.ok(sessionLine >= 0 && firstThought > sessionLine, 'no database is read before init');
     assert.ok(firstThought < firstAnswer, 'thinking must arrive before the answer');
     assert.deepEqual(markers(stdout, 'THINKING_DELTA').map(decodeStringMarker), [
-      'First thought.',
-      '\nSecond thought.',
+      'First thought.\nSecond thought.',
     ]);
     assert.deepEqual(markers(stdout, 'CONTENT_DELTA').map(decodeStringMarker), ['Done.']);
+    assert.equal(finalPayload(stdout).success, true);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('Thinking on: a fast answer stream does not copy the conversation database on every line', async () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'gemini-think-burst-'));
+  try {
+    const convId = 'c0210000-0000-4000-8000-000000000021';
+    createConversationDb(tempDir, convId, buildStepPayload({ field3: 'Planning the answer.' }));
+    // Count snapshot folders made inside the service process.
+    const hookPath = join(tempDir, 'count-snapshots.mjs');
+    writeFileSync(hookPath, [
+      "import fs from 'node:fs';",
+      'let n = 0;',
+      'const original = fs.mkdtempSync;',
+      "fs.mkdtempSync = (prefix, ...rest) => { if (String(prefix).includes('gemini-reply-')) n += 1; return original(prefix, ...rest); };",
+      "process.on('exit', () => process.stderr.write('SNAPSHOTS:' + n + '\\n'));",
+    ].join('\n'));
+
+    const { stdout, stderr } = await runService({
+      mode: 'think-burst',
+      cliHome: tempDir,
+      sessionId: convId,
+      extraEnv: { FAKE_CONV_ID: convId, NODE_OPTIONS: `--import=${pathToFileURL(hookPath).href}` },
+      timeoutMs: 10000,
+    });
+
+    const counts = [...stderr.matchAll(/SNAPSHOTS:(\d+)/g)].map((m) => Number(m[1]));
+    const snapshots = Math.max(0, ...counts);
+    assert.ok(snapshots > 0, `the hook must see the service's reads: ${stderr.slice(-400)}`);
+    // About 7 reads happen in any turn (preseed, step start/end, result recovery); the old code made 36 here.
+    assert.ok(snapshots <= 12, `30 lines in ~0.7 s must not mean 30 copies, got ${snapshots}`);
+    assert.equal(markers(stdout, 'CONTENT_DELTA').length, 30);
     assert.equal(finalPayload(stdout).success, true);
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
@@ -3379,6 +3472,39 @@ test('Story 1.11: isSubagentChildLive recognizes live .db and .db-wal files with
     utimesSync(walPath, seventySecAgo, seventySecAgo);
     utimesSync(extraPath, tenSecAgo, tenSecAgo);
     assert.equal(isSubagentChildLive(childId, tempDir, windowMinutes, now), false);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('an empty -wal left by a read-only open is not conversation activity', async () => {
+  const { isTurnActivityLive, getConversationDbSignature } = await import('./message-service.js');
+  const tempDir = mkdtempSync(join(tmpdir(), 'gemini-empty-wal-'));
+  try {
+    const convDir = join(tempDir, '.gemini', 'antigravity-cli', 'conversations');
+    mkdirSync(convDir, { recursive: true });
+    const id = '019fb0fe-c344-7da0-9d10-20659f884100';
+    const now = 1_000_000;
+    const dbPath = join(convDir, `${id}.db`);
+    writeFileSync(dbPath, 'dummy sqlite');
+    utimesSync(dbPath, (now - 70_000) / 1000, (now - 70_000) / 1000);
+    // Seeded the way init seeds it.
+    const state = {
+      turnStartedAt: 900_000,
+      lastDbSig: getConversationDbSignature(id, tempDir),
+      lastWorkCwdSig: null,
+      initialized: true,
+    };
+    const check = () => isTurnActivityLive({ sessionId: id, cliHome: tempDir, silenceMs: 60_000, now, state });
+    assert.equal(check(), false);
+
+    // What SQLite leaves when the plugin reads an idle WAL database.
+    const walPath = join(convDir, `${id}.db-wal`);
+    writeFileSync(walPath, '');
+    utimesSync(walPath, (now - 1_000) / 1000, (now - 1_000) / 1000);
+
+    assert.equal(isSubagentChildLive(id, tempDir, 1, now), false);
+    assert.equal(check(), false);
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }

@@ -7,6 +7,7 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -17,6 +18,7 @@ import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -262,6 +264,93 @@ public class GeminiSubagentHistoryLoaderTest {
                 res.completed());
         assertEquals("No recorded completion must not read as success", "error", res.status());
         assertEquals(GeminiSubagentHistoryLoader.STALE_CHILD_ERROR, res.error());
+    }
+
+    @Test
+    public void loadStatusesIgnoresAnEmptyWalLeftByAReadOnlyOpen() throws Exception {
+        Path home = temporaryFolder.newFolder("gemini-empty-wal").toPath();
+        Path conversationsDir = home.resolve("conversations");
+        Files.createDirectories(conversationsDir);
+        Path childDb = conversationsDir.resolve(CHILD_A_ID + ".db");
+        createDbWithBlobs(childDb,
+                blobStep(1, 14, protoMessage(19, protoField(2, "Stopped long ago")))
+        );
+        long staleMtime = System.currentTimeMillis() - GeminiSubagentHistoryLoader.STALE_RUNNING_GRACE_MS - 60_000L;
+        Files.setLastModifiedTime(childDb, FileTime.fromMillis(staleMtime));
+        // SQLite leaves this behind when the plugin reads an idle WAL database.
+        Files.createFile(conversationsDir.resolve(CHILD_A_ID + ".db-wal"));
+
+        List<GeminiSubagentHistoryLoader.StatusResult> results = new GeminiSubagentHistoryLoader(home).loadStatuses(
+                PARENT_ID, List.of(new GeminiSubagentHistoryLoader.StatusRequest("call-wal", CHILD_A_ID)));
+
+        assertEquals("error", results.get(0).status());
+        assertTrue(results.get(0).completed());
+    }
+
+    @Test
+    public void loadStatusesFailsAMissingChildOnceTheParentIsQuiet() throws Exception {
+        Path home = temporaryFolder.newFolder("gemini-missing-child").toPath();
+        Path conversationsDir = home.resolve("conversations");
+        Path parentDb = conversationsDir.resolve(PARENT_ID + ".db");
+        createDb(parentDb, step(1, 14, "Start a subagent"));
+        long staleMtime = System.currentTimeMillis() - GeminiSubagentHistoryLoader.STALE_RUNNING_GRACE_MS - 60_000L;
+        Files.setLastModifiedTime(parentDb, FileTime.fromMillis(staleMtime));
+
+        GeminiSubagentHistoryLoader loader = new GeminiSubagentHistoryLoader(home);
+        GeminiSubagentHistoryLoader.StatusResult status = loader.loadStatuses(PARENT_ID, List.of(
+                new GeminiSubagentHistoryLoader.StatusRequest("call-missing", CHILD_B_ID))).get(0);
+        GeminiSubagentHistoryLoader.SessionResult session = loader.loadChildSession(PARENT_ID, "call-missing", CHILD_B_ID);
+
+        assertTrue("A child that never wrote a log must stop polling", status.completed());
+        assertEquals("error", status.status());
+        assertEquals(GeminiSubagentHistoryLoader.STALE_CHILD_ERROR, status.error());
+        assertTrue(session.completed());
+        assertEquals("error", session.status());
+    }
+
+    @Test
+    public void loadStatusesReadsTheParentAgainOnlyAfterItChanges() throws Exception {
+        Path home = temporaryFolder.newFolder("gemini-parent-cache").toPath();
+        Path conversationsDir = home.resolve("conversations");
+        Path parentDb = conversationsDir.resolve(PARENT_ID + ".db");
+        createDb(parentDb,
+                step(10, 101, "[Message] timestamp=2026-10-12T20:10:00Z sender=" + CHILD_A_ID + " priority=HIGH content=Done A")
+        );
+        AtomicInteger copies = new AtomicInteger();
+        GeminiHistoryReader countingReader = new GeminiHistoryReader(home, new Gson()) {
+            @Override
+            Path copyWithSidecarsToTemp(Path db) throws IOException {
+                copies.incrementAndGet();
+                return super.copyWithSidecarsToTemp(db);
+            }
+        };
+        GeminiSubagentHistoryLoader loader = new GeminiSubagentHistoryLoader(
+                home, countingReader, GeminiSubagentHistoryLoader.STALE_RUNNING_GRACE_MS);
+        List<GeminiSubagentHistoryLoader.StatusRequest> requests = List.of(
+                new GeminiSubagentHistoryLoader.StatusRequest("call-b", CHILD_B_ID));
+
+        loader.loadStatuses(PARENT_ID, requests);
+        loader.loadStatuses(PARENT_ID, requests);
+        assertEquals("A parent written this second may change without a new stamp", 2, copies.get());
+
+        Files.setLastModifiedTime(parentDb, FileTime.fromMillis(System.currentTimeMillis() - 10_000L));
+        loader.loadStatuses(PARENT_ID, requests);
+        loader.loadStatuses(PARENT_ID, requests);
+        assertEquals("An unchanged parent must not be copied on every poll", 3, copies.get());
+
+        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + parentDb.toAbsolutePath());
+             PreparedStatement insert = conn.prepareStatement(
+                     "INSERT INTO steps (idx, step_type, status, step_payload) VALUES (11, 101, 3, ?)")) {
+            insert.setBytes(1, ("[Message] timestamp=2026-10-12T20:11:00Z sender=" + CHILD_B_ID
+                    + " priority=HIGH content=Done B").getBytes(StandardCharsets.UTF_8));
+            insert.executeUpdate();
+        }
+        Files.setLastModifiedTime(parentDb, FileTime.fromMillis(System.currentTimeMillis() - 5_000L));
+        GeminiSubagentHistoryLoader.StatusResult status = loader.loadStatuses(PARENT_ID, requests).get(0);
+
+        assertEquals(4, copies.get());
+        assertEquals("completed", status.status());
+        assertEquals("Done B", status.resultText());
     }
 
     @Test

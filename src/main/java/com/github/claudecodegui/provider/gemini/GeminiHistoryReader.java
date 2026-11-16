@@ -359,8 +359,7 @@ public class GeminiHistoryReader {
                 if (!isSafeSessionId(id)) {
                     continue;
                 }
-                // New steps land in -wal and leave the .db mtime alone until a checkpoint.
-                long mtime = Math.max(fileMtime(db), fileMtime(db.resolveSibling(fileName + "-wal")));
+                long mtime = latestDbMtime(db);
                 ScanMeta meta = readScanMeta(db, mtime);
                 if (meta.childSessionIds != null && !meta.childSessionIds.isEmpty()) {
                     subagentChildIds.addAll(meta.childSessionIds);
@@ -1668,6 +1667,25 @@ public class GeminiHistoryReader {
         } catch (IOException ignored) {
         }
         return 0L;
+    }
+
+    /**
+     * Last write time of a conversation database. New steps land in -wal and leave the
+     * .db mtime alone until a checkpoint, so a non-empty -wal counts. An empty -wal does
+     * not: SQLite creates one (and leaves it) whenever an idle WAL database is opened
+     * read-only, including by this reader.
+     */
+    static long latestDbMtime(Path db) {
+        long mtime = fileMtime(db);
+        Path wal = db.resolveSibling(db.getFileName() + "-wal");
+        try {
+            if (Files.isRegularFile(wal) && Files.size(wal) > 0) {
+                mtime = Math.max(mtime, Files.getLastModifiedTime(wal).toMillis());
+            }
+        } catch (IOException ignored) {
+            // agy removed the -wal mid-check when it closed the database.
+        }
+        return mtime;
     }
 
     private static String truncate(String value, int maxChars) {

@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -39,9 +40,16 @@ public class GeminiSubagentHistoryLoader {
             Pattern.DOTALL
     );
 
+    private static final int MAX_CACHED_PARENTS = 32;
+    private static final long MTIME_GRANULARITY_MS = 2_000L;
+
     private final Path cliHome;
     private final GeminiHistoryReader historyReader;
     private final long staleRunningGraceMs;
+    private final Map<Path, CachedCompletions> completionCache = new ConcurrentHashMap<>();
+
+    private record CachedCompletions(String stamp, Map<String, String> completions) {
+    }
 
     /**
      * Request descriptor for polling a single Gemini subagent status.
@@ -228,12 +236,15 @@ public class GeminiSubagentHistoryLoader {
      */
     public Map<String, String> loadParentStep101Completions(String parentSessionId) {
         Map<String, String> completions = new HashMap<>();
-        if (!GeminiHistoryReader.isSafeSessionId(parentSessionId)) {
+        Path db = parentDbPath(parentSessionId);
+        if (db == null || !Files.isRegularFile(db)) {
             return completions;
         }
-        Path db = cliHome.resolve("conversations").resolve(parentSessionId.trim() + ".db");
-        if (!Files.isRegularFile(db)) {
-            return completions;
+        // Status polls run every 2 s; copy the parent again only after it changed.
+        String stamp = fileStamp(db) + "|" + fileStamp(db.resolveSibling(db.getFileName() + "-wal"));
+        CachedCompletions cached = completionCache.get(db);
+        if (cached != null && cached.stamp().equals(stamp)) {
+            return cached.completions();
         }
         Connection conn = null;
         Path tempCopy = null;
@@ -251,6 +262,13 @@ public class GeminiSubagentHistoryLoader {
                         completions.putIfAbsent(msg.sender().toLowerCase(), msg.content());
                     }
                 }
+            }
+            // On 1-2 s timestamp file systems a write in the same second keeps the stamp.
+            if (System.currentTimeMillis() - GeminiHistoryReader.latestDbMtime(db) > MTIME_GRANULARITY_MS) {
+                if (completionCache.size() >= MAX_CACHED_PARENTS) {
+                    completionCache.clear();
+                }
+                completionCache.put(db, new CachedCompletions(stamp, Map.copyOf(completions)));
             }
         } catch (Exception e) {
             LOG.debug("[GeminiSubagentHistoryLoader] Failed to read step 101 from parent " + parentSessionId + ": " + e.getMessage());
@@ -290,9 +308,12 @@ public class GeminiSubagentHistoryLoader {
             String completion = completions.get(agentId.toLowerCase());
             if (completion != null) {
                 results.add(new StatusResult(toolUseId, agentId, true, STATUS_COMPLETED, true, completion, null, List.of()));
+            } else if (!hasChildDb && isStaleDb(parentDbPath(parentSessionId))) {
+                // No child log and a quiet parent: the child never started.
+                results.add(new StatusResult(toolUseId, agentId, true, STATUS_ERROR, true, null, STALE_CHILD_ERROR, List.of()));
             } else if (!hasChildDb) {
                 results.add(new StatusResult(toolUseId, agentId, false, STATUS_RUNNING, false, null, "Subagent log not found yet", List.of()));
-            } else if (isStaleChildDb(childDb)) {
+            } else if (isStaleDb(childDb)) {
                 results.add(new StatusResult(toolUseId, agentId, true, STATUS_ERROR, true, null, STALE_CHILD_ERROR, List.of()));
             } else {
                 results.add(new StatusResult(toolUseId, agentId, true, STATUS_RUNNING, false, null, null, List.of()));
@@ -320,6 +341,9 @@ public class GeminiSubagentHistoryLoader {
             if (completion != null) {
                 return new SessionResult(toolUseId, agentId, true, STATUS_COMPLETED, true, completion, null, List.of());
             }
+            if (isStaleDb(parentDbPath(parentSessionId))) {
+                return new SessionResult(toolUseId, agentId, true, STATUS_ERROR, true, null, STALE_CHILD_ERROR, List.of());
+            }
             return new SessionResult(toolUseId, agentId, false, STATUS_RUNNING, false, null, "Subagent log not found yet", List.of());
         }
         List<JsonObject> messages;
@@ -332,34 +356,32 @@ public class GeminiSubagentHistoryLoader {
         if (completion != null) {
             return new SessionResult(toolUseId, agentId, true, STATUS_COMPLETED, true, completion, null, messages);
         }
-        if (isStaleChildDb(childDb)) {
+        if (isStaleDb(childDb)) {
             return new SessionResult(toolUseId, agentId, true, STATUS_ERROR, true, null, STALE_CHILD_ERROR, messages);
         }
         return new SessionResult(toolUseId, agentId, true, STATUS_RUNNING, false, null, null, messages);
     }
 
-    private boolean isStaleChildDb(Path childDb) {
-        long latestMtime = latestModifiedMillis(childDb);
+    private boolean isStaleDb(Path db) {
+        long latestMtime = db != null ? GeminiHistoryReader.latestDbMtime(db) : 0L;
         if (latestMtime <= 0L) {
             return false;
         }
         return System.currentTimeMillis() - latestMtime > staleRunningGraceMs;
     }
 
-    private static long latestModifiedMillis(Path childDb) {
-        long mtime = fileModifiedMillis(childDb);
-        Path wal = childDb.resolveSibling(childDb.getFileName() + "-wal");
-        if (Files.isRegularFile(wal)) {
-            mtime = Math.max(mtime, fileModifiedMillis(wal));
+    private Path parentDbPath(String parentSessionId) {
+        if (!GeminiHistoryReader.isSafeSessionId(parentSessionId)) {
+            return null;
         }
-        return mtime;
+        return cliHome.resolve("conversations").resolve(parentSessionId.trim() + ".db");
     }
 
-    private static long fileModifiedMillis(Path path) {
+    private static String fileStamp(Path path) {
         try {
-            return Files.getLastModifiedTime(path).toMillis();
+            return Files.getLastModifiedTime(path) + ":" + Files.size(path);
         } catch (IOException e) {
-            return 0L;
+            return "-";
         }
     }
 }
