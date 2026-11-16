@@ -48,10 +48,10 @@ for (const backgroundKind of ['legacy Bash', 'native workflow']) {
     assert.equal(runtime.backgroundTaskIds.size, 1);
     assert.match(query.options.systemPrompt.append, /Review code carefully/);
     assert.doesNotMatch(query.options.systemPrompt.append, /first\.js|second\.js|const first|const second/);
-    assert.deepEqual(query.inputs.map(input => input.message.content[0].text), ['Explain this selection', 'Now explain this one']);
-    assert.match(query.inputs[0].message.content[1].text, /first\.js[\s\S]*const first = 1;/);
-    assert.match(query.inputs[1].message.content[1].text, /second\.js[\s\S]*const second = 2;\nreturn second;/);
-    assert.doesNotMatch(query.inputs[1].message.content[1].text, /first\.js|const first/);
+    assert.deepEqual(query.inputs.map(input => input.message.content.at(-1).text), ['Explain this selection', 'Now explain this one']);
+    assert.match(query.inputs[0].message.content[0].text, /first\.js[\s\S]*const first = 1;/);
+    assert.match(query.inputs[1].message.content[0].text, /second\.js[\s\S]*const second = 2;\nreturn second;/);
+    assert.doesNotMatch(query.inputs[1].message.content[0].text, /first\.js|const first/);
 
     // Real launch-time changes still cannot kill existing background work.
     for (const change of [{ streaming: true }, { agentPrompt: 'A different role' }, { permissionMode: 'bypassPermissions' }]) {
@@ -63,7 +63,7 @@ for (const backgroundKind of ['legacy Bash', 'native workflow']) {
   });
 }
 
-test('QuickFix context follows attachments and original text without entering launch options', async () => {
+test('QuickFix context precedes attachments and original text without entering launch options', async () => {
   let query;
   __testing.setQueryFn(args => (query = createScriptedQuery(args, [[RESULT_OK]])));
   const context = await __testing.buildRequestContext({
@@ -75,12 +75,49 @@ test('QuickFix context follows attachments and original text without entering la
   await __testing.executeTurn(runtime, context);
   const blocks = query.inputs[0].message.content;
   assert.equal(blocks.length, 3);
-  assert.deepEqual(blocks[0], { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'aW1hZ2U=' } });
-  assert.deepEqual(blocks[1], { type: 'text', text: 'Fix this error' });
-  assert.match(blocks[2].text, /^<system-reminder>\n/);
-  assert.match(blocks[2].text, /fix\.js/);
-  assert.match(blocks[2].text, /QUICK FIX INSTRUCTIONS/);
-  assert.match(blocks[2].text, /&lt;\/system-reminder&gt;/);
-  assert.equal(blocks[2].text.match(/<\/system-reminder>/g).length, 1);
+  assert.deepEqual(blocks[1], { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'aW1hZ2U=' } });
+  assert.deepEqual(blocks[2], { type: 'text', text: 'Fix this error' });
+  assert.equal(__testing.extractUserMessageText(query.inputs[0]), 'Fix this error');
+  assert.match(blocks[0].text, /^<system-reminder>\n/);
+  assert.match(blocks[0].text, /fix\.js/);
+  assert.match(blocks[0].text, /QUICK FIX INSTRUCTIONS/);
+  assert.match(blocks[0].text, /&lt;\/system-reminder&gt;/);
+  assert.equal(blocks[0].text.match(/<\/system-reminder>/g).length, 1);
   assert.doesNotMatch(query.options.systemPrompt.append, /fix\.js|QUICK FIX/);
 });
+
+for (const message of ['/compact', '/compact Keep the API decisions.\nPreserve unresolved issues.',
+  '/init', '/review 123', '/mcp', '/goal Fix the regression', '/simplify', '/team:review src/main', '/my-skill task']) {
+  for (const attachments of [undefined, [], [
+    { fileName: 'notes.txt', mediaType: 'text/plain', data: 'bm90ZXM=' },
+    { fileName: 'screen.png', mediaType: 'image/png', data: 'aW1hZ2U=' },
+  ]]) {
+    test(`keeps ${JSON.stringify(message)} in Claude's command block (attachments: ${attachments?.length ?? 'none'})`, async () => {
+      let query;
+      __testing.setQueryFn(args => (query = createScriptedQuery(args, [[RESULT_OK], [RESULT_OK]])));
+      const first = await __testing.buildRequestContext({ ...params, message: 'Previous turn' }, false, OVERRIDES);
+      const runtime = await __testing.acquireRuntime(first);
+      await __testing.executeTurn(runtime, first);
+      const context = await __testing.buildRequestContext({
+        ...params, message, attachments,
+        openedFiles: { active: '/project/current.js', selection: { selectedText: '/not-a-command' } },
+      }, attachments !== undefined, OVERRIDES);
+      assert.equal(await __testing.acquireRuntime(context), runtime);
+      await __testing.executeTurn(runtime, context);
+      const input = query.inputs[1];
+      // processUserInputBase in Claude Code interprets only the final block as
+      // the command; preceding context must never become command arguments.
+      assert.deepEqual(input.message.content.at(-1), { type: 'text', text: message });
+      assert.match(input.message.content[0].text, /current\.js[\s\S]*\/not-a-command/);
+      assert.equal(__testing.extractUserMessageText(input), message);
+      assert.equal(input.session_id, params.sessionId);
+      assert.equal(query.inputs.length, 2);
+      if (attachments?.length) {
+        assert.deepEqual(input.message.content.slice(1, -1), [
+          { type: 'text', text: '[Attachment: notes.txt]' },
+          { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'aW1hZ2U=' } },
+        ]);
+      }
+    });
+  }
+}
