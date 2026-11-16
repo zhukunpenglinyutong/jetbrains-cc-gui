@@ -255,6 +255,11 @@
         "placeholder": "例: /usr/local/bin/claude — 空欄の場合は内蔵 SDK を使用",
         "hint": "任意。設定すると、内蔵の @anthropic-ai/claude-agent-sdk の代わりにこのバイナリを起動します。保存時にデーモンが再起動されます。"
       },
+      "claudeConfigDir": {
+        "label": "Claude Config Directory (override)",
+        "placeholder": "e.g. ~/.claude-work — leave empty to use CLAUDE_CONFIG_DIR or ~/.claude",
+        "hint": "Optional. Chat history, session actions, usage statistics and the Claude process read this directory instead of ~/.claude. Pair it with the Claude CLI path of the same profile. Daemon restarts on save."
+      },
       "workingDirectory": {
         "label": "作業ディレクトリ",
         "placeholder": "例: project1 または空欄でプロジェクトルートを使用",

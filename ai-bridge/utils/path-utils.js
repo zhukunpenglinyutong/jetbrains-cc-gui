@@ -78,6 +78,10 @@ export function getCodemossDir() {
  * @returns {string} The ~/.claude directory path
  */
 export function getClaudeDir() {
+  const override = process.env.CLAUDE_CONFIG_DIR;
+  if (typeof override === 'string' && override.trim()) {
+    return resolve(override.trim());
+  }
   return join(getRealHomeDir(), '.claude');
 }
 

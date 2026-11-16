@@ -1,5 +1,6 @@
 package com.github.claudecodegui.handler.history;
 
+import com.github.claudecodegui.util.ClaudeConfigDir;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.util.PathUtils;
@@ -54,7 +55,7 @@ class SessionConversionService {
      * node. Every other history service in this package was migrated the same way.
      */
     private static Path projectsDir() {
-        return Paths.get(NodeDetector.resolveHomeForFileOps(), ".claude", "projects");
+        return ClaudeConfigDir.current().resolve("projects");
     }
 
     /**

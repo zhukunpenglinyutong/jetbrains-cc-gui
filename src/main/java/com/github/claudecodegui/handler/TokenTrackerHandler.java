@@ -2,6 +2,7 @@ package com.github.claudecodegui.handler;
 
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.core.HandlerContext;
+import com.github.claudecodegui.util.ClaudeConfigDir;
 import com.github.claudecodegui.util.PlatformUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
@@ -572,6 +573,9 @@ public class TokenTrackerHandler {
             ProcessBuilder pb = new ProcessBuilder(
                     bin, "serve", "--no-open", "--port", String.valueOf(port));
             pb.environment().put("TOKENTRACKER_NO_TELEMETRY", "1");
+            if (ClaudeConfigDir.override() != null) {
+                pb.environment().put(ClaudeConfigDir.ENV_VAR, ClaudeConfigDir.current().toString());
+            }
             // The npm bin shim uses `#!/usr/bin/env node` — make sure node is
             // reachable from the child's PATH even when the IDE's PATH is minimal.
             prependNodeDirsToPath(pb, bin);

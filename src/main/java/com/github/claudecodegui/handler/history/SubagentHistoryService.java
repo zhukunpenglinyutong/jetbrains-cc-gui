@@ -1,5 +1,6 @@
 package com.github.claudecodegui.handler.history;
 
+import com.github.claudecodegui.util.ClaudeConfigDir;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.provider.codex.CodexNativeHistoryReader;
@@ -477,7 +478,7 @@ class SubagentHistoryService {
         validateId("agentId", agentId);
         List<String> projectKeys = projectKeys();
         for (String projectKey : projectKeys) {
-            Path file = Path.of(NodeDetector.resolveHomeForFileOps(), ".claude", "projects", projectKey)
+            Path file = ClaudeConfigDir.current().resolve("projects").resolve(projectKey)
                     .resolve(sessionId)
                     .resolve("subagents")
                     .resolve("agent-" + agentId + ".jsonl")
@@ -486,7 +487,7 @@ class SubagentHistoryService {
                 return file;
             }
         }
-        return Path.of(NodeDetector.resolveHomeForFileOps(), ".claude", "projects", projectKeys.get(0))
+        return ClaudeConfigDir.current().resolve("projects").resolve(projectKeys.get(0))
                 .resolve(sessionId)
                 .resolve("subagents")
                 .resolve("agent-" + agentId + ".jsonl")
@@ -500,7 +501,7 @@ class SubagentHistoryService {
 
         List<Path> subagentsDirs = new ArrayList<>();
         for (String projectKey : projectKeys()) {
-            Path subagentsDir = Path.of(NodeDetector.resolveHomeForFileOps(), ".claude", "projects", projectKey)
+            Path subagentsDir = ClaudeConfigDir.current().resolve("projects").resolve(projectKey)
                     .resolve(sessionId)
                     .resolve("subagents")
                     .normalize();
@@ -509,7 +510,7 @@ class SubagentHistoryService {
             }
         }
         if (subagentsDirs.isEmpty()) {
-            return Path.of(NodeDetector.resolveHomeForFileOps(), ".claude", "projects", projectKeys().get(0))
+            return ClaudeConfigDir.current().resolve("projects").resolve(projectKeys().get(0))
                     .resolve(sessionId)
                     .resolve("subagents")
                     .resolve("missing.jsonl");

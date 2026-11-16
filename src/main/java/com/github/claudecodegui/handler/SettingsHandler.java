@@ -27,6 +27,7 @@ public class SettingsHandler extends BaseMessageHandler {
     private final ModelProviderHandler modelProviderHandler;
     private final NodePathHandler nodePathHandler;
     private final ClaudeCliPathHandler claudeCliPathHandler;
+    private final ClaudeConfigDirHandler claudeConfigDirHandler;
     private final ProjectConfigHandler projectConfigHandler;
     // Handle for the theme-change callback registered with ThemeConfigService.
     // Kept so it can be cleanly unregistered when the owning window is disposed,
@@ -49,6 +50,8 @@ public class SettingsHandler extends BaseMessageHandler {
         "set_node_path",
         "get_claude_cli_path",
         "set_claude_cli_path",
+        "get_claude_config_dir",
+        "set_claude_config_dir",
         // TokenTracker local usage dashboard (vendored tokentracker-cli server)
         "tt_detect_cli",
         "tt_install_cli",
@@ -128,6 +131,7 @@ public class SettingsHandler extends BaseMessageHandler {
         this.modelProviderHandler = new ModelProviderHandler(context, usagePushService);
         this.nodePathHandler = new NodePathHandler(context);
         this.claudeCliPathHandler = new ClaudeCliPathHandler(context);
+        this.claudeConfigDirHandler = new ClaudeConfigDirHandler(context);
         this.projectConfigHandler = new ProjectConfigHandler(context);
         this.codexSubscriptionQuotaHandler = new CodexSubscriptionQuotaHandler(context);
         this.tokenTrackerHandler = new TokenTrackerHandler(context);
@@ -208,6 +212,13 @@ public class SettingsHandler extends BaseMessageHandler {
                 return true;
             case "set_claude_cli_path":
                 claudeCliPathHandler.handleSetClaudeCliPath(content);
+                return true;
+            // Claude config directory
+            case "get_claude_config_dir":
+                claudeConfigDirHandler.handleGetClaudeConfigDir();
+                return true;
+            case "set_claude_config_dir":
+                claudeConfigDirHandler.handleSetClaudeConfigDir(content);
                 return true;
             // TokenTracker local usage dashboard
             case "tt_detect_cli":

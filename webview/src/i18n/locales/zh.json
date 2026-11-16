@@ -521,6 +521,11 @@
         "placeholder": "例如 /usr/local/bin/claude — 留空则使用内置 SDK",
         "hint": "可选。设置后，插件将启动此二进制文件，而非内置的 @anthropic-ai/claude-agent-sdk。保存时会重启守护进程。"
       },
+      "claudeConfigDir": {
+        "label": "Claude 配置目录（覆盖）",
+        "placeholder": "例如 ~/.claude-work — 留空则使用 CLAUDE_CONFIG_DIR 或 ~/.claude",
+        "hint": "可选。历史记录、会话操作、用量统计和 Claude 进程将读取该目录而非 ~/.claude。请与同一配置的 Claude CLI 路径配合使用。保存时守护进程会重启。"
+      },
       "workingDirectory": {
         "label": "工作目录",
         "placeholder": "例如 project1 或留空使用项目根目录",

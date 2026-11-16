@@ -521,6 +521,11 @@
         "placeholder": "e.g. /usr/local/bin/claude — leave empty to use the bundled SDK",
         "hint": "Optional. When set, the plugin spawns this binary instead of the bundled @anthropic-ai/claude-agent-sdk. Daemon restarts on save."
       },
+      "claudeConfigDir": {
+        "label": "Claude Config Directory (override)",
+        "placeholder": "e.g. ~/.claude-work — leave empty to use CLAUDE_CONFIG_DIR or ~/.claude",
+        "hint": "Optional. Chat history, session actions, usage statistics and the Claude process read this directory instead of ~/.claude. Pair it with the Claude CLI path of the same profile. Daemon restarts on save."
+      },
       "workingDirectory": {
         "label": "Working Directory",
         "placeholder": "e.g. project1 or leave empty to use project root",

@@ -255,6 +255,11 @@
         "placeholder": "напр. /usr/local/bin/claude — оставьте пустым для использования встроенного SDK",
         "hint": "Необязательно. Если задано, плагин запускает этот исполняемый файл вместо встроенного @anthropic-ai/claude-agent-sdk. При сохранении демон перезапускается."
       },
+      "claudeConfigDir": {
+        "label": "Claude Config Directory (override)",
+        "placeholder": "e.g. ~/.claude-work — leave empty to use CLAUDE_CONFIG_DIR or ~/.claude",
+        "hint": "Optional. Chat history, session actions, usage statistics and the Claude process read this directory instead of ~/.claude. Pair it with the Claude CLI path of the same profile. Daemon restarts on save."
+      },
       "workingDirectory": {
         "label": "Рабочая директория",
         "placeholder": "например, project1 или оставьте пустым для корня проекта",

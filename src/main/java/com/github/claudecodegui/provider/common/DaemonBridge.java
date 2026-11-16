@@ -1,5 +1,6 @@
 package com.github.claudecodegui.provider.common;
 
+import com.github.claudecodegui.util.ClaudeConfigDir;
 import com.github.claudecodegui.bridge.BridgeDirectoryResolver;
 import com.github.claudecodegui.bridge.EnvironmentConfigurator;
 import com.github.claudecodegui.bridge.NodeDetector;
@@ -381,6 +382,10 @@ public class DaemonBridge {
         if (claudeCliPath != null && !claudeCliPath.trim().isEmpty()) {
             environment.put("CLAUDE_CODE_PATH", claudeCliPath.trim());
             LOG.info("[DaemonBridge] Using custom Claude CLI: " + claudeCliPath.trim());
+        }
+
+        if (ClaudeConfigDir.override() != null) {
+            environment.put(ClaudeConfigDir.ENV_VAR, ClaudeConfigDir.current().toString());
         }
 
         processBuilder.redirectErrorStream(false);
