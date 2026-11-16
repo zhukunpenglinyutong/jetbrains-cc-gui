@@ -30,14 +30,18 @@ final class OsrFrameRateLimiter {
 
     /** CEF's default for windowless browsers, used when the registry value is 0. */
     static final int DEFAULT_FRAME_RATE = 30;
-    static final int HIDDEN_FRAME_RATE = 1;
-    /** Chromium's upper bound for windowless rendering. */
-    static final int MAX_FRAME_RATE = 60;
+    /**
+     * A rate change waits for the frame tick already scheduled at the old rate, so the hidden rate
+     * also bounds how long a browser that comes back on screen shows its last frame (200 ms here).
+     */
+    static final int HIDDEN_FRAME_RATE = 5;
     static final String FRAME_RATE_REGISTRY_KEY = "ide.browser.jcef.osr.framerate";
 
     private final BooleanSupplier showing;
     private final IntConsumer frameRateSetter;
     private final int visibleFrameRate;
+    /** Read and written on the EDT only. */
+    private boolean peerCreated;
 
     OsrFrameRateLimiter(BooleanSupplier showing, IntConsumer frameRateSetter, int registryFrameRate) {
         this.showing = showing;
@@ -60,35 +64,44 @@ final class OsrFrameRateLimiter {
                     component::isShowing,
                     rate -> setFrameRate(cefBrowser, rate),
                     Registry.intValue(FRAME_RATE_REGISTRY_KEY, 0));
-            component.addHierarchyListener(event -> {
-                if ((event.getChangeFlags() & HierarchyEvent.SHOWING_CHANGED) != 0) {
-                    limiter.apply();
-                }
-            });
-            // The in-process browser ignores the rate until its native peer exists.
+            component.addHierarchyListener(event -> limiter.onHierarchyChanged(event.getChangeFlags()));
+            // Before its native peer exists the in-process browser drops the call and logs a CEF error.
             browser.getJBCefClient().addLifeSpanHandler(new CefLifeSpanHandlerAdapter() {
                 @Override
                 public void onAfterCreated(CefBrowser target) {
-                    ApplicationManager.getApplication().invokeLater(limiter::apply, ModalityState.any());
+                    ApplicationManager.getApplication().invokeLater(limiter::onPeerCreated, ModalityState.any());
                 }
             }, cefBrowser);
-            limiter.apply();
         } catch (RuntimeException | LinkageError e) {
             LOG.warn("Could not install the OSR frame-rate limiter; hidden browsers render at the full rate", e);
         }
     }
 
-    /** Applies the rate for the browser's current on-screen state. */
-    void apply() {
-        frameRateSetter.accept(showing.getAsBoolean() ? visibleFrameRate : HIDDEN_FRAME_RATE);
+    /** Called once the native browser exists; applies the rate for the current on-screen state. */
+    void onPeerCreated() {
+        peerCreated = true;
+        apply();
     }
 
-    /** A positive registry value is the user's choice; 0, the IDE default, means CEF's default. */
-    static int visibleFrameRate(int registryFrameRate) {
-        if (registryFrameRate <= 0) {
-            return DEFAULT_FRAME_RATE;
+    /** Re-applies the rate when the browser component starts or stops showing. */
+    void onHierarchyChanged(long changeFlags) {
+        if ((changeFlags & HierarchyEvent.SHOWING_CHANGED) != 0) {
+            apply();
         }
-        return Math.min(registryFrameRate, MAX_FRAME_RATE);
+    }
+
+    private void apply() {
+        if (peerCreated) {
+            frameRateSetter.accept(showing.getAsBoolean() ? visibleFrameRate : HIDDEN_FRAME_RATE);
+        }
+    }
+
+    /**
+     * A positive registry value is the user's choice and is passed on as is, like the platform does:
+     * CEF has no upper limit for windowless rendering. 0, the IDE default, means CEF's default.
+     */
+    static int visibleFrameRate(int registryFrameRate) {
+        return registryFrameRate > 0 ? registryFrameRate : DEFAULT_FRAME_RATE;
     }
 
     private static void setFrameRate(CefBrowser cefBrowser, int rate) {
