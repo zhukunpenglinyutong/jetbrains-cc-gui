@@ -99,7 +99,9 @@ test('Claude dispatches compact and custom commands with per-turn IDE context', 
     sessionId = runtime.sessionId;
   }
 
+  // Older CLIs refuse to compact a single exchange ("Not enough messages to compact").
   await send('Remember the API decisions for this fixture.');
+  await send('Also remember the pending work.');
   const customInstructions = 'Keep the API decisions and pending work.';
   await send(`/compact ${customInstructions}`);
   assert.ok(events.some(event => event.type === 'system' && event.subtype === 'compact_boundary'),

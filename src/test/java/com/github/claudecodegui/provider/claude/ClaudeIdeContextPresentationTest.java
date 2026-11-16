@@ -22,6 +22,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 /** Exercises the same persisted native record through titles, replay, live transport, and export. */
 public class ClaudeIdeContextPresentationTest {
@@ -119,9 +120,25 @@ public class ClaudeIdeContextPresentationTest {
         assertNotNull("Selected code must not hide an ordinary user message", parsed);
         assertEquals(prompt, parsed.content);
 
-        JsonObject command = userMessage(PluginIdeContext.PREFIX + "Active file: commands.ts\n</system-reminder>",
+        JsonObject bookkeeping = userMessage(PluginIdeContext.PREFIX + "Active file: commands.ts\n</system-reminder>",
                 "[Attachment: notes.txt]", "<command-name>/compact</command-name>\n<command-args></command-args>");
-        assertNull("Native command bookkeeping must stay hidden", new MessageParser().parseServerMessage(command));
+        assertNull("A final block with only bookkeeping tags must stay hidden", new MessageParser().parseServerMessage(bookkeeping));
+
+        // Recorded by Claude Code 2.1.311 for "/compact keep decisions"; <command-message> keeps it visible.
+        String record = "<command-name>/compact</command-name>\n            <command-message>compact</command-message>\n"
+                + "            <command-args>keep decisions</command-args>";
+        ClaudeSession.Message shown = new MessageParser().parseServerMessage(
+                userMessage(PluginIdeContext.PREFIX + "Active file: commands.ts\n</system-reminder>", record));
+        assertNotNull("The native command record shows as the command", shown);
+        assertEquals(record, shown.content);
+        assertVisiblePrompt(shown.raw, record);
+    }
+
+    /** Fails when the bridge and this filter stop agreeing on the wrapper, which would leak context into bubbles. */
+    @Test
+    public void bridgeWritesTheMarkerThatJavaHides() throws Exception {
+        String bridge = Files.readString(Path.of("ai-bridge", "services", "claude", "persistent-query-service.js"));
+        assertTrue(bridge.contains("text: `" + PluginIdeContext.PREFIX.replace("\n", "\\n")));
     }
 
     /** Prevents later history and transport passes from treating a user's quoted wrapper as injected context. */
