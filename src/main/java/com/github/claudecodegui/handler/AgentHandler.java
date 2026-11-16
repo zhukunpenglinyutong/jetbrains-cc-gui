@@ -1,9 +1,14 @@
 package com.github.claudecodegui.handler;
 
+import com.github.claudecodegui.agent.AgentDenyRules;
+import com.github.claudecodegui.agent.AgentResolver;
+import com.github.claudecodegui.agent.SubagentDiscoveryScanner;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.core.BaseMessageHandler;
 import com.github.claudecodegui.handler.core.HandlerContext;
 
+import com.github.claudecodegui.util.LogSanitizer;
+import com.github.claudecodegui.watcher.AgentFileWatcher;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.model.ConflictStrategy;
 import com.google.gson.Gson;
@@ -13,6 +18,7 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.fileChooser.FileChooser;
 import com.intellij.openapi.fileChooser.FileChooserDescriptor;
+import com.intellij.util.concurrency.AppExecutorUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.vfs.LocalFileSystem;
 
@@ -25,6 +31,7 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Agent management message handler.
@@ -47,11 +54,49 @@ public class AgentHandler extends BaseMessageHandler {
 
     private final CodemossSettingsService settingsService;
     private final Gson gson;
+    private final AgentFileWatcher fileWatcher;
 
     public AgentHandler(HandlerContext context) {
         super(context);
         this.settingsService = new CodemossSettingsService();
         this.gson = new Gson();
+
+        // An agent file edited in the IDE has to reach the open settings tab.
+        // The watcher does not rescan: it only says "a root changed", and the
+        // frontend decides whether anyone is looking. That keeps every read of a
+        // discovered file on the one path that applies the containment checks,
+        // and means a save made while Settings is closed costs nothing.
+        this.fileWatcher = new AgentFileWatcher(
+                context.getProject(),
+                context::resolveEffectiveWorkingDirectory,
+                () -> ApplicationManager.getApplication().invokeLater(() ->
+                        callJavaScript("window.agentFilesChanged", "1")));
+        this.fileWatcher.startWatching();
+    }
+    // Server-computed fields that must be stripped on export/import
+    private static final Set<String> SERVER_FIELDS = Set.of(
+            "disabled", "disabledReason", "warning", "warningLine",
+            "readOnly", "scope", "source", "path", "id", "prompt");
+
+    private static JsonObject stripServerFields(JsonObject agent) {
+        JsonObject stripped = agent.deepCopy();
+        for (String key : SERVER_FIELDS) {
+            stripped.remove(key);
+        }
+        return stripped;
+    }
+
+
+
+    /**
+     * Stop watching. Called when the chat window is torn down; the project bus
+     * would dispose the subscription anyway, but doing it here makes the
+     * lifetime explicit and matches {@link PromptHandler}.
+     */
+    public void dispose() {
+        if (fileWatcher != null) {
+            fileWatcher.stopWatching();
+        }
     }
 
     @Override
@@ -63,7 +108,10 @@ public class AgentHandler extends BaseMessageHandler {
     public boolean handle(String type, String content) {
         switch (type) {
             case "get_agents":
-                handleGetAgents();
+                // The body is forwarded verbatim: it names the scopes the client
+                // asked for, and dropping it here would silently answer every
+                // request with all three.
+                handleGetAgents(content);
                 return true;
             case "add_agent":
                 handleAddAgent(content);
@@ -95,15 +143,88 @@ public class AgentHandler extends BaseMessageHandler {
     }
 
     /**
-     * Get all agents.
+     * Resolve the agent list and hand it to the client.
+     *
+     * <p>The body may name the scopes the client wants
+     * ({@code {"scopes":["global","local"]}}, or the singular
+     * {@code {"scope":"store"}} the prompt handler uses). An absent or
+     * unparsable body means every scope, which is what the chat-bar provider has
+     * always sent and what the settings tab sent before this contract existed —
+     * see {@link AgentResolver} for the full rule.
+     *
+     * <p>Resolution happens here and only here, on purpose: the store, the
+     * global directory and the project directory can each define the same name,
+     * and a client that resolved precedence itself would show a different agent
+     * than the one an edit would apply to.
      */
-    private void handleGetAgents() {
-        try {
-            List<JsonObject> agents = settingsService.getAgents();
-            String agentsJson = gson.toJson(agents);
+    private void handleGetAgents(String content) {
+        // Off the EDT, deliberately. Resolving the list reads every agent file
+        // under two roots and parses a YAML block from each: measured at roughly
+        // half a second for a 150-agent ~/.claude/agents. Four call sites reach
+        // this method from invokeLater, so doing the work inline froze the whole
+        // UI for that long after every create, edit and delete — and the IDE
+        // stops painting, which reads as a hang rather than as a slow list.
+        //
+        // Only the call into the webview has to be on the EDT; everything
+        // else here is file I/O and JSON. Nothing in this path touches the VFS,
+        // so no read action is needed to keep it off the EDT.
+        AppExecutorUtil.getAppExecutorService().execute(() -> resolveAndSendAgents(content));
+    }
 
+    /**
+     * Resolve the list off the EDT and hand it to the webview.
+     *
+     * <p>Split from {@link #handleGetAgents} so the thread hop is visible at the
+     * call site rather than buried inside the method the other callers invoke
+     * from {@code invokeLater}.
+     */
+    private void resolveAndSendAgents(String content) {
+        try {
+            List<String> scopes = AgentResolver.parseRequestedScopes(content);
+            List<JsonObject> storeAgents = settingsService.getAgents();
+
+            // The project root is the effective working directory, not the raw
+            // base path: a configured custom directory is the one Claude runs
+            // in, so it is the one whose .claude/agents is in effect.
+            String workspaceRoot = context.resolveEffectiveWorkingDirectory();
+            SubagentDiscoveryScanner.ScanResult scan = SubagentDiscoveryScanner.scanAll(workspaceRoot);
+
+            AgentResolver.Resolution resolution = AgentResolver.resolve(
+                    storeAgents, scan, AgentDenyRules.readForProject(workspaceRoot), scopes);
+            if (!resolution.unmatchedDenyRules().isEmpty()) {
+                // Inert rules are worth a line: the user wrote a rule and the
+                // plugin is telling them it matches nothing they can see.
+                // The names come from permissions.deny in a settings file, so
+                // they are user-supplied rather than repository-supplied — a
+                // weaker vector than a cloned file, but the escaping is already
+                // in this method for the rejection path, and leaving one log
+                // line out of it would be the inconsistency a reader trips on.
+                resolution.unmatchedDenyRules().forEach(rule ->
+                        LOG.info("[AgentHandler] permissions.deny names no known agent: "
+                                + LogSanitizer.sanitize(rule)));
+            }
+
+            String agentsJson = gson.toJson(resolution.agents());
             ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.updateAgents", escapeJs(agentsJson));
+            });
+        } catch (IllegalArgumentException e) {
+            // A bad scope is the client's own mistake and is worth saying so:
+            // answering with an empty list would look like "you have no
+            // agents", which is a different and very confusing message.
+            // The message quotes the client's own scopes back, so it carries
+            // whatever the caller sent. The UI copy is escaped by escapeJs and
+            // rendered as text; the log copy needs its own escaping, because a
+            // scope string containing a newline would otherwise split this
+            // record in two.
+            LOG.warn("[AgentHandler] Rejected get_agents request: "
+                    + LogSanitizer.sanitize(e.getMessage()));
+            ApplicationManager.getApplication().invokeLater(() -> {
+                JsonObject error = new JsonObject();
+                error.addProperty("success", false);
+                error.addProperty("error", e.getMessage());
+                callJavaScript("window.updateAgents", escapeJs("[]"));
+                callJavaScript("window.agentOperationResult", escapeJs(gson.toJson(error)));
             });
         } catch (Exception e) {
             LOG.error("[AgentHandler] Failed to get agents: " + e.getMessage(), e);
@@ -123,7 +244,7 @@ public class AgentHandler extends BaseMessageHandler {
 
             // Refresh the list
             ApplicationManager.getApplication().invokeLater(() -> {
-                handleGetAgents();
+                handleGetAgents("");
                 callJavaScript("window.agentOperationResult", escapeJs("{\"success\":true,\"operation\":\"add\"}"));
             });
         } catch (Exception e) {
@@ -151,7 +272,7 @@ public class AgentHandler extends BaseMessageHandler {
 
             // Refresh the list
             ApplicationManager.getApplication().invokeLater(() -> {
-                handleGetAgents();
+                handleGetAgents("");
                 callJavaScript("window.agentOperationResult", escapeJs("{\"success\":true,\"operation\":\"update\"}"));
             });
         } catch (Exception e) {
@@ -191,7 +312,7 @@ public class AgentHandler extends BaseMessageHandler {
 
                 // Refresh the list
                 ApplicationManager.getApplication().invokeLater(() -> {
-                    handleGetAgents();
+                    handleGetAgents("");
                     callJavaScript("window.agentOperationResult", escapeJs("{\"success\":true,\"operation\":\"delete\"}"));
                 });
             } else {
@@ -344,7 +465,7 @@ public class AgentHandler extends BaseMessageHandler {
 
                 JsonArray agentsArray = new JsonArray();
                 for (JsonObject agent : agents) {
-                    agentsArray.add(agent);
+                    agentsArray.add(stripServerFields(agent));
                 }
                 exportData.add("agents", agentsArray);
 
@@ -510,13 +631,13 @@ public class AgentHandler extends BaseMessageHandler {
 
             List<JsonObject> agentsToImport = new java.util.ArrayList<>();
             for (int i = 0; i < agentsArray.size(); i++) {
-                agentsToImport.add(agentsArray.get(i).getAsJsonObject());
+                agentsToImport.add(stripServerFields(agentsArray.get(i).getAsJsonObject()));
             }
 
             Map<String, Object> result = settingsService.getAgentManager().batchImportAgents(agentsToImport, strategy);
 
             ApplicationManager.getApplication().invokeLater(() -> {
-                handleGetAgents();
+                handleGetAgents("");
 
                 int imported = (int) result.get("imported");
                 int updated = (int) result.get("updated");
@@ -553,4 +674,5 @@ public class AgentHandler extends BaseMessageHandler {
             });
         }
     }
+
 }

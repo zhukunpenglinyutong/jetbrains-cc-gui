@@ -242,3 +242,446 @@
     }
   }
 }
+
+// ---- Auto-discovered subagents (tasks 58-61) ----
+
+.agentCardDisabled {
+  opacity: 0.75;
+}
+
+.agentCard {
+  // The card now stacks a details panel under the summary, so it must grow
+  // downward from the top rather than staying vertically centered.
+  align-items: flex-start;
+}
+
+.agentNameRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.agentDescription {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agentWarning {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: var(--warning-background, rgba(255, 193, 7, 0.12));
+  color: var(--warning-color, #b58900);
+  font-size: 12px;
+  line-height: 1.4;
+
+  .codicon {
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+}
+
+.agentMeta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  flex-wrap: wrap;
+}
+
+.agentModel,
+.agentConfigSummary {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.scopeBadge,
+.readOnlyBadge,
+.disabledBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.scopeBadge {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+.scopeBadge_global {
+  background: rgba(0, 120, 212, 0.15);
+  color: var(--button-primary-background, #0078d4);
+}
+
+.scopeBadge_local {
+  background: rgba(16, 124, 16, 0.15);
+  color: #107c10;
+}
+
+.scopeBadge_store {
+  background: rgba(122, 122, 122, 0.18);
+  color: var(--text-secondary);
+}
+
+.readOnlyBadge {
+  background: var(--bg-tertiary);
+  color: var(--text-tertiary);
+  cursor: help;
+}
+
+.disabledBadge {
+  background: rgba(244, 67, 54, 0.15);
+  color: var(--error-color, #f44336);
+  cursor: help;
+}
+
+.agentInlineActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.detailsToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover:not(:disabled) {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .codicon {
+    font-size: 12px;
+  }
+}
+
+.details {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.detailsDivider {
+  height: 1px;
+  background: var(--border-primary);
+  margin: 2px 0;
+}
+
+.detailRow {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.detailKey {
+  flex: 0 0 120px;
+  color: var(--text-tertiary);
+  word-break: break-word;
+}
+
+.detailValue {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-primary);
+  font-family: var(--font-family-monospace, monospace);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.detailEmpty {
+  flex: 1;
+  color: var(--text-tertiary);
+  font-style: italic;
+  opacity: 0.75;
+}
+
+// Refresh: icon-only so it costs ~32px instead of the ~90px a labelled button
+// would add to the row that was already too tight for four of them.
+.iconButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--border-primary);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+
+  &:hover:not(:disabled) {
+    background: var(--bg-hover);
+    border-color: var(--border-hover, var(--border-secondary));
+    color: var(--text-primary);
+  }
+
+  // Kept enabled-looking while spinning: the request is in flight and the
+  // control should look busy, not dead.
+  &:disabled {
+    opacity: 0.7;
+    cursor: progress;
+  }
+
+  .codicon {
+    font-size: 15px;
+  }
+}
+
+// Link to the backing .md, so a broken agent can be fixed where it lives.
+.fileLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: 2px 6px;
+  background: transparent;
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  color: var(--button-primary-background, #0078d4);
+  font-size: 11px;
+  font-family: var(--font-family-monospace, monospace);
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+
+  &:hover {
+    background: var(--bg-hover);
+    border-color: var(--button-primary-background, #0078d4);
+  }
+
+  .codicon {
+    font-size: 12px;
+  }
+}
+
+.fileLinkLine {
+  color: var(--warning-color, #b58900);
+  font-weight: 600;
+}
+
+// The warning is now a row of text plus a button, so it has to stay a row.
+.agentWarning {
+  flex-wrap: wrap;
+}
+
+// Row two: the filter on the left.
+//
+// Split from the title row because the search box and its match count do not
+// fit beside the action buttons at the width the settings panel actually gets.
+.headerSecondary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  // Pulls the row up under the title: .header already owns the bottom margin.
+  margin: -12px 0 16px;
+  flex-wrap: wrap;
+}
+
+.secondaryLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.searchBox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  height: 32px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 6px;
+  transition: border-color 0.15s ease;
+  // On a row of its own the box can take the space it has, up to a width that
+  // still reads as a filter rather than a second input line.
+  flex: 1 1 auto;
+  max-width: 320px;
+  min-width: 180px;
+
+  &:focus-within {
+    border-color: var(--button-primary-background, #0078d4);
+  }
+
+  > .codicon {
+    color: var(--text-tertiary);
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+}
+
+.searchInput {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+
+  &::placeholder {
+    color: var(--text-tertiary);
+  }
+}
+
+.searchClear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  flex-shrink: 0;
+
+  &:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+
+  .codicon {
+    font-size: 12px;
+  }
+}
+
+.matchCount {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+// The per-scope tally beside the section title.
+.sectionHeaderRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+
+  .sectionTitle {
+    margin: 0;
+  }
+}
+
+.scopeCounts {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.scopeCount {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+
+  strong {
+    color: var(--text-secondary);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.scopeCountDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.scopeCountTotal {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding-left: 12px;
+  border-left: 1px solid var(--border-primary);
+  white-space: nowrap;
+
+  strong {
+    color: var(--text-primary);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+// The file row inside Details: a link rather than text, matching the control on
+// the card above it.
+.detailLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--button-primary-background, #0078d4);
+  font-family: var(--font-family-monospace, monospace);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  .codicon {
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+}
