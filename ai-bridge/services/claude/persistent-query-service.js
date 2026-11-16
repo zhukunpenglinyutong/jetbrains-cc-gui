@@ -135,7 +135,7 @@ function extractUserMessageText(userMessage) {
   const content = userMessage.message.content;
   if (typeof content === 'string') return content;
   if (Array.isArray(content)) {
-    const textBlock = content.find(b => b.type === 'text');
+    const textBlock = content.findLast(b => b.type === 'text');
     return textBlock?.text || null;
   }
   return null;
@@ -147,7 +147,7 @@ function buildSystemPromptAppend(params) {
   return buildIDEContextPrompt(null, params.agentPrompt || null);
 }
 
-function appendTurnContext(contentBlocks, params) {
+function prependTurnContext(contentBlocks, params) {
   if (!params.openedFiles || typeof params.openedFiles !== 'object') return contentBlocks;
   const context = params.openedFiles.isQuickFix
     ? buildQuickFixPrompt(params.openedFiles, params.message || '')
@@ -155,10 +155,12 @@ function appendTurnContext(contentBlocks, params) {
   // Keep the wrapper well-formed even if selected source contains these tags.
   // Java strips this internal block from both live echoes and history replay.
   const escapedContext = context.replace(/<\/?system-reminder>/g, tag => tag.replace('<', '&lt;').replace('>', '&gt;'));
-  return [...contentBlocks, {
+  // Claude Code parses slash commands from the final text block. Keep the
+  // user's input and arguments last, after both IDE context and attachments.
+  return [{
     type: 'text',
-    text: `<system-reminder>\nThe following IDE context applies only to this user message.\n${escapedContext || 'No active editor context is available.'}\n</system-reminder>`,
-  }];
+    text: `<system-reminder>\nThe following IDE context applies to the user message below.\n${escapedContext || 'No active editor context is available.'}\n</system-reminder>`,
+  }, ...contentBlocks];
 }
 
 function resolveRequestModelState(modelId, settingsEnv) {
@@ -213,7 +215,7 @@ async function buildUserMessage(params, withAttachments, requestedSessionId) {
       type: 'user',
       session_id: requestedSessionId || '',
       parent_tool_use_id: null,
-      message: { role: 'user', content: appendTurnContext(contentBlocks, params) }
+      message: { role: 'user', content: prependTurnContext(contentBlocks, params) }
     };
   }
 
@@ -222,7 +224,7 @@ async function buildUserMessage(params, withAttachments, requestedSessionId) {
     type: 'user',
     session_id: requestedSessionId || '',
     parent_tool_use_id: null,
-    message: { role: 'user', content: appendTurnContext([{ type: 'text', text: userText }], params) }
+    message: { role: 'user', content: prependTurnContext([{ type: 'text', text: userText }], params) }
   };
 }
 
@@ -1102,6 +1104,7 @@ export const __testing = {
   },
   notifyExpiredResume,
   emitSendError,
+  extractUserMessageText,
   async buildRequestContext(params = {}, withAttachments = false, overrides = {}) {
     return buildRequestContext(params, withAttachments, overrides);
   },

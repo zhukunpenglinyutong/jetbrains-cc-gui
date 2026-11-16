@@ -194,6 +194,7 @@ public class MessageJsonConverter {
         JsonObject transport = new JsonObject();
         copyFieldIfPresent(raw, transport, "uuid");
         copyFieldIfPresent(raw, transport, "type");
+        copyFieldIfPresent(raw, transport, PluginIdeContext.REMOVED_FIELD);
         copyFieldIfPresent(raw, transport, "clientMessageId");
         copyFieldIfPresent(raw, transport, "codexItemId");
         copyFieldIfPresent(raw, transport, "codexThreadId");
