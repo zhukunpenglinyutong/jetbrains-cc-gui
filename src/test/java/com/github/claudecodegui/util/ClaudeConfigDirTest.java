@@ -79,4 +79,45 @@ public class ClaudeConfigDirTest {
     public void unusableValueIsTreatedAsUnset() {
         assertNull(ClaudeConfigDir.explicit("bad\0path", null, home()));
     }
+
+    @Test
+    public void wslNodeMapsALinuxPathThroughTheUncConverter() {
+        String unc = abs("unc-home");
+        assertEquals(Paths.get(unc), ClaudeConfigDir.resolve("/home/me/p", null, home(), true, linux -> unc));
+    }
+
+    @Test
+    public void wslNodeEnvVarIsMappedToo() {
+        String unc = abs("unc-env");
+        assertEquals(Paths.get(unc), ClaudeConfigDir.resolve(null, "/home/me/p", home(), true, linux -> unc));
+    }
+
+    @Test
+    public void unavailableWslMappingFallsThroughToTheNextCandidate() {
+        assertEquals(Paths.get(abs("env")),
+                ClaudeConfigDir.resolve("/home/me/p", abs("env"), home(), true, linux -> null));
+        assertNull(ClaudeConfigDir.explicit("/home/me/p", null, home(), true, linux -> null));
+    }
+
+    @Test
+    public void wslNodeStillExpandsTildeAgainstItsOwnHome() {
+        assertEquals(Paths.get(home(), ".claude-work"),
+                ClaudeConfigDir.resolve("~/.claude-work", null, home(), true, linux -> "unused"));
+    }
+
+    @Test
+    public void wslNodeKeepsAnAbsoluteWindowsPathUnchanged() {
+        assertEquals(Paths.get(abs("win")), ClaudeConfigDir.resolve(abs("win"), null, home(), true, linux -> "unused"));
+    }
+
+    @Test
+    public void nativeNodeReceivesTheFilePathAsIs() {
+        assertEquals(abs("x"), ClaudeConfigDir.forNode(Paths.get(abs("x")), false));
+    }
+
+    @Test
+    public void wslNodeReceivesLinuxSpellings() {
+        assertEquals("/home/me/p", ClaudeConfigDir.forNode(Paths.get("\\\\wsl.localhost\\Ubuntu\\home\\me\\p"), true));
+        assertEquals("/mnt/d/x", ClaudeConfigDir.forNode(Paths.get("D:\\x"), true));
+    }
 }

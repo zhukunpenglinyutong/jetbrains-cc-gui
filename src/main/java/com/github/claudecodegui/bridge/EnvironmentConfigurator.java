@@ -196,13 +196,17 @@ public class EnvironmentConfigurator {
     /**
      * Hands the configured Claude config directory to every Node child, so one-shot processes
      * (session loading, rewind, MCP status) read the same profile the daemon does. A WSL node
-     * cannot use a Windows path, and nothing converts it yet, so it is left out.
+     * gets the Linux spelling of the directory, and a stale inherited value is removed so a raw
+     * Windows path never crosses WSLENV.
      */
     static void configureClaudeConfigDirEnv(Map<String, String> env, Path configDir, boolean isWslNode) {
-        if (configDir == null || isWslNode) {
+        if (configDir == null) {
+            if (isWslNode) {
+                env.remove(ClaudeConfigDir.ENV_VAR);
+            }
             return;
         }
-        env.put(ClaudeConfigDir.ENV_VAR, configDir.toString());
+        env.put(ClaudeConfigDir.ENV_VAR, ClaudeConfigDir.forNode(configDir, isWslNode));
     }
 
     static String resolveHomeForNodeEnvironment(String nodeExecutable, String currentHome) {
@@ -291,7 +295,8 @@ public class EnvironmentConfigurator {
             CLAUDE_PERMISSION_ENV,
             CLAUDE_SESSION_ID_ENV,
             CLAUDE_PERMISSION_SAFETY_NET_ENV,
-            CODEX_INHERIT_PROXY_ENV
+            CODEX_INHERIT_PROXY_ENV,
+            ClaudeConfigDir.ENV_VAR
     };
 
     /** Appends the propagated keys to WSLENV so they reach the daemon inside WSL. */

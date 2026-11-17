@@ -524,7 +524,7 @@
       "claudeConfigDir": {
         "label": "Claude 配置目录（覆盖）",
         "placeholder": "例如 ~/.claude-work — 留空则使用 CLAUDE_CONFIG_DIR 或 ~/.claude",
-        "hint": "可选。历史记录、会话操作和 Claude 进程将读取该目录而非 ~/.claude。用量统计会把该目录与 ~/.claude 合并统计（不按配置区分），并在统计服务下次启动时生效。请使用绝对路径；暂不支持 WSL。请与同一配置的 Claude CLI 路径配合使用。保存时守护进程会重启。"
+        "hint": "可选。历史记录、会话操作和 Claude 进程将读取该目录而非 ~/.claude。用量统计会把该目录与 ~/.claude 合并统计（不按配置区分），并在统计服务下次启动时生效。请使用绝对路径或 ~/…；使用 WSL 的 node 时可填写 Linux 路径，例如 /home/me/.claude-work。请与同一配置的 Claude CLI 路径配合使用。保存时守护进程会重启。"
       },
       "workingDirectory": {
         "label": "工作目录",
@@ -1900,7 +1900,8 @@
     "guideNoteHooks": "首次启动时，tokentracker 服务会向已安装的 AI 工具写入 hooks（这是它的数据采集机制）。",
     "guideNoteTelemetry": "本应用已为其关闭匿名遥测。",
     "errorTitle": "tokentracker 服务启动失败",
-    "errorRetry": "重试"
+    "errorRetry": "重试",
+    "staleConfigDirNotice": "用量统计仍来自更改 Claude 配置目录之前启动的 tokentracker 服务，因此可能不包含新目录。该服务独立于 IDE 运行，仅重启 IDE 可能无效：请结束 tokentracker 进程，然后重新打开此标签页。"
   },
   "mcp": {
     "nativeToolCount": "{{count}} 个工具",

@@ -3,6 +3,7 @@ package com.github.claudecodegui.handler;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.util.ClaudeConfigDir;
+import com.github.claudecodegui.util.WslPathUtil;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.ide.util.PropertiesComponent;
@@ -13,6 +14,8 @@ import com.intellij.util.concurrency.AppExecutorUtil;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Predicate;
+import java.util.function.UnaryOperator;
 
 /**
  * Persists the Claude configuration directory (the plugin-side equivalent of
@@ -60,8 +63,9 @@ public class ClaudeConfigDirHandler {
                 if (pathArg.isEmpty()) {
                     props.unsetValue(ClaudeConfigDir.CONFIG_DIR_PROPERTY_KEY);
                 } else {
-                    failure = validateConfigDir(
-                            ClaudeConfigDir.expand(pathArg, NodeDetector.resolveHomeForFileOps()), pathArg);
+                    failure = validateInput(pathArg, NodeDetector.resolveHomeForFileOps(),
+                            ClaudeConfigDir.isWslNode(), WslPathUtil::convertWslPathToWindowsUnc,
+                            WslPathUtil::wslDirectoryExists);
                     if (failure == null) {
                         props.setValue(ClaudeConfigDir.CONFIG_DIR_PROPERTY_KEY, pathArg);
                     }
@@ -104,6 +108,23 @@ public class ClaudeConfigDirHandler {
     private void showError(String message) {
         ApplicationManager.getApplication().invokeLater(() ->
                 context.callJavaScript("window.showError", context.escapeJs(message)));
+    }
+
+    /**
+     * Validates what the user typed. With a WSL node a Linux path is opened through its UNC form,
+     * and {@code wslDirectoryExists} is the fallback for the UNC share answering "missing" too early.
+     */
+    static String validateInput(String raw, String home, boolean wslNode, UnaryOperator<String> linuxToUnc,
+                                Predicate<String> wslDirectoryExists) {
+        Path dir = ClaudeConfigDir.expand(raw, home, wslNode, linuxToUnc);
+        if (dir == null) {
+            return "Cannot reach the WSL path (is WSL running?): " + raw;
+        }
+        String failure = validateConfigDir(dir, raw);
+        if (failure != null && wslNode && raw.trim().startsWith("/") && wslDirectoryExists.test(raw.trim())) {
+            return null;
+        }
+        return failure;
     }
 
     /** Returns null when {@code dir} is an existing absolute directory, otherwise a human-readable reason. */

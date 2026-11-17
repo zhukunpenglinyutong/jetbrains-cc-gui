@@ -258,7 +258,7 @@
       "claudeConfigDir": {
         "label": "Claude Config Directory (override)",
         "placeholder": "e.g. ~/.claude-work — leave empty to use CLAUDE_CONFIG_DIR or ~/.claude",
-        "hint": "Optional. Chat history, session actions and the Claude process read this directory instead of ~/.claude. Usage statistics add it to ~/.claude (combined, not per profile) and pick it up when the statistics server next starts. Use an absolute path; WSL is not supported yet. Pair it with the Claude CLI path of the same profile. Daemon restarts on save."
+        "hint": "Optional. Chat history, session actions and the Claude process read this directory instead of ~/.claude. Usage statistics add it to ~/.claude (combined, not per profile) and pick it up when the statistics server next starts. Use an absolute path or ~/…; with a WSL node a Linux path such as /home/me/.claude-work works. Pair it with the Claude CLI path of the same profile. Daemon restarts on save."
       },
       "workingDirectory": {
         "label": "작업 디렉토리",
@@ -1540,7 +1540,8 @@
     "guideNoteHooks": "첫 실행 시 tokentracker 서버는 설치된 AI 도구에 hooks를 작성합니다(이것이 데이터 수집 방식입니다).",
     "guideNoteTelemetry": "이 앱은 익명 텔레메트리를 비활성화했습니다.",
     "errorTitle": "tokentracker 서버 시작 실패",
-    "errorRetry": "다시 시도"
+    "errorRetry": "다시 시도",
+    "staleConfigDirNotice": "Usage statistics still come from a tokentracker server that was started before the Claude config directory changed, so they may not include it. The server runs detached from the IDE, so restarting the IDE may not be enough: stop the tokentracker process, then reopen this tab."
   },
   "mcp": {
     "title": "MCP 서버",

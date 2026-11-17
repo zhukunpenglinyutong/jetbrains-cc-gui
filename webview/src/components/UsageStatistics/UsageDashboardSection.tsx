@@ -27,6 +27,7 @@ export function UsageDashboardSection() {
     guideNoteTelemetry: t('usage.guideNoteTelemetry'),
     errorTitle: t('usage.errorTitle'),
     errorRetry: t('usage.errorRetry'),
+    staleConfigDirNotice: t('usage.staleConfigDirNotice'),
   };
 
   return (

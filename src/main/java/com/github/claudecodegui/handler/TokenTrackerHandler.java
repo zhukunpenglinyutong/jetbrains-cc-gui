@@ -64,6 +64,9 @@ public class TokenTrackerHandler {
     /** Error the webview answers by reinstalling the pinned CLI and calling ensure again. */
     private static final String TT_CLI_OUTDATED_ERROR = "tokentracker_cli_outdated";
     /** Default port used by `tokentracker serve`. */
+    /** Port to the Claude config directory a server we spawned was started with (JSON object). */
+    private static final String TT_SERVER_CONFIG_DIRS_KEY = "tokentracker.server.config.dirs";
+
     private static final int TT_DEFAULT_PORT = 7680;
     /** Ports scanned when looking for a running server. */
     private static final int TT_STATUS_SCAN_FIRST = 7680;
@@ -151,7 +154,7 @@ public class TokenTrackerHandler {
             synchronized (TokenTrackerHandler.class) {
                 RunningServer running = detectRunningServer();
                 if (running != null && running.current) {
-                    return useServer(running.port);
+                    return useServer(running.port, false);
                 }
 
                 CliStatus cli = detectCli();
@@ -166,7 +169,7 @@ public class TokenTrackerHandler {
                     }
                     // No CLI, or the upgrade did not take: keep a running server rather than break the dashboard.
                     if (running != null) {
-                        return useServer(running.port);
+                        return useServer(running.port, false);
                     }
                     if (!cli.installed) {
                         throw new TokenTrackerException("tokentracker_cli_not_installed");
@@ -176,7 +179,7 @@ public class TokenTrackerHandler {
                 // On the old server's port, `serve` stops the outdated server itself (it cannot on
                 // Windows, where the new process exits and a free port is used instead).
                 if (running != null && startServer(cli.binPath, running.port, true)) {
-                    return useServer(running.port);
+                    return useServer(running.port, true);
                 }
 
                 int port = findFreePort();
@@ -187,7 +190,7 @@ public class TokenTrackerHandler {
                 if (!startServer(cli.binPath, port, cliCurrent)) {
                     throw new TokenTrackerException("tokentracker server exited before becoming ready on port " + port);
                 }
-                return useServer(port);
+                return useServer(port, true);
             }
         });
     }
@@ -626,12 +629,66 @@ public class TokenTrackerHandler {
     // Plumbing
     // ------------------------------------------------------------------
 
-    private JsonObject useServer(int port) {
+    /**
+     * @param spawnedByUs true when this plugin just started the server with the current environment;
+     *                    otherwise the server may predate the active Claude config directory.
+     */
+    private JsonObject useServer(int port, boolean spawnedByUs) {
         rememberedPort = port;
+        String active = activeConfigDir();
+        if (spawnedByUs) {
+            recordServerConfigDir(port, active);
+        }
         JsonObject data = new JsonObject();
         data.addProperty("running", true);
         data.addProperty("port", port);
+        if (!spawnedByUs && isConfigDirStale(recordedServerConfigDir(port), active)) {
+            data.addProperty("configDirStale", true);
+        }
         return data;
+    }
+
+    /** The override handed to a spawned server, or "" when none (the default profile). */
+    private static String activeConfigDir() {
+        Path override = ClaudeConfigDir.override();
+        return override == null ? "" : override.toString();
+    }
+
+    /**
+     * True when a running server was started for a different Claude config directory than the
+     * active one. A server with no record counts as started for the default directory.
+     */
+    static boolean isConfigDirStale(String recorded, String active) {
+        String started = recorded == null ? "" : recorded;
+        String wanted = active == null ? "" : active;
+        return !started.equals(wanted);
+    }
+
+    private static String recordedServerConfigDir(int port) {
+        try {
+            String json = PropertiesComponent.getInstance().getValue(TT_SERVER_CONFIG_DIRS_KEY);
+            if (json == null || json.isBlank()) {
+                return null;
+            }
+            JsonObject map = JsonParser.parseString(json).getAsJsonObject();
+            String key = String.valueOf(port);
+            return map.has(key) && map.get(key).isJsonPrimitive() ? map.get(key).getAsString() : null;
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    private static void recordServerConfigDir(int port, String configDir) {
+        try {
+            PropertiesComponent props = PropertiesComponent.getInstance();
+            String json = props.getValue(TT_SERVER_CONFIG_DIRS_KEY);
+            JsonObject map = json == null || json.isBlank()
+                    ? new JsonObject() : JsonParser.parseString(json).getAsJsonObject();
+            map.addProperty(String.valueOf(port), configDir);
+            props.setValue(TT_SERVER_CONFIG_DIRS_KEY, map.toString());
+        } catch (RuntimeException e) {
+            LOG.debug("[TokenTrackerHandler] Failed to record server config dir: " + e.getMessage());
+        }
     }
 
     private boolean isRestrictedHeader(String name) {

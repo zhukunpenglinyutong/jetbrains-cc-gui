@@ -63,4 +63,52 @@ public class ClaudeConfigDirHandlerTest {
         assertNotNull(error);
         assertTrue(error.contains("does not exist"));
     }
+
+    @Test
+    public void wslLinuxPathIsValidatedThroughItsUncForm() throws Exception {
+        File profile = tmp.newFolder("unc-profile");
+        String error = ClaudeConfigDirHandler.validateInput("/home/me/p", tmp.getRoot().getPath(), true,
+                linux -> profile.getPath(), linux -> false);
+        assertNull(error);
+    }
+
+    @Test
+    public void wslLinuxPathFallsBackToAWslDirectoryCheckWhenTheShareSaysMissing() {
+        String missing = tmp.getRoot().toPath().resolve("share-lag").toString();
+        String error = ClaudeConfigDirHandler.validateInput("/home/me/p", tmp.getRoot().getPath(), true,
+                linux -> missing, linux -> linux.equals("/home/me/p"));
+        assertNull(error);
+    }
+
+    @Test
+    public void wslLinuxPathThatExistsNowhereIsRejected() {
+        String missing = tmp.getRoot().toPath().resolve("nowhere").toString();
+        String error = ClaudeConfigDirHandler.validateInput("/home/me/p", tmp.getRoot().getPath(), true,
+                linux -> missing, linux -> false);
+        assertNotNull(error);
+        assertTrue(error.contains("does not exist"));
+    }
+
+    @Test
+    public void unreachableWslIsReportedInsteadOfAcceptingTheValue() {
+        String error = ClaudeConfigDirHandler.validateInput("/home/me/p", tmp.getRoot().getPath(), true,
+                linux -> null, linux -> true);
+        assertNotNull(error);
+        assertTrue(error.contains("WSL"));
+    }
+
+    @Test
+    public void nativeNodeNeverTakesTheWslFallback() throws Exception {
+        String error = ClaudeConfigDirHandler.validateInput(tmp.getRoot().toPath().resolve("absent").toString(),
+                tmp.getRoot().getPath(), false, null, linux -> true);
+        assertNotNull(error);
+        assertTrue(error.contains("does not exist"));
+    }
+
+    @Test
+    public void relativeInputIsRejectedByValidateInput() {
+        String error = ClaudeConfigDirHandler.validateInput("profile", tmp.getRoot().getPath(), false, null, linux -> true);
+        assertNotNull(error);
+        assertTrue(error.contains("absolute"));
+    }
 }
