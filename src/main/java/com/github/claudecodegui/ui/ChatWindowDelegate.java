@@ -30,6 +30,7 @@ import com.github.claudecodegui.handler.provider.CustomModelPricingHandler;
 import com.github.claudecodegui.handler.provider.ModelProviderHandler;
 import com.github.claudecodegui.handler.provider.ProviderHandler;
 import com.github.claudecodegui.handler.provider.claude.ClaudePlanUsageHandler;
+import com.github.claudecodegui.handler.provider.gemini.GeminiPlanUsageHandler;
 import com.github.claudecodegui.handler.provider.grok.GrokPlanUsageHandler;
 import com.github.claudecodegui.handler.provider.omp.OmpApprovalModeHandler;
 import com.github.claudecodegui.handler.provider.omp.OmpPlanUsageHandler;
@@ -570,6 +571,7 @@ public class ChatWindowDelegate {
 
         messageDispatcher.registerHandler(new ProviderHandler(handlerContext));
         messageDispatcher.registerHandler(new ClaudePlanUsageHandler(handlerContext));
+        messageDispatcher.registerHandler(new GeminiPlanUsageHandler(handlerContext));
         messageDispatcher.registerHandler(new GrokPlanUsageHandler(handlerContext));
         messageDispatcher.registerHandler(new OmpPlanUsageHandler(handlerContext));
         messageDispatcher.registerHandler(new OmpApprovalModeHandler(handlerContext, host::persistTabSessionState));
@@ -1042,7 +1044,7 @@ public class ChatWindowDelegate {
     /**
      * Resolves the same configured Claude model mapping used by an explicit model selection
      * (from the conversation's supplier), while retaining v0.5's provider-aware Codex
-     * behavior and the per-provider resolvers (OMP, OpenCode, Grok, custom windows).
+     * behavior and the per-provider resolvers (OMP, OpenCode, Grok, Gemini, custom windows).
      */
     static int resolveModelContextLimitForRecovery(
             String provider,

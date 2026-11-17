@@ -215,6 +215,15 @@ public class ModelProviderHandlerTest {
         assertEquals(1_000_000, ModelProviderHandler.getModelContextLimit("claude-opus-4-6[1m]"));
         // Haiku - no 1M context available
         assertEquals(200_000, ModelProviderHandler.getModelContextLimit("claude-haiku-4-5"));
+        // Gemini models - 1M context window only when provider is gemini
+        assertEquals(200_000, ModelProviderHandler.getModelContextLimit("gemini-4-argon-high"));
+        assertEquals(200_000, ModelProviderHandler.getModelContextLimit("gemini-3.8-flash-high"));
+        assertEquals(200_000, ModelProviderHandler.getModelContextLimit("gemini-3.1-pro-high"));
+        assertEquals(1_000_000, ModelProviderHandler.resolveContextLimit("gemini", "gemini-4-argon-high", null));
+        assertEquals(1_000_000, ModelProviderHandler.resolveContextLimit("gemini", "gemini-3.8-flash-high", null));
+        assertEquals(1_000_000, ModelProviderHandler.resolveContextLimit("gemini", "gemini-3.1-pro-high", null));
+        assertEquals(1_000_000, ModelProviderHandler.resolveContextLimit("gemini", "", null));
+        assertEquals(200_000, ModelProviderHandler.resolveContextLimit("gemini", "claude-sonnet-4-6", null));
     }
 
     @Test
@@ -702,5 +711,12 @@ public class ModelProviderHandlerTest {
         assertEquals(32_768, ModelProviderHandler.resolveContextLimit("opencode", "lmstudio/qwen-project-only",
                 project.toString()));
         assertEquals(200_000, ModelProviderHandler.getModelContextLimit("opencode", "lmstudio/qwen-project-only"));
+    }
+
+    @Test
+    public void geminiPrefixContextLimitAppliesOnlyToGeminiProvider() {
+        assertEquals(1_000_000, ModelProviderHandler.resolveContextLimit("gemini", "gemini-2.5-pro", null));
+        assertEquals(200_000, ModelProviderHandler.resolveContextLimit("claude", "gemini-2.5-pro", null));
+        assertEquals(200_000, ModelProviderHandler.getModelContextLimit("gemini-2.5-pro"));
     }
 }

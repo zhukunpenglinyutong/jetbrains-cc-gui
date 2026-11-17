@@ -65,6 +65,8 @@ export interface ChatControllerModelSlice {
   setCodexPermissionMode: UseWindowCallbacksOptions['setCodexPermissionMode'];
   setSelectedClaudeModel: UseWindowCallbacksOptions['setSelectedClaudeModel'];
   setSelectedCodexModel: UseWindowCallbacksOptions['setSelectedCodexModel'];
+  setSelectedGeminiModel?: UseWindowCallbacksOptions['setSelectedGeminiModel'];
+  setGeminiPermissionMode?: UseWindowCallbacksOptions['setGeminiPermissionMode'];
   setLongContextEnabled: UseWindowCallbacksOptions['setLongContextEnabled'];
   setReasoningEffort: UseWindowCallbacksOptions['setReasoningEffort'];
   setClaudeUltracode?: UseWindowCallbacksOptions['setClaudeUltracode'];
@@ -168,7 +170,7 @@ export const useAppChatController = ({
     currentProviderRef, syncActiveProviderModelMapping,
     setPermissionMode, setCurrentProvider,
     setClaudePermissionMode, setCodexPermissionMode,
-    setSelectedClaudeModel, setSelectedCodexModel,
+    setSelectedClaudeModel, setSelectedCodexModel, setSelectedGeminiModel, setGeminiPermissionMode,
     setLongContextEnabled, setReasoningEffort, setClaudeUltracode, setCodexFastMode,
     setProviderConfigVersion, setActiveProviderConfig,
     setClaudeSettingsAlwaysThinkingEnabled, setStreamingEnabledSetting,
@@ -253,7 +255,7 @@ export const useAppChatController = ({
     setIsThinking, setStreamingActive, setHistoryData,
     setCurrentSessionId, setUsagePercentage, setUsageUsedTokens, setUsageMaxTokens,
     setPermissionMode, setCurrentProvider, setClaudePermissionMode, setCodexPermissionMode,
-    setSelectedClaudeModel, setSelectedCodexModel,
+    setSelectedClaudeModel, setSelectedCodexModel, setSelectedGeminiModel, setGeminiPermissionMode,
     setLongContextEnabled, setReasoningEffort, setClaudeUltracode, setCodexFastMode,
     setProviderConfigVersion, setActiveProviderConfig,
     setClaudeSettingsAlwaysThinkingEnabled, setStreamingEnabledSetting,
@@ -512,7 +514,7 @@ export const useAppChatController = ({
     codexCompactionStartedAt,
     onContinueCodexPlan: handleContinueCodexPlan,
     // Session management
-    createNewSession, loadHistorySession, deleteHistorySession, deleteHistorySessions,
+    createNewSession, forceCreateNewSession, loadHistorySession, deleteHistorySession, deleteHistorySessions,
     exportHistorySession, toggleFavoriteSession, updateHistoryTitle, convertToCliSession,
     showNewSessionConfirm, handleConfirmNewSession, handleCancelNewSession,
     showInterruptConfirm, handleConfirmInterrupt, handleCancelInterrupt,

@@ -509,6 +509,11 @@ interface Window {
   updatePermissionDialogTimeout?: (json: string) => void;
 
   /**
+   * Update the Gemini idle-reap window (minutes) setting
+   */
+  updateGeminiIdleReapMinutes?: (json: string) => void;
+
+  /**
    * Show error message
    */
   showError?: (message: string) => void;

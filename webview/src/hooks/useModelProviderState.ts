@@ -3,6 +3,7 @@ import type { TFunction } from 'i18next';
 import { sendBridgeEvent } from '../utils/bridge';
 import {
   apply1MContextSuffix,
+  GEMINI_DEFAULT_MODEL_ID,
   isValidDshPreset,
   isValidPermissionMode,
 } from '../components/ChatInputBox/types';
@@ -86,6 +87,16 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
       addToast(t('toast.codexSettingsDispatchFailed'), 'error');
     }
   }, [addToast, t]);
+
+  // Gemini model slot: a full catalog slug where family+effort is ONE slug
+  // ('auto' = let the CLI pick its own default).
+  const [selectedGeminiModel, setSelectedGeminiModel] = useState(GEMINI_DEFAULT_MODEL_ID);
+
+  // Gemini mode slot: the CLI natively supports every shared posture including
+  // plan and sandbox, so the choice is persisted un-coerced. Without a slot the
+  // mode rides the shared claude one and a provider switch away and back
+  // silently swaps the user's posture for claude's.
+  const [geminiPermissionMode, setGeminiPermissionMode] = useState<PermissionMode>('default');
 
   // External-facing ref so window callbacks can read the latest provider
   // without re-binding. Mirrored in an effect (bridge callbacks fire async,
@@ -278,6 +289,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     setSelectedPiModel,
     setSelectedOmpModel,
     setSelectedDshModel,
+    setSelectedGeminiModel,
     setGrokPermissionMode,
     setKimiPermissionMode,
     setMiniMaxPermissionMode,
@@ -286,6 +298,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     setPiPermissionMode,
     setOmpPermissionMode,
     setDshPermissionMode,
+    setGeminiPermissionMode,
     setPermissionMode,
     setLongContextEnabled,
     setReasoningEffort,
@@ -309,6 +322,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     selectedPiModel,
     selectedOmpModel,
     selectedDshModel,
+    selectedGeminiModel,
     grokPermissionMode,
     kimiPermissionMode,
     miniMaxPermissionMode,
@@ -317,6 +331,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     piPermissionMode,
     ompPermissionMode,
     dshPermissionMode,
+    geminiPermissionMode,
     longContextEnabled,
     reasoningEffort,
     claudeUltracode,
@@ -340,6 +355,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     pi: selectedPiModel,
     omp: selectedOmpModel,
     dsh: selectedDshModel,
+    gemini: selectedGeminiModel,
   });
   const currentSdkInstalled = useMemo(
     () => isSdkInstalled(currentProvider),
@@ -358,21 +374,24 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
   // the CLI itself and capability decisions come from the native runtime.
   const claudeSdkMeetsMinimum = sdkStatus?.['claude-sdk']?.meetsMinimumVersion;
   const handleModeSelect = useCallback((mode: PermissionMode) => {
+    const normalizedMode: PermissionMode = mode === 'sandbox' && currentProvider !== 'gemini'
+      ? 'default'
+      : mode;
     if (currentProvider === 'codex') {
       // Codex exposes plan as a native collaboration mode while approval
       // policy remains an independent setting carried by the next turn.
-      setPermissionMode(mode);
-      setCodexPermissionMode(mode);
-      const collaborationMode: CodexCollaborationMode = mode === 'plan' ? 'plan' : 'default';
+      setPermissionMode(normalizedMode);
+      setCodexPermissionMode(normalizedMode);
+      const collaborationMode: CodexCollaborationMode = normalizedMode === 'plan' ? 'plan' : 'default';
       setCodexCollaborationMode(collaborationMode);
-      const approvalPreset: CodexApprovalPreset = mode === 'plan'
-          || (mode === 'default' && codexCollaborationMode === 'plan') ? codexApprovalPreset : mode === 'auto'
+      const approvalPreset: CodexApprovalPreset = normalizedMode === 'plan'
+          || (normalizedMode === 'default' && codexCollaborationMode === 'plan') ? codexApprovalPreset : normalizedMode === 'auto'
         ? 'auto'
-        : mode === 'bypassPermissions' ? 'full-access' : 'request';
+        : normalizedMode === 'bypassPermissions' ? 'full-access' : 'request';
       setCodexApprovalPreset(approvalPreset);
       let sandboxSelection = codexSandboxSelection;
       let sandboxSource = codexSandboxSource;
-      if (mode === 'bypassPermissions') {
+      if (normalizedMode === 'bypassPermissions') {
         setCodexSandboxSelection('danger-full-access');
         setCodexSandboxSource('user');
         sandboxSelection = 'danger-full-access';
@@ -390,11 +409,11 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
         sandboxSource = 'user';
       }
       submitCodexSettings({ collaborationMode, approvalPreset, sandboxSelection, sandboxSource });
-      sendBridgeEvent('set_mode', mode);
+      sendBridgeEvent('set_mode', normalizedMode);
       return;
     }
     if (isCliOnlyProvider(currentProvider)) {
-      applyCliModeSelect(currentProvider, mode, {
+      applyCliModeSelect(currentProvider, normalizedMode, {
         setPermissionMode,
         setGrokPermissionMode,
         setKimiPermissionMode,
@@ -404,13 +423,14 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
         setPiPermissionMode,
         setOmpPermissionMode,
         setDshPermissionMode,
+        setGeminiPermissionMode,
         setSelectedOmpModel,
       });
       return;
     }
-    setPermissionMode(mode);
-    setClaudePermissionMode(mode);
-    sendBridgeEvent('set_mode', mode);
+    setPermissionMode(normalizedMode);
+    setClaudePermissionMode(normalizedMode);
+    sendBridgeEvent('set_mode', normalizedMode);
   }, [
     currentProvider,
     codexCollaborationMode,
@@ -433,6 +453,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     setOmpPermissionMode,
     setSelectedOmpModel,
     setDshPermissionMode,
+    setGeminiPermissionMode,
   ]);
 
   /**
@@ -448,6 +469,11 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
   }, [codexCollaborationMode, codexApprovalPreset, submitCodexSettings, setCodexSandboxSelection, setCodexSandboxSource]);
 
   const handleModelSelect = useCallback((modelId: string) => {
+    if (currentProvider === 'gemini') {
+      setSelectedGeminiModel(modelId);
+      sendBridgeEvent('set_model', modelId);
+      return;
+    }
     applyModelSelect(currentProvider, modelId, longContextEnabled, ompRoles, {
       setSelectedClaudeModel,
       setSelectedCodexModel,
@@ -477,6 +503,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     setSelectedOmpModel,
     setOmpPermissionMode,
     setSelectedDshModel,
+    setSelectedGeminiModel,
   ]);
 
   const handleProviderSelect = useCallback((providerId: string) => {
@@ -495,6 +522,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
       pi: piPermissionMode,
       omp: ompPermissionMode,
       dsh: dshPermissionMode,
+      gemini: geminiPermissionMode,
     });
     setPermissionMode(modeToSet);
     // Dynamic omp roles are not in Java's static mode whitelist — the
@@ -514,6 +542,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
       pi: selectedPiModel,
       omp: selectedOmpModel,
       dsh: selectedDshModel,
+      gemini: selectedGeminiModel,
     }, longContextEnabled);
     sendBridgeEvent('set_model', newModel);
   }, [
@@ -527,6 +556,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     piPermissionMode,
     ompPermissionMode,
     dshPermissionMode,
+    geminiPermissionMode,
     selectedCodexModel,
     selectedClaudeModel,
     selectedGrokModel,
@@ -537,6 +567,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     selectedPiModel,
     selectedOmpModel,
     selectedDshModel,
+    selectedGeminiModel,
     longContextEnabled,
   ]);
 
@@ -590,6 +621,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     sdkStatus,
     sdkStatusError: currentSdkStatusError,
     currentProvider, setCurrentProvider,
+    selectedGeminiModel, setSelectedGeminiModel, setGeminiPermissionMode,
     permissionMode, setPermissionMode,
     codexCollaborationMode, setCodexCollaborationMode,
     codexApprovalPreset, setCodexApprovalPreset,

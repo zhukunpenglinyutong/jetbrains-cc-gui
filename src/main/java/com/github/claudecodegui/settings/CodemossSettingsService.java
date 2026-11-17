@@ -121,6 +121,98 @@ public class CodemossSettingsService {
                 Math.min(MAX_HISTORY_LOAD_TIMEOUT_SECONDS, seconds));
     }
 
+    /**
+     * Silence-window (minutes) after which a Gemini turn with no output is
+     * reaped by the ai-bridge watchdog. Strictly above the known-legitimate
+     * silent tool-call tail (20-minute builds); {@code 0} disables automatic
+     * reaping entirely (manual cancel always works).
+     */
+    public static final int DEFAULT_GEMINI_IDLE_REAP_MINUTES = 30;
+
+    /**
+     * Upper bound (minutes) for the Gemini idle reap silence window (24 hours),
+     * preventing 32-bit timer millisecond overflow in the Node.js bridge.
+     */
+    public static final int MAX_GEMINI_IDLE_REAP_MINUTES = 1440;
+
+    /**
+     * Key of the Gemini object in {@code ~/.codemoss/config.json}.
+     */
+    private static final String GEMINI_CONFIG_KEY = "gemini";
+
+    /**
+     * Clamps a numeric Gemini idle reap silence window into {@code [0, MAX_GEMINI_IDLE_REAP_MINUTES]},
+     * rounding positive fractional values in {@code (0, 1)} up to {@code 1}.
+     *
+     * @param minutes Raw idle reap silence window in minutes
+     * @return clamped silence window in minutes ({@code 0} disables reaping)
+     */
+    public static int clampGeminiIdleReapMinutes(double minutes) {
+        if (!Double.isFinite(minutes)) {
+            return DEFAULT_GEMINI_IDLE_REAP_MINUTES;
+        }
+        if (minutes <= 0) {
+            return 0;
+        }
+        if (minutes < 1) {
+            return 1;
+        }
+        if (minutes >= MAX_GEMINI_IDLE_REAP_MINUTES) {
+            return MAX_GEMINI_IDLE_REAP_MINUTES;
+        }
+        return (int) minutes;
+    }
+
+    /**
+     * Reads the configured Gemini idle reap silence window in minutes, clamped to {@code [0, 1440]}.
+     *
+     * @return configured silence window in minutes, or {@link #DEFAULT_GEMINI_IDLE_REAP_MINUTES} when absent or invalid
+     * @throws IOException если не удалось прочитать конфигурационный файл
+     */
+    public int getGeminiIdleReapMinutes() throws IOException {
+        JsonObject config = readConfig();
+        if (!config.has(GEMINI_CONFIG_KEY) || !config.get(GEMINI_CONFIG_KEY).isJsonObject()) {
+            return DEFAULT_GEMINI_IDLE_REAP_MINUTES;
+        }
+        JsonObject gemini = config.getAsJsonObject(GEMINI_CONFIG_KEY);
+        if (!gemini.has("idleReapMinutes") || gemini.get("idleReapMinutes").isJsonNull()) {
+            return DEFAULT_GEMINI_IDLE_REAP_MINUTES;
+        }
+        try {
+            double minutes = gemini.get("idleReapMinutes").getAsDouble();
+            // A hand-edited negative must not become a kill window — fail safe
+            // to disabled, matching the ai-bridge's parse of the same value.
+            return clampGeminiIdleReapMinutes(minutes);
+        } catch (Exception e) {
+            return DEFAULT_GEMINI_IDLE_REAP_MINUTES;
+        }
+    }
+
+    /**
+     * Persists the Gemini idle reap silence window in minutes, clamped to {@code [0, 1440]}.
+     *
+     * @param minutes Silence window in minutes ({@code 0} disables automatic reaping)
+     * @throws IOException если не удалось записать конфигурационный файл
+     */
+    public void setGeminiIdleReapMinutes(int minutes) throws IOException {
+        runConfigTransaction(() -> {
+            JsonObject config = readConfig();
+            JsonObject gemini = config.has(GEMINI_CONFIG_KEY) && config.get(GEMINI_CONFIG_KEY).isJsonObject()
+                    ? config.getAsJsonObject(GEMINI_CONFIG_KEY)
+                    : new JsonObject();
+            int normalized = clampGeminiIdleReapMinutes(minutes);
+            if (normalized == DEFAULT_GEMINI_IDLE_REAP_MINUTES) {
+                // The default is the absent-key reading; keep the file clean.
+                gemini.remove("idleReapMinutes");
+            } else {
+                gemini.addProperty("idleReapMinutes", normalized);
+            }
+            config.add(GEMINI_CONFIG_KEY, gemini);
+            writeConfig(config);
+            LOG.info("[CodemossSettingsService] Set gemini.idleReapMinutes=" + normalized);
+        });
+    }
+
     public String getGrokAuthMethod() throws IOException {
         JsonObject config = readConfig();
         if (!config.has("grok") || config.get("grok").isJsonNull()) {
