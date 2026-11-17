@@ -2,6 +2,7 @@
 package com.github.claudecodegui.bridge;
 
 import com.github.claudecodegui.settings.CodemossSettingsService;
+import com.github.claudecodegui.util.ClaudeConfigDir;
 import com.github.claudecodegui.util.CodexHomeResolver;
 import com.github.claudecodegui.util.PlatformUtils;
 import com.github.claudecodegui.util.ShellExecutor;
@@ -187,7 +188,21 @@ public class EnvironmentConfigurator {
             env.put(CODEX_HOME_ENV, normalizePathForNodeEnvironment(codexHome, isWslNode));
         }
 
+        configureClaudeConfigDirEnv(env, ClaudeConfigDir.override(), isWslNode);
+
         configurePermissionEnv(env, nodeExecutable);
+    }
+
+    /**
+     * Hands the configured Claude config directory to every Node child, so one-shot processes
+     * (session loading, rewind, MCP status) read the same profile the daemon does. A WSL node
+     * cannot use a Windows path, and nothing converts it yet, so it is left out.
+     */
+    static void configureClaudeConfigDirEnv(Map<String, String> env, Path configDir, boolean isWslNode) {
+        if (configDir == null || isWslNode) {
+            return;
+        }
+        env.put(ClaudeConfigDir.ENV_VAR, configDir.toString());
     }
 
     static String resolveHomeForNodeEnvironment(String nodeExecutable, String currentHome) {

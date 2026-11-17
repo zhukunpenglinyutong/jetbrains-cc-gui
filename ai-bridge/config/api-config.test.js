@@ -110,6 +110,7 @@ function buildChildEnv(homeDir) {
     'AWS_ACCESS_KEY_ID',
     'AWS_SECRET_ACCESS_KEY',
     'AWS_SESSION_TOKEN',
+    'CLAUDE_CONFIG_DIR',
   ]) {
     delete env[key];
   }
@@ -117,7 +118,7 @@ function buildChildEnv(homeDir) {
   return env;
 }
 
-function runSetupApiKey(homeDir) {
+function runSetupApiKey(homeDir, extraEnv = {}) {
   const script = `
     import { setupApiKey } from ${JSON.stringify(API_CONFIG_MODULE)};
     try {
@@ -133,7 +134,7 @@ function runSetupApiKey(homeDir) {
     ['--input-type=module', '--eval', script],
     {
       cwd: path.resolve('.'),
-      env: buildChildEnv(homeDir),
+      env: { ...buildChildEnv(homeDir), ...extraEnv },
       encoding: 'utf8',
     }
   );
@@ -958,4 +959,47 @@ test('provider-management contract: both routing layers carry the request in eac
   } finally {
     fs.rmSync(loginHome, { recursive: true, force: true });
   }
+});
+
+test('setupApiKey keeps reading the settings.json the plugin writes when CLAUDE_CONFIG_DIR points elsewhere', () => {
+  const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-api-config-'));
+  const otherProfile = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-other-profile-'));
+  const claudeDir = path.join(tempHome, '.claude');
+  fs.mkdirSync(claudeDir, { recursive: true });
+  writeCodemossClaudeConfig(tempHome, 'provider-a', {
+    'provider-a': { name: 'Provider A', settingsConfig: {} }
+  });
+  fs.writeFileSync(
+    path.join(claudeDir, 'settings.json'),
+    JSON.stringify({
+      env: {
+        ANTHROPIC_AUTH_TOKEN: 'sk-ant-managed-token',
+        ANTHROPIC_BASE_URL: 'https://api.anthropic.com',
+      },
+    }),
+    'utf8'
+  );
+
+  const result = runSetupApiKey(tempHome, { CLAUDE_CONFIG_DIR: otherProfile });
+  assert.equal(result.ok, true);
+  assert.equal(result.result.authType, 'auth_token');
+  assert.equal(result.result.baseUrl, 'https://api.anthropic.com');
+});
+
+test('setupApiKey does not pick up managed credentials from the CLAUDE_CONFIG_DIR profile', () => {
+  const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-api-config-'));
+  const otherProfile = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-other-profile-'));
+  fs.mkdirSync(path.join(tempHome, '.claude'), { recursive: true });
+  writeCodemossClaudeConfig(tempHome, 'provider-a', {
+    'provider-a': { name: 'Provider A', settingsConfig: {} }
+  });
+  fs.writeFileSync(
+    path.join(otherProfile, 'settings.json'),
+    JSON.stringify({ env: { ANTHROPIC_AUTH_TOKEN: 'sk-ant-profile-token' } }),
+    'utf8'
+  );
+
+  const result = runSetupApiKey(tempHome, { CLAUDE_CONFIG_DIR: otherProfile });
+  assert.equal(result.ok, false);
+  assert.equal(result.error, 'API Key not configured');
 });

@@ -21,6 +21,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -573,8 +574,9 @@ public class TokenTrackerHandler {
             ProcessBuilder pb = new ProcessBuilder(
                     bin, "serve", "--no-open", "--port", String.valueOf(port));
             pb.environment().put("TOKENTRACKER_NO_TELEMETRY", "1");
-            if (ClaudeConfigDir.override() != null) {
-                pb.environment().put(ClaudeConfigDir.ENV_VAR, ClaudeConfigDir.current().toString());
+            Path configDir = ClaudeConfigDir.override();
+            if (configDir != null) {
+                pb.environment().put(ClaudeConfigDir.ENV_VAR, configDir.toString());
             }
             // The npm bin shim uses `#!/usr/bin/env node` — make sure node is
             // reachable from the child's PATH even when the IDE's PATH is minimal.

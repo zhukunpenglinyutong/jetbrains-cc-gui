@@ -524,7 +524,7 @@
       "claudeConfigDir": {
         "label": "Claude 配置目录（覆盖）",
         "placeholder": "例如 ~/.claude-work — 留空则使用 CLAUDE_CONFIG_DIR 或 ~/.claude",
-        "hint": "可选。历史记录、会话操作、用量统计和 Claude 进程将读取该目录而非 ~/.claude。请与同一配置的 Claude CLI 路径配合使用。保存时守护进程会重启。"
+        "hint": "可选。历史记录、会话操作和 Claude 进程将读取该目录而非 ~/.claude。用量统计会把该目录与 ~/.claude 合并统计（不按配置区分），并在统计服务下次启动时生效。请使用绝对路径；暂不支持 WSL。请与同一配置的 Claude CLI 路径配合使用。保存时守护进程会重启。"
       },
       "workingDirectory": {
         "label": "工作目录",

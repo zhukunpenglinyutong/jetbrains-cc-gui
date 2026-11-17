@@ -61,7 +61,7 @@ public class ClaudeConfigDirHandler {
                     props.unsetValue(ClaudeConfigDir.CONFIG_DIR_PROPERTY_KEY);
                 } else {
                     failure = validateConfigDir(
-                            ClaudeConfigDir.resolve(pathArg, null, NodeDetector.resolveHomeForFileOps()), pathArg);
+                            ClaudeConfigDir.expand(pathArg, NodeDetector.resolveHomeForFileOps()), pathArg);
                     if (failure == null) {
                         props.setValue(ClaudeConfigDir.CONFIG_DIR_PROPERTY_KEY, pathArg);
                     }
@@ -106,8 +106,11 @@ public class ClaudeConfigDirHandler {
                 context.callJavaScript("window.showError", context.escapeJs(message)));
     }
 
-    /** Returns null when {@code dir} is an existing directory, otherwise a human-readable reason. */
+    /** Returns null when {@code dir} is an existing absolute directory, otherwise a human-readable reason. */
     static String validateConfigDir(Path dir, String rawPath) {
+        if (!dir.isAbsolute()) {
+            return "Path must be absolute: " + rawPath;
+        }
         if (!Files.exists(dir)) {
             return "Directory does not exist: " + rawPath;
         }

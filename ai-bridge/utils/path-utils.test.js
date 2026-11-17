@@ -16,6 +16,7 @@ import {
   getClaudeProjectSessionFileCandidates,
   isMainEntryModule,
   getClaudeDir,
+  getPluginClaudeSettingsPath,
 } from './path-utils.js';
 
 // This test sits in <bridge>/utils/, so the bridge install dir is one level up.
@@ -225,6 +226,19 @@ test('getClaudeDir follows CLAUDE_CONFIG_DIR like the Claude CLI and defaults to
 
     process.env.CLAUDE_CONFIG_DIR = '   ';
     assert.equal(path.basename(getClaudeDir()), '.claude');
+  } finally {
+    if (saved === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+    else process.env.CLAUDE_CONFIG_DIR = saved;
+  }
+});
+
+test('getPluginClaudeSettingsPath is always ~/.claude/settings.json, even when CLAUDE_CONFIG_DIR is set', () => {
+  const saved = process.env.CLAUDE_CONFIG_DIR;
+  try {
+    process.env.CLAUDE_CONFIG_DIR = path.join(os.tmpdir(), 'cfg-work');
+    const expected = path.join(fs.realpathSync(homedir()), '.claude', 'settings.json');
+    assert.equal(getPluginClaudeSettingsPath(), expected);
+    assert.notEqual(path.dirname(getPluginClaudeSettingsPath()), getClaudeDir());
   } finally {
     if (saved === undefined) delete process.env.CLAUDE_CONFIG_DIR;
     else process.env.CLAUDE_CONFIG_DIR = saved;

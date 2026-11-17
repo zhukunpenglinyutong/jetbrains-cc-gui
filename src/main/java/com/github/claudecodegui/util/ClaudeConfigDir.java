@@ -3,6 +3,7 @@ package com.github.claudecodegui.util;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.intellij.ide.util.PropertiesComponent;
 
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
@@ -12,7 +13,8 @@ import java.nio.file.Paths;
  * <p>Mirrors the Claude CLI: {@code CLAUDE_CONFIG_DIR} replaces {@code ~/.claude}. A plugin
  * setting takes precedence so a profile chosen via "Claude CLI Path (override)" can be paired
  * with its own data directory. Order: plugin setting, then the IDE's {@code CLAUDE_CONFIG_DIR},
- * then {@code ~/.claude}.
+ * then {@code ~/.claude}. A candidate that is not an absolute path after {@code ~} expansion is
+ * ignored, because a relative directory would depend on each process's working directory.
  */
 public final class ClaudeConfigDir {
 
@@ -23,24 +25,45 @@ public final class ClaudeConfigDir {
     private ClaudeConfigDir() {
     }
 
-    /** Pure resolution, independent of IDE services. Blank values are treated as unset. */
-    public static Path resolve(String configured, String envValue, String home) {
-        String raw = firstNonBlank(configured, envValue);
-        if (raw == null) {
-            return Paths.get(home, DEFAULT_DIR_NAME);
-        }
-        if (raw.equals("~")) {
+    /** Expands a leading {@code ~} against {@code home}. Does not check that the result is absolute. */
+    public static Path expand(String raw, String home) {
+        String value = raw.trim();
+        if (value.equals("~")) {
             return Paths.get(home);
         }
-        if (raw.startsWith("~/") || raw.startsWith("~\\")) {
-            return Paths.get(home, raw.substring(2));
+        if (value.startsWith("~/") || value.startsWith("~\\")) {
+            return Paths.get(home, value.substring(2));
         }
-        return Paths.get(raw);
+        return Paths.get(value);
+    }
+
+    /** The first usable explicit directory (setting, then env), or null when the default applies. */
+    public static Path explicit(String configured, String envValue, String home) {
+        for (String candidate : new String[] {configured, envValue}) {
+            if (candidate == null || candidate.trim().isEmpty()) {
+                continue;
+            }
+            try {
+                Path path = expand(candidate, home);
+                if (path.isAbsolute()) {
+                    return path;
+                }
+            } catch (InvalidPathException ignored) {
+                // An unusable value is treated as unset.
+            }
+        }
+        return null;
+    }
+
+    /** Pure resolution, independent of IDE services. */
+    public static Path resolve(String configured, String envValue, String home) {
+        Path explicit = explicit(configured, envValue, home);
+        return explicit != null ? explicit : Paths.get(home, DEFAULT_DIR_NAME);
     }
 
     /** The explicitly chosen directory (setting, else env), or null when the default applies. */
-    public static String override() {
-        return firstNonBlank(readSetting(), System.getenv(ENV_VAR));
+    public static Path override() {
+        return explicit(readSetting(), System.getenv(ENV_VAR), NodeDetector.resolveHomeForFileOps());
     }
 
     /** Resolve at call time so a changed setting is honoured without a restart. */
@@ -54,15 +77,5 @@ public final class ClaudeConfigDir {
         } catch (RuntimeException e) {
             return null;
         }
-    }
-
-    private static String firstNonBlank(String a, String b) {
-        if (a != null && !a.trim().isEmpty()) {
-            return a.trim();
-        }
-        if (b != null && !b.trim().isEmpty()) {
-            return b.trim();
-        }
-        return null;
     }
 }
