@@ -937,6 +937,47 @@ describe('useSessionManagement', () => {
     expect(sentTransition('load_session')).toMatchObject({"sessionId":"hist-codex","provider":"codex","model":"gpt-5.4"});
   });
 
+  it('codex same-session selection soft-reloads without a session transition', () => {
+    const historyData = {
+      success: true,
+      sessions: [
+        {
+          sessionId: 'thread-current',
+          title: 'Current Codex Session',
+          provider: 'codex',
+          messageCount: 2,
+          lastTimestamp: Date.now(),
+        },
+      ],
+      total: 1,
+    } as unknown as HistoryData;
+
+    const mocks = createMocks();
+
+    const { result } = renderHook(() =>
+      useSessionManagement({
+        messages: [],
+        loading: false,
+        historyData,
+        currentSessionId: 'thread-current',
+        currentProvider: 'codex',
+        ...mocks,
+        t,
+      })
+    );
+
+    act(() => {
+      result.current.loadHistorySession('thread-current', 'codex');
+    });
+
+    // The in-place refresh never holds the transition guard or resets messages:
+    // a live turn keeps streaming and stays stoppable across the reload.
+    expect(window.__sessionTransitioning).toBe(false);
+    expect(window.__sessionTransitionToken).toBe(null);
+    expect(sentTransition('load_session')).toMatchObject({ sessionId: 'thread-current', provider: 'codex' });
+    expect(mocks.setMessages).not.toHaveBeenCalledWith([]);
+  });
+
   it('loadHistorySession falls back to current provider when history item has no provider', () => {
     const historyData = {
       success: true,

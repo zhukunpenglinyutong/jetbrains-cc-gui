@@ -680,6 +680,39 @@ public class HistoryMessageInjectorTest {
         }
     }
 
+    /** A tokened same-session replacement waits for native work even after the UI busy flag clears. */
+    @Test
+    public void fullCodexReloadWaitsForTheCurrentTurnToStopAndPreservesFailures() {
+        for (boolean busy : List.of(false, true)) {
+            HandlerContext context = new HandlerContext(null, null, null, null, null);
+            CompletableFuture<Void> stopped = new CompletableFuture<>();
+            ClaudeSession session = new ClaudeSession(null, null, null, null) {
+                /** Keep replacement pending until the native stop has settled. */
+                @Override
+                public CompletableFuture<Void> interrupt() {
+                    return stopped;
+                }
+            };
+            session.setProvider("codex");
+            session.setSessionInfo("thread-current", "/project");
+            session.getState().beginTurn();
+            session.getState().setBusy(busy);
+            context.setSession(session);
+            HistoryMessageInjector injector = new HistoryMessageInjector(context);
+
+            CompletableFuture<Boolean> quiesced = injector.quiesceForCodexHistory(
+                    injector.invalidateCodexHistory(), session, "thread-current");
+            assertFalse(quiesced.isDone());
+            if (busy) {
+                stopped.completeExceptionally(new IllegalStateException("Writer still active"));
+                assertTrue(quiesced.isCompletedExceptionally());
+            } else {
+                stopped.complete(null);
+                assertTrue(quiesced.join());
+            }
+        }
+    }
+
     @Test
     public void historyRequestsRetainTheirTokensAcrossProviderDispatch() {
         RecordingHistoryMessageInjector injector = new RecordingHistoryMessageInjector(createContext("D:/project/demo"));
@@ -785,6 +818,84 @@ public class HistoryMessageInjectorTest {
         );
 
         assertEquals("hist-codex", injector.loadedCodexSessionId);
+        assertFalse(callbackInvoked[0]);
+    }
+
+    /** Re-opening the active Codex thread refreshes in place; the destructive reload must not run. */
+    @Test
+    public void codexSameSessionSelectionRoutesToTheInPlaceSoftReload() {
+        HandlerContext context = createContext("D:/project/demo");
+        ClaudeSession current = new ClaudeSession(null, null, null, null);
+        current.setProvider("codex");
+        current.setSessionInfo("thread-current", "D:/project/demo");
+        context.setSession(current);
+        RecordingHistoryMessageInjector injector = new RecordingHistoryMessageInjector(context);
+        String[] forwarded = new String[2];
+
+        injector.handleLoadSession(
+                "{\"sessionId\":\"thread-current\",\"provider\":\"codex\"}",
+                "codex",
+                (sessionId, projectPath, provider, model) -> {
+                    forwarded[0] = sessionId;
+                    forwarded[1] = provider;
+                }
+        );
+
+        assertEquals("thread-current", forwarded[0]);
+        assertEquals("codex", forwarded[1]);
+        assertNull("The clear-and-restore load must stay untouched for the live session",
+                injector.loadedCodexSessionId);
+    }
+
+    /** A soft reload must retain the reader behind the page's native continuation cursor. */
+    @Test
+    public void codexSoftReloadPreservesTheNativePageReaderAndFencesPendingLoads() throws Exception {
+        HandlerContext context = createContext("D:/project/demo");
+        ClaudeSession current = new ClaudeSession(null, null, null, null);
+        current.setProvider("codex");
+        current.setSessionInfo("thread-current", "D:/project/demo");
+        context.setSession(current);
+        RecordingHistoryMessageInjector injector = new RecordingHistoryMessageInjector(context);
+        long pendingGeneration = injector.invalidateCodexHistory();
+        var readerField = HistoryMessageInjector.class.getDeclaredField("nativeHistoryReader");
+        readerField.setAccessible(true);
+        var reader = new com.github.claudecodegui.provider.codex.CodexNativeHistoryReader(
+                null, current.getChannelId(), current.getCwd(), current.getSessionId());
+        readerField.set(injector, reader);
+        var cursorField = HistoryMessageInjector.class.getDeclaredField("nativeHistoryCursor");
+        cursorField.setAccessible(true);
+        JsonPrimitive cursor = new JsonPrimitive("opaque:older");
+        cursorField.set(injector, cursor);
+        java.util.concurrent.atomic.AtomicInteger retiredSelections = new java.util.concurrent.atomic.AtomicInteger();
+        injector.setCodexSessionSelectionListener(retiredSelections::incrementAndGet);
+
+        injector.handleLoadSession("{\"sessionId\":\"thread-current\",\"provider\":\"codex\"}", "codex", (id, cwd, provider, model) -> { });
+
+        assertEquals(reader, readerField.get(injector));
+        assertEquals(cursor, cursorField.get(injector));
+        assertEquals(0, retiredSelections.get());
+        injector.publishIfCurrent(pendingGeneration, () -> fail("A pending restore must not overwrite the soft reload"));
+    }
+
+    /** Same-session selection still performs the full swap while a transition token is present. */
+    @Test
+    public void codexSameSessionSelectionWithTransitionTokenKeepsTheFullLoad() {
+        HandlerContext context = createContext("D:/project/demo");
+        ClaudeSession current = new ClaudeSession(null, null, null, null);
+        current.setProvider("codex");
+        current.setSessionInfo("thread-current", "D:/project/demo");
+        context.setSession(current);
+        RecordingHistoryMessageInjector injector = new RecordingHistoryMessageInjector(context);
+        boolean[] callbackInvoked = {false};
+
+        injector.handleLoadSession(
+                "{\"sessionId\":\"thread-current\",\"provider\":\"codex\",\"transitionToken\":\"request-R\"}",
+                "codex",
+                (sessionId, projectPath, provider, model) -> callbackInvoked[0] = true
+        );
+
+        assertEquals("thread-current", injector.loadedCodexSessionId);
+        assertEquals("request-R", injector.loadedTransitionToken);
         assertFalse(callbackInvoked[0]);
     }
 

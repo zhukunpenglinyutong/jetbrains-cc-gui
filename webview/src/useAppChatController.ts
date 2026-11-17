@@ -330,6 +330,13 @@ export const useAppChatController = ({
 
   // ── Message queue ──
   const sessionTransitionPending = useSyncExternalStore(subscribeSessionTransition, getSessionTransitionPending);
+  // A dispatch refused by the imperative transition guard (which can observe
+  // `pending` before this reactive snapshot updates) must retry once the
+  // transition ends: only a changed retryKey re-opens a refused queue item.
+  const queueDispatchRetryKey = useMemo(
+    () => ({ sender: queueRetryKey, transitionPending: sessionTransitionPending }),
+    [queueRetryKey, sessionTransitionPending],
+  );
   const {
     queue: messageQueue,
     enqueue: enqueueMessage,
@@ -339,7 +346,7 @@ export const useAppChatController = ({
     clearQueue,
     reorder: reorderMessageQueue,
   } = useMessageQueue({ isLoading: loading || codexTurnActive || codexPlanExecutionPending || codexCompactionPending || reasoningCapabilitiesUnconfirmed || sessionTransitionPending,
-    onExecute: hookHandleSubmit, retryKey: queueRetryKey });
+    onExecute: hookHandleSubmit, retryKey: queueDispatchRetryKey });
 
   // The edit flow has to look at a queued message before it removes it.
   const queuedEditSource = useMemo(

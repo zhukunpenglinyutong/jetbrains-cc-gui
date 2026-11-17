@@ -3637,8 +3637,8 @@ public class ClaudeChatWindow {
      * <p>Used when the user re-opens the session that is already active: instead
      * of tearing it down (interrupt + recreate), we merely refresh the transcript
      * so the latest on-disk state is reflected. Reuses the {@code session_updated}
-     * reload path (coalescing + isSessionActive guard), and defers to stream end
-     * when a turn is live so the streaming bubble is never disturbed.</p>
+     * reload path (coalescing + isSessionActive guard), and waits for idle work
+     * and its final snapshot so pre-stream and non-streaming turns remain intact.</p>
      */
     void reloadActiveSessionMessages() {
         ApplicationManager.getApplication().invokeLater(() -> {
@@ -3655,13 +3655,12 @@ public class ClaudeChatWindow {
                 callJavaScript("historyLoadComplete", "0");
                 return;
             }
-            if (streamCoalescer != null && streamCoalescer.isStreamActive()) {
-                deferredReload.defer(currentId);
-                LOG.info("[ClaudeChatWindow] Same-session resume deferred — "
-                        + "turn streaming, will reload at stream end, sessionId=" + currentId);
-                // Frontend may have begun a transition (cleared the list). Release the
-                // guard now so a later deferred reload can paint; if the list is empty
-                // the stream-end drain will repopulate it.
+            if (current.isBusy() || (this.streamCoalescer != null
+                    && (this.streamCoalescer.isStreamActive() || this.streamCoalescer.isSnapshotBuildPending()))) {
+                this.deferredReload.defer(currentId);
+                // Pre-stream and non-streaming work may never produce a stream-end edge.
+                this.scheduleDeferredReloadSafetyDrain();
+                LOG.info("[ClaudeChatWindow] Same-session resume deferred until the turn is idle, sessionId=" + currentId);
                 callJavaScript("historyLoadComplete", String.valueOf(current.getMessages().size()));
                 return;
             }

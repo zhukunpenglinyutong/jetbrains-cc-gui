@@ -110,8 +110,6 @@ public class HistoryMessageInjector {
      * Load a history session.
      */
     void handleLoadSession(String sessionId, String currentProvider, HistoryHandler.SessionLoadCallback sessionLoadCallback) {
-        // Every session selection invalidates asynchronous Codex loads from the previous selection.
-        invalidateCodexHistory();
         String provider = currentProvider;
         String resolvedSessionId = sessionId;
         String model = null;
@@ -139,8 +137,21 @@ public class HistoryMessageInjector {
         } catch (Exception ignored) {
             // Backward compatible: legacy payload is the raw sessionId string.
         }
-        if ("codex".equals(provider)) {
-            codexSessionSelectionListener.run();
+
+        // Refresh the active thread without retiring its running writer.
+        ClaudeSession currentSession = context.getSession();
+        boolean codexSoftReloadSelection = "codex".equals(provider)
+                && transitionToken == null && sessionLoadCallback != null
+                && currentSession != null && "codex".equals(currentSession.getProvider())
+                && resolvedSessionId != null && resolvedSessionId.equals(currentSession.getSessionId());
+        if (codexSoftReloadSelection) {
+            // The page still needs its continuation reader while the refresh is deferred or fails.
+            this.fencePendingCodexLoads();
+        } else {
+            this.invalidateCodexHistory();
+            if ("codex".equals(provider)) {
+                this.codexSessionSelectionListener.run();
+            }
         }
 
         String rawPath = context.resolveEffectiveWorkingDirectory();
@@ -160,6 +171,11 @@ public class HistoryMessageInjector {
                 + (model != null ? ", model: " + model : ""));
 
         if ("codex".equals(provider)) {
+            if (codexSoftReloadSelection) {
+                LOG.info("[HistoryHandler] Codex same-session resume, soft-reloading transcript: " + resolvedSessionId);
+                sessionLoadCallback.onLoadSession(resolvedSessionId, projectPath, provider, model, null);
+                return;
+            }
             // Codex session: read session info and restore session state
             if (transitionToken == null) {
                 loadCodexSession(resolvedSessionId, model);
@@ -276,6 +292,10 @@ public class HistoryMessageInjector {
                     }
                     return true;
                 });
+            }
+            // A tokened replacement resets the page, so settle live work before restoring its snapshot.
+            if (activeSession.isBusy() || activeSession.getState().getExecutionState().hasLiveTurn()) {
+                return activeSession.interrupt().thenApply(ignored -> true);
             }
             return CompletableFuture.completedFuture(true);
         }

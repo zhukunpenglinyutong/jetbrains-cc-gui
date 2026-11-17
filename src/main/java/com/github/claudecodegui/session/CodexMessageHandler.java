@@ -133,6 +133,11 @@ public class CodexMessageHandler implements MessageCallback {
     @Override
     public void onMessage(String type, String content) {
         synchronized (state.getMessageStateLock()) {
+            // Channel events outlive their turn; only their session mutations require current ownership.
+            if ("codex_runtime_event".equals(type)) {
+                this.handleRuntimeEvent(content);
+                return;
+            }
             if (!ownsBindingAndTurn()) {
                 return;
             }
@@ -185,8 +190,6 @@ public class CodexMessageHandler implements MessageCallback {
                 }
             } else if ("message_end".equals(type)) {
                 handleMessageEnd();
-            } else if ("codex_runtime_event".equals(type)) {
-                handleRuntimeEvent(content);
             } else {
                 LOG.debug("CodexMessageHandler: Unhandled message type: " + type);
             }
@@ -312,16 +315,18 @@ public class CodexMessageHandler implements MessageCallback {
             return;
         }
         JsonObject event = parsed.getAsJsonObject();
-        observeNativeInteraction(event);
-        if ("thread/settings/updated".equals(stringProperty(event, "kind"))
-                && state.getSessionId() != null && state.getSessionId().equals(stringProperty(event, "threadId"))
-                && event.has("payload") && event.get("payload").isJsonObject()) {
-            String cwd = stringProperty(event.getAsJsonObject("payload"), "cwd");
-            if (!state.isCodexCwdExplicit() && cwd != null && !cwd.isBlank()) {
-                state.setCwd(cwd);
+        if (this.ownsBindingAndTurn()) {
+            this.observeNativeInteraction(event);
+            if ("thread/settings/updated".equals(stringProperty(event, "kind"))
+                    && this.state.getSessionId() != null && this.state.getSessionId().equals(stringProperty(event, "threadId"))
+                    && event.has("payload") && event.get("payload").isJsonObject()) {
+                String cwd = stringProperty(event.getAsJsonObject("payload"), "cwd");
+                if (!this.state.isCodexCwdExplicit() && cwd != null && !cwd.isBlank()) {
+                    this.state.setCwd(cwd);
+                }
             }
         }
-        callbackHandler.notifyCodexRuntimeEvent(content);
+        this.callbackHandler.notifyCodexRuntimeEvent(content);
     }
 
     private static String stringProperty(JsonObject object, String name) {

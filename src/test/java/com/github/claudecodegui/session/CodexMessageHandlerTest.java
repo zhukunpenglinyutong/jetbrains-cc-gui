@@ -106,6 +106,9 @@ public class CodexMessageHandlerTest {
         // Story 1.9: records the context-ring notifications (used, max) so the
         // [USAGE]-marker path can be asserted end to end.
         final List<int[]> usageUpdates = new ArrayList<>();
+        // Records structured runtime events so tests can assert the channel-scoped
+        // forwarding survives a binding rebind.
+        final List<String> codexRuntimeEvents = new ArrayList<>();
 
         @Override
         public void onMessageUpdate(List<Message> messages) {
@@ -178,6 +181,11 @@ public class CodexMessageHandlerTest {
         public void onThinkingDelta(String delta) {
             thinkingDeltas.add(delta);
         }
+
+        @Override
+        public void onCodexRuntimeEvent(String eventJson) {
+            codexRuntimeEvents.add(eventJson);
+        }
     }
 
     @Test
@@ -244,6 +252,81 @@ public class CodexMessageHandlerTest {
         assertTrue(state.isLoading());
         assertEquals(0, recorded.stateChangeCount);
         assertEquals(0, recorded.messageUpdateCount);
+    }
+
+    /** Channel-scoped runtime events must survive a binding rebind or the queue gate sticks shut. */
+    @Test
+    public void orphanedHandlerStillForwardsCodexRuntimeEvents() {
+        SessionState state = new SessionState();
+        CallbackHandler callbacks = new CallbackHandler();
+        RecordingCallback recorded = new RecordingCallback();
+        callbacks.setCallback(recorded);
+        state.beginTurn();
+        CodexMessageHandler orphaned = new CodexMessageHandler(state, callbacks);
+
+        // A restored session, provider switch or newer send rebinds the execution
+        // while the previous native operation is still unsettled; its operationDone
+        // arrives at this still-registered handler.
+        state.rotateRuntimeSessionEpoch();
+
+        orphaned.onMessage("codex_runtime_event",
+                "{\"kind\":\"operationDone\",\"clientOperationId\":\"op-1\",\"payload\":{\"outcome\":\"completed\"}}");
+
+        assertEquals(1, recorded.codexRuntimeEvents.size());
+        assertTrue(recorded.codexRuntimeEvents.get(0).contains("operationDone"));
+
+        // Session message flow stays fenced to the current binding.
+        orphaned.onMessage("assistant",
+                "{\"codexSnapshot\":true,\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"late output\"}]}}");
+        assertEquals(0, recorded.messageUpdateCount);
+    }
+
+    /** Forwarding a channel event cannot give a retired handler authority over the new binding. */
+    @Test
+    public void orphanedRuntimeSettingsCannotChangeTheCurrentWorkingDirectory() {
+        SessionState state = new SessionState();
+        state.setSessionId("thread-current");
+        state.setCwd("/current");
+        state.beginTurn();
+        CallbackHandler callbacks = new CallbackHandler();
+        RecordingCallback recorded = new RecordingCallback();
+        callbacks.setCallback(recorded);
+        CodexMessageHandler orphaned = new CodexMessageHandler(state, callbacks);
+        state.rotateRuntimeSessionEpoch();
+        state.beginTurn();
+
+        orphaned.onMessage("codex_runtime_event",
+                "{\"kind\":\"thread/settings/updated\",\"threadId\":\"thread-current\",\"payload\":{\"cwd\":\"/retired\"}}");
+
+        assertEquals("/current", state.getCwd());
+        assertEquals(1, recorded.codexRuntimeEvents.size());
+        assertEquals(SessionExecutionState.Phase.RUNNING, state.getExecutionSnapshot().phase());
+    }
+
+    /** Native interaction and settings updates share the message lock with completion and rebind. */
+    @Test
+    public void ownedRuntimeEventsUpdateStateUnderTheMessageLock() {
+        SessionState state = new SessionState() {
+            /** Verify that a native settings update cannot race a binding replacement. */
+            @Override
+            public void setCwd(String cwd) {
+                assertTrue(Thread.holdsLock(this.getMessageStateLock()));
+                super.setCwd(cwd);
+            }
+        };
+        state.setSessionId("thread-current");
+        state.beginTurn();
+        CodexMessageHandler handler = new CodexMessageHandler(state, new CallbackHandler());
+
+        handler.onMessage("codex_runtime_event",
+                "{\"kind\":\"thread/settings/updated\",\"threadId\":\"thread-current\",\"payload\":{\"cwd\":\"/native\"}}");
+        assertEquals("/native", state.getCwd());
+        handler.onMessage("codex_runtime_event", """
+                {"kind":"interactionRequested","interactionKey":"approval","payload":{"method":"item/commandExecution/requestApproval"}}
+                """);
+        assertEquals(SessionExecutionState.Phase.WAITING_USER, state.getExecutionSnapshot().phase());
+        handler.onMessage("codex_runtime_event", "{\"kind\":\"interactionResolved\",\"interactionKey\":\"approval\"}");
+        assertEquals(SessionExecutionState.Phase.RUNNING, state.getExecutionSnapshot().phase());
     }
 
     @Test
