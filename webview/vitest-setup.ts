@@ -1,10 +1,8 @@
-import { vi } from 'vitest';
-
-// Newer Node.js releases expose their own Web Storage on globalThis. It differs from the
-// browser Storage the code under test runs against: localStorage may lack methods such as
-// clear() unless --localstorage-file is set, and sessionStorage turns vi.spyOn(storage,
-// 'setItem') into a stored item instead of replacing the method. Replace any storage that
-// does not behave like a browser one with a spec-shaped in-memory Storage.
+// Node.js 25+ exposes its own Web Storage on globalThis, and it shadows happy-dom's. The tests
+// are written against happy-dom's: localStorage from Node may lack methods such as clear()
+// unless --localstorage-file is set, and Node's sessionStorage turns vi.spyOn(storage,
+// 'setItem') into a stored item instead of replacing the method. Replace any storage that is
+// not happy-dom's with an in-memory Storage that lists its items as keys and can be spied on.
 const METHOD_NAMES = new Set(['getItem', 'setItem', 'removeItem', 'clear', 'key', 'length']);
 
 function createStorage(): Storage {
@@ -41,7 +39,7 @@ function createStorage(): Storage {
       return true;
     },
     has(t, prop) {
-      return typeof prop === 'symbol' || prop in t || items.has(prop);
+      return prop in t || (typeof prop === 'string' && items.has(prop));
     },
     ownKeys() {
       return [...items.keys()];
@@ -55,31 +53,6 @@ function createStorage(): Storage {
   }) as unknown as Storage;
 }
 
-/** True when the storage has the methods, lists its items as keys and lets tests spy on setItem. */
-function behavesLikeBrowserStorage(storage: Storage | undefined): boolean {
-  if (!storage || typeof storage.clear !== 'function') return false;
-  try {
-    storage.clear();
-    storage.setItem('__vitest_probe__', '1');
-    const listsItems = Object.keys(storage).includes('__vitest_probe__');
-    storage.clear();
-    const spy = vi.spyOn(storage, 'setItem').mockImplementation(() => {
-      throw new Error('probe');
-    });
-    let spyable = false;
-    try {
-      storage.setItem('__vitest_probe__', '2');
-    } catch {
-      spyable = true;
-    }
-    spy.mockRestore();
-    storage.clear();
-    return listsItems && spyable;
-  } catch {
-    return false;
-  }
-}
-
 for (const name of ['localStorage', 'sessionStorage'] as const) {
   let current: Storage | undefined;
   try {
@@ -87,7 +60,11 @@ for (const name of ['localStorage', 'sessionStorage'] as const) {
   } catch {
     current = undefined;
   }
-  if (!behavesLikeBrowserStorage(current)) {
+  // Keep the DOM environment's own storage (happy-dom or jsdom); Node's is not an instance of
+  // that Storage class. No probe here: spying on happy-dom's setItem leaves a mock behind.
+  // shortcut: under `@vitest-environment node` on Node 25+, Storage is Node's class and its
+  // sessionStorage is kept; add a check if a node-environment test ever needs storage.
+  if (!(typeof Storage === 'function' && current instanceof Storage)) {
     Object.defineProperty(globalThis, name, {
       value: createStorage(),
       writable: true,
