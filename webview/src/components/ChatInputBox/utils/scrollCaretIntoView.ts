@@ -1,3 +1,5 @@
+import { getAppViewport } from '../../../utils/viewport.js';
+
 /**
  * Keep the contenteditable caret inside its scrolling wrapper after an edit.
  * The wrapper owns scrolling, so scrolling the editable element itself would
@@ -35,12 +37,18 @@ export function scrollCaretIntoView(editable: HTMLElement | null): void {
   if (!caretRect) return;
 
   const wrapperRect = wrapper.getBoundingClientRect();
-  const visibleTop = wrapperRect.top + wrapper.clientTop;
-  const visibleBottom = visibleTop + wrapper.clientHeight;
+  const { fixedPosDivisor: scale } = getAppViewport();
+  const style = getComputedStyle(wrapper);
+  const paddingTop = parseFloat(style.paddingTop) || 0;
+  const paddingBottom = parseFloat(style.paddingBottom) || 0;
+  // Range rects follow app zoom, but client dimensions and scrollTop use logical
+  // pixels. Keep the wrapper's padding clear so the caret stays above the toolbar.
+  const visibleTop = wrapperRect.top + (wrapper.clientTop + paddingTop) * scale;
+  const visibleBottom = wrapperRect.top + (wrapper.clientTop + wrapper.clientHeight - paddingBottom) * scale;
 
   if (caretRect.top < visibleTop) {
-    wrapper.scrollTop -= visibleTop - caretRect.top;
+    wrapper.scrollTop -= (visibleTop - caretRect.top) / scale;
   } else if (caretRect.bottom > visibleBottom) {
-    wrapper.scrollTop += caretRect.bottom - visibleBottom;
+    wrapper.scrollTop += (caretRect.bottom - visibleBottom) / scale;
   }
 }

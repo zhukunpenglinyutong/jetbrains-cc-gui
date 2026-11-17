@@ -126,4 +126,47 @@ describe('scrollCaretIntoView', () => {
 
     expect(wrapper.scrollTop).toBe(520);
   });
+
+  it.each([0.8, 0.9, 1, 1.4])('keeps bottom padding clear at %s app zoom', (zoom) => {
+    const app = document.createElement('div');
+    app.id = 'app';
+    app.style.zoom = String(zoom);
+    const wrapper = document.createElement('div');
+    wrapper.style.padding = '6px';
+    const editable = document.createElement('div');
+    wrapper.append(editable);
+    app.append(wrapper);
+    document.body.append(app);
+    mockRect(app, { height: window.innerHeight });
+    Object.defineProperty(wrapper, 'clientHeight', { configurable: true, value: 100 });
+    mockRect(wrapper, { top: 200, bottom: 200 + 100 * zoom, height: 100 * zoom });
+    createSelection(editable);
+    mockCaretRect({ top: 200 + 82 * zoom, bottom: 200 + 102 * zoom });
+
+    scrollCaretIntoView(editable);
+
+    expect(wrapper.scrollTop).toBeCloseTo(8);
+  });
+
+  it('converts upward scrolling to logical pixels at reduced app zoom', () => {
+    const app = document.createElement('div');
+    app.id = 'app';
+    app.style.zoom = '0.8';
+    const wrapper = document.createElement('div');
+    wrapper.style.padding = '6px';
+    const editable = document.createElement('div');
+    wrapper.append(editable);
+    app.append(wrapper);
+    document.body.append(app);
+    mockRect(app, { height: window.innerHeight });
+    Object.defineProperty(wrapper, 'clientHeight', { configurable: true, value: 100 });
+    wrapper.scrollTop = 50;
+    mockRect(wrapper, { top: 200, bottom: 280, height: 80 });
+    createSelection(editable);
+    mockCaretRect({ top: 200 - 2 * 0.8, bottom: 200 + 18 * 0.8 });
+
+    scrollCaretIntoView(editable);
+
+    expect(wrapper.scrollTop).toBeCloseTo(42);
+  });
 });
