@@ -19,6 +19,34 @@ async function sentMessages(page: Page) {
   return page.evaluate(() => (window as InputTestWindow).__sentMessages);
 }
 
+test('keeps a blank-line caret visible in a long draft after input', async ({ page }) => {
+  const position = await page.locator('.input-editable').evaluate((editable) => {
+    editable.innerHTML = '<div>draft line</div>'.repeat(30) + '<div><br></div>';
+    (editable as HTMLElement).focus();
+    const wrapper = editable.parentElement!;
+    wrapper.scrollTop = wrapper.scrollHeight;
+    const line = editable.lastElementChild!;
+    const range = document.createRange();
+    range.setStart(line, 0);
+    range.collapse(true);
+    window.getSelection()!.removeAllRanges();
+    window.getSelection()!.addRange(range);
+    // This is the Chromium case that a mocked, nonempty Range rectangle misses.
+    const collapsedRectCount = range.getClientRects().length;
+    editable.dispatchEvent(new InputEvent('input', { inputType: 'insertParagraph', bubbles: true }));
+    return {
+      collapsedRectCount,
+      caretBottom: line.getBoundingClientRect().bottom,
+      visibleTop: wrapper.getBoundingClientRect().top,
+      visibleBottom: wrapper.getBoundingClientRect().top + wrapper.clientHeight,
+    };
+  });
+
+  expect(position.collapsedRectCount).toBe(0);
+  expect(position.caretBottom).toBeGreaterThan(position.visibleTop);
+  expect(position.caretBottom).toBeLessThanOrEqual(position.visibleBottom);
+});
+
 test.beforeEach(async ({ page }) => {
   await page.addInitScript((appVersion) => {
     localStorage.setItem('lastSeenChangelogVersion', appVersion);
