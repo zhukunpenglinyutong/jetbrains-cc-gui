@@ -256,9 +256,9 @@
         "hint": "वैकल्पिक। सेट करने पर, प्लगइन अंतर्निहित @anthropic-ai/claude-agent-sdk के बजाय इस बाइनरी को चलाता है। सहेजने पर डेमॉन पुनः आरंभ होता है।"
       },
       "claudeConfigDir": {
-        "label": "Claude Config Directory (override)",
-        "placeholder": "e.g. ~/.claude-work — leave empty to use CLAUDE_CONFIG_DIR or ~/.claude",
-        "hint": "Optional. Chat history, session actions and the Claude process read this directory instead of ~/.claude. Usage statistics add it to ~/.claude (combined, not per profile) and pick it up when the statistics server next starts. Use an absolute path or ~/…; with a WSL node a Linux path such as /home/me/.claude-work works. Pair it with the Claude CLI path of the same profile. Daemon restarts on save."
+        "label": "Claude कॉन्फ़िग निर्देशिका (ओवरराइड)",
+        "placeholder": "उदा. ~/.claude-work — CLAUDE_CONFIG_DIR या ~/.claude का उपयोग करने के लिए खाली छोड़ें",
+        "hint": "वैकल्पिक। चैट इतिहास, सत्र क्रियाएँ और Claude प्रक्रिया ~/.claude के बजाय इस निर्देशिका को पढ़ती हैं। उपयोग सांख्यिकी इसे ~/.claude में जोड़कर संयुक्त रूप से गिनती है (प्रोफ़ाइल के अनुसार अलग नहीं), और चल रहा सांख्यिकी सर्वर अगले सिंक पर इसे उठा लेता है; इसे खाली करने पर भी पहले गिना जा चुका उपयोग बना रहता है। पूर्ण पथ या ~/… का उपयोग करें; WSL के node के साथ /home/me/.claude-work जैसा Linux पथ भी काम करता है। इसे उसी प्रोफ़ाइल के Claude CLI पथ के साथ उपयोग करें। सहेजने पर डेमॉन पुनः आरंभ होता है।"
       },
       "workingDirectory": {
         "label": "Working Directory",
@@ -1455,8 +1455,7 @@
     "guideNoteHooks": "पहली बार शुरू होने पर, tokentracker सर्वर इंस्टॉल किए गए AI टूल्स में hooks लिखता है (यही इसका डेटा संग्रह तरीका है)।",
     "guideNoteTelemetry": "इस ऐप ने इसके लिए अनाम टेलीमेट्री बंद कर दी है।",
     "errorTitle": "tokentracker सर्वर शुरू नहीं हो सका",
-    "errorRetry": "पुनः प्रयास करें",
-    "staleConfigDirNotice": "Usage statistics still come from a tokentracker server that was started before the Claude config directory changed, so they may not include it. The server runs detached from the IDE, so restarting the IDE may not be enough: stop the tokentracker process, then reopen this tab."
+    "errorRetry": "पुनः प्रयास करें"
   },
   "mcp": {
     "title": "MCP सर्वर",

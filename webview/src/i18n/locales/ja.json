@@ -256,9 +256,9 @@
         "hint": "任意。設定すると、内蔵の @anthropic-ai/claude-agent-sdk の代わりにこのバイナリを起動します。保存時にデーモンが再起動されます。"
       },
       "claudeConfigDir": {
-        "label": "Claude Config Directory (override)",
-        "placeholder": "e.g. ~/.claude-work — leave empty to use CLAUDE_CONFIG_DIR or ~/.claude",
-        "hint": "Optional. Chat history, session actions and the Claude process read this directory instead of ~/.claude. Usage statistics add it to ~/.claude (combined, not per profile) and pick it up when the statistics server next starts. Use an absolute path or ~/…; with a WSL node a Linux path such as /home/me/.claude-work works. Pair it with the Claude CLI path of the same profile. Daemon restarts on save."
+        "label": "Claude 設定ディレクトリ（オーバーライド）",
+        "placeholder": "例: ~/.claude-work — 空欄の場合は CLAUDE_CONFIG_DIR または ~/.claude を使用",
+        "hint": "任意。チャット履歴、セッション操作、Claude プロセスは ~/.claude の代わりにこのディレクトリを読み込みます。使用統計はこれを ~/.claude に加えて集計し（プロファイル別ではなく合算）、実行中の統計サーバーは次回の同期で取り込みます。クリアしても集計済みの使用量は残ります。絶対パスまたは ~/… を指定してください。WSL の node では /home/me/.claude-work のような Linux パスも使えます。同じプロファイルの Claude CLI パスと組み合わせてください。保存時にデーモンが再起動されます。"
       },
       "workingDirectory": {
         "label": "作業ディレクトリ",
@@ -1450,8 +1450,7 @@
     "guideNoteHooks": "初回起動時、tokentracker サーバーはインストール済みの AI ツールに hooks を書き込みます（これがデータ収集の仕組みです）。",
     "guideNoteTelemetry": "本アプリでは匿名テレメトリを無効化しています。",
     "errorTitle": "tokentracker サーバーの起動に失敗しました",
-    "errorRetry": "再試行",
-    "staleConfigDirNotice": "Usage statistics still come from a tokentracker server that was started before the Claude config directory changed, so they may not include it. The server runs detached from the IDE, so restarting the IDE may not be enough: stop the tokentracker process, then reopen this tab."
+    "errorRetry": "再試行"
   },
   "mcp": {
     "title": "MCPサーバー",

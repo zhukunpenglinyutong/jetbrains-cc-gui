@@ -34,31 +34,4 @@ public class TokenTrackerHandlerVersionTest {
         assertTrue(TokenTrackerHandler.isAtLeastMinVersion("1.10.0"));
         assertTrue(TokenTrackerHandler.isAtLeastMinVersion("2.0.0"));
     }
-
-    @Test
-    public void serverWithoutRecordIsCurrentForTheDefaultProfile() {
-        assertFalse(TokenTrackerHandler.isConfigDirStale(null, ""));
-        assertFalse(TokenTrackerHandler.isConfigDirStale(null, null));
-    }
-
-    @Test
-    public void serverWithoutRecordIsStaleOnceAProfileIsActive() {
-        assertTrue(TokenTrackerHandler.isConfigDirStale(null, "/profiles/work"));
-    }
-
-    @Test
-    public void serverStartedForAProfileIsStaleWhenTheProfileIsCleared() {
-        assertTrue(TokenTrackerHandler.isConfigDirStale("/profiles/work", ""));
-        assertTrue(TokenTrackerHandler.isConfigDirStale("/profiles/work", null));
-    }
-
-    @Test
-    public void serverIsStaleWhenTheProfileChanges() {
-        assertTrue(TokenTrackerHandler.isConfigDirStale("/profiles/a", "/profiles/b"));
-    }
-
-    @Test
-    public void serverStartedForTheActiveProfileIsCurrent() {
-        assertFalse(TokenTrackerHandler.isConfigDirStale("/profiles/work", "/profiles/work"));
-    }
 }

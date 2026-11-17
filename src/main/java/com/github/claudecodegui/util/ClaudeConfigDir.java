@@ -2,10 +2,12 @@ package com.github.claudecodegui.util;
 
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.intellij.ide.util.PropertiesComponent;
+import org.jetbrains.annotations.TestOnly;
 
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 
 /**
@@ -27,6 +29,8 @@ public final class ClaudeConfigDir {
     public static final String CONFIG_DIR_PROPERTY_KEY = "claude.code.config.dir";
     public static final String ENV_VAR = "CLAUDE_CONFIG_DIR";
     private static final String DEFAULT_DIR_NAME = ".claude";
+
+    private static volatile Supplier<String> settingReader = ClaudeConfigDir::readSetting;
 
     private ClaudeConfigDir() {
     }
@@ -97,18 +101,24 @@ public final class ClaudeConfigDir {
 
     /** The explicitly chosen directory (setting, else env) as a path the plugin can open, or null for the default. */
     public static Path override() {
-        return explicit(readSetting(), System.getenv(ENV_VAR), NodeDetector.resolveHomeForFileOps(),
+        return explicit(settingReader.get(), System.getenv(ENV_VAR), NodeDetector.resolveHomeForFileOps(),
                 isWslNode(), WslPathUtil::convertWslPathToWindowsUnc);
     }
 
     /** Resolve at call time so a changed setting is honoured without a restart. */
     public static Path current() {
-        return resolve(readSetting(), System.getenv(ENV_VAR), NodeDetector.resolveHomeForFileOps(),
+        return resolve(settingReader.get(), System.getenv(ENV_VAR), NodeDetector.resolveHomeForFileOps(),
                 isWslNode(), WslPathUtil::convertWslPathToWindowsUnc);
     }
 
     public static boolean isWslNode() {
         return NodeDetector.isWslPath(NodeDetector.getInstance().getCachedNodePath());
+    }
+
+    /** Replaces the stored-setting lookup so tests can run without IDE services; null restores the default. */
+    @TestOnly
+    public static void setSettingReaderForTests(Supplier<String> reader) {
+        settingReader = reader != null ? reader : ClaudeConfigDir::readSetting;
     }
 
     private static String readSetting() {

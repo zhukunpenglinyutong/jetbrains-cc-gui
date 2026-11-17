@@ -15,7 +15,7 @@ import {
   isInterruptionMarker,
   loadSessionHistory,
 } from './session-service.js';
-import { getClaudeProjectSessionFilePath } from '../../utils/path-utils.js';
+import { getClaudeProjectKey, getClaudeProjectSessionFilePath } from '../../utils/path-utils.js';
 
 
 test('persistJsonlMessage and loadSessionHistory keep using a legacy symlink-keyed session', () => {
@@ -746,5 +746,42 @@ test('buildSessionMessagesPagePayload and buildSessionMessagesPayload read a tra
     assert.equal(full.messages.length, 80);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('channel-manager getSession reads a custom profile only when CLAUDE_CONFIG_DIR reaches it', () => {
+  const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-profile-home-'));
+  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-profile-dir-'));
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-profile-cwd-'));
+  try {
+    const sessionId = 'profile-session';
+    const projectDir = path.join(profile, 'projects', getClaudeProjectKey(fs.realpathSync(cwd)));
+    fs.mkdirSync(projectDir, { recursive: true });
+    fs.writeFileSync(path.join(projectDir, `${sessionId}.jsonl`), [
+      JSON.stringify({ type: 'user', message: { role: 'user', content: 'profile prompt' } }),
+      JSON.stringify({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'profile answer' }] } }),
+    ].join('\n') + '\n');
+
+    const run = (extraEnv) => {
+      const env = { ...process.env, HOME: tempHome, USERPROFILE: tempHome };
+      delete env.CLAUDE_CONFIG_DIR;
+      Object.assign(env, extraEnv);
+      const output = execFileSync(
+        process.execPath,
+        [path.resolve('ai-bridge/channel-manager.js'), 'claude', 'getSession', sessionId, fs.realpathSync(cwd)],
+        { cwd: process.cwd(), env, encoding: 'utf8' },
+      );
+      return JSON.parse(output.trim().split('\n').filter(Boolean).pop());
+    };
+
+    const withProfile = run({ CLAUDE_CONFIG_DIR: profile });
+    assert.equal(withProfile.success, true);
+    assert.equal(JSON.stringify(withProfile.messages).includes('profile prompt'), true);
+    assert.equal(JSON.stringify(withProfile.messages).includes('profile answer'), true);
+
+    const withoutProfile = run({});
+    assert.equal(JSON.stringify(withoutProfile).includes('profile prompt'), false);
+  } finally {
+    for (const dir of [tempHome, profile, cwd]) fs.rmSync(dir, { recursive: true, force: true });
   }
 });

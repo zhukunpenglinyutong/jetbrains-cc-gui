@@ -94,8 +94,6 @@ export interface TtCliStatus {
 export interface TtServerStatus {
   running: boolean;
   port: number;
-  /** The running server was started before the Claude config directory changed. */
-  configDirStale?: boolean;
 }
 
 export function ttDetectCli(): Promise<TtCliStatus> {

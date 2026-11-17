@@ -35,7 +35,6 @@ export type TokenTrackerGateCopy = {
   guideNoteTelemetry: string;
   errorTitle: string;
   errorRetry: string;
-  staleConfigDirNotice: string;
 };
 
 type TokenTrackerServerGateProps = {
@@ -159,12 +158,6 @@ export function TokenTrackerServerGate({
 
   return (
     <div className="extensions-usage-section">
-      {state.status === 'ready' && state.configDirStale && (
-        <div className="extensions-usage-notice" role="status">
-          <span className="codicon codicon-info" aria-hidden />
-          <span>{copy.staleConfigDirNotice}</span>
-        </div>
-      )}
       <div key={remountKey} className={dashboardClassName}>
         <Suspense fallback={<GateStatus label={copy.startingLabel} />}>
           {children}

@@ -256,9 +256,9 @@
         "hint": "선택 사항. 설정하면 플러그인이 내장된 @anthropic-ai/claude-agent-sdk 대신 이 바이너리를 실행합니다. 저장 시 데몬이 다시 시작됩니다."
       },
       "claudeConfigDir": {
-        "label": "Claude Config Directory (override)",
-        "placeholder": "e.g. ~/.claude-work — leave empty to use CLAUDE_CONFIG_DIR or ~/.claude",
-        "hint": "Optional. Chat history, session actions and the Claude process read this directory instead of ~/.claude. Usage statistics add it to ~/.claude (combined, not per profile) and pick it up when the statistics server next starts. Use an absolute path or ~/…; with a WSL node a Linux path such as /home/me/.claude-work works. Pair it with the Claude CLI path of the same profile. Daemon restarts on save."
+        "label": "Claude 설정 디렉터리 (재정의)",
+        "placeholder": "예: ~/.claude-work — 비워 두면 CLAUDE_CONFIG_DIR 또는 ~/.claude 사용",
+        "hint": "선택 사항. 채팅 기록, 세션 작업, Claude 프로세스가 ~/.claude 대신 이 디렉터리를 읽습니다. 사용 통계는 이를 ~/.claude에 더해 합산하며(프로필별 아님), 실행 중인 통계 서버는 다음 동기화 때 반영합니다. 비워도 이미 집계된 사용량은 유지됩니다. 절대 경로 또는 ~/…를 사용하세요. WSL의 node를 쓰면 /home/me/.claude-work 같은 Linux 경로도 가능합니다. 같은 프로필의 Claude CLI 경로와 함께 사용하세요. 저장 시 데몬이 다시 시작됩니다."
       },
       "workingDirectory": {
         "label": "작업 디렉토리",
@@ -1540,8 +1540,7 @@
     "guideNoteHooks": "첫 실행 시 tokentracker 서버는 설치된 AI 도구에 hooks를 작성합니다(이것이 데이터 수집 방식입니다).",
     "guideNoteTelemetry": "이 앱은 익명 텔레메트리를 비활성화했습니다.",
     "errorTitle": "tokentracker 서버 시작 실패",
-    "errorRetry": "다시 시도",
-    "staleConfigDirNotice": "Usage statistics still come from a tokentracker server that was started before the Claude config directory changed, so they may not include it. The server runs detached from the IDE, so restarting the IDE may not be enough: stop the tokentracker process, then reopen this tab."
+    "errorRetry": "다시 시도"
   },
   "mcp": {
     "title": "MCP 서버",

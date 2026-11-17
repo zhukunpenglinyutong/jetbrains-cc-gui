@@ -29,7 +29,7 @@ export type TokenTrackerServerState =
   | { status: 'guide' }
   | { status: 'installing' }
   | { status: 'starting' }
-  | { status: 'ready'; port: number; configDirStale?: boolean }
+  | { status: 'ready'; port: number }
   | { status: 'error'; message: string };
 
 const CLI_NOT_INSTALLED_ERROR = 'tokentracker_cli_not_installed';
@@ -72,11 +72,7 @@ export function useTokenTrackerServer() {
         if (generationRef.current === generation) setState({ status: 'installing' });
       });
       if (generationRef.current !== generation) return;
-      setState({
-        status: 'ready',
-        port: server.port,
-        ...(server.configDirStale ? { configDirStale: true } : {}),
-      });
+      setState({ status: 'ready', port: server.port });
     } catch (error) {
       if (generationRef.current !== generation) return;
       const message = errorMessage(error);

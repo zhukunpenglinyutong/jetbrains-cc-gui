@@ -256,9 +256,9 @@
         "hint": "Opcional. Cuando se establece, el complemento ejecuta este binario en lugar del @anthropic-ai/claude-agent-sdk integrado. El daemon se reinicia al guardar."
       },
       "claudeConfigDir": {
-        "label": "Claude Config Directory (override)",
-        "placeholder": "e.g. ~/.claude-work — leave empty to use CLAUDE_CONFIG_DIR or ~/.claude",
-        "hint": "Optional. Chat history, session actions and the Claude process read this directory instead of ~/.claude. Usage statistics add it to ~/.claude (combined, not per profile) and pick it up when the statistics server next starts. Use an absolute path or ~/…; with a WSL node a Linux path such as /home/me/.claude-work works. Pair it with the Claude CLI path of the same profile. Daemon restarts on save."
+        "label": "Directorio de configuración de Claude (anulación)",
+        "placeholder": "p. ej. ~/.claude-work — déjalo vacío para usar CLAUDE_CONFIG_DIR o ~/.claude",
+        "hint": "Opcional. El historial del chat, las acciones de sesión y el proceso de Claude leen este directorio en lugar de ~/.claude. Las estadísticas de uso lo suman a ~/.claude (combinado, no por perfil) y un servidor de estadísticas en ejecución lo recoge en su próxima sincronización; el uso ya contabilizado se conserva si lo borras. Usa una ruta absoluta o ~/…; con un node de WSL sirve una ruta de Linux como /home/me/.claude-work. Combínalo con la ruta del CLI de Claude del mismo perfil. El daemon se reinicia al guardar."
       },
       "workingDirectory": {
         "label": "Working Directory",
@@ -1455,8 +1455,7 @@
     "guideNoteHooks": "En el primer inicio, el servidor de tokentracker escribe hooks en tus herramientas de IA instaladas (así es como recopila los datos de uso).",
     "guideNoteTelemetry": "Esta aplicación ha desactivado la telemetría anónima.",
     "errorTitle": "No se pudo iniciar el servidor de tokentracker",
-    "errorRetry": "Reintentar",
-    "staleConfigDirNotice": "Usage statistics still come from a tokentracker server that was started before the Claude config directory changed, so they may not include it. The server runs detached from the IDE, so restarting the IDE may not be enough: stop the tokentracker process, then reopen this tab."
+    "errorRetry": "Reintentar"
   },
   "mcp": {
     "title": "Servidores MCP",

@@ -72,6 +72,7 @@ public class ClaudeConfigDirHandler {
                 }
 
                 if (failure == null) {
+                    TokenTrackerScanRoots.syncFromSettings();
                     try {
                         // CLAUDE_CONFIG_DIR is injected at daemon spawn, so restart it.
                         context.getClaudeSDKBridge().shutdownDaemon();
