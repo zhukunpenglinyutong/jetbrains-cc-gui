@@ -6,7 +6,6 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.openapi.diagnostic.Logger;
 
 import java.io.IOException;
@@ -19,6 +18,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 
 /**
  * Keeps the usage statistics server pointed at the configured Claude config directory.
@@ -33,8 +33,7 @@ final class TokenTrackerScanRoots {
 
     private static final Logger LOG = Logger.getInstance(TokenTrackerScanRoots.class);
 
-    /** The entry this plugin last added to {@code scanRoots.claude}, so only that entry is ever removed. */
-    static final String ADDED_ENTRY_KEY = "tokentracker.scanroots.claude.added";
+    private static final String MARKER_ENTRY_FIELD = "claudeEntry";
 
     private static final Object LOCK = new Object();
 
@@ -50,18 +49,54 @@ final class TokenTrackerScanRoots {
         try {
             synchronized (LOCK) {
                 Path override = ClaudeConfigDir.override();
-                PropertiesComponent props = PropertiesComponent.getInstance();
-                String tracked = props.getValue(ADDED_ENTRY_KEY);
+                Path marker = markerFile();
+                String tracked = readMarker(marker);
                 String trackedAfter = sync(configFile(), override == null ? null : override.toString(), tracked);
-                if (trackedAfter == null) {
-                    props.unsetValue(ADDED_ENTRY_KEY);
-                } else {
-                    props.setValue(ADDED_ENTRY_KEY, trackedAfter);
+                if (!Objects.equals(tracked, trackedAfter)) {
+                    writeMarker(marker, trackedAfter);
                 }
             }
         } catch (Exception e) {
             LOG.warn("[TokenTrackerScanRoots] Could not update tokentracker scanRoots: " + e.getMessage());
         }
+    }
+
+    /**
+     * Records the entry this plugin added, so only that entry is ever removed. It lives in a file the plugin
+     * owns and is written immediately: IDE settings are flushed lazily, and losing the marker would leave an
+     * entry in tokentracker's config that nothing owns.
+     */
+    static Path markerFile() {
+        return Paths.get(PlatformUtils.getHomeDirectory(), ".codemoss", "tokentracker-scanroots.json");
+    }
+
+    /** The tracked entry, or null when there is none or the file cannot be read. */
+    static String readMarker(Path file) {
+        try {
+            if (!Files.isRegularFile(file)) {
+                return null;
+            }
+            JsonElement parsed = JsonParser.parseString(Files.readString(file, StandardCharsets.UTF_8));
+            if (!parsed.isJsonObject()) {
+                return null;
+            }
+            JsonElement entry = parsed.getAsJsonObject().get(MARKER_ENTRY_FIELD);
+            return entry != null && entry.isJsonPrimitive() && entry.getAsJsonPrimitive().isString()
+                    && !entry.getAsString().isBlank() ? entry.getAsString() : null;
+        } catch (IOException | RuntimeException e) {
+            return null;
+        }
+    }
+
+    /** Stores the tracked entry; a null entry removes the marker. */
+    static void writeMarker(Path file, String entry) throws IOException {
+        if (entry == null) {
+            Files.deleteIfExists(file);
+            return;
+        }
+        JsonObject marker = new JsonObject();
+        marker.addProperty(MARKER_ENTRY_FIELD, entry);
+        writeAtomically(file, marker.toString());
     }
 
     static Path configFile() {

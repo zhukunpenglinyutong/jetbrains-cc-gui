@@ -283,4 +283,57 @@ public class TokenTrackerScanRootsTest {
         assertEquals(json("{\"scanRoots\":{\"claude\":[\"/work/profile\"]}}"),
                 json(Files.readString(configFile(), StandardCharsets.UTF_8)));
     }
+
+    private Path markerFile() {
+        return tmp.getRoot().toPath().resolve("home").resolve(".codemoss").resolve("tokentracker-scanroots.json");
+    }
+
+    @Test
+    public void aMarkerRoundTripsTheTrackedEntry() throws Exception {
+        TokenTrackerScanRoots.writeMarker(markerFile(), "/work/profile");
+
+        assertEquals("/work/profile", TokenTrackerScanRoots.readMarker(markerFile()));
+        assertEquals(json("{\"claudeEntry\":\"/work/profile\"}"), json(Files.readString(markerFile(), StandardCharsets.UTF_8)));
+        assertEquals(List.of("tokentracker-scanroots.json"), filesIn(markerFile().getParent()));
+    }
+
+    @Test
+    public void writingNoEntryRemovesTheMarker() throws Exception {
+        TokenTrackerScanRoots.writeMarker(markerFile(), "/work/profile");
+
+        TokenTrackerScanRoots.writeMarker(markerFile(), null);
+
+        assertFalse(Files.exists(markerFile()));
+        assertNull(TokenTrackerScanRoots.readMarker(markerFile()));
+    }
+
+    @Test
+    public void removingAMarkerThatDoesNotExistIsHarmless() throws Exception {
+        TokenTrackerScanRoots.writeMarker(markerFile(), null);
+
+        assertFalse(Files.exists(markerFile()));
+    }
+
+    @Test
+    public void anUnreadableMarkerMeansNothingIsTracked() throws Exception {
+        Files.createDirectories(markerFile().getParent());
+        for (String content : List.of("garbage", "[1]", "{}", "{\"claudeEntry\":5}", "{\"claudeEntry\":\"  \"}")) {
+            Files.writeString(markerFile(), content, StandardCharsets.UTF_8);
+
+            assertNull(content, TokenTrackerScanRoots.readMarker(markerFile()));
+        }
+    }
+
+    @Test
+    public void anEntryAddedBeforeARestartIsStillRemovedAfterwards() throws Exception {
+        String trackedBefore = TokenTrackerScanRoots.sync(configFile(), "/work/profile", TokenTrackerScanRoots.readMarker(markerFile()));
+        TokenTrackerScanRoots.writeMarker(markerFile(), trackedBefore);
+
+        String trackedAfterRestart = TokenTrackerScanRoots.readMarker(markerFile());
+        String afterClearing = TokenTrackerScanRoots.sync(configFile(), null, trackedAfterRestart);
+
+        assertEquals("/work/profile", trackedAfterRestart);
+        assertNull(afterClearing);
+        assertEquals(json("{}"), json(Files.readString(configFile(), StandardCharsets.UTF_8)));
+    }
 }
