@@ -560,6 +560,15 @@ function makeTempDir(prefix) {
   return dir;
 }
 
+/** Windows can keep a SQLite handle briefly after the child exits; retry the delete. */
+function removeTempDir(dir) {
+  try {
+    rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  } catch {
+    // Best effort: the file-level after() sweep makes one last pass at process end.
+  }
+}
+
 /** Same as makeTempDir but rooted at an arbitrary parent (e.g. the home dir). */
 function makeTempDirAt(parent, prefix) {
   const dir = mkdtempSync(join(parent, prefix));
@@ -2215,7 +2224,7 @@ test('Story 1.9 DB metadata: current-turn step_type=15 metadata.9 usages emit in
       { input_tokens: 3486, output_tokens: 236, cache_read_input_tokens: 228502, thinking_tokens: 83 },
     );
   } finally {
-    rmSync(tempDir, { recursive: true, force: true });
+    removeTempDir(tempDir);
   }
 });
 
@@ -2883,7 +2892,7 @@ test('Story 1.12 Case 1: Tail only in the db — emitted deltas and result.respo
     const dbBytesAfter = readFileSync(dbPath);
     assert.deepEqual(dbBytesAfter, dbBytesBefore, 'temp .db bytes must be unchanged');
   } finally {
-    rmSync(tempDir, { recursive: true, force: true });
+    removeTempDir(tempDir);
   }
 });
 
@@ -2922,7 +2931,7 @@ test('Story 1.12 Case 2: Response covers part — response extends deltas, store
     const dbBytesAfter = readFileSync(dbPath);
     assert.deepEqual(dbBytesAfter, dbBytesBefore, 'temp .db bytes must be unchanged');
   } finally {
-    rmSync(tempDir, { recursive: true, force: true });
+    removeTempDir(tempDir);
   }
 });
 
@@ -2960,7 +2969,7 @@ test('Story 1.12 Case 3: Already complete — deltas equal response equal 20.1',
     const dbBytesAfter = readFileSync(dbPath);
     assert.deepEqual(dbBytesAfter, dbBytesBefore, 'temp .db bytes must be unchanged');
   } finally {
-    rmSync(tempDir, { recursive: true, force: true });
+    removeTempDir(tempDir);
   }
 });
 
@@ -3002,7 +3011,7 @@ test('Story 1.12 Case 4: Divergent store — field 20.1 does not start with emit
     const dbBytesAfter = readFileSync(dbPath);
     assert.deepEqual(dbBytesAfter, dbBytesBefore, 'temp .db bytes must be unchanged');
   } finally {
-    rmSync(tempDir, { recursive: true, force: true });
+    removeTempDir(tempDir);
   }
 });
 
@@ -3045,7 +3054,7 @@ test('Thinking off: stored field 20.3 and a stream thinking_delta are not emitte
     assert.equal(finalPayload(stdout).success, true);
     assert.deepEqual(readFileSync(dbPath), dbBytesBefore, 'temp .db bytes must be unchanged');
   } finally {
-    rmSync(tempDir, { recursive: true, force: true });
+    removeTempDir(tempDir);
   }
 });
 
@@ -3109,7 +3118,7 @@ test('Thinking on: distinct field 20.3 narrations are emitted once and never as 
     assert.equal(finalPayload(stdout).success, true);
     assert.deepEqual(readFileSync(dbPath), dbBytesBefore, 'temp .db bytes must be unchanged');
   } finally {
-    rmSync(tempDir, { recursive: true, force: true });
+    removeTempDir(tempDir);
   }
 });
 
@@ -3150,7 +3159,7 @@ test('Thinking on: field 20.3 that equals the answer is not also a thinking summ
     assert.equal(finalPayload(stdout).success, true);
     assert.deepEqual(readFileSync(dbPath), dbBytesBefore, 'temp .db bytes must be unchanged');
   } finally {
-    rmSync(tempDir, { recursive: true, force: true });
+    removeTempDir(tempDir);
   }
 });
 
@@ -3206,7 +3215,7 @@ test('Thinking on: a stream thinking snapshot emits only the new suffix', async 
     ]);
     assert.equal(finalPayload(stdout).success, true);
   } finally {
-    rmSync(tempDir, { recursive: true, force: true });
+    removeTempDir(tempDir);
   }
 });
 
@@ -3247,7 +3256,7 @@ test('Thinking on: a stored narration that grows while the turn is quiet is stre
     assert.equal(finalPayload(stdout).success, true);
     assert.notDeepEqual(readFileSync(dbPath), dbBytesBefore);
   } finally {
-    rmSync(tempDir, { recursive: true, force: true });
+    removeTempDir(tempDir);
   }
 });
 
@@ -3289,7 +3298,7 @@ test('Thinking on: a fresh turn reads no conversation database before init, then
     assert.deepEqual(markers(stdout, 'CONTENT_DELTA').map(decodeStringMarker), ['Done.']);
     assert.equal(finalPayload(stdout).success, true);
   } finally {
-    rmSync(tempDir, { recursive: true, force: true });
+    removeTempDir(tempDir);
   }
 });
 
@@ -3308,14 +3317,17 @@ test('Thinking on: a fast answer stream does not copy the conversation database 
       "process.on('exit', () => process.stderr.write('SNAPSHOTS:' + n + '\\n'));",
     ].join('\n'));
 
-    const { stdout, stderr } = await runService({
+    const { stdout, stderr, timedOut } = await runService({
       mode: 'think-burst',
       cliHome: tempDir,
       sessionId: convId,
       extraEnv: { FAKE_CONV_ID: convId, NODE_OPTIONS: `--import=${pathToFileURL(hookPath).href}` },
-      timeoutMs: 10000,
+      // CI Windows runners are much slower than a local run (~1 s); give the
+      // bounded child headroom so a loaded machine is not a timeout test.
+      timeoutMs: 20000,
     });
 
+    assert.equal(timedOut, false, 'the fast stream must finish on its own');
     const counts = [...stderr.matchAll(/SNAPSHOTS:(\d+)/g)].map((m) => Number(m[1]));
     const snapshots = Math.max(0, ...counts);
     assert.ok(snapshots > 0, `the hook must see the service's reads: ${stderr.slice(-400)}`);
@@ -3324,7 +3336,7 @@ test('Thinking on: a fast answer stream does not copy the conversation database 
     assert.equal(markers(stdout, 'CONTENT_DELTA').length, 30);
     assert.equal(finalPayload(stdout).success, true);
   } finally {
-    rmSync(tempDir, { recursive: true, force: true });
+    removeTempDir(tempDir);
   }
 });
 
@@ -3370,7 +3382,7 @@ test('Thinking on: a resumed conversation does not re-emit prior turns stored th
     assert.equal(markers(stdout, 'THINKING_DELTA').length, 0);
     assert.equal(finalPayload(stdout).success, true);
   } finally {
-    rmSync(tempDir, { recursive: true, force: true });
+    removeTempDir(tempDir);
   }
 });
 
@@ -3398,7 +3410,7 @@ test('Story 1.12 Case 5: No text at all — empty deltas and blank response neve
     assert.doesNotMatch(stderr, /stored reply extends streamed text/);
     assert.doesNotMatch(stderr, /failed to read stored reply/);
   } finally {
-    rmSync(tempDir, { recursive: true, force: true });
+    removeTempDir(tempDir);
   }
 });
 
@@ -3425,7 +3437,7 @@ test('Story 1.12 Case 6: Unreadable — missing db file falls back safely', asyn
     assert.equal(markers(stdout, 'STREAM_END').length, 1);
     assert.equal(finalPayload(stdout).success, true);
   } finally {
-    rmSync(tempDir, { recursive: true, force: true });
+    removeTempDir(tempDir);
   }
 });
 
@@ -3461,7 +3473,7 @@ test('Story 1.12 AC 5: zero streamed deltas with non-blank response extends from
     const dbBytesAfter = readFileSync(dbPath);
     assert.deepEqual(dbBytesAfter, dbBytesBefore, 'temp .db bytes must be unchanged');
   } finally {
-    rmSync(tempDir, { recursive: true, force: true });
+    removeTempDir(tempDir);
   }
 });
 
@@ -3500,7 +3512,7 @@ test('Story 1.12 WAL snapshot: stored suffix is read without touching live sidec
     assert.deepEqual(after['-wal'], before['-wal'], 'live -wal bytes must be unchanged');
     assert.deepEqual(after['-shm'], before['-shm'], 'live -shm bytes must be unchanged');
   } finally {
-    rmSync(tempDir, { recursive: true, force: true });
+    removeTempDir(tempDir);
   }
 });
 
@@ -3587,7 +3599,7 @@ test('Story 1.11: isSubagentChildLive recognizes live .db and .db-wal files with
     utimesSync(extraPath, tenSecAgo, tenSecAgo);
     assert.equal(isSubagentChildLive(childId, tempDir, windowMinutes, now), false);
   } finally {
-    rmSync(tempDir, { recursive: true, force: true });
+    removeTempDir(tempDir);
   }
 });
 
@@ -3620,7 +3632,7 @@ test('an empty -wal left by a read-only open is not conversation activity', asyn
     assert.equal(isSubagentChildLive(id, tempDir, 1, now), false);
     assert.equal(check(), false);
   } finally {
-    rmSync(tempDir, { recursive: true, force: true });
+    removeTempDir(tempDir);
   }
 });
 
@@ -3700,7 +3712,7 @@ test('Story 1.11 AC9: a completed invoke_subagent with a live child db postpones
     const reapErrors = markers(stdout, 'SEND_ERROR').filter((l) => /no output|silent|silence/i.test(l));
     assert.equal(reapErrors.length, 0, 'no reap error may appear while child is live');
   } finally {
-    rmSync(tempDir, { recursive: true, force: true });
+    removeTempDir(tempDir);
   }
 });
 
@@ -3754,7 +3766,7 @@ test('Story 1.11 AC9: a completed invoke_subagent with a live child db-wal postp
     const reapErrors = markers(stdout, 'SEND_ERROR').filter((l) => /no output|silent|silence/i.test(l));
     assert.equal(reapErrors.length, 0, 'no reap error may appear while child wal is fresh');
   } finally {
-    rmSync(tempDir, { recursive: true, force: true });
+    removeTempDir(tempDir);
   }
 });
 
@@ -3804,7 +3816,7 @@ test('Story 1.11 AC10: a completed invoke_subagent with a STALE child db is reap
     assertActionableReapMessage(stdout);
     assert.equal(markers(stdout, 'STREAM_END').length, 1);
   } finally {
-    rmSync(tempDir, { recursive: true, force: true });
+    removeTempDir(tempDir);
   }
 });
 
@@ -3847,7 +3859,7 @@ test('Story 1.11 AC10: a completed invoke_subagent with a MISSING child db is re
     assertActionableReapMessage(stdout);
     assert.equal(markers(stdout, 'STREAM_END').length, 1);
   } finally {
-    rmSync(tempDir, { recursive: true, force: true });
+    removeTempDir(tempDir);
   }
 });
 
@@ -3938,7 +3950,7 @@ test('Story 1.11 AC9: an ERROR invoke_subagent result that names a live child po
     const reapErrors = markers(stdout, 'SEND_ERROR').filter((l) => /no output|silent|silence/i.test(l));
     assert.equal(reapErrors.length, 0, 'no reap error may appear while the named child is live');
   } finally {
-    rmSync(tempDir, { recursive: true, force: true });
+    removeTempDir(tempDir);
   }
 });
 
@@ -3979,7 +3991,7 @@ test('Story 004 AC-1: reconciles final step response suffix when step 1 streamed
     assert.equal(markers(stdout, 'STREAM_END').length, 1);
     assert.equal(finalPayload(stdout).success, true);
   } finally {
-    rmSync(tempDir, { recursive: true, force: true });
+    removeTempDir(tempDir);
   }
 });
 
@@ -4033,7 +4045,7 @@ test('Story 004 AC-3: readLatestStoredAgentReply ignores step_type=15 rows befor
     assert.doesNotMatch(stderr, /stored reply extends streamed text/);
     assert.equal(finalPayload(stdout).success, true);
   } finally {
-    rmSync(tempDir, { recursive: true, force: true });
+    removeTempDir(tempDir);
   }
 });
 
@@ -4102,7 +4114,7 @@ test('Story 004 AC-4: pollStoredThinking does not suppress thinking summaries at
     );
     assert.equal(finalPayload(stdout).success, true);
   } finally {
-    rmSync(tempDir, { recursive: true, force: true });
+    removeTempDir(tempDir);
   }
 });
 
