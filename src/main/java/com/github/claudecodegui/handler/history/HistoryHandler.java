@@ -96,6 +96,15 @@ public class HistoryHandler extends BaseMessageHandler {
         historyMessageInjector.invalidateCodexHistory();
     }
 
+    /**
+     * Close the Codex earlier-page loader after a reload committed the whole thread.
+     *
+     * @param sessionId the thread whose transcript is now complete on the page
+     */
+    public void retireCodexPageCursor(String sessionId) {
+        historyMessageInjector.retireCodexPageCursor(sessionId);
+    }
+
     public void setRestoredHistoryCallback(RestoredHistoryCallback callback) {
         this.restoredHistoryCallback = callback;
         historyMessageInjector.setCodexSessionSelectionListener(

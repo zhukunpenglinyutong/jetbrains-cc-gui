@@ -59,6 +59,8 @@ public class HistoryMessageInjector {
     private final CodexHistoryPageIndex codexPageIndex = new CodexHistoryPageIndex();
     private volatile CodexNativeHistoryReader nativeHistoryReader;
     private volatile JsonElement nativeHistoryCursor;
+    /** Session history commits when the current page cursor was issued; a later full reload spends it. */
+    private volatile long codexPageCommitBaseline;
 
     HistoryMessageInjector(HandlerContext context) {
         this.context = context;
@@ -87,6 +89,17 @@ public class HistoryMessageInjector {
         synchronized (sessionLoadGeneration) {
             sessionLoadGeneration.incrementAndGet();
         }
+    }
+
+    /**
+     * A full-thread reload replaced the paged view, so no earlier page is left to fetch.
+     * The generation stays put: bumping it would orphan a session switch that is still loading.
+     * A page already in flight is refused by {@link #commitEarlierCodexPage}.
+     */
+    void retireCodexPageCursor(String sessionId) {
+        this.nativeHistoryReader = null;
+        this.nativeHistoryCursor = null;
+        this.context.callJavaScript("codexHistoryFullyLoaded", this.context.escapeJs(sessionId));
     }
 
     void publishIfCurrent(long generation, Runnable publication) {
@@ -144,10 +157,9 @@ public class HistoryMessageInjector {
                 && transitionToken == null && sessionLoadCallback != null
                 && currentSession != null && "codex".equals(currentSession.getProvider())
                 && resolvedSessionId != null && resolvedSessionId.equals(currentSession.getSessionId());
-        if (codexSoftReloadSelection) {
-            // The page still needs its continuation reader while the refresh is deferred or fails.
-            this.fencePendingCodexLoads();
-        } else {
+        // A soft reload keeps the page reader and lets an earlier-page load already in flight land;
+        // fencing it would drop both its result and its error and leave that spinner running.
+        if (!codexSoftReloadSelection) {
             this.invalidateCodexHistory();
             if ("codex".equals(provider)) {
                 this.codexSessionSelectionListener.run();
@@ -239,6 +251,7 @@ public class HistoryMessageInjector {
                     context.getSession().setSessionInfo(threadIdToUse, cwd, transitionToken);
                     this.nativeHistoryReader = page.nativeReader;
                     this.nativeHistoryCursor = page.cursor;
+                    this.codexPageCommitBaseline = context.getSession().getCommittedHistoryLoadCount();
                     if (model != null && !model.isBlank()) {
                         context.getSession().setModel(model.trim());
                     }
@@ -404,6 +417,33 @@ public class HistoryMessageInjector {
         return page;
     }
 
+    /**
+     * Fold an earlier page into the session unless a full-thread reload committed since its cursor
+     * was issued: merged into the whole thread, the page would land above turns older than itself.
+     *
+     * @return false when the page is obsolete; the session is left untouched
+     */
+    boolean commitEarlierCodexPage(CodexHistoryPage page) {
+        List<ClaudeSession.Message> earlier = new ArrayList<>();
+        for (JsonObject message : page.messages) {
+            ClaudeSession.Message parsed = toSessionMessage(message);
+            if (parsed != null) {
+                earlier.add(parsed);
+            }
+        }
+        ClaudeSession session = this.context.getSession();
+        SessionState state = session.getState();
+        // A reload bumps the commit count under this lock, so it cannot slip between check and merge.
+        synchronized (state.getMessageStateLock()) {
+            if (session.getCommittedHistoryLoadCount() != this.codexPageCommitBaseline) {
+                return false;
+            }
+            state.replaceMessages(page.cursorReset ? earlier
+                    : com.github.claudecodegui.session.CodexHistoryMerger.merge(earlier, state.getMessages()));
+        }
+        return true;
+    }
+
     void loadEarlierCodexHistoryPage(String content) {
         long generation = sessionLoadGeneration.get();
         CompletableFuture.runAsync(() -> {
@@ -446,23 +486,15 @@ public class HistoryMessageInjector {
                         LOG.info("[HistoryHandler] Discarding stale Codex history page: " + requestedSessionId);
                         return;
                     }
+                    if (!this.commitEarlierCodexPage(page)) {
+                        LOG.info("[HistoryHandler] Discarding Codex history page superseded by a full reload: "
+                                + requestedSessionId);
+                        this.retireCodexPageCursor(requestedSessionId);
+                        return;
+                    }
                     boolean replace = page.cursorReset;
                     if (replace) {
-                        restoreCodexFrontendMessagesToSessionState(context.getSession().getState(), page.messages);
                         pushRestoredCodexUsage();
-                    } else {
-                        List<ClaudeSession.Message> earlier = new ArrayList<>();
-                        for (JsonObject message : page.messages) {
-                            ClaudeSession.Message parsed = toSessionMessage(message);
-                            if (parsed != null) {
-                                earlier.add(parsed);
-                            }
-                        }
-                        SessionState state = this.context.getSession().getState();
-                        synchronized (state.getMessageStateLock()) {
-                            state.replaceMessages(com.github.claudecodegui.session.CodexHistoryMerger.merge(
-                                    earlier, state.getMessages()));
-                        }
                     }
                     this.nativeHistoryCursor = page.cursor;
                     injectCodexHistoryPage(requestedSessionId, page, replace);
