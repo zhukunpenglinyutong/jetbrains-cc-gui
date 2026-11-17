@@ -298,19 +298,52 @@ describe('session lifecycle through the registered bridge callbacks', () => {
     act(() => window.historyLoadComplete?.(0, accepted.transitionToken));
   });
 
+  it.each([true, false])('keeps a Codex turn and its queued message across a soft reload (streaming=%s)', streaming => {
+    const { result } = renderSessionController('codex');
+    act(() => {
+      window.onCodexRuntimeEvent?.(JSON.stringify({ kind: 'operationQueued', rootThreadId: 'old-session', clientOperationId: 'running-op' }));
+      if (streaming) {
+        window.showLoading?.('true');
+        window.onStreamStart?.();
+      }
+    });
+    act(() => result.current.controller.handleSubmit('send after the native turn', [attachment]));
+    const queued = result.current.controller.messageQueue[0];
+
+    act(() => result.current.controller.loadHistorySession('old-session', 'codex'));
+    expect(lastRequest('load_session')).not.toHaveProperty('transitionToken');
+    expect(getSessionTransitionPending()).toBe(false);
+    act(() => window.historyLoadComplete?.(1));
+    expect(result.current.messages.messages[0].content).toBe('old conversation');
+    expect(result.current.controller.codexTurnActive).toBe(true);
+    expect(result.current.controller.messageQueue).toEqual([queued]);
+    expect(vi.mocked(window.sendToJava!).mock.calls.some(([line]) => line.startsWith('interrupt_session'))).toBe(false);
+
+    act(() => { window.onStreamEnd?.(); window.showLoading?.('false'); });
+    expect(sentTurns()).toHaveLength(0);
+    act(() => window.onCodexRuntimeEvent?.(JSON.stringify({ kind: 'operationDone', rootThreadId: 'old-session', clientOperationId: 'running-op' })));
+    expect(result.current.controller.codexTurnActive).toBe(false);
+    expect(result.current.controller.messageQueue).toHaveLength(0);
+    expect(sentTurns()).toHaveLength(1);
+    expect(JSON.parse(sentTurns()[0].split(/:(.*)/s)[1])).toMatchObject({ text: 'send after the native turn', attachments: [{ fileName: 'notes.txt' }] });
+  });
+
   it('rejects stale Codex pages when a retry targets the same session', () => {
     const { result } = renderSessionController('codex');
-    act(() => result.current.controller.loadHistorySession('old-session', 'codex'));
+    // A different target keeps both loads on the full-transition path (a
+    // same-session selection now soft-reloads in place without page tokens),
+    // so the retry below produces a second transition token to vet pages with.
+    act(() => result.current.controller.loadHistorySession('other-session', 'codex'));
     const tokenA = lastRequest('load_session').transitionToken;
     act(() => window.clearMessages?.(undefined, tokenA));
     const page = (pageId: string, transitionToken: string) => ({ pageId, transitionToken,
-      sessionId: 'old-session', mode: 'replace', fromTurn: 0, toTurn: 1, totalTurns: 1, hasMore: false, loadedMessageCount: 1 });
+      sessionId: 'other-session', mode: 'replace', fromTurn: 0, toTurn: 1, totalTurns: 1, hasMore: false, loadedMessageCount: 1 });
     act(() => {
       window.beginCodexHistoryPage?.(JSON.stringify(page('page-a', tokenA)));
       window.appendCodexHistoryPageBatch?.('page-a', JSON.stringify([{ type: 'user', content: 'stale page A' }]));
       vi.advanceTimersByTime(15_001);
     });
-    act(() => result.current.controller.loadHistorySession('old-session', 'codex'));
+    act(() => result.current.controller.loadHistorySession('other-session', 'codex'));
     const tokenB = lastRequest('load_session').transitionToken;
     act(() => {
       window.completeCodexHistoryPage?.(JSON.stringify(page('page-a', tokenA)));

@@ -19,6 +19,66 @@ async function sentMessages(page: Page) {
   return page.evaluate(() => (window as InputTestWindow).__sentMessages);
 }
 
+test('keeps a blank-line caret visible in a long draft after input', async ({ page }) => {
+  const position = await page.locator('.input-editable').evaluate((editable) => {
+    editable.innerHTML = '<div>draft line</div>'.repeat(30) + '<div><br></div>';
+    (editable as HTMLElement).focus();
+    const wrapper = editable.parentElement!;
+    wrapper.scrollTop = wrapper.scrollHeight;
+    const line = editable.lastElementChild!;
+    const range = document.createRange();
+    range.setStart(line, 0);
+    range.collapse(true);
+    window.getSelection()!.removeAllRanges();
+    window.getSelection()!.addRange(range);
+    // This is the Chromium case that a mocked, nonempty Range rectangle misses.
+    const collapsedRectCount = range.getClientRects().length;
+    editable.dispatchEvent(new InputEvent('input', { inputType: 'insertParagraph', bubbles: true }));
+    return {
+      collapsedRectCount,
+      caretBottom: line.getBoundingClientRect().bottom,
+      visibleTop: wrapper.getBoundingClientRect().top,
+      visibleBottom: wrapper.getBoundingClientRect().top + wrapper.clientHeight,
+    };
+  });
+
+  expect(position.collapsedRectCount).toBe(0);
+  expect(position.caretBottom).toBeGreaterThan(position.visibleTop);
+  expect(position.caretBottom).toBeLessThanOrEqual(position.visibleBottom);
+});
+
+for (const fontSizeLevel of [1, 2, 3, 6]) {
+  test(`keeps the last-line caret above the model toolbar at font level ${fontSizeLevel}`, async ({ page }) => {
+    await page.evaluate((level) => localStorage.setItem('fontSizeLevel', String(level)), fontSizeLevel);
+    await page.reload();
+    const position = await page.locator('.input-editable').evaluate((editable) => {
+      editable.innerHTML = '<div>draft line</div>'.repeat(40);
+      (editable as HTMLElement).focus();
+      const wrapper = editable.parentElement!;
+      // Leave the last caret just below the scroll boundary to exercise our own
+      // reveal logic instead of Chromium's automatic scroll on a native keypress.
+      wrapper.scrollTop = wrapper.scrollHeight - wrapper.clientHeight - 12;
+      const text = editable.lastChild!.firstChild as Text;
+      const range = document.createRange();
+      range.setStart(text, text.length);
+      range.collapse(true);
+      window.getSelection()!.removeAllRanges();
+      window.getSelection()!.addRange(range);
+      editable.dispatchEvent(new InputEvent('input', { inputType: 'insertText', bubbles: true }));
+      const toolbar = editable.closest('.chat-input-box')!.querySelector('.button-area')!;
+      return {
+        caretBottom: range.getBoundingClientRect().bottom,
+        toolbarTop: toolbar.getBoundingClientRect().top,
+        scale: wrapper.getBoundingClientRect().height / wrapper.offsetHeight,
+      };
+    });
+
+    // Keep the wrapper's 6 CSS-pixel padding between the caret and model controls;
+    // allow one logical pixel for Chromium's fractional scroll rounding.
+    expect((position.toolbarTop - position.caretBottom) / position.scale).toBeGreaterThanOrEqual(5);
+  });
+}
+
 test.beforeEach(async ({ page }) => {
   await page.addInitScript((appVersion) => {
     localStorage.setItem('lastSeenChangelogVersion', appVersion);

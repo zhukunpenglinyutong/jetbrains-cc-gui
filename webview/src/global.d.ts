@@ -115,6 +115,8 @@ interface Window {
   ) => void;
   completeCodexHistoryPage?: (json: string) => void;
   codexHistoryPageError?: (json: string) => void;
+  /** A full-thread reload replaced the paged view: no earlier page is left to fetch. */
+  codexHistoryFullyLoaded?: (sessionId: string) => void;
   codexHistoryPageRenderComplete?: () => void;
   __codexHistoryPageInfo?: {
     pageId: string;

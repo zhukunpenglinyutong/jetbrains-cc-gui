@@ -3027,6 +3027,7 @@ public class ClaudeChatWindow {
                 ApplicationManager.getApplication().invokeLater(() -> {
                     if (!disposed) {
                         restoredHistoryLoader.settleIfCommitted(current, committedBefore);
+                        retireCodexPagesAfterFullReload(current, targetSessionId, committedBefore);
                     }
                 });
             }
@@ -3080,6 +3081,23 @@ public class ClaudeChatWindow {
     static boolean decideReloadCompletion(
             boolean pending, boolean disposed, boolean sessionMatches) {
         return pending && !disposed && sessionMatches;
+    }
+
+    /** Busy clears at stream end, before a native turn settles; both mean work is still in flight. */
+    static boolean hasTurnInFlight(ClaudeSession session) {
+        return session != null && (session.isBusy() || session.getState().getExecutionState().hasLiveTurn());
+    }
+
+    /**
+     * A committed Codex reload holds the whole thread, so the page's earlier-page cursor is spent.
+     * Codex switches threads on the same session object, hence the thread id check.
+     */
+    private void retireCodexPagesAfterFullReload(ClaudeSession reloaded, String threadId, long committedBefore) {
+        if (historyHandler != null && reloaded == session && "codex".equals(reloaded.getProvider())
+                && reloaded.getCommittedHistoryLoadCount() != committedBefore
+                && threadId != null && threadId.equals(reloaded.getSessionId())) {
+            historyHandler.retireCodexPageCursor(threadId);
+        }
     }
 
     /**
@@ -3637,8 +3655,8 @@ public class ClaudeChatWindow {
      * <p>Used when the user re-opens the session that is already active: instead
      * of tearing it down (interrupt + recreate), we merely refresh the transcript
      * so the latest on-disk state is reflected. Reuses the {@code session_updated}
-     * reload path (coalescing + isSessionActive guard), and defers to stream end
-     * when a turn is live so the streaming bubble is never disturbed.</p>
+     * reload path (coalescing + isSessionActive guard), and waits for idle work
+     * and its final snapshot so pre-stream and non-streaming turns remain intact.</p>
      */
     void reloadActiveSessionMessages() {
         ApplicationManager.getApplication().invokeLater(() -> {
@@ -3655,14 +3673,14 @@ public class ClaudeChatWindow {
                 callJavaScript("historyLoadComplete", "0");
                 return;
             }
-            if (streamCoalescer != null && streamCoalescer.isStreamActive()) {
-                deferredReload.defer(currentId);
-                LOG.info("[ClaudeChatWindow] Same-session resume deferred — "
-                        + "turn streaming, will reload at stream end, sessionId=" + currentId);
-                // Frontend may have begun a transition (cleared the list). Release the
-                // guard now so a later deferred reload can paint; if the list is empty
-                // the stream-end drain will repopulate it.
-                callJavaScript("historyLoadComplete", String.valueOf(current.getMessages().size()));
+            if (hasTurnInFlight(current) || (this.streamCoalescer != null
+                    && (this.streamCoalescer.isStreamActive() || this.streamCoalescer.isSnapshotBuildPending()))) {
+                this.deferredReload.defer(currentId);
+                // Pre-stream and non-streaming work may never produce a stream-end edge.
+                this.scheduleDeferredReloadSafetyDrain();
+                // No historyLoadComplete: the page never cleared, and that signal marks
+                // every tool still running in this turn as interrupted.
+                LOG.info("[ClaudeChatWindow] Same-session resume deferred until the turn is idle, sessionId=" + currentId);
                 return;
             }
             LOG.info("[ClaudeChatWindow] Same-session resume soft reload (no interrupt), sessionId=" + currentId);
@@ -3676,6 +3694,7 @@ public class ClaudeChatWindow {
                     return;
                 }
                 restoredHistoryLoader.settleIfCommitted(restoring, committedBefore);
+                retireCodexPagesAfterFullReload(restoring, currentId, committedBefore);
                 int count = restoring.getMessages().size();
                 if (streamCoalescer != null) {
                     // Same lock contract as enqueue: the flush may deep-copy live messages.
