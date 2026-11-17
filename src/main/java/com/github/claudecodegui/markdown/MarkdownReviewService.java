@@ -13,6 +13,7 @@ import com.intellij.openapi.editor.event.DocumentEvent;
 import com.intellij.openapi.editor.event.DocumentListener;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Disposer;
+import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vfs.VirtualFileManager;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.vfs.newvfs.BulkFileListener;
@@ -764,8 +765,13 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
         String after = newText.toString();
         int oldMatch = before.indexOf(source);
         int newMatch = after.indexOf(source);
+        // A reload hunk can span many lines: a short quote that changed lines inside it may be
+        // another copy (a different "TODO"), so only a long quote may move between lines.
         return oldMatch >= 0 && newMatch >= 0 && before.indexOf(source, oldMatch + 1) < 0
-                && after.indexOf(source, newMatch + 1) < 0;
+                && after.indexOf(source, newMatch + 1) < 0
+                && (source.length() >= AnnotationAnchorResolver.FRAGMENT_CHARS
+                    || StringUtil.countNewLines(before.substring(0, oldMatch))
+                        == StringUtil.countNewLines(after.substring(0, newMatch)));
     }
 
     /**

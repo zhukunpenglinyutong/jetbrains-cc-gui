@@ -171,6 +171,17 @@ public class MarkdownReviewDocumentTrackingTest {
     }
 
     @Test
+    public void rewriteThatDropsTheQuoteAndAddsItOnAnotherLineDoesNotFollowIt() {
+        // One reload hunk spans both lines: the commented TODO goes, another TODO appears below.
+        assertEquals(List.of("TODO:ambiguous"), commentsAfterReload(
+                "# Plan\n\nA: fix the TODO in login.\nB: ship it.\n",
+                "# Plan\n\nA: login fixed.\nB: ship it, TODO add tests.\n", "TODO"));
+        assertEquals(List.of("401:ambiguous"), commentsAfterReload(
+                "# Plan\n\n## Auth\nReturn 401 for expired tokens.\n\n## Cache\nKeep entries 5 minutes.\n",
+                "# Plan\n\n## Cache\nKeep entries 10 minutes.\n\n## Errors\nNever log a 401 body.\n", "401"));
+    }
+
+    @Test
     public void deletingAllCopiesRemovesTheCommentOnlyWhenAutoDeleteIsOn() {
         Fixture deleting = new Fixture("Keep 401 here.\n", true, "401");
         deleting.reload("Keep it here.\n");
