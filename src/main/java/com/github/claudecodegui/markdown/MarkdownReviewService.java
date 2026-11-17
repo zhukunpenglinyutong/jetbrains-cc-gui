@@ -449,10 +449,8 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
         if (markerHere) {
             // IntelliJ widens a marker when a minimized replace inserts right at its edge
             // (disk reload, paste-over); the quote still inside it is the same place.
-            String tracked = text.substring(marker.getStartOffset(), marker.getEndOffset());
-            int inner = tracked.indexOf(annotation.sourceText);
-            if (inner >= 0 && tracked.indexOf(annotation.sourceText, inner + 1) < 0) {
-                int start = marker.getStartOffset() + inner;
+            int start = quoteInside(text, marker.getStartOffset(), marker.getEndOffset(), annotation);
+            if (start >= 0) {
                 applyRange(annotation, document, start, start + annotation.sourceText.length(), "attached", null);
                 return true;
             }
@@ -477,7 +475,37 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
         }
     }
 
+    /**
+     * The quote inside a (possibly widened) marker: its only copy, or else the only copy that kept
+     * one side of the stored context, since a widening edit changes one edge only. -1 when unclear.
+     */
+    static int quoteInside(String text, int from, int to, Annotation annotation) {
+        String source = annotation.sourceText;
+        List<Integer> copies = new ArrayList<>();
+        for (int at = text.indexOf(source, from); at >= 0 && at + source.length() <= to; at = text.indexOf(source, at + 1)) {
+            copies.add(at);
+        }
+        if (copies.size() <= 1) {
+            return copies.isEmpty() ? -1 : copies.get(0);
+        }
+        List<Integer> kept = copies.stream().filter(at -> keepsContext(text, at, annotation)).toList();
+        return kept.size() == 1 ? kept.get(0) : -1;
+    }
+
+    private static boolean keepsContext(String text, int at, Annotation annotation) {
+        String prefix = annotation.prefix;
+        String suffix = annotation.suffix;
+        return prefix != null && !prefix.isEmpty() && text.startsWith(prefix, at - prefix.length())
+                || suffix != null && !suffix.isEmpty() && text.startsWith(suffix, at + annotation.sourceText.length());
+    }
+
     private void applyRange(Annotation annotation, Document document, int start, int end, String status, String anchorText) {
+        if ("attached".equals(status)) {
+            // Keep the context current so a restart can still match it after nearby edits.
+            CharSequence text = document.getCharsSequence();
+            annotation.prefix = text.subSequence(Math.max(0, start - MarkdownReviewLimits.ANCHOR_CONTEXT_CHARS), start).toString();
+            annotation.suffix = text.subSequence(end, Math.min(text.length(), end + MarkdownReviewLimits.ANCHOR_CONTEXT_CHARS)).toString();
+        }
         annotation.start = start;
         annotation.end = end;
         annotation.startLine = document.getLineNumber(start) + 1;
@@ -552,10 +580,13 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
         if (state.config.enabled && !documentListeners.containsKey(document)) {
             DocumentListener listener = new DocumentListener() {
                 private final Set<String> affected = new HashSet<>();
+                /** Whole marker replaced by text that still holds the quote exactly once. */
+                private final Set<String> replaced = new HashSet<>();
 
                 @Override
                 public void beforeDocumentChange(@NotNull DocumentEvent event) {
                     affected.clear();
+                    replaced.clear();
                     int[] range = changedRange(event.getOffset(), event.getOldFragment(), event.getNewFragment());
                     synchronized (MarkdownReviewService.this) {
                         if (!state.config.enabled) {
@@ -565,11 +596,14 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
                         for (Annotation item : state.annotations) {
                             RangeMarker marker = markers.get(item.id);
                             if (marker != null && marker.getDocument() == document && marker.isValid()
-                                    && overlaps(range, marker.getStartOffset(), marker.getEndOffset())
-                                    && !(event.getOffset() <= marker.getStartOffset()
-                                    && event.getOffset() + event.getOldLength() >= marker.getEndOffset()
-                                    && preservesSource(event.getOldFragment(), event.getNewFragment(), item.sourceText))) {
-                                affected.add(item.id);
+                                    && overlaps(range, marker.getStartOffset(), marker.getEndOffset())) {
+                                boolean covered = event.getOffset() <= marker.getStartOffset()
+                                        && event.getOffset() + event.getOldLength() >= marker.getEndOffset();
+                                if (covered && preservesSource(event.getOldFragment(), event.getNewFragment(), item.sourceText)) {
+                                    replaced.add(item.id);
+                                } else {
+                                    affected.add(item.id);
+                                }
                             }
                         }
                     }
@@ -582,7 +616,9 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
                     boolean orphanedAny = false;
                     synchronized (MarkdownReviewService.this) {
                         Set<String> resolved = new HashSet<>(affected);
+                        Set<String> moved = new HashSet<>(replaced);
                         affected.clear();
+                        replaced.clear();
                         if (!state.config.enabled) {
                             // Disabled: positions are reconciled by the next sync after re-enabling.
                             return;
@@ -602,6 +638,19 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
                                     missing.add(item);
                                 }
                             }
+                        }
+                        if (!moved.isEmpty()) {
+                            // A rewrite replaced the whole marker (IntelliJ invalidates it), but the new
+                            // text holds the quote exactly once: anchor there instead of guessing later.
+                            String inserted = event.getNewFragment().toString();
+                            for (Annotation item : state.annotations) {
+                                int inner = moved.contains(item.id) ? inserted.indexOf(item.sourceText) : -1;
+                                if (inner >= 0) {
+                                    int start = event.getOffset() + inner;
+                                    applyRange(item, document, start, start + item.sourceText.length(), "attached", null);
+                                }
+                            }
+                            resolved.addAll(moved);
                         }
                         // Offsets are per-document: only this document's tracked
                         // annotations may drive the impact, otherwise a larger

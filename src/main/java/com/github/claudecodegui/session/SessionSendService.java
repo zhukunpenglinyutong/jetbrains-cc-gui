@@ -3,6 +3,7 @@ package com.github.claudecodegui.session;
 import com.github.claudecodegui.cli.CliToolId;
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.markdown.MarkdownReviewPrompt;
+import com.github.claudecodegui.markdown.MarkdownReviewService;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.settings.CodexSettingsManager;
 import com.github.claudecodegui.settings.SessionSupplierCatalog;
@@ -309,11 +310,13 @@ public class SessionSendService {
 
         String currentProvider = state.getProvider();
         // Claude's persistent runtime receives the stable append once when it is
-        // created; subsequent turns reuse it. Other providers use their existing
-        // hidden agent-context path only on turns containing review snapshots.
+        // created; subsequent turns reuse it. Changing the append restarts the runtime,
+        // which fails while background tasks run, so it is latched as soon as the
+        // feature is enabled rather than on the first review. Other providers use their
+        // existing hidden agent-context path only on turns containing review snapshots.
         boolean restoredReviews = "claude".equals(currentProvider) && !markdownReviewContext.isActiveFor(state.getRuntimeSessionEpoch())
-                && state.getMessages().stream().anyMatch(message ->
-                message.type == ClaudeSession.Message.Type.USER && MarkdownReviewPrompt.hasReview(message.content));
+                && (markdownReviewsEnabled() || state.getMessages().stream().anyMatch(message ->
+                message.type == ClaudeSession.Message.Type.USER && MarkdownReviewPrompt.hasReview(message.content)));
         agentPrompt = markdownReviewContext.apply(currentProvider, input, agentPrompt, state.getRuntimeSessionEpoch(), restoredReviews);
         String sessionModeBeforeSend = state.getPermissionMode();
         String normalizedRequestedMode = normalizeRequestedPermissionMode(requestedPermissionMode);
@@ -1058,6 +1061,12 @@ public class SessionSendService {
             LOG.warn("[Streaming] Failed to read streaming config: " + e.getMessage());
         }
         return streaming;
+    }
+
+    private boolean markdownReviewsEnabled() {
+        MarkdownReviewService reviews = project == null || project.isDisposed()
+                ? null : project.getService(MarkdownReviewService.class);
+        return reviews != null && reviews.getConfig().enabled;
     }
 
     private String getAgentPrompt() {

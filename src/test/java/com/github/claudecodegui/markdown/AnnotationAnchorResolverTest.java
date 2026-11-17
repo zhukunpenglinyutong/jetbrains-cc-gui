@@ -28,6 +28,15 @@ public class AnnotationAnchorResolverTest {
     }
 
     @Test
+    public void followsALongUniqueQuoteWhoseContextChanged() {
+        String quote = "Reject expired tokens with 401";
+        String document = "Intro was rewritten.\nAlways: Reject expired tokens with 401 now.\n";
+        assertEquals(document.indexOf(quote), AnnotationAnchorResolver.relocate(document, quote, 0, "Old intro.\n", ".\n"));
+        // Two copies without context stay a manual choice even when long.
+        assertEquals(-2, AnnotationAnchorResolver.relocate(document + document, quote, 0, "Old intro.\n", ".\n"));
+    }
+
+    @Test
     public void deletingTheCommentedLineDoesNotMoveTheCommentToTheOtherCopy() {
         // Comment was on the first TODO; that line is deleted, the second TODO stays.
         var match = AnnotationAnchorResolver.locate("- TODO: write docs\n", "TODO", 2, "- ", ": fix login\n- TODO: write docs\n");

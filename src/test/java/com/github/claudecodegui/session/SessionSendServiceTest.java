@@ -106,6 +106,41 @@ public class SessionSendServiceTest {
     }
 
     @Test
+    public void enabledMarkdownReviewsPutTheGuideInClaudesFirstPromptSoAReviewNeverRestartsIt() {
+        for (boolean enabled : new boolean[]{true, false}) {
+            List<String> prompts = new ArrayList<>();
+            var bridge = new ClaudeSDKBridge() {
+                @Override
+                public CompletableFuture<SDKResult> sendMessage(
+                        String channelId, String message, String sessionId, String epoch, String cwd,
+                        List<ClaudeSession.Attachment> attachments, String permissionMode, String model,
+                        JsonObject openedFiles, String agentPrompt, Boolean streaming,
+                        Boolean disableThinking, String effort, boolean ultracode, MessageCallback callback) {
+                    prompts.add(agentPrompt);
+                    return CompletableFuture.completedFuture(new SDKResult());
+                }
+            };
+            com.github.claudecodegui.markdown.MarkdownReviewService reviews =
+                    new com.github.claudecodegui.markdown.MarkdownReviewService(null);
+            var config = reviews.getConfig();
+            config.enabled = enabled;
+            reviews.configure(config);
+            Project base = projectWithBase(null);
+            Project project = (Project) Proxy.newProxyInstance(Project.class.getClassLoader(), new Class<?>[]{Project.class},
+                    (proxy, method, args) -> "getService".equals(method.getName()) && args[0] == reviews.getClass()
+                            ? reviews : method.invoke(base, args));
+            SessionState state = new SessionState();
+            SessionSendService service = new SessionSendService(project, state, new SessionCallbackFacade(null),
+                    new MessageParser(), new MessageMerger(), new Gson(), bridge, null, null, null);
+            service.sendMessageToProvider("channel", "hello", null, null, "", null,
+                    "default", "high", null, null, "first", null, false).join();
+            boolean guided = prompts.get(0) != null && prompts.get(0).contains(
+                    com.github.claudecodegui.markdown.MarkdownReviewPrompt.GUIDE);
+            assertEquals("enabled=" + enabled, enabled, guided);
+        }
+    }
+
+    @Test
     public void ultraIsNativeCodexEffortAndCannotLeakToOtherProviders() {
         assertEquals("ultra", SessionSendService.normalizeRequestedReasoningEffort(" ultra "));
         assertEquals("ultra", SessionSendService.resolveEffectiveReasoningEffort("codex", "ultra", "high"));

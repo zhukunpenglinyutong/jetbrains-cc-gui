@@ -78,7 +78,8 @@ public class LanguageConfigService {
     }
 
     /**
-     * Get user's manually set language preference. The disk read is cached until
+     * Get user's manually set language preference. The disk read is cached for a few
+     * seconds (another IDE instance may change it) or until
      * {@link #invalidateUserLanguageCache()} is called after a preference write.
      *
      * @return the user's language preference, or null if not manually set

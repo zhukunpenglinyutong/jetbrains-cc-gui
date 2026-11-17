@@ -4,7 +4,7 @@ import { ToggleSettingSection } from './ToggleSettingSection';
 import styles from './style.module.less';
 
 interface ReviewConfig { enabled: boolean; autoAddToChat: boolean; autoDeleteAffected: boolean; persist: boolean; submitShortcut: 'enter' | 'ctrlEnter' }
-const defaults: ReviewConfig = { enabled: false, autoAddToChat: false, autoDeleteAffected: true, persist: false, submitShortcut: 'enter' };
+const defaults: ReviewConfig = { enabled: false, autoAddToChat: false, autoDeleteAffected: false, persist: false, submitShortcut: 'enter' };
 
 export function MarkdownReviewSettings() {
   const { t } = useTranslation();

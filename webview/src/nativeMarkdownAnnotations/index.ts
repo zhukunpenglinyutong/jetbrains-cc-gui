@@ -456,7 +456,9 @@ function start(pipe: NativePipe) {
               : send('create', { ...selection, documentVersion: selectionVersion, comment: draft });
             void operation.then(ok => {
               pending = false;
-              if (creating) unsavedDraft = ok ? '' : draft;
+              // A timed-out create (retry set) may still land; carrying its text to another
+              // selection would duplicate it. Retrying here reuses the request id instead.
+              if (creating) unsavedDraft = ok || retry ? '' : draft;
               if (ok) close(); else render();
             })
               .catch(() => { pending = false; message = labels.failed; render(); });

@@ -59,6 +59,18 @@ describe('review submission snapshot', () => {
     expect(onSubmitted).not.toHaveBeenCalled();
   });
 
+  it.each(['\u200B/compact', '/审查 plan.md'])('treats %j as a slash command and keeps review drafts', (text) => {
+    vi.useFakeTimers();
+    const config = options();
+    config.getTextContent = () => text;
+    config.captureReviewSubmission = vi.fn(() => ({ text: 'review', onSubmitted: vi.fn() }));
+    const { result } = renderHook(() => useSubmitHandler(config));
+    result.current();
+    vi.advanceTimersByTime(20);
+    expect(config.captureReviewSubmission).not.toHaveBeenCalled();
+    expect(config.onSubmit).toHaveBeenCalledWith(text, undefined);
+  });
+
   it('still attaches drafts to text that only starts with a path', () => {
     vi.useFakeTimers();
     const config = options();

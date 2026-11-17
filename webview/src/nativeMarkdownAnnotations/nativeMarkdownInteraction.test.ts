@@ -100,31 +100,38 @@ describe('native Markdown interaction state machine and debounce', () => {
     }
   });
 
-  it('keeps a comment the host rejected so the user can select again without retyping it', async () => {
+  const mockRanges = () => {
     const rect = () => ({ left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0, x: 0, y: 0, toJSON: () => ({}) });
     vi.spyOn(Range.prototype, 'getBoundingClientRect').mockImplementation(() => rect() as DOMRect);
     vi.spyOn(Range.prototype, 'getClientRects').mockImplementation(() => [] as unknown as DOMRectList);
-    const selectParagraph = () => {
-      const text = document.querySelector('p')!.firstChild!;
-      const range = document.createRange();
-      range.setStart(text, 0); range.setEnd(text, 2);
-      window.getSelection()!.removeAllRanges(); window.getSelection()!.addRange(range);
-      document.dispatchEvent(new Event('selectionchange'));
-    };
-    const click = (label: string) => {
-      const target = [...document.querySelectorAll<HTMLButtonElement>('#ccgui-markdown-review button')]
-        .find(element => element.textContent === label);
-      expect(target, label).toBeDefined();
-      target!.click();
-    };
-    await import('./index');
-    messageCallback!(enabledState(1));
+  };
+  const selectParagraph = () => {
+    const text = document.querySelector('p')!.firstChild!;
+    const range = document.createRange();
+    range.setStart(text, 0); range.setEnd(text, 2);
+    window.getSelection()!.removeAllRanges(); window.getSelection()!.addRange(range);
+    document.dispatchEvent(new Event('selectionchange'));
+  };
+  const click = (label: string) => {
+    const target = [...document.querySelectorAll<HTMLButtonElement>('#ccgui-markdown-review button')]
+      .find(element => element.textContent === label);
+    expect(target, label).toBeDefined();
+    target!.click();
+  };
+  const typeCommentAndAdd = (comment: string) => {
     selectParagraph();
     click('Comment');
     const textarea = document.querySelector<HTMLTextAreaElement>('#ccgui-markdown-review textarea')!;
-    textarea.value = 'tighten this wording';
+    textarea.value = comment;
     textarea.dispatchEvent(new Event('input'));
     click('Add comment');
+  };
+
+  it('keeps a comment the host rejected so the user can select again without retyping it', async () => {
+    mockRanges();
+    await import('./index');
+    messageCallback!(enabledState(1));
+    typeCommentAndAdd('tighten this wording');
     // The document changed while typing: the host rejects the stale selection.
     messageCallback!(JSON.stringify({ requestId: lastRequest('create').requestId, status: 'error', messageKey: 'documentChanged' }));
     await vi.waitFor(() => expect(document.querySelector('#ccgui-markdown-review .ccgui-md-popup .primary')).not.toHaveProperty('disabled', true));
@@ -134,6 +141,21 @@ describe('native Markdown interaction state machine and debounce', () => {
     click('Comment');
     expect(document.querySelector<HTMLTextAreaElement>('#ccgui-markdown-review textarea')!.value).toBe('tighten this wording');
     // A live selection would wake this test's overlay instance during the next test.
+    window.getSelection()!.removeAllRanges();
+  });
+
+  it('does not carry a timed-out comment to another selection, where it could be created twice', async () => {
+    mockRanges();
+    await import('./index');
+    messageCallback!(enabledState(1));
+    typeCommentAndAdd('tighten this wording');
+    // No answer within 8 s: the host may still create it.
+    vi.advanceTimersByTime(9000);
+    await vi.waitFor(() => expect(document.querySelector('#ccgui-markdown-review .ccgui-md-popup .primary')).not.toHaveProperty('disabled', true));
+    click('Cancel');
+    selectParagraph();
+    click('Comment');
+    expect(document.querySelector<HTMLTextAreaElement>('#ccgui-markdown-review textarea')!.value).toBe('');
     window.getSelection()!.removeAllRanges();
   });
 

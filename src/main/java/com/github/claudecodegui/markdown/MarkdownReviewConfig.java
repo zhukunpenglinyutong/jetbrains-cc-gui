@@ -5,6 +5,7 @@ public final class MarkdownReviewConfig {
     public boolean enabled = false;
     public boolean autoAddToChat = false;
     public String submitShortcut = "enter";
-    public boolean autoDeleteAffected = true;
+    // Off by default: a cut-and-paste move would otherwise delete the comment for good.
+    public boolean autoDeleteAffected = false;
     public boolean persist = false;
 }

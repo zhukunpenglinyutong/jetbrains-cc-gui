@@ -87,7 +87,8 @@ export function useSubmitHandler({
     invalidateCache();
     const rawInput = getTextContent();
     // A slash command must stay at the head of the message to reach the CLI; drafts wait for the next message.
-    const isSlashCommand = /^\/[\w:.-]+(?:\s|$)/.test(rawInput.trimStart());
+    // Zero-width marks are invisible to the slash menu; names may be non-ASCII (/审查); a path has a second '/'.
+    const isSlashCommand = /^\/[^\s/]+(?:\s|$)/.test(rawInput.replace(/[\u200B-\u200D\uFEFF]/g, '').trimStart());
     const reviewSubmission = isSlashCommand ? undefined : captureReviewSubmission?.();
     const reviews = reviewSubmission?.text ?? '';
     // Review handoffs freeze quote text before the deferred clear; ordinary messages keep

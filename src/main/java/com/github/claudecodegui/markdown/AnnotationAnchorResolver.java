@@ -111,9 +111,15 @@ public final class AnnotationAnchorResolver {
         if (found >= 0) {
             return found;
         }
-        // Without its context a unique copy may be a different occurrence that only became
-        // unique because the commented one was deleted; refuse to guess (manual relocate).
-        return document.contains(source) ? -2 : -1;
+        int first = document.indexOf(source);
+        if (first < 0) {
+            return -1;
+        }
+        // Without its context a short unique copy may be a different occurrence (another "TODO")
+        // that only became unique because the commented one was deleted; refuse to guess
+        // (manual relocate). A long quote is distinctive enough to follow after nearby edits.
+        boolean unique = document.indexOf(source, first + 1) < 0;
+        return unique && source.length() >= FRAGMENT_CHARS ? first : -2;
     }
 
     private static boolean matchesContext(String text, int start, int length, String prefix, String suffix) {
