@@ -361,7 +361,7 @@ describe('TaskExecutionBlock polling', () => {
     const stats = container.querySelector('.subagent-process-stats');
     expect(stats).toBeTruthy();
     expect(stats?.textContent).toContain('7');
-    expect(stats?.textContent).toContain('4,200');
+    expect(stats?.textContent).toContain((4200).toLocaleString());
     expect(container.querySelector('.subagent-result-card')?.textContent).toContain('调研完成');
   });
 
