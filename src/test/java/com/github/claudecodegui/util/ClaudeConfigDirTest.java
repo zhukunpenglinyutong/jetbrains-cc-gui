@@ -87,15 +87,15 @@ public class ClaudeConfigDirTest {
     }
 
     @Test
-    public void wslNodeEnvVarIsMappedToo() {
-        String unc = abs("unc-env");
-        assertEquals(Paths.get(unc), ClaudeConfigDir.resolve(null, "/home/me/p", home(), true, linux -> unc));
+    public void wslNodeIgnoresTheInheritedEnvVar() {
+        assertNull(ClaudeConfigDir.explicit(null, abs("windows-profile"), home(), true, linux -> abs("unc")));
+        assertNull(ClaudeConfigDir.explicit(null, "/home/me/p", home(), true, linux -> abs("unc")));
+        assertEquals(Paths.get(home(), ".claude"), ClaudeConfigDir.resolve(null, abs("windows-profile"), home(), true, linux -> null));
     }
 
     @Test
-    public void unavailableWslMappingFallsThroughToTheNextCandidate() {
-        java.util.function.UnaryOperator<String> mapping = linux -> linux.equals("/home/me/p") ? null : abs("env");
-        assertEquals(Paths.get(abs("env")), ClaudeConfigDir.resolve("/home/me/p", "/home/me/other", home(), true, mapping));
+    public void unavailableWslMappingFallsBackToTheDefault() {
+        assertEquals(Paths.get(home(), ".claude"), ClaudeConfigDir.resolve("/home/me/p", abs("env"), home(), true, linux -> null));
         assertNull(ClaudeConfigDir.explicit("/home/me/p", null, home(), true, linux -> null));
     }
 

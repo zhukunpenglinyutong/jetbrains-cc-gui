@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -17,7 +18,9 @@ import java.util.stream.Stream;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class TokenTrackerScanRootsTest {
@@ -335,5 +338,61 @@ public class TokenTrackerScanRootsTest {
         assertEquals("/work/profile", trackedAfterRestart);
         assertNull(afterClearing);
         assertEquals(json("{}"), json(Files.readString(configFile(), StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    public void eachIdeProductKeepsItsOwnMarker() {
+        assertNotEquals(TokenTrackerScanRoots.markerFile("IU"), TokenTrackerScanRoots.markerFile("PY"));
+        assertEquals("tokentracker-scanroots-IU.json", TokenTrackerScanRoots.markerFile("IU").getFileName().toString());
+    }
+
+    private Path trackerLock() {
+        return configFile().resolveSibling("config.json.lock");
+    }
+
+    @Test
+    public void aSyncInAnExistingTrackerDirectoryLeavesNoLockFilesBehind() throws Exception {
+        Files.createDirectories(configFile().getParent());
+        Files.writeString(configFile(), "{\"installedAt\":\"2026-11-01\"}", StandardCharsets.UTF_8);
+
+        TokenTrackerScanRoots.sync(configFile(), "/work/profile", null);
+
+        assertEquals(List.of("config.json"), filesIn(configFile().getParent()));
+        assertEquals(json("{\"installedAt\":\"2026-11-01\",\"scanRoots\":{\"claude\":[\"/work/profile\"]}}"),
+                json(Files.readString(configFile(), StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    public void aLockHeldByTokentrackerLeavesEverythingUntouched() throws Exception {
+        Files.createDirectories(configFile().getParent());
+        Files.writeString(configFile(), "{\"installedAt\":\"2026-11-01\"}", StandardCharsets.UTF_8);
+        Files.writeString(trackerLock(), "{\"pid\":1,\"token\":\"theirs\"}", StandardCharsets.UTF_8);
+
+        assertThrows(IOException.class,
+                () -> TokenTrackerScanRoots.sync(configFile(), "/work/profile", null, Duration.ofMillis(100)));
+
+        assertEquals("{\"installedAt\":\"2026-11-01\"}", Files.readString(configFile(), StandardCharsets.UTF_8));
+        assertEquals("{\"pid\":1,\"token\":\"theirs\"}", Files.readString(trackerLock(), StandardCharsets.UTF_8));
+    }
+
+    @Test
+    public void aLockReleasedWhileWaitingIsTaken() throws Exception {
+        Files.createDirectories(configFile().getParent());
+        Files.writeString(trackerLock(), "{\"pid\":1,\"token\":\"theirs\"}", StandardCharsets.UTF_8);
+        Thread releaser = new Thread(() -> {
+            try {
+                Thread.sleep(150);
+                Files.delete(trackerLock());
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            }
+        });
+        releaser.start();
+
+        String tracked = TokenTrackerScanRoots.sync(configFile(), "/work/profile", null, Duration.ofSeconds(5));
+        releaser.join();
+
+        assertEquals("/work/profile", tracked);
+        assertEquals(List.of("config.json"), filesIn(configFile().getParent()));
     }
 }

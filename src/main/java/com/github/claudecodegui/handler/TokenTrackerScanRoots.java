@@ -6,19 +6,28 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.intellij.openapi.application.ApplicationInfo;
 import com.intellij.openapi.diagnostic.Logger;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.UUID;
 
 /**
  * Keeps the usage statistics server pointed at the configured Claude config directory.
@@ -37,6 +46,8 @@ final class TokenTrackerScanRoots {
 
     private static final Object LOCK = new Object();
 
+    private static final Duration TRACKER_LOCK_WAIT = Duration.ofSeconds(2);
+
     private TokenTrackerScanRoots() {
     }
 
@@ -49,7 +60,7 @@ final class TokenTrackerScanRoots {
         try {
             synchronized (LOCK) {
                 Path override = ClaudeConfigDir.override();
-                Path marker = markerFile();
+                Path marker = markerFile(ApplicationInfo.getInstance().getBuild().getProductCode());
                 String tracked = readMarker(marker);
                 String trackedAfter = sync(configFile(), override == null ? null : override.toString(), tracked);
                 if (!Objects.equals(tracked, trackedAfter)) {
@@ -64,10 +75,11 @@ final class TokenTrackerScanRoots {
     /**
      * Records the entry this plugin added, so only that entry is ever removed. It lives in a file the plugin
      * owns and is written immediately: IDE settings are flushed lazily, and losing the marker would leave an
-     * entry in tokentracker's config that nothing owns.
+     * entry in tokentracker's config that nothing owns. There is one file per IDE product because the setting
+     * is stored per IDE: an IDE without the setting must not remove the entry another IDE added.
      */
-    static Path markerFile() {
-        return Paths.get(PlatformUtils.getHomeDirectory(), ".codemoss", "tokentracker-scanroots.json");
+    static Path markerFile(String productCode) {
+        return Paths.get(PlatformUtils.getHomeDirectory(), ".codemoss", "tokentracker-scanroots-" + productCode + ".json");
     }
 
     /** The tracked entry, or null when there is none or the file cannot be read. */
@@ -109,6 +121,77 @@ final class TokenTrackerScanRoots {
      * @return the entry the plugin now tracks as its own (null when it added none)
      */
     static String sync(Path configFile, String desired, String previouslyAdded) throws IOException {
+        return sync(configFile, desired, previouslyAdded, TRACKER_LOCK_WAIT);
+    }
+
+    static String sync(Path configFile, String desired, String previouslyAdded, Duration lockWait) throws IOException {
+        if (!Files.isDirectory(configFile.getParent())) {
+            // tokentracker has never run here, so nothing else can be writing the file.
+            return syncUnlocked(configFile, desired, previouslyAdded);
+        }
+        Path lock = configFile.resolveSibling(configFile.getFileName() + ".lock");
+        Path heartbeat = acquireTrackerLock(lock, UUID.randomUUID().toString(), lockWait);
+        try {
+            return syncUnlocked(configFile, desired, previouslyAdded);
+        } finally {
+            Files.deleteIfExists(heartbeat);
+            Files.deleteIfExists(lock);
+        }
+    }
+
+    /**
+     * Takes the lease tokentracker itself uses for config.json (openLock in its src/lib/fs.js): an owner file
+     * created exclusively with pid and token, plus a heartbeat file named after the token. A live pid with a
+     * fresh heartbeat makes tokentracker wait. Returns the heartbeat file.
+     */
+    private static Path acquireTrackerLock(Path lock, String token, Duration wait) throws IOException {
+        JsonObject owner = new JsonObject();
+        owner.addProperty("pid", ProcessHandle.current().pid());
+        owner.addProperty("token", token);
+        owner.addProperty("createdAt", Instant.now().toString());
+        long deadline = System.nanoTime() + wait.toNanos();
+        while (true) {
+            try {
+                Files.writeString(lock, owner + "\n", StandardCharsets.UTF_8,
+                        StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+                break;
+            } catch (FileAlreadyExistsException busy) {
+                // shortcut: a stale lease is left for tokentracker to reclaim; the next sync retries.
+                if (System.nanoTime() >= deadline) {
+                    throw new IOException("tokentracker is updating " + lock.getFileName() + ", try again later");
+                }
+                pause();
+            }
+        }
+        Path heartbeat = lock.resolveSibling(lock.getFileName() + ".heartbeat." + sha256Hex(token));
+        try {
+            Files.writeString(heartbeat, token + "\n", StandardCharsets.UTF_8,
+                    StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+        } catch (IOException e) {
+            Files.deleteIfExists(lock);
+            throw e;
+        }
+        return heartbeat;
+    }
+
+    private static void pause() throws IOException {
+        try {
+            Thread.sleep(25);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Interrupted while waiting for the tokentracker config lock", e);
+        }
+    }
+
+    private static String sha256Hex(String value) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 is unavailable", e);
+        }
+    }
+
+    private static String syncUnlocked(Path configFile, String desired, String previouslyAdded) throws IOException {
         JsonObject config = readConfig(configFile);
         if (config == null) {
             LOG.warn("[TokenTrackerScanRoots] Leaving an unreadable " + configFile + " untouched");

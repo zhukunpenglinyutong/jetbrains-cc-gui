@@ -2,6 +2,7 @@ package com.github.claudecodegui.handler;
 
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.core.HandlerContext;
+import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.util.ClaudeConfigDir;
 import com.github.claudecodegui.util.WslPathUtil;
 import com.google.gson.Gson;
@@ -73,8 +74,10 @@ public class ClaudeConfigDirHandler {
 
                 if (failure == null) {
                     TokenTrackerScanRoots.syncFromSettings();
+                    // CLAUDE_CONFIG_DIR is injected at daemon spawn: other chat tabs replace their
+                    // daemon on their next idle request, this tab restarts now.
+                    ClaudeSDKBridge.markSdkChanged();
                     try {
-                        // CLAUDE_CONFIG_DIR is injected at daemon spawn, so restart it.
                         context.getClaudeSDKBridge().shutdownDaemon();
                     } catch (Exception e) {
                         LOG.warn("[ClaudeConfigDirHandler] Failed to shutdown daemon: " + e.getMessage());

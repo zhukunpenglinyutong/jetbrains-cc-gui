@@ -1,7 +1,6 @@
 package com.github.claudecodegui.provider.claude;
 
 import com.github.claudecodegui.util.ClaudeConfigDir;
-import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.provider.common.GitRepositorySessionMatcher;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.google.gson.Gson;

@@ -258,7 +258,7 @@
       "claudeConfigDir": {
         "label": "Diretório de configuração do Claude (substituição)",
         "placeholder": "ex. ~/.claude-work — deixe vazio para usar CLAUDE_CONFIG_DIR ou ~/.claude",
-        "hint": "Opcional. O histórico do chat, as ações de sessão e o processo do Claude leem este diretório em vez de ~/.claude. As estatísticas de uso o somam a ~/.claude (combinado, não por perfil) e um servidor de estatísticas em execução o assimila na próxima sincronização; o uso já contabilizado permanece se você limpar o campo. Use um caminho absoluto ou ~/…; com um node do WSL, um caminho Linux como /home/me/.claude-work funciona. Combine com o caminho do CLI do Claude do mesmo perfil. O daemon reinicia ao salvar."
+        "hint": "Opcional. O histórico do chat, as ações de sessão e o processo do Claude leem este diretório em vez de ~/.claude. Servidores MCP, skills e Hooks das páginas de configurações do plugin continuam usando ~/.claude. As estatísticas de uso o somam a ~/.claude (combinado, não por perfil) e um servidor de estatísticas em execução o assimila na próxima sincronização; o uso já contabilizado permanece se você limpar o campo. Use um caminho absoluto ou ~/…; com um node do WSL, um caminho Linux como /home/me/.claude-work funciona e o CLAUDE_CONFIG_DIR do Windows não é usado. Combine com o caminho do CLI do Claude do mesmo perfil. O daemon reinicia ao salvar."
       },
       "workingDirectory": {
         "label": "Diretório de Trabalho",

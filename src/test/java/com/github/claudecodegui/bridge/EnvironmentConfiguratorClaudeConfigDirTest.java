@@ -38,11 +38,11 @@ public class EnvironmentConfiguratorClaudeConfigDirTest {
     }
 
     @Test
-    public void noOverrideKeepsAnInheritedValueForANativeNode() {
+    public void noOverrideRemovesAnInheritedValueTheResolverRejected() {
         Map<String, String> env = new HashMap<>();
-        env.put("CLAUDE_CONFIG_DIR", "inherited");
+        env.put("CLAUDE_CONFIG_DIR", "relative/profile");
         EnvironmentConfigurator.configureClaudeConfigDirEnv(env, null, false);
-        assertEquals("inherited", env.get("CLAUDE_CONFIG_DIR"));
+        assertFalse(env.containsKey("CLAUDE_CONFIG_DIR"));
     }
 
     @Test

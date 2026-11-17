@@ -22,7 +22,9 @@ import java.util.function.UnaryOperator;
  * <p>With a WSL node the same directory has two spellings. The plugin reads files through the
  * Windows UNC form ({@code \\wsl.localhost\Distro\home\me\.claude-work}), while node inside WSL
  * needs the Linux form ({@code /home/me/.claude-work}). A Linux path typed in the setting is
- * converted for file access, and {@link #forNode} converts back for the child process.
+ * converted for file access, and {@link #forNode} converts back for the child process. A WSL node
+ * ignores the IDE's {@code CLAUDE_CONFIG_DIR}: that value names the Windows Claude's directory, and
+ * the Claude inside WSL keeps its own {@code ~/.claude} unless the setting says otherwise.
  */
 public final class ClaudeConfigDir {
 
@@ -60,14 +62,14 @@ public final class ClaudeConfigDir {
         return Paths.get(value);
     }
 
-    /** The first usable explicit directory (setting, then env), or null when the default applies. */
+    /** The first usable explicit directory (setting, then env; setting only for a WSL node), or null for the default. */
     public static Path explicit(String configured, String envValue, String home) {
         return explicit(configured, envValue, home, false, null);
     }
 
     public static Path explicit(String configured, String envValue, String home,
                                 boolean wslNode, UnaryOperator<String> linuxToUnc) {
-        for (String candidate : new String[] {configured, envValue}) {
+        for (String candidate : wslNode ? new String[] {configured} : new String[] {configured, envValue}) {
             if (candidate == null || candidate.trim().isEmpty()) {
                 continue;
             }

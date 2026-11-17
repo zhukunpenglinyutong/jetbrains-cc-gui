@@ -258,7 +258,7 @@
       "claudeConfigDir": {
         "label": "Claude 설정 디렉터리 (재정의)",
         "placeholder": "예: ~/.claude-work — 비워 두면 CLAUDE_CONFIG_DIR 또는 ~/.claude 사용",
-        "hint": "선택 사항. 채팅 기록, 세션 작업, Claude 프로세스가 ~/.claude 대신 이 디렉터리를 읽습니다. 사용 통계는 이를 ~/.claude에 더해 합산하며(프로필별 아님), 실행 중인 통계 서버는 다음 동기화 때 반영합니다. 비워도 이미 집계된 사용량은 유지됩니다. 절대 경로 또는 ~/…를 사용하세요. WSL의 node를 쓰면 /home/me/.claude-work 같은 Linux 경로도 가능합니다. 같은 프로필의 Claude CLI 경로와 함께 사용하세요. 저장 시 데몬이 다시 시작됩니다."
+        "hint": "선택 사항. 채팅 기록, 세션 작업, Claude 프로세스가 ~/.claude 대신 이 디렉터리를 읽습니다. 플러그인 설정 페이지의 MCP 서버, 스킬, Hooks는 계속 ~/.claude를 사용합니다. 사용 통계는 이를 ~/.claude에 더해 합산하며(프로필별 아님), 실행 중인 통계 서버는 다음 동기화 때 반영합니다. 비워도 이미 집계된 사용량은 유지됩니다. 절대 경로 또는 ~/…를 사용하세요. WSL의 node를 쓰면 /home/me/.claude-work 같은 Linux 경로도 가능하며, Windows의 CLAUDE_CONFIG_DIR은 사용되지 않습니다. 같은 프로필의 Claude CLI 경로와 함께 사용하세요. 저장 시 데몬이 다시 시작됩니다."
       },
       "workingDirectory": {
         "label": "작업 디렉토리",
