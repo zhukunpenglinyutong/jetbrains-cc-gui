@@ -3317,6 +3317,7 @@ test('Thinking on: a fast answer stream does not copy the conversation database 
       "process.on('exit', () => process.stderr.write('SNAPSHOTS:' + n + '\\n'));",
     ].join('\n'));
 
+    const startedAt = Date.now();
     const { stdout, stderr, timedOut } = await runService({
       mode: 'think-burst',
       cliHome: tempDir,
@@ -3326,13 +3327,18 @@ test('Thinking on: a fast answer stream does not copy the conversation database 
       // bounded child headroom so a loaded machine is not a timeout test.
       timeoutMs: 20000,
     });
+    const elapsedMs = Date.now() - startedAt;
 
     assert.equal(timedOut, false, 'the fast stream must finish on its own');
     const counts = [...stderr.matchAll(/SNAPSHOTS:(\d+)/g)].map((m) => Number(m[1]));
     const snapshots = Math.max(0, ...counts);
     assert.ok(snapshots > 0, `the hook must see the service's reads: ${stderr.slice(-400)}`);
-    // About 7 reads happen in any turn (preseed, step start/end, result recovery); the old code made 36 here.
-    assert.ok(snapshots <= 12, `30 lines in ~0.7 s must not mean 30 copies, got ${snapshots}`);
+    // The service time-throttles DB snapshots (~500 ms), so a slower runner
+    // legitimately takes more reads for the same 30 lines. Keep the bound
+    // time-proportional while still rejecting the old per-line copy (36).
+    const maxSnapshots = Math.min(29, 8 + Math.ceil(elapsedMs / 500));
+    assert.ok(snapshots <= maxSnapshots,
+      `30 lines over ${elapsedMs}ms must not mean 30 copies, got ${snapshots} (limit ${maxSnapshots})`);
     assert.equal(markers(stdout, 'CONTENT_DELTA').length, 30);
     assert.equal(finalPayload(stdout).success, true);
   } finally {
