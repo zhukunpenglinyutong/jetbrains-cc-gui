@@ -39,7 +39,8 @@ export function capturePreviewSelection(root: HTMLElement): PreviewSelection | n
   if (!selectedText.trim() || selectedText.length > REVIEW_TEXT_MAX_CHARS) return null;
   const nearest = (node: Node): [number, number] | null => {
     let element = node.nodeType === Node.ELEMENT_NODE ? node as Element : node.parentElement;
-    while (element && root.contains(hostNode(element))) {
+    // The root's own range is the whole document; text without a positioned block is not anchorable.
+    while (element && element !== root && root.contains(hostNode(element))) {
       const offsets = sourceRange(element, attribute);
       if (offsets) return offsets;
       if (element.matches('.mermaid-diagram, .mermaid[data-actual-fence-content]')) return null;

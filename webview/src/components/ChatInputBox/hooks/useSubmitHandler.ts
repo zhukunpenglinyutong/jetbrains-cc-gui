@@ -85,9 +85,14 @@ export function useSubmitHandler({
   return useCallback(() => {
     // Force fresh DOM read to avoid stale cache (e.g., after paste)
     invalidateCache();
-    const input = expandQuoteTokens(getTextContent());
-    const reviewSubmission = captureReviewSubmission?.();
+    const rawInput = getTextContent();
+    // A slash command must stay at the head of the message to reach the CLI; drafts wait for the next message.
+    const isSlashCommand = /^\/[\w:.-]+(?:\s|$)/.test(rawInput.trimStart());
+    const reviewSubmission = isSlashCommand ? undefined : captureReviewSubmission?.();
     const reviews = reviewSubmission?.text ?? '';
+    // Review handoffs freeze quote text before the deferred clear; ordinary messages keep
+    // the chip tokens so a queued message restores its chips when edited.
+    const input = reviews ? expandQuoteTokens(rawInput) : rawInput;
     const content = reviews ? [reviews, input.trim() ? input : ''].filter(Boolean).join('\n\n') : input;
     const cleanContent = content.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
 

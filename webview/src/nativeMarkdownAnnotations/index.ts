@@ -49,6 +49,9 @@ function start(pipe: NativePipe) {
   let pending = false;
   let message = '';
   let draft = '';
+  // A new comment the host rejected (e.g. the document changed while typing); the
+  // user must select again, so the next new comment starts from this text.
+  let unsavedDraft = '';
   let root: HTMLElement | null = null;
   const adaptMermaid = createMermaidAdapter(() => scheduleRender(), () => state?.enabled !== false);
   const callbacks = new Map<string, { resolve: (ok: boolean) => void; timer: ReturnType<typeof setTimeout> }>();
@@ -128,9 +131,12 @@ function start(pipe: NativePipe) {
     retry = null;
     const timer = setTimeout(() => {
       callbacks.delete(requestId);
-      // Housekeeping requests are cheap to repeat; only user intents reuse the
-      // id, since a cached replay of a sync would skip the real reconciliation.
-      if (action !== 'ready' && action !== 'sync') retry = { signature, requestId };
+      // Housekeeping requests are repeated automatically and carry no user content:
+      // the first 'ready' is posted before the IDE injects the pipe at load end and
+      // is dropped, so reporting it would show a false "no acknowledgement".
+      if (action === 'ready' || action === 'sync') { resolve(false); return; }
+      // Only user intents reuse the id; a cached replay of a sync would skip reconciliation.
+      retry = { signature, requestId };
       message = labels.timeout; pending = false; render();
       resolve(false);
     }, 8000);
@@ -348,7 +354,7 @@ function start(pipe: NativePipe) {
         position(toolbar, selection?.left ?? 16, selection?.top ?? 80);
       } else if (selection) {
         toolbar.append(button(labels.comment, () => {
-          draft = ''; editing = true; showAllComments = false; popupPosition = null; message = ''; render();
+          draft = unsavedDraft; editing = true; showAllComments = false; popupPosition = null; message = ''; render();
           popup.querySelector('textarea')?.focus();
         }), button(labels.quote, () => {
           if (pending || !selection) return;
@@ -444,10 +450,15 @@ function start(pipe: NativePipe) {
             if (!draft.trim()) { message = labels.empty; render(); return; }
             if (!activeComment && !selection) { message = labels.selectionMismatch; render(); return; }
             pending = true;
+            const creating = !activeComment;
             const operation = activeComment
               ? send('update', { id: activeComment.id, revision: activeComment.revision, comment: draft })
               : send('create', { ...selection, documentVersion: selectionVersion, comment: draft });
-            void operation.then(ok => { pending = false; if (ok) close(); else render(); })
+            void operation.then(ok => {
+              pending = false;
+              if (creating) unsavedDraft = ok ? '' : draft;
+              if (ok) close(); else render();
+            })
               .catch(() => { pending = false; message = labels.failed; render(); });
           };
           actions.append(button(labels.cancel, close), button(activeComment ? labels.save : labels.add, saveComment, pending, 'primary'));
@@ -536,6 +547,8 @@ function start(pipe: NativePipe) {
   }
 
   function close() {
+    // Keep the latest edit of a rejected new comment; clearing the box discards it.
+    if (editing && !activeComment && unsavedDraft) unsavedDraft = draft;
     editing = false; composing = false; activeComment = null; selection = null; popupPosition = null; showAllComments = false;
     relocating = null; draft = ''; popup.replaceChildren(); render();
   }

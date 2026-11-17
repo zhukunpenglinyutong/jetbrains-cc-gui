@@ -28,6 +28,14 @@ describe('native Markdown selection mapping', () => {
     expect(capturePreviewSelection(root)).toMatchObject({ start: 0, end: 30 });
   });
 
+  it('does not anchor text without a positioned block to the whole document', () => {
+    root.setAttribute('data-sourcepos', '0..30');
+    root.insertAdjacentHTML('beforeend', '<div><span>raw html</span></div>');
+    const raw = root.querySelector('span')!.firstChild!;
+    select(raw, 0, raw, 3);
+    expect(capturePreviewSelection(root)).toBeNull();
+  });
+
   it('rejects selections outside the native root and invalid source metadata', () => {
     const outside = document.createElement('p'); outside.textContent = 'outside'; document.body.append(outside);
     select(root.firstElementChild!.firstChild!, 0, outside.firstChild!, 7);

@@ -47,5 +47,7 @@ public class MarkdownReviewPromptTest {
         assertEquals("Markdown review: docs/plan.md", MarkdownReviewPrompt.displaySummary(withPath));
         assertEquals("Please fix", MarkdownReviewPrompt.displaySummary(withPath + "\n\nPlease fix"));
         assertNull(MarkdownReviewPrompt.displaySummary("ordinary message"));
+        // Claude CLI lastPrompt is cut to 200 chars, so the closing tag is gone.
+        assertEquals("Markdown review", MarkdownReviewPrompt.displaySummary(withPath.substring(0, 60) + "\u2026"));
     }
 }

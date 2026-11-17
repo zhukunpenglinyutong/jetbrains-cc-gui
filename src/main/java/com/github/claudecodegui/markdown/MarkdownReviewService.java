@@ -446,9 +446,16 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
     private boolean resolveAnchor(Annotation annotation, Document document, String text) {
         RangeMarker marker = markers.get(annotation.id);
         boolean markerHere = marker != null && marker.isValid() && marker.getDocument() == document;
-        if (markerHere && text.substring(marker.getStartOffset(), marker.getEndOffset()).equals(annotation.sourceText)) {
-            applyRange(annotation, document, marker.getStartOffset(), marker.getEndOffset(), "attached", null);
-            return true;
+        if (markerHere) {
+            // IntelliJ widens a marker when a minimized replace inserts right at its edge
+            // (disk reload, paste-over); the quote still inside it is the same place.
+            String tracked = text.substring(marker.getStartOffset(), marker.getEndOffset());
+            int inner = tracked.indexOf(annotation.sourceText);
+            if (inner >= 0 && tracked.indexOf(annotation.sourceText, inner + 1) < 0) {
+                int start = marker.getStartOffset() + inner;
+                applyRange(annotation, document, start, start + annotation.sourceText.length(), "attached", null);
+                return true;
+            }
         }
         int hint = markerHere ? marker.getStartOffset() : annotation.start;
         AnnotationAnchorResolver.Match match = AnnotationAnchorResolver.locate(
@@ -620,8 +627,9 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
                                 if ("changed".equals(item.status)) {
                                     item.anchorText = text.substring(item.start, item.end);
                                 } else {
-                                    item.status = text.substring(item.start, item.end).equals(item.sourceText) ? "attached" : "orphaned";
-                                    item.anchorText = null;
+                                    // A disk reload or paste-over can widen the marker over adjacent
+                                    // text; relocate the quote instead of orphaning it.
+                                    resolveAnchor(item, document, text);
                                 }
                                 if ("orphaned".equals(item.status)) {
                                     item.sourceMissing = true;

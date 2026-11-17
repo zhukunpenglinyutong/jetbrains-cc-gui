@@ -39,6 +39,22 @@ public class LanguageConfigServiceCacheTest {
     }
 
     @Test
+    public void rereadsAfterTheTtlSoAChangeFromAnotherIdeShowsUp() {
+        LanguageConfigService.invalidateUserLanguageCache();
+        try {
+            AtomicInteger reads = new AtomicInteger();
+            long ttl = LanguageConfigService.USER_LANGUAGE_CACHE_TTL_MS;
+            assertEquals("zh", LanguageConfigService.userLanguageWithCache(() -> { reads.incrementAndGet(); return "zh"; }, 0));
+            assertEquals("zh", LanguageConfigService.userLanguageWithCache(() -> { reads.incrementAndGet(); return "en"; }, ttl - 1));
+            assertEquals(1, reads.get());
+            assertEquals("en", LanguageConfigService.userLanguageWithCache(() -> { reads.incrementAndGet(); return "en"; }, ttl));
+            assertEquals(2, reads.get());
+        } finally {
+            LanguageConfigService.invalidateUserLanguageCache();
+        }
+    }
+
+    @Test
     public void doesNotCacheTransientReadFailures() {
         LanguageConfigService.invalidateUserLanguageCache();
         try {

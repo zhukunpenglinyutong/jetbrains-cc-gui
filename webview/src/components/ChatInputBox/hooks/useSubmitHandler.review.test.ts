@@ -34,6 +34,44 @@ describe('review submission snapshot', () => {
     expect(onSubmitted).toHaveBeenCalledOnce();
   });
 
+  it('keeps quote chip tokens in ordinary messages so a queued edit restores the chip', () => {
+    vi.useFakeTimers();
+    const config = options();
+    const token = makeQuoteToken(registerQuote('quoted source'));
+    config.getTextContent = () => token + ' explain';
+    const { result } = renderHook(() => useSubmitHandler(config));
+    result.current();
+    vi.advanceTimersByTime(20);
+    expect(config.onSubmit).toHaveBeenCalledWith(token + ' explain', undefined);
+  });
+
+  it('sends a slash command on its own and keeps review drafts for the next message', () => {
+    vi.useFakeTimers();
+    const config = options();
+    config.getTextContent = () => '/compact';
+    const onSubmitted = vi.fn();
+    config.captureReviewSubmission = vi.fn(() => ({ text: 'review', onSubmitted }));
+    const { result } = renderHook(() => useSubmitHandler(config));
+    result.current();
+    vi.advanceTimersByTime(20);
+    expect(config.onSubmit).toHaveBeenCalledWith('/compact', undefined);
+    expect(config.captureReviewSubmission).not.toHaveBeenCalled();
+    expect(onSubmitted).not.toHaveBeenCalled();
+  });
+
+  it('still attaches drafts to text that only starts with a path', () => {
+    vi.useFakeTimers();
+    const config = options();
+    config.getTextContent = () => '/src/plan.md looks wrong';
+    const onSubmitted = vi.fn();
+    config.captureReviewSubmission = () => ({ text: 'review', onSubmitted, isCurrent: () => true });
+    const { result } = renderHook(() => useSubmitHandler(config));
+    result.current();
+    vi.advanceTimersByTime(20);
+    expect(config.onSubmit).toHaveBeenCalledWith('review\n\n/src/plan.md looks wrong', undefined);
+    expect(onSubmitted).toHaveBeenCalledOnce();
+  });
+
   it('retains review drafts when the SDK is unavailable or context exceeds the limit', () => {
     const config = options();
     const onSubmitted = vi.fn();

@@ -111,12 +111,9 @@ public final class AnnotationAnchorResolver {
         if (found >= 0) {
             return found;
         }
-        // Context can change during nearby edits. A unique source is still safe.
-        int first = document.indexOf(source);
-        if (first >= 0 && document.indexOf(source, first + 1) < 0) {
-            return first;
-        }
-        return first >= 0 ? -2 : -1;
+        // Without its context a unique copy may be a different occurrence that only became
+        // unique because the commented one was deleted; refuse to guess (manual relocate).
+        return document.contains(source) ? -2 : -1;
     }
 
     private static boolean matchesContext(String text, int start, int length, String prefix, String suffix) {

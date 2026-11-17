@@ -36,8 +36,8 @@ describe('native Markdown interaction state machine and debounce', () => {
 
   afterEach(() => {
     vi.useRealTimers();
-    const container = document.getElementById('ccgui-markdown-review');
-    if (container) container.remove();
+    vi.restoreAllMocks();
+    document.querySelectorAll('#ccgui-markdown-review').forEach(container => container.remove());
     const win = window as any;
     delete win.__ccguiMarkdownReview;
   });
@@ -74,6 +74,67 @@ describe('native Markdown interaction state machine and debounce', () => {
     // Exactly 1 sync sent
     const syncs = sentMessages.filter(m => m.data.includes('"action":"sync"'));
     expect(syncs).toHaveLength(1);
+  });
+
+  const lastRequest = (action: string) => JSON.parse([...sentMessages].reverse()
+    .find(m => m.data.includes(`"action":"${action}"`))!.data);
+  const enabledState = (documentVersion: number) => JSON.stringify({
+    kind: 'state', panelId: 'panel-1', documentVersion, enabled: true, annotations: [],
+  });
+
+  it('does not report a timeout for the first ready that the IDE drops before its pipe exists', async () => {
+    // BrowserPipe.js swallows posts until the IDE injects its post function at load end.
+    const post = mockPipe.post;
+    let connected = false;
+    mockPipe.post = (type, data) => { if (connected) post(type, data); };
+    try {
+      await import('./index');
+      connected = true;
+      window.dispatchEvent(new Event('IdeReady'));
+      messageCallback!(enabledState(1));
+      messageCallback!(JSON.stringify({ requestId: lastRequest('ready').requestId, status: 'ok' }));
+      vi.advanceTimersByTime(9000);
+      expect(document.querySelector('#ccgui-markdown-review .ccgui-md-status')).toBeNull();
+    } finally {
+      mockPipe.post = post;
+    }
+  });
+
+  it('keeps a comment the host rejected so the user can select again without retyping it', async () => {
+    const rect = () => ({ left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0, x: 0, y: 0, toJSON: () => ({}) });
+    vi.spyOn(Range.prototype, 'getBoundingClientRect').mockImplementation(() => rect() as DOMRect);
+    vi.spyOn(Range.prototype, 'getClientRects').mockImplementation(() => [] as unknown as DOMRectList);
+    const selectParagraph = () => {
+      const text = document.querySelector('p')!.firstChild!;
+      const range = document.createRange();
+      range.setStart(text, 0); range.setEnd(text, 2);
+      window.getSelection()!.removeAllRanges(); window.getSelection()!.addRange(range);
+      document.dispatchEvent(new Event('selectionchange'));
+    };
+    const click = (label: string) => {
+      const target = [...document.querySelectorAll<HTMLButtonElement>('#ccgui-markdown-review button')]
+        .find(element => element.textContent === label);
+      expect(target, label).toBeDefined();
+      target!.click();
+    };
+    await import('./index');
+    messageCallback!(enabledState(1));
+    selectParagraph();
+    click('Comment');
+    const textarea = document.querySelector<HTMLTextAreaElement>('#ccgui-markdown-review textarea')!;
+    textarea.value = 'tighten this wording';
+    textarea.dispatchEvent(new Event('input'));
+    click('Add comment');
+    // The document changed while typing: the host rejects the stale selection.
+    messageCallback!(JSON.stringify({ requestId: lastRequest('create').requestId, status: 'error', messageKey: 'documentChanged' }));
+    await vi.waitFor(() => expect(document.querySelector('#ccgui-markdown-review .ccgui-md-popup .primary')).not.toHaveProperty('disabled', true));
+    click('Cancel');
+    messageCallback!(enabledState(2));
+    selectParagraph();
+    click('Comment');
+    expect(document.querySelector<HTMLTextAreaElement>('#ccgui-markdown-review textarea')!.value).toBe('tighten this wording');
+    // A live selection would wake this test's overlay instance during the next test.
+    window.getSelection()!.removeAllRanges();
   });
 
   it('filters completed and orphaned annotations from the transfer action', async () => {

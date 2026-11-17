@@ -21,10 +21,17 @@ public class AnnotationAnchorResolverTest {
     }
 
     @Test
-    public void fallsBackOnlyToUniqueSourceAndKeepsDeletedTextOrphaned() {
-        assertEquals(4, AnnotationAnchorResolver.relocate("new same ending", "same", 0, "old ", " old"));
+    public void refusesAUniqueCopyWithoutContextAndKeepsDeletedTextOrphaned() {
+        assertEquals(-2, AnnotationAnchorResolver.relocate("new same ending", "same", 0, "old ", " old"));
         assertEquals(-1, AnnotationAnchorResolver.relocate("changed", "same", 0, "", ""));
         assertEquals(-1, AnnotationAnchorResolver.relocate("changed", "", 0, "", ""));
+    }
+
+    @Test
+    public void deletingTheCommentedLineDoesNotMoveTheCommentToTheOtherCopy() {
+        // Comment was on the first TODO; that line is deleted, the second TODO stays.
+        var match = AnnotationAnchorResolver.locate("- TODO: write docs\n", "TODO", 2, "- ", ": fix login\n- TODO: write docs\n");
+        assertEquals(AnnotationAnchorResolver.AnchorStatus.AMBIGUOUS, match.status());
     }
 
     @Test

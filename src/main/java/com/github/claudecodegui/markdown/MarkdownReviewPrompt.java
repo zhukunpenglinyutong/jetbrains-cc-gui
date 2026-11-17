@@ -10,6 +10,7 @@ public final class MarkdownReviewPrompt {
             + "Report completed IDs and every unfinished or partial item with file, reason and next step, even if its live marker disappeared.";
     private static final String OPEN = "<ccgui-markdown-review>";
     private static final String CLOSE = "</ccgui-markdown-review>";
+    private static final String TITLE = "Markdown review";
 
     private MarkdownReviewPrompt() {
     }
@@ -58,7 +59,8 @@ public final class MarkdownReviewPrompt {
         }
         int end = text.indexOf(CLOSE, OPEN.length());
         if (end < 0) {
-            return null;
+            // The Claude CLI stores lastPrompt cut to 200 chars, which drops the closing tag.
+            return TITLE;
         }
         try {
             var payload = JsonParser.parseString(text.substring(OPEN.length(), end)).getAsJsonObject();
@@ -69,7 +71,7 @@ public final class MarkdownReviewPrompt {
             var first = payload.getAsJsonArray("batches").get(0).getAsJsonObject();
             String path = payload.has("version") ? first.get("path").getAsString()
                     : first.getAsJsonArray("annotations").get(0).getAsJsonObject().get("path").getAsString();
-            return request.isEmpty() ? "Markdown review: " + path : request;
+            return request.isEmpty() ? TITLE + ": " + path : request;
         } catch (RuntimeException ignored) {
             return null;
         }

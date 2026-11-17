@@ -23,7 +23,10 @@ public class LanguageConfigService {
 
     /** Cached manual preference; "" means "verified absent". Transient read failures are not cached. */
     private static volatile String cachedUserLanguage;
+    private static volatile long cachedUserLanguageAt;
     private static volatile boolean cachedUserLanguageLogged;
+    /** ~/.codemoss/config.json is shared by every open IDE; re-read it so another IDE's change shows up. */
+    static final long USER_LANGUAGE_CACHE_TTL_MS = 5_000;
 
     /**
      * Map IDEA locale codes to i18n-supported language codes.
@@ -98,8 +101,12 @@ public class LanguageConfigService {
      * Cache semantics around a raw preference reader. Package-private for unit tests.
      */
     static String userLanguageWithCache(java.util.function.Supplier<String> reader) {
+        return userLanguageWithCache(reader, System.currentTimeMillis());
+    }
+
+    static String userLanguageWithCache(java.util.function.Supplier<String> reader, long nowMillis) {
         String cached = cachedUserLanguage;
-        if (cached != null) {
+        if (cached != null && nowMillis - cachedUserLanguageAt < USER_LANGUAGE_CACHE_TTL_MS) {
             return cached.isEmpty() ? null : cached;
         }
         String raw;
@@ -115,6 +122,7 @@ public class LanguageConfigService {
             LOG.info("[LanguageConfig] User manually set language: " + value);
             cachedUserLanguageLogged = true;
         }
+        cachedUserLanguageAt = nowMillis;
         cachedUserLanguage = value;
         return value.isEmpty() ? null : value;
     }
