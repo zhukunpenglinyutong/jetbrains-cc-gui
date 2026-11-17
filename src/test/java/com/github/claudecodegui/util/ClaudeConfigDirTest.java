@@ -94,8 +94,8 @@ public class ClaudeConfigDirTest {
 
     @Test
     public void unavailableWslMappingFallsThroughToTheNextCandidate() {
-        assertEquals(Paths.get(abs("env")),
-                ClaudeConfigDir.resolve("/home/me/p", abs("env"), home(), true, linux -> null));
+        java.util.function.UnaryOperator<String> mapping = linux -> linux.equals("/home/me/p") ? null : abs("env");
+        assertEquals(Paths.get(abs("env")), ClaudeConfigDir.resolve("/home/me/p", "/home/me/other", home(), true, mapping));
         assertNull(ClaudeConfigDir.explicit("/home/me/p", null, home(), true, linux -> null));
     }
 
@@ -107,7 +107,11 @@ public class ClaudeConfigDirTest {
 
     @Test
     public void wslNodeKeepsAnAbsoluteWindowsPathUnchanged() {
-        assertEquals(Paths.get(abs("win")), ClaudeConfigDir.resolve(abs("win"), null, home(), true, linux -> "unused"));
+        String drivePath = "D:\\profiles\\work";
+        java.util.function.UnaryOperator<String> mustNotBeCalled = linux -> {
+            throw new AssertionError("a drive path must not be mapped as a Linux path: " + linux);
+        };
+        assertEquals(Paths.get(drivePath), ClaudeConfigDir.expand(drivePath, home(), true, mustNotBeCalled));
     }
 
     @Test
