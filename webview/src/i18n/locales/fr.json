@@ -268,6 +268,11 @@
         "placeholder": "ex. /usr/local/bin/claude — laissez vide pour utiliser le SDK intégré",
         "hint": "Facultatif. Lorsqu'il est défini, le plugin lance ce binaire au lieu du @anthropic-ai/claude-agent-sdk intégré. Le démon redémarre lors de l'enregistrement."
       },
+      "claudeConfigDir": {
+        "label": "Répertoire de configuration de Claude (remplacement)",
+        "placeholder": "ex. ~/.claude-work — laissez vide pour utiliser CLAUDE_CONFIG_DIR ou ~/.claude",
+        "hint": "Facultatif. L'historique des discussions, les actions de session et le processus Claude lisent ce répertoire à la place de ~/.claude. Les serveurs MCP, les compétences et les Hooks des pages de paramètres du plugin utilisent toujours ~/.claude. Les statistiques d'utilisation l'ajoutent à ~/.claude (cumul, pas par profil) et un serveur de statistiques en cours d'exécution le prend en compte à sa prochaine synchronisation ; l'utilisation déjà comptabilisée est conservée si vous l'effacez. Utilisez un chemin absolu ou ~/… ; avec un node WSL, un chemin Linux comme /home/me/.claude-work fonctionne et le CLAUDE_CONFIG_DIR de Windows n'est pas utilisé. Associez-le au chemin du CLI Claude du même profil. Le démon redémarre lors de l'enregistrement."
+      },
       "workingDirectory": {
         "label": "Working Directory",
         "placeholder": "e.g. project1 or leave empty to use project root",

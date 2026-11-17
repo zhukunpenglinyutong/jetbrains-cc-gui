@@ -1,7 +1,6 @@
 package com.github.claudecodegui.handler.history;
 
 import com.github.claudecodegui.handler.core.HandlerContext;
-import com.github.claudecodegui.provider.claude.ClaudeHistoryReader;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.util.PathUtils;
 import com.google.gson.JsonElement;
@@ -42,16 +41,15 @@ public class CrossDirectoryClaudeActionsTest {
             @Override public String resolveEffectiveWorkingDirectory() { return project.toString(); }
         };
         Field homeField = com.github.claudecodegui.util.PlatformUtils.class.getDeclaredField("cachedRealHomeDir");
-        Field historyField = ClaudeHistoryReader.class.getDeclaredField("claudeDir");
-        homeField.setAccessible(true); historyField.setAccessible(true);
+        homeField.setAccessible(true);
         Object oldHome = homeField.get(null);
-        Object oldHistory = historyField.get(null);
         try {
             homeField.set(null, home.toString());
-            historyField.set(null, home.resolve(".claude"));
             // All destructive fixture operations must remain inside this temporary home.
             org.junit.Assume.assumeTrue(home.toString().equals(
                     com.github.claudecodegui.bridge.NodeDetector.resolveHomeForFileOps()));
+            org.junit.Assume.assumeTrue(home.resolve(".claude").equals(
+                    com.github.claudecodegui.util.ClaudeConfigDir.current()));
             var export = new HistoryExportService(context);
             var read = HistoryExportService.class.getDeclaredMethod("loadMessagesForExport", String.class, String.class, String.class);
             read.setAccessible(true);
@@ -72,7 +70,6 @@ public class CrossDirectoryClaudeActionsTest {
             assertFalse(Files.exists(transcript));
             assertTrue(Files.exists(foreign));
         } finally {
-            historyField.set(null, oldHistory);
             homeField.set(null, oldHome);
         }
     }

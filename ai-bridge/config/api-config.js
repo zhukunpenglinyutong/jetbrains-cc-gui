@@ -5,7 +5,7 @@
 
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
-import { getClaudeDir, getCodemossDir, getManagedSettingsPath } from '../utils/path-utils.js';
+import { getCodemossDir, getManagedSettingsPath, getPluginClaudeSettingsPath } from '../utils/path-utils.js';
 import { MODEL_TIER_ENV_KEYS, readConfiguredModelTiers, resolveModelTierEnvKey } from '../utils/model-utils.js';
 
 // Conditional debug logging: set CLAUDE_DEBUG=1 to enable verbose diagnostics
@@ -428,7 +428,7 @@ function readJsonFile(filePath) {
 }
 
 function readClaudeSettingsFromDisk() {
-  return readJsonFile(join(getClaudeDir(), 'settings.json'));
+  return readJsonFile(getPluginClaudeSettingsPath());
 }
 
 export function loadCodemossConfig() {

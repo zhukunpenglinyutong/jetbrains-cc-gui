@@ -268,6 +268,11 @@
         "placeholder": "p. ej. /usr/local/bin/claude — déjalo vacío para usar el SDK integrado",
         "hint": "Opcional. Cuando se establece, el complemento ejecuta este binario en lugar del @anthropic-ai/claude-agent-sdk integrado. El daemon se reinicia al guardar."
       },
+      "claudeConfigDir": {
+        "label": "Directorio de configuración de Claude (anulación)",
+        "placeholder": "p. ej. ~/.claude-work — déjalo vacío para usar CLAUDE_CONFIG_DIR o ~/.claude",
+        "hint": "Opcional. El historial del chat, las acciones de sesión y el proceso de Claude leen este directorio en lugar de ~/.claude. Los servidores MCP, las habilidades y los Hooks de las páginas de ajustes del plugin siguen usando ~/.claude. Las estadísticas de uso lo suman a ~/.claude (combinado, no por perfil) y un servidor de estadísticas en ejecución lo recoge en su próxima sincronización; el uso ya contabilizado se conserva si lo borras. Usa una ruta absoluta o ~/…; con un node de WSL sirve una ruta de Linux como /home/me/.claude-work y no se usa el CLAUDE_CONFIG_DIR de Windows. Combínalo con la ruta del CLI de Claude del mismo perfil. El daemon se reinicia al guardar."
+      },
       "workingDirectory": {
         "label": "Working Directory",
         "placeholder": "e.g. project1 or leave empty to use project root",

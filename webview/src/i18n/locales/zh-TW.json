@@ -266,6 +266,11 @@
         "placeholder": "例如 /usr/local/bin/claude — 留空則使用內建 SDK",
         "hint": "可選。設定後，外掛程式將啟動此二進位檔案，而非內建的 @anthropic-ai/claude-agent-sdk。儲存時會重新啟動守護程序。"
       },
+      "claudeConfigDir": {
+        "label": "Claude 設定目錄（覆寫）",
+        "placeholder": "例如 ~/.claude-work — 留空則使用 CLAUDE_CONFIG_DIR 或 ~/.claude",
+        "hint": "選填。聊天歷史、工作階段操作與 Claude 程序會讀取此目錄，而非 ~/.claude。外掛設定頁中的 MCP 伺服器、Skills 與 Hooks 仍使用 ~/.claude。用量統計會將此目錄與 ~/.claude 合併計算（不按設定檔區分），執行中的統計服務會在下次同步時讀取；清除後已計入的用量仍會保留。請使用絕對路徑或 ~/…；使用 WSL 的 node 時可填寫 Linux 路徑，例如 /home/me/.claude-work，且不會使用 Windows 的 CLAUDE_CONFIG_DIR。請與同一設定檔的 Claude CLI 路徑搭配使用。儲存時常駐程序會重新啟動。"
+      },
       "workingDirectory": {
         "label": "Working Directory",
         "placeholder": "e.g. project1 or leave empty to use project root",

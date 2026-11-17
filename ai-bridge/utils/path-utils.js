@@ -78,7 +78,21 @@ export function getCodemossDir() {
  * @returns {string} The ~/.claude directory path
  */
 export function getClaudeDir() {
+  const override = process.env.CLAUDE_CONFIG_DIR;
+  if (typeof override === 'string' && override.trim()) {
+    return resolve(override.trim());
+  }
   return join(getRealHomeDir(), '.claude');
+}
+
+/**
+ * Path of the settings.json the plugin itself writes for managed providers.
+ * Always ~/.claude/settings.json, whatever CLAUDE_CONFIG_DIR says, because the Java side
+ * (ClaudeSettingsManager) writes there and the bridge must read the same file.
+ * @returns {string}
+ */
+export function getPluginClaudeSettingsPath() {
+  return join(getRealHomeDir(), '.claude', 'settings.json');
 }
 
 const CLAUDE_SESSION_ID_PATTERN = /^[A-Za-z0-9._-]+$/;

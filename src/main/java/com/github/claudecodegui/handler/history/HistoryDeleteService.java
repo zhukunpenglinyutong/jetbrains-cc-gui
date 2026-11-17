@@ -1,5 +1,6 @@
 package com.github.claudecodegui.handler.history;
 
+import com.github.claudecodegui.util.ClaudeConfigDir;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.NodeJsServiceCaller;
 import com.github.claudecodegui.handler.core.HandlerContext;
@@ -611,9 +612,7 @@ class HistoryDeleteService {
      * @return int[2]: [mainDeleted(0/1), agentFilesDeleted]
      */
     private int[] deleteClaudeSession(String sessionId, String projectPath) throws java.io.IOException {
-        String homeDir = NodeDetector.resolveHomeForFileOps();
-        Path claudeDir = Paths.get(homeDir, ".claude");
-        Path projectsDir = claudeDir.resolve("projects");
+        Path projectsDir = ClaudeConfigDir.current().resolve("projects");
         List<Path> sessionDirs = PathUtils.getSanitizedPathCandidates(projectPath).stream()
                 .map(projectsDir::resolve)
                 .filter(Files::isDirectory)

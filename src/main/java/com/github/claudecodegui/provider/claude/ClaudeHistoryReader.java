@@ -1,6 +1,6 @@
 package com.github.claudecodegui.provider.claude;
 
-import com.github.claudecodegui.bridge.NodeDetector;
+import com.github.claudecodegui.util.ClaudeConfigDir;
 import com.github.claudecodegui.provider.common.GitRepositorySessionMatcher;
 import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.google.gson.Gson;
@@ -27,20 +27,8 @@ public class ClaudeHistoryReader {
 
     private static final Logger LOG = Logger.getInstance(ClaudeHistoryReader.class);
 
-    private static volatile Path claudeDir;
-
     private static Path claudeDir() {
-        Path dir = claudeDir;
-        if (dir == null) {
-            synchronized (ClaudeHistoryReader.class) {
-                dir = claudeDir;
-                if (dir == null) {
-                    dir = Paths.get(NodeDetector.resolveHomeForFileOps(), ".claude");
-                    claudeDir = dir;
-                }
-            }
-        }
-        return dir;
+        return ClaudeConfigDir.current();
     }
 
     private static Path historyFile() {

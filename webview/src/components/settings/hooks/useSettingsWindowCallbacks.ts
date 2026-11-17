@@ -35,6 +35,7 @@ export const SETTINGS_BOOTSTRAP_BRIDGE_MESSAGES = [
   // Environment + permissions (visible / used early on basic tab)
   'get_node_path:',
   'get_claude_cli_path:',
+  'get_claude_config_dir:',
   'get_working_directory:',
   'get_streaming_enabled:',
   'get_load_history_on_startup:',
@@ -68,6 +69,8 @@ export interface SettingsWindowCallbacksDeps {
   setSavingNodePath: (saving: boolean) => void;
   setClaudeCliPath: (path: string) => void;
   setSavingClaudeCliPath: (saving: boolean) => void;
+  setClaudeConfigDir: (path: string) => void;
+  setSavingClaudeConfigDir: (saving: boolean) => void;
   setWorkingDirectory: (dir: string) => void;
   setSavingWorkingDirectory: (saving: boolean) => void;
   setCommitPrompt: (prompt: string) => void;
@@ -185,6 +188,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       d().setLoading(false);
       d().setSavingNodePath(false);
       d().setSavingClaudeCliPath(false);
+      d().setSavingClaudeConfigDir(false);
       d().setSavingWorkingDirectory(false);
       d().setSavingCommitPrompt(false);
       d().setSavingProjectCommitPrompt(false);
@@ -221,6 +225,16 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       d().setSavingClaudeCliPath(false);
     };
 
+    window.updateClaudeConfigDir = (jsonStr: string) => {
+      try {
+        const data = JSON.parse(jsonStr);
+        d().setClaudeConfigDir(data.path || '');
+      } catch (e) {
+        console.warn('[SettingsView] Failed to parse updateClaudeConfigDir JSON:', e);
+      }
+      d().setSavingClaudeConfigDir(false);
+    };
+
     window.updateWorkingDirectory = (jsonStr: string) => {
       try {
         const data = JSON.parse(jsonStr);
@@ -237,6 +251,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       d().showAlert('success', t('toast.operationSuccess'), message);
       d().setSavingNodePath(false);
       d().setSavingClaudeCliPath(false);
+      d().setSavingClaudeConfigDir(false);
       d().setSavingWorkingDirectory(false);
     };
 
@@ -683,6 +698,7 @@ export function useSettingsWindowCallbacks(deps: SettingsWindowCallbacksDeps) {
       window.showSwitchSuccess = undefined;
       window.updateNodePath = undefined;
       window.updateClaudeCliPath = undefined;
+      window.updateClaudeConfigDir = undefined;
       window.updateWorkingDirectory = undefined;
       window.showSuccess = undefined;
       window.showSuccessI18n = undefined;

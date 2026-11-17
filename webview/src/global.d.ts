@@ -536,6 +536,11 @@ interface Window {
   updateClaudeCliPath?: (path: string) => void;
 
   /**
+   * Update custom Claude config directory
+   */
+  updateClaudeConfigDir?: (path: string) => void;
+
+  /**
    * Update working directory configuration
    */
   updateWorkingDirectory?: (json: string) => void;
