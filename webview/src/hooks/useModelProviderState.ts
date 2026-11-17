@@ -621,7 +621,7 @@ export function useModelProviderState({ addToast, t }: UseModelProviderStateOpti
     sdkStatus,
     sdkStatusError: currentSdkStatusError,
     currentProvider, setCurrentProvider,
-    selectedGeminiModel, setSelectedGeminiModel,
+    selectedGeminiModel, setSelectedGeminiModel, setGeminiPermissionMode,
     permissionMode, setPermissionMode,
     codexCollaborationMode, setCodexCollaborationMode,
     codexApprovalPreset, setCodexApprovalPreset,

@@ -262,6 +262,57 @@ if (mode) {
     await write(tool(2, 'DONE', 'mkdir -p out'));
     await write(JSON.stringify({ event: 'result', result: { conversation_id: conv, status: 'SUCCESS', response: 'Done.', duration_seconds: 1, num_turns: 1, error: null } }));
     process.exit(0);
+  } else if (mode === 'deny-order') {
+    // FAKE_DENY_ORDER: parallel = tool 1's notice lands, tool 2 starts, then tool 1 ends empty;
+    // split = the notice arrives in two writes with tool 2's start between them;
+    // open = two tools start, the notice lands, the result closes both unfinished.
+    const conv = process.env.FAKE_CONV_ID || CONV;
+    const notice = process.env.FAKE_DENY_STDERR || '';
+    const tool = (index, state, output) => JSON.stringify({ event: 'step_update', step_update: { conversation_id: conv, step_index: index, state, step_type: 'tool', tool_name: 'run_command', tool_info: { name: 'run_command', parameters: { CommandLine: 'cmd' + index }, ...(output ? { output } : {}) } } });
+    const pause = () => new Promise((res) => setTimeout(res, 300));
+    const order = process.env.FAKE_DENY_ORDER;
+    await write(JSON.stringify({ event: 'init', conversation_id: conv, init: { cwd: process.cwd(), tools: [], permission_mode: 'default' } }));
+    if (order === 'parallel') {
+      await write(tool(1, 'ACTIVE'));
+      await pause();
+      process.stderr.write(notice);
+      await pause();
+      await write(tool(2, 'ACTIVE'));
+      await pause();
+      await write(tool(1, 'DONE'));
+      await write(tool(2, 'DONE', 'ok'));
+    } else if (order === 'split') {
+      await write(tool(1, 'ACTIVE'));
+      await write(tool(1, 'DONE', 'built'));
+      process.stderr.write(notice.slice(0, 40));
+      await pause();
+      await write(tool(2, 'ACTIVE'));
+      await pause();
+      process.stderr.write(notice.slice(40));
+      await pause();
+      await write(tool(2, 'DONE'));
+    } else if (order === 'two-notices') {
+      await write(tool(1, 'ACTIVE'));
+      await write(tool(2, 'ACTIVE'));
+      await pause();
+      process.stderr.write(notice.replace('<target>', 'cmd1') + notice.replace('<target>', 'cmd2'));
+      await pause();
+      await write(tool(1, 'DONE'));
+      await write(tool(2, 'DONE'));
+    } else if (order === 'open') {
+      await write(tool(1, 'ACTIVE'));
+      await write(tool(2, 'ACTIVE'));
+      await pause();
+      process.stderr.write(notice);
+      await pause();
+    }
+    await write(JSON.stringify({ event: 'result', result: { conversation_id: conv, status: 'SUCCESS', response: 'Done.', duration_seconds: 1, num_turns: 1, error: null } }));
+    process.exit(0);
+  } else if (mode === 'old-agy') {
+    // An agy older than the minimum: --version answers, a turn fails on an unknown flag.
+    if (process.argv.includes('--version')) { process.stdout.write('1.0.3\\n'); process.exit(0); }
+    process.stderr.write('error: unknown option --print-timeout\\n');
+    process.exit(2);
   } else {
     process.exit(43); // unknown mode: visible in the exit code, never a silent hang
   }
@@ -963,6 +1014,69 @@ test('a soft-deny notice that arrives after its tool finished is not given to th
   assert.equal(toolResults.length, 2);
   assert.equal(toolResults[1].is_error, false, 'mkdir started after the notice; it is not its result');
   assert.doesNotMatch(String(toolResults[1].content), /headless mode cannot prompt/);
+});
+
+test('a notice stays with its tool when another tool starts before that tool ends', async () => {
+  const { stdout } = await runService({
+    mode: 'deny-order',
+    extraEnv: { FAKE_DENY_STDERR: HEADLESS_DENY_STDERR, FAKE_DENY_ORDER: 'parallel' },
+    timeoutMs: 8000,
+  });
+  const toolResults = messageMarkers(stdout).filter((m) => m.type === 'tool_result');
+  assert.equal(toolResults.length, 2);
+  assert.equal(toolResults[0].is_error, true, 'tool 1 was denied while tool 2 started');
+  assert.match(String(toolResults[0].content), /headless mode cannot prompt/);
+  assert.equal(toolResults[1].is_error, false);
+  assert.equal(toolResults[1].content, 'ok');
+});
+
+test('a notice split across two stderr writes is attached whole', async () => {
+  const { stdout } = await runService({
+    mode: 'deny-order',
+    extraEnv: { FAKE_DENY_STDERR: HEADLESS_DENY_STDERR, FAKE_DENY_ORDER: 'split' },
+    timeoutMs: 8000,
+  });
+  const toolResults = messageMarkers(stdout).filter((m) => m.type === 'tool_result');
+  assert.equal(toolResults.length, 2);
+  assert.equal(toolResults[1].is_error, true);
+  assert.equal(toolResults[1].content, extractHeadlessDenyNotice(HEADLESS_DENY_STDERR));
+});
+
+test('tools closed by the result share one notice: only one of them gets it', async () => {
+  const { stdout } = await runService({
+    mode: 'deny-order',
+    extraEnv: { FAKE_DENY_STDERR: HEADLESS_DENY_STDERR, FAKE_DENY_ORDER: 'open' },
+    timeoutMs: 8000,
+  });
+  const toolResults = messageMarkers(stdout).filter((m) => m.type === 'tool_result');
+  assert.equal(toolResults.length, 2);
+  const withNotice = toolResults.filter((m) => /headless mode cannot prompt/.test(String(m.content)));
+  assert.equal(withNotice.length, 1);
+  assert.equal(withNotice[0].tool_use_id, toolResults[1].tool_use_id, 'the latest tool started before the notice');
+  assert.ok(toolResults.every((m) => m.is_error), 'both tools ended without a result');
+});
+
+test('two notices that land before either tool ends give one to each tool', async () => {
+  const { stdout } = await runService({
+    mode: 'deny-order',
+    extraEnv: { FAKE_DENY_STDERR: HEADLESS_DENY_STDERR, FAKE_DENY_ORDER: 'two-notices' },
+    timeoutMs: 8000,
+  });
+  const toolResults = messageMarkers(stdout).filter((m) => m.type === 'tool_result');
+  assert.equal(toolResults.length, 2);
+  assert.match(String(toolResults[0].content), /command\(cmd1\)/);
+  assert.doesNotMatch(String(toolResults[0].content), /cmd2/);
+  assert.match(String(toolResults[1].content), /command\(cmd2\)/);
+  assert.ok(toolResults.every((m) => m.is_error));
+});
+
+test('a failed turn on an agy below the minimum version says to update', async () => {
+  const { stdout } = await runService({ mode: 'old-agy', timeoutMs: 15000 });
+  const sendErrors = markers(stdout, 'SEND_ERROR');
+  assert.equal(sendErrors.length, 1);
+  const { error } = JSON.parse(sendErrors[0].slice('[SEND_ERROR]'.length));
+  assert.match(error, /unknown option --print-timeout/, 'the CLI error is kept');
+  assert.match(error, /1\.0\.3 is below the minimum required version/);
 });
 
 test('a real SUCCESS answer is not replaced by a headless deny notice on stderr', async () => {

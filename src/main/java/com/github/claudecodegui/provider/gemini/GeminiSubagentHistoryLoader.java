@@ -236,7 +236,7 @@ public class GeminiSubagentHistoryLoader {
      */
     public Map<String, String> loadParentStep101Completions(String parentSessionId) {
         Map<String, String> completions = new HashMap<>();
-        Path db = parentDbPath(parentSessionId);
+        Path db = conversationDbPath(parentSessionId);
         if (db == null || !Files.isRegularFile(db)) {
             return completions;
         }
@@ -295,6 +295,15 @@ public class GeminiSubagentHistoryLoader {
      */
     public List<StatusResult> loadStatuses(String parentSessionId, List<StatusRequest> requests) {
         Map<String, String> completions = parentSessionId != null ? loadParentStep101Completions(parentSessionId) : Map.of();
+        // A child may wait without a log behind a sibling that still works, so "never started"
+        // needs the parent and every requested sibling to be quiet.
+        boolean familyQuiet = isStaleDb(conversationDbPath(parentSessionId));
+        for (StatusRequest req : requests) {
+            Path siblingDb = conversationDbPath(req.agentId());
+            if (familyQuiet && siblingDb != null && Files.isRegularFile(siblingDb) && !isStaleDb(siblingDb)) {
+                familyQuiet = false;
+            }
+        }
         List<StatusResult> results = new ArrayList<>(requests.size());
         for (StatusRequest req : requests) {
             String toolUseId = req.toolUseId();
@@ -308,8 +317,8 @@ public class GeminiSubagentHistoryLoader {
             String completion = completions.get(agentId.toLowerCase());
             if (completion != null) {
                 results.add(new StatusResult(toolUseId, agentId, true, STATUS_COMPLETED, true, completion, null, List.of()));
-            } else if (!hasChildDb && isStaleDb(parentDbPath(parentSessionId))) {
-                // No child log and a quiet parent: the child never started.
+            } else if (!hasChildDb && familyQuiet) {
+                // No child log and nobody in the family writes: the child never started.
                 results.add(new StatusResult(toolUseId, agentId, true, STATUS_ERROR, true, null, STALE_CHILD_ERROR, List.of()));
             } else if (!hasChildDb) {
                 results.add(new StatusResult(toolUseId, agentId, false, STATUS_RUNNING, false, null, "Subagent log not found yet", List.of()));
@@ -341,9 +350,6 @@ public class GeminiSubagentHistoryLoader {
             if (completion != null) {
                 return new SessionResult(toolUseId, agentId, true, STATUS_COMPLETED, true, completion, null, List.of());
             }
-            if (isStaleDb(parentDbPath(parentSessionId))) {
-                return new SessionResult(toolUseId, agentId, true, STATUS_ERROR, true, null, STALE_CHILD_ERROR, List.of());
-            }
             return new SessionResult(toolUseId, agentId, false, STATUS_RUNNING, false, null, "Subagent log not found yet", List.of());
         }
         List<JsonObject> messages;
@@ -370,11 +376,11 @@ public class GeminiSubagentHistoryLoader {
         return System.currentTimeMillis() - latestMtime > staleRunningGraceMs;
     }
 
-    private Path parentDbPath(String parentSessionId) {
-        if (!GeminiHistoryReader.isSafeSessionId(parentSessionId)) {
+    private Path conversationDbPath(String sessionId) {
+        if (!GeminiHistoryReader.isSafeSessionId(sessionId)) {
             return null;
         }
-        return cliHome.resolve("conversations").resolve(parentSessionId.trim() + ".db");
+        return cliHome.resolve("conversations").resolve(sessionId.trim() + ".db");
     }
 
     private static String fileStamp(Path path) {

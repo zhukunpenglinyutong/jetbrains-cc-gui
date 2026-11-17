@@ -127,6 +127,7 @@ export function createLocalizeMessage(t: TFunction): (text: string) => string {
   return (text: string): string => {
     const exactKey = AI_BRIDGE_MESSAGE_KEYS.get(text);
     if (exactKey) return t(exactKey);
+    const isGeminiAuthBlock = text.includes('Gemini CLI authentication required:');
 
     // Check if contains keywords that need mapping and replace
     let result = text;
@@ -221,11 +222,13 @@ export function createLocalizeMessage(t: TFunction): (text: string) => string {
 
     // Replacement callbacks avoid translation lookups when ordinary text has no error labels.
     // Handle labels in multi-line error messages
+    if (isGeminiAuthBlock) {
+      // Only the label localizes, and only in the Gemini auth block: the details are the
+      // CLI's own text, and an answer's own "- Error details:" line stays as written.
+      result = result.replace(/- Error details:/g, () => `- ${t('aiBridge.geminiErrorDetails')}:`);
+    }
     result = result
       .replace(/- Error message:/g, () => `- ${t('aiBridge.errorMessage')}:`)
-      // Gemini auth remedy tail: only the LABEL localizes — the details after
-      // it are the CLI's own (untranslateable) error text.
-      .replace(/- Error details:/g, () => `- ${t('aiBridge.geminiErrorDetails')}:`)
       .replace(/- Current API Key source:/g, () => `- ${t('aiBridge.currentApiKeySource')}:`)
       .replace(/- Current API Key preview:/g, () => `- ${t('aiBridge.currentApiKeyPreview')}:`)
       .replace(/- Current Base URL:/g, () => `- ${t('aiBridge.currentBaseUrl')}:`)

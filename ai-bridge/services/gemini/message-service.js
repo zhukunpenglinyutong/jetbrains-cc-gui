@@ -70,6 +70,7 @@ import { join, resolve } from 'path';
 import { resolveGeminiCliPath, enrichPathWithBinDirs, commonCliBinDirs } from '../../utils/cli-path.js';
 import { killChildTree, runCliStreaming } from '../../utils/cli-spawn.js';
 import { GeminiPermissionMapper } from './permission-mapper.js';
+import { verifyAgyBinary } from './agy-binary-verifier.js';
 import {
   beginStream,
   emitJsonStringMarker,
@@ -1590,12 +1591,15 @@ export async function sendMessage({
   // SUCCESS with an empty response. Hold that tail until the result (or the
   // process close, if the notice arrives after the result line).
   let stderrText = '';
-  // A notice explains only the tool it was attached to; later tools look at newer stderr.
+  // Absolute stderr offsets: everything seen so far, and the end of the last notice given to a tool.
   let stderrSeenLength = 0;
   let stderrUsedLength = 0;
-  const unusedStderr = () => {
-    const fresh = stderrSeenLength - stderrUsedLength;
-    return fresh > 0 ? stderrText.slice(-fresh) : '';
+  // Stderr from offset `from` on, widened to that line's start so a notice split
+  // across two reads stays whole, minus anything already given to a tool.
+  const stderrSince = (from) => {
+    const base = stderrSeenLength - stderrText.length;
+    const lineStart = stderrText.lastIndexOf('\n', Math.max(0, from - base) - 1) + 1;
+    return stderrText.slice(Math.max(lineStart, stderrUsedLength - base));
   };
   let deniedToolText = '';
   let emptyAnswerPending = false;
@@ -1741,6 +1745,26 @@ export async function sendMessage({
     // report ACTIVE then DONE/ERROR for the same index.
     const emittedToolUseIds = new Set();
     const emittedToolResultIds = new Set();
+    // stderr offset at each tool's ACTIVE step: its notice can only come after that.
+    const toolStderrStart = new Map();
+    // shortcut: a tool first seen already finished has no start, so a notice that landed after
+    // the previous tool ended goes to it, and a notice split around a later tool's start goes to
+    // that later tool; agy's stdout/stderr order is unknown, revisit with live captures.
+    const takeDenyNotice = (toolIndex) => {
+      const text = stderrSince(toolStderrStart.get(toolIndex) ?? stderrUsedLength);
+      const textStart = stderrSeenLength - text.length;
+      let lineEnd = 0;
+      // One notice line per tool; the next tool starts after that line.
+      for (const line of text.split('\n')) {
+        lineEnd += line.length + 1;
+        const notice = extractHeadlessDenyNotice(line);
+        if (notice) {
+          stderrUsedLength = textStart + Math.min(lineEnd, text.length);
+          return notice;
+        }
+      }
+      return '';
+    };
     // FIFO of tool_use ids minted without a step_index whose terminal state
     // has not arrived yet. Interleaved unnamed tools (ACTIVE A, ACTIVE B,
     // DONE A, ERROR B) pair in start order, not "most recent wins".
@@ -1931,12 +1955,12 @@ export async function sendMessage({
     // close every unresolved tool_use with an error result before the stream
     // ends.
     const flushUnresolvedTools = () => {
-      const notice = extractHeadlessDenyNotice(unusedStderr());
-      if (notice) stderrUsedLength = stderrSeenLength;
-      for (const id of emittedToolUseIds) {
-        if (emittedToolResultIds.has(id)) continue;
+      const open = [...emittedToolUseIds].filter((id) => !emittedToolResultIds.has(id));
+      // A notice most likely explains the latest tool that started before it, so newest asks first.
+      const notices = new Map(open.slice().reverse().map((id) => [id, takeDenyNotice(id)]));
+      for (const id of open) {
         emittedToolResultIds.add(id);
-        const content = notice || 'interrupted';
+        const content = notices.get(id) || 'interrupted';
         noteToolDenial(content, true);
         emitToolResultMessage({ toolUseId: id, content, isError: true });
       }
@@ -2033,7 +2057,17 @@ export async function sendMessage({
           console.error('[gemini] post-result CLI error (ignored): ' + msg);
           return;
         }
-        emitFailure(msg, { status: 'CLI_ERROR' });
+        if (failureEmitted) return;
+        // An old agy fails on flags it does not know; say so. Only the version verdict
+        // is used: the verifier's help-flag checks were never run against a real agy.
+        let hint = '';
+        try {
+          const verdict = verifyAgyBinary(bin, { env, timeout: 3000, versionOnly: true });
+          if (verdict.reason === 'unsupported_version') hint = `\n\n${verdict.error}`;
+        } catch (error) {
+          console.error('[gemini] agy version probe failed:', error?.message || error);
+        }
+        emitFailure(msg + hint, { status: 'CLI_ERROR' });
       },
       onStderr: (text) => {
         if (text) {
@@ -2225,8 +2259,7 @@ export async function sendMessage({
             if (isKnownState && !emittedToolUseIds.has(toolIndex)) {
               emittedToolUseIds.add(toolIndex);
               emitToolUseMessage({ id: toolIndex, name: toolName, input: toolParams });
-              // stderr from before this tool started explains an earlier step, never this one.
-              if (step.state === 'ACTIVE') stderrUsedLength = stderrSeenLength;
+              if (step.state === 'ACTIVE') toolStderrStart.set(toolIndex, stderrSeenLength);
             }
             if ((step.state === 'DONE' || step.state === 'ERROR') && !emittedToolResultIds.has(toolIndex)) {
               emittedToolResultIds.add(toolIndex);
@@ -2238,11 +2271,10 @@ export async function sendMessage({
               // A soft-denied command arrives as DONE with an empty output.
               // The explanation is on stderr; attach it when it is already here.
               if (!String(resultText || '').trim()) {
-                const notice = extractHeadlessDenyNotice(unusedStderr());
+                const notice = takeDenyNotice(toolIndex);
                 if (notice) {
                   resultText = notice;
                   isError = true;
-                  stderrUsedLength = stderrSeenLength;
                 }
               }
               noteToolDenial(resultText, isError);

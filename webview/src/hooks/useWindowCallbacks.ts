@@ -55,6 +55,7 @@ export interface UseWindowCallbacksOptions {
   setSelectedCodexModel: React.Dispatch<React.SetStateAction<string>>;
   /** Optional: only the onModelConfirmed gemini branch consumes it (W2). */
   setSelectedGeminiModel?: React.Dispatch<React.SetStateAction<string>>;
+  setGeminiPermissionMode?: React.Dispatch<React.SetStateAction<PermissionMode>>;
   setLongContextEnabled: React.Dispatch<React.SetStateAction<boolean>>;
   setReasoningEffort: React.Dispatch<React.SetStateAction<ReasoningEffort>>;
   setClaudeUltracode?: React.Dispatch<React.SetStateAction<boolean>>;

@@ -32,6 +32,7 @@ export function registerUsageModeCallbacks(options: UseWindowCallbacksOptions): 
     setSelectedClaudeModel,
     setSelectedCodexModel,
     setSelectedGeminiModel,
+    setGeminiPermissionMode,
     setLongContextEnabled,
     setReasoningEffort,
     setClaudeUltracode,
@@ -99,6 +100,9 @@ export function registerUsageModeCallbacks(options: UseWindowCallbacksOptions): 
       setPermissionMode((prev) => (prev === nextMode ? prev : nextMode));
       if (activeProvider === 'codex') {
         setCodexPermissionMode((prev) => (prev === nextMode ? prev : nextMode));
+      } else if (activeProvider === 'gemini') {
+        // Gemini's plan/sandbox would otherwise leak into the Claude slot.
+        setGeminiPermissionMode?.((prev) => (prev === nextMode ? prev : nextMode));
       } else {
         setClaudePermissionMode((prev) => (prev === nextMode ? prev : nextMode));
       }

@@ -304,3 +304,18 @@ test('verifyAgyBinary fails on lookalike binary missing distinctive flags in --h
   assert.equal(result.reason, 'lookalike');
   assert.match(result.error, /GEMINI_BIN/);
 });
+
+test('verifyAgyBinary versionOnly skips the --help probe', () => {
+  const probes = [];
+  const result = verifyAgyBinary(process.execPath, {
+    versionOnly: true,
+    spawnSyncFn: (file, args) => {
+      probes.push(args.join(' '));
+      return { status: 0, stdout: '1.1.22\n', stderr: '', error: null };
+    },
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.version, '1.1.22');
+  assert.equal(probes.length, 1);
+});

@@ -304,8 +304,32 @@ public class GeminiSubagentHistoryLoaderTest {
         assertTrue("A child that never wrote a log must stop polling", status.completed());
         assertEquals("error", status.status());
         assertEquals(GeminiSubagentHistoryLoader.STALE_CHILD_ERROR, status.error());
-        assertTrue(session.completed());
-        assertEquals("error", session.status());
+        // The transcript view cannot see siblings; the status poll decides the card.
+        assertFalse(session.completed());
+        assertEquals("running", session.status());
+    }
+
+    @Test
+    public void loadStatusesKeepsAMissingChildRunningWhileASiblingWrites() throws Exception {
+        Path home = temporaryFolder.newFolder("gemini-queued-child").toPath();
+        Path conversationsDir = home.resolve("conversations");
+        Path parentDb = conversationsDir.resolve(PARENT_ID + ".db");
+        createDb(parentDb, step(1, 14, "Start two subagents"));
+        long staleMtime = System.currentTimeMillis() - GeminiSubagentHistoryLoader.STALE_RUNNING_GRACE_MS - 60_000L;
+        Files.setLastModifiedTime(parentDb, FileTime.fromMillis(staleMtime));
+        // The parent waits quietly while subagent A works; B has no log yet (queued behind A).
+        createDbWithBlobs(conversationsDir.resolve(CHILD_A_ID + ".db"),
+                blobStep(1, 14, protoMessage(19, protoField(2, "Working")))
+        );
+
+        List<GeminiSubagentHistoryLoader.StatusResult> results = new GeminiSubagentHistoryLoader(home).loadStatuses(
+                PARENT_ID, List.of(
+                        new GeminiSubagentHistoryLoader.StatusRequest("call-a", CHILD_A_ID),
+                        new GeminiSubagentHistoryLoader.StatusRequest("call-b", CHILD_B_ID)));
+
+        assertEquals("running", results.get(0).status());
+        assertEquals("running", results.get(1).status());
+        assertFalse("A queued child must keep polling", results.get(1).completed());
     }
 
     @Test

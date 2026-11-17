@@ -471,6 +471,13 @@ describe('createLocalizeMessage — gemini auth remedy block (NFR8)', () => {
     const emitted = 'agy: the model stream closed unexpectedly';
     expect(localize(emitted)).toBe(emitted);
   });
+
+  it('leaves an answer\'s own "- Error details:" line alone outside the auth block', () => {
+    const t = makeT();
+    const localize = createLocalizeMessage(t as never);
+    const answer = 'Bug report template:\n- Error details: paste the stack trace here';
+    expect(localize(answer)).toBe(answer);
+  });
 });
 
 describe('createLocalizeMessage — gemini idle-reap message (NFR8)', () => {

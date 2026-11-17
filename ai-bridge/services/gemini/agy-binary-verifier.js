@@ -94,7 +94,7 @@ function comparePrerelease(a, b) {
  * Validates that a resolved binary is the genuine Antigravity CLI (agy) and meets the minimum version requirement.
  *
  * @param {string} [bin] Optional binary path or command name to probe.
- * @param {object} [options] Optional probe configuration (env, timeout, forceWindows, spawnSyncFn).
+ * @param {object} [options] Optional probe configuration (env, timeout, forceWindows, spawnSyncFn, versionOnly to skip the --help probe).
  * @returns {{ ok: boolean, available: boolean, version?: string, path?: string, error?: string, reason?: string }} verification outcome for the agy binary
  */
 export function verifyAgyBinary(bin, options = {}) {
@@ -197,6 +197,10 @@ export function verifyAgyBinary(bin, options = {}) {
       reason: 'unsupported_version',
       error: `Antigravity CLI version ${parsedVersion.raw} is below the minimum required version ${AGY_MIN_VERSION}. Please update with 'agy update' or visit https://antigravity.google/docs`,
     };
+  }
+
+  if (opts.versionOnly) {
+    return { ok: true, available: true, version: parsedVersion.raw, path: resolvedBin };
   }
 
   // 2. Probe help: <bin> --help
