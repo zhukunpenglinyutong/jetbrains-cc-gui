@@ -124,4 +124,16 @@ public class ClaudeConfigDirTest {
         assertEquals("/home/me/p", ClaudeConfigDir.forNode(Paths.get("\\\\wsl.localhost\\Ubuntu\\home\\me\\p"), true));
         assertEquals("/mnt/d/x", ClaudeConfigDir.forNode(Paths.get("D:\\x"), true));
     }
+
+    @Test
+    public void claudeJsonIsInTheHomeDirectoryByDefault() {
+        assertEquals(Paths.get(home(), ".claude.json"), ClaudeConfigDir.claudeJson(null, home()));
+    }
+
+    @Test
+    public void claudeJsonMovesIntoAnExplicitConfigDirectory() {
+        Path profile = Paths.get(abs("profile"));
+
+        assertEquals(profile.resolve(".claude.json"), ClaudeConfigDir.claudeJson(profile, home()));
+    }
 }

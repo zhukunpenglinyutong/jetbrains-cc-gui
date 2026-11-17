@@ -74,6 +74,7 @@ public class ClaudeConfigDirHandler {
 
                 if (failure == null) {
                     TokenTrackerScanRoots.syncFromSettings();
+                    applyActiveProviderToNewDirectory();
                     // CLAUDE_CONFIG_DIR is injected at daemon spawn: other chat tabs replace their
                     // daemon on their next idle request, this tab restarts now.
                     ClaudeSDKBridge.markSdkChanged();
@@ -99,6 +100,20 @@ public class ClaudeConfigDirHandler {
                 showError("Failed to save Claude config directory: " + e.getMessage());
             }
         }, AppExecutorUtil.getAppExecutorService());
+    }
+
+    /**
+     * A managed provider keeps its credentials in {@code settings.json}, and that file now belongs to
+     * the active directory. Fill in what the new one is missing (never overwriting a value already
+     * there), so the next chat request finds the provider's key without a manual provider switch.
+     */
+    private void applyActiveProviderToNewDirectory() {
+        try {
+            context.getSettingsService().repairActiveProviderToClaudeSettings();
+        } catch (Exception e) {
+            LOG.warn("[ClaudeConfigDirHandler] Could not apply the active provider to the new directory: "
+                    + e.getMessage());
+        }
     }
 
     private void sendPath(String path) {

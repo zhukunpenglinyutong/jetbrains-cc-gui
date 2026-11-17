@@ -1,5 +1,6 @@
 package com.github.claudecodegui.settings;
 
+import com.github.claudecodegui.util.ClaudeConfigDir;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.util.SafeJsonFileOps;
 import com.google.gson.Gson;
@@ -265,9 +266,9 @@ public class ClaudeSettingsManager {
      * @throws IOException on read/write failures
      */
     public void syncMcpToClaudeSettings(boolean allowEmptyOverwrite) throws IOException {
-        Path claudeJsonPath = Paths.get(NodeDetector.resolveHomeForFileOps(), ".claude.json");
+        Path claudeJsonPath = ClaudeConfigDir.claudeJson();
         if (!Files.exists(claudeJsonPath)) {
-            LOG.info("[ClaudeSettingsManager] ~/.claude.json not found, skipping MCP sync");
+            LOG.info("[ClaudeSettingsManager] " + claudeJsonPath + " not found, skipping MCP sync");
             return;
         }
 
@@ -383,8 +384,7 @@ public class ClaudeSettingsManager {
      */
     public JsonObject readCliLoginAccountInfo() {
         try {
-            String homeDir = NodeDetector.resolveHomeForFileOps();
-            Path claudeJsonPath = Paths.get(homeDir, ".claude.json");
+            Path claudeJsonPath = ClaudeConfigDir.claudeJson();
             File claudeJsonFile = claudeJsonPath.toFile();
 
             if (!claudeJsonFile.exists()) {

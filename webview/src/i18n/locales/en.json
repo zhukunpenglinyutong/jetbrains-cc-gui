@@ -584,7 +584,7 @@
       "claudeConfigDir": {
         "label": "Claude Config Directory (override)",
         "placeholder": "e.g. ~/.claude-work — leave empty to use CLAUDE_CONFIG_DIR or ~/.claude",
-        "hint": "Optional. Chat history, session actions and the Claude process read this directory instead of ~/.claude. MCP servers, skills and hooks on the plugin's settings pages still use ~/.claude. Usage statistics add it to ~/.claude (combined, not per profile) and a running statistics server picks it up at its next sync; usage already counted stays if you clear it. Use an absolute path or ~/…; with a WSL node a Linux path such as /home/me/.claude-work works, and the Windows CLAUDE_CONFIG_DIR is not used. Pair it with the Claude CLI path of the same profile. Daemon restarts on save."
+        "hint": "Optional. Chat history, session actions and the Claude process read this directory instead of ~/.claude. The plugin's settings.json and MCP servers follow it; its skills and hooks pages still use ~/.claude. Usage statistics add it to ~/.claude (combined, not per profile) and a running statistics server picks it up at its next sync; usage already counted stays if you clear it. Use an absolute path or ~/…; with a WSL node a Linux path such as /home/me/.claude-work works, and the Windows CLAUDE_CONFIG_DIR is not used. Pair it with the Claude CLI path of the same profile. Daemon restarts on save."
       },
       "workingDirectory": {
         "label": "Working Directory",

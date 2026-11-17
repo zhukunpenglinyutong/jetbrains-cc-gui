@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import path from 'node:path';
 import { isDangerousPath } from './permission-safety.js';
 import { getRealHomeDir } from './utils/path-utils.js';
 
@@ -170,4 +171,43 @@ test('credential and config directories in the home directory stay protected', (
 test('empty input is not dangerous', () => {
   assert.equal(isDangerousPath(''), false);
   assert.equal(isDangerousPath(undefined), false);
+});
+
+function withConfigDir(value, fn) {
+  const saved = process.env.CLAUDE_CONFIG_DIR;
+  try {
+    process.env.CLAUDE_CONFIG_DIR = value;
+    fn();
+  } finally {
+    if (saved === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+    else process.env.CLAUDE_CONFIG_DIR = saved;
+  }
+}
+
+test('the Claude login inside a custom config directory is protected like the default one', () => {
+  const custom = path.join(home, '.claude-work-profile');
+  withConfigDir(custom, () => {
+    assert.equal(isDangerousPath(path.join(custom, '.credentials.json')), true);
+    assert.equal(isDangerousPath(`cat ${custom.replace(/\\/g, '/')}/.credentials.json`), true);
+    assert.equal(isDangerousPath('cat ~/.claude/.credentials.json'), true);
+  });
+});
+
+test('other files inside a custom config directory stay usable', () => {
+  const custom = path.join(home, '.claude-work-profile');
+  withConfigDir(custom, () => {
+    assert.equal(isDangerousPath(path.join(custom, 'bin', 'gl-draft-note')), false);
+    assert.equal(isDangerousPath(path.join(custom, 'settings.json')), false);
+  });
+});
+
+test('the default credentials stay protected when no config directory is set', () => {
+  const saved = process.env.CLAUDE_CONFIG_DIR;
+  try {
+    delete process.env.CLAUDE_CONFIG_DIR;
+    assert.equal(isDangerousPath(`${home}/.claude/.credentials.json`), true);
+    assert.equal(isDangerousPath(path.join(home, '.claude', '.credentials.json')), true);
+  } finally {
+    if (saved !== undefined) process.env.CLAUDE_CONFIG_DIR = saved;
+  }
 });

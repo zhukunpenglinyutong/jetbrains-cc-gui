@@ -10,6 +10,7 @@ import {
   getExistingClaudeProjectSessionFilePath
 } from '../../utils/path-utils.js';
 import { loadClaudeSettings } from '../../config/api-config.js';
+import { getClaudeSettingsDisplayPath } from '../../utils/path-utils.js';
 
 // SDK cache (module-internal, accessed via ensure* functions)
 let claudeSdk = null;
@@ -294,17 +295,18 @@ export function buildConfigErrorPayload(error) {
         : null;
 
     // Note: Configuration is only read from settings.json; shell environment variables are no longer checked
+    const settingsPath = getClaudeSettingsDisplayPath();
     let keySource = 'Not configured';
     let rawKey = null;
 
     if (settingsApiKey !== null) {
       rawKey = String(settingsApiKey);
       if (env.ANTHROPIC_AUTH_TOKEN !== undefined && env.ANTHROPIC_AUTH_TOKEN !== null) {
-        keySource = '~/.claude/settings.json: ANTHROPIC_AUTH_TOKEN';
+        keySource = `${settingsPath}: ANTHROPIC_AUTH_TOKEN`;
       } else if (env.ANTHROPIC_API_KEY !== undefined && env.ANTHROPIC_API_KEY !== null) {
-        keySource = '~/.claude/settings.json: ANTHROPIC_API_KEY';
+        keySource = `${settingsPath}: ANTHROPIC_API_KEY`;
       } else {
-        keySource = '~/.claude/settings.json';
+        keySource = settingsPath;
       }
     }
 
@@ -315,7 +317,7 @@ export function buildConfigErrorPayload(error) {
     let baseUrl = settingsBaseUrl || 'https://api.anthropic.com';
     let baseUrlSource;
     if (settingsBaseUrl) {
-      baseUrlSource = '~/.claude/settings.json: ANTHROPIC_BASE_URL';
+      baseUrlSource = `${settingsPath}: ANTHROPIC_BASE_URL`;
     } else {
       baseUrlSource = 'Default (https://api.anthropic.com)';
     }

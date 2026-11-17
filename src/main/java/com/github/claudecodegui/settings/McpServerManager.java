@@ -1,5 +1,6 @@
 package com.github.claudecodegui.settings;
 
+import com.github.claudecodegui.util.ClaudeConfigDir;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.util.SafeJsonFileOps;
 import com.google.gson.Gson;
@@ -538,7 +539,7 @@ public class McpServerManager {
      * @return the path of the shared Claude CLI config
      */
     private static Path claudeJsonPath() {
-        return Paths.get(NodeDetector.resolveHomeForFileOps(), ".claude.json");
+        return ClaudeConfigDir.claudeJson();
     }
 
     /**

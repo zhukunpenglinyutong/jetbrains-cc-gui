@@ -31,6 +31,8 @@ public final class ClaudeConfigDir {
     public static final String CONFIG_DIR_PROPERTY_KEY = "claude.code.config.dir";
     public static final String ENV_VAR = "CLAUDE_CONFIG_DIR";
     private static final String DEFAULT_DIR_NAME = ".claude";
+    private static final String SETTINGS_FILE_NAME = "settings.json";
+    private static final String CLAUDE_JSON_FILE_NAME = ".claude.json";
 
     private static volatile Supplier<String> settingReader = ClaudeConfigDir::readSetting;
 
@@ -111,6 +113,25 @@ public final class ClaudeConfigDir {
     public static Path current() {
         return resolve(settingReader.get(), System.getenv(ENV_VAR), NodeDetector.resolveHomeForFileOps(),
                 isWslNode(), WslPathUtil::convertWslPathToWindowsUnc);
+    }
+
+    /** {@code settings.json} of the active Claude profile: {@code <config dir>/settings.json}. */
+    public static Path settingsJson() {
+        return current().resolve(SETTINGS_FILE_NAME);
+    }
+
+    /**
+     * The Claude CLI's global state file ({@code .claude.json}: account, MCP servers, per-project trust).
+     * It sits in the home directory by default, but moves into the config directory when
+     * {@code CLAUDE_CONFIG_DIR} is set, so an explicit directory takes it along.
+     */
+    public static Path claudeJson() {
+        return claudeJson(override(), NodeDetector.resolveHomeForFileOps());
+    }
+
+    /** Pure form of {@link #claudeJson()}: {@code override} is the explicit directory, or null for the default. */
+    public static Path claudeJson(Path override, String home) {
+        return override != null ? override.resolve(CLAUDE_JSON_FILE_NAME) : Paths.get(home, CLAUDE_JSON_FILE_NAME);
     }
 
     public static boolean isWslNode() {
