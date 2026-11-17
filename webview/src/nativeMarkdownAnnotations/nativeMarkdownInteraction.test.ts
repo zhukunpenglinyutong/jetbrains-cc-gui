@@ -159,6 +159,24 @@ describe('native Markdown interaction state machine and debounce', () => {
     window.getSelection()!.removeAllRanges();
   });
 
+  it('retries a timed-out comment under its first request id even after a preview sync', async () => {
+    mockRanges();
+    await import('./index');
+    messageCallback!(enabledState(1));
+    typeCommentAndAdd('tighten this wording');
+    const first = lastRequest('create').requestId;
+    vi.advanceTimersByTime(9000);
+    await vi.waitFor(() => expect(document.querySelector('#ccgui-markdown-review .ccgui-md-popup .primary')).not.toHaveProperty('disabled', true));
+    // The busy IDE re-renders the preview meanwhile; that housekeeping sync must not drop the retry id,
+    // or the host could create the comment a second time.
+    (window as any).IncrementalDOM.notifications.afterPatchListeners.forEach((listener: () => void) => listener());
+    vi.advanceTimersByTime(130);
+    expect(lastRequest('sync')).toBeDefined();
+    click('Add comment');
+    expect(lastRequest('create').requestId).toBe(first);
+    window.getSelection()!.removeAllRanges();
+  });
+
   it('filters completed and orphaned annotations from the transfer action', async () => {
     await import('./index');
 

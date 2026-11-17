@@ -158,6 +158,19 @@ public class MarkdownReviewDocumentTrackingTest {
     }
 
     @Test
+    public void rewriteDoesNotMoveAnUnlocatedCommentOntoAnotherCopy() {
+        String before = "Alpha says TODO here.\nBeta says TODO there.\n";
+        Fixture fixture = new Fixture(before, false);
+        int second = before.lastIndexOf("TODO");
+        fixture.service.create(fixture.file, "plan.md", fixture.document, second, second + 4, "TODO", "comment");
+        fixture.document.replaceString(second + 3, second + 4, "X");
+        assertEquals(List.of("TODO:ambiguous"), fixture.comments());
+        // The rewrite keeps one TODO, but it is the first line's copy, not the commented one.
+        fixture.reload("Gamma says TODO here.\nBeta done.\n");
+        assertEquals(List.of("TODO:ambiguous"), fixture.comments());
+    }
+
+    @Test
     public void deletingAllCopiesRemovesTheCommentOnlyWhenAutoDeleteIsOn() {
         Fixture deleting = new Fixture("Keep 401 here.\n", true, "401");
         deleting.reload("Keep it here.\n");

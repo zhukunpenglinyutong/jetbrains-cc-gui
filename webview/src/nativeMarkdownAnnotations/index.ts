@@ -124,17 +124,19 @@ function start(pipe: NativePipe) {
   let retry: { signature: string; requestId: string } | null = null;
   const send = (action: string, payload: object = {}) => new Promise<boolean>(resolve => {
     const signature = action + '|' + JSON.stringify(payload);
+    const housekeeping = action === 'ready' || action === 'sync';
     // A retry of the timed-out intent reuses its id so the backend replays the
     // original result instead of duplicating the transfer (plan §5 idempotency).
-    const requestId = retry?.signature === signature
+    const requestId = !housekeeping && retry?.signature === signature
       ? retry.requestId : 'md-' + Date.now() + '-' + requestCounter++;
-    retry = null;
+    // The automatic sync after every preview patch must not drop a pending user retry.
+    if (!housekeeping) retry = null;
     const timer = setTimeout(() => {
       callbacks.delete(requestId);
       // Housekeeping requests are repeated automatically and carry no user content:
       // the first 'ready' is posted before the IDE injects the pipe at load end and
       // is dropped, so reporting it would show a false "no acknowledgement".
-      if (action === 'ready' || action === 'sync') { resolve(false); return; }
+      if (housekeeping) { resolve(false); return; }
       // Only user intents reuse the id; a cached replay of a sync would skip reconciliation.
       retry = { signature, requestId };
       message = labels.timeout; pending = false; render();

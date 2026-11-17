@@ -25,6 +25,8 @@ public class LanguageConfigService {
     private static volatile String cachedUserLanguage;
     private static volatile long cachedUserLanguageAt;
     private static volatile boolean cachedUserLanguageLogged;
+    /** Bumped by every invalidation, so a read that overlapped a preference write is not cached. */
+    private static long userLanguageGeneration;
     /** ~/.codemoss/config.json is shared by every open IDE; re-read it so another IDE's change shows up. */
     static final long USER_LANGUAGE_CACHE_TTL_MS = 5_000;
 
@@ -110,6 +112,10 @@ public class LanguageConfigService {
         if (cached != null && nowMillis - cachedUserLanguageAt < USER_LANGUAGE_CACHE_TTL_MS) {
             return cached.isEmpty() ? null : cached;
         }
+        long generation;
+        synchronized (LanguageConfigService.class) {
+            generation = userLanguageGeneration;
+        }
         String raw;
         try {
             raw = reader.get();
@@ -123,8 +129,12 @@ public class LanguageConfigService {
             LOG.info("[LanguageConfig] User manually set language: " + value);
             cachedUserLanguageLogged = true;
         }
-        cachedUserLanguageAt = nowMillis;
-        cachedUserLanguage = value;
+        synchronized (LanguageConfigService.class) {
+            if (generation == userLanguageGeneration) {
+                cachedUserLanguageAt = nowMillis;
+                cachedUserLanguage = value;
+            }
+        }
         return value.isEmpty() ? null : value;
     }
 
@@ -141,7 +151,10 @@ public class LanguageConfigService {
 
     /** Drops the cached preference; call after every write to the manual language preference. */
     public static void invalidateUserLanguageCache() {
-        cachedUserLanguage = null;
+        synchronized (LanguageConfigService.class) {
+            userLanguageGeneration++;
+            cachedUserLanguage = null;
+        }
         cachedUserLanguageLogged = false;
     }
 

@@ -599,7 +599,12 @@ public final class MarkdownReviewService implements PersistentStateComponent<Mar
                                     && overlaps(range, marker.getStartOffset(), marker.getEndOffset())) {
                                 boolean covered = event.getOffset() <= marker.getStartOffset()
                                         && event.getOffset() + event.getOldLength() >= marker.getEndOffset();
-                                if (covered && preservesSource(event.getOldFragment(), event.getNewFragment(), item.sourceText)) {
+                                // The old fragment's single copy must be the one under the marker: an
+                                // ambiguous or changed comment must not move to another occurrence.
+                                boolean onQuote = covered && marker.getEndOffset() - marker.getStartOffset() == item.sourceText.length()
+                                        && event.getOldFragment().toString().indexOf(item.sourceText)
+                                        == marker.getStartOffset() - event.getOffset();
+                                if (onQuote && preservesSource(event.getOldFragment(), event.getNewFragment(), item.sourceText)) {
                                     replaced.add(item.id);
                                 } else {
                                     affected.add(item.id);

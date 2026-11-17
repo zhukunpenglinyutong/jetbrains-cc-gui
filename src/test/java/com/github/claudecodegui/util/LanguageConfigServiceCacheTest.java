@@ -71,6 +71,23 @@ public class LanguageConfigServiceCacheTest {
     }
 
     @Test
+    public void doesNotCacheAValueReadWhileThePreferenceWasRewritten() {
+        LanguageConfigService.invalidateUserLanguageCache();
+        try {
+            AtomicInteger reads = new AtomicInteger();
+            // A write lands (and invalidates) while this read is still returning the old value.
+            assertEquals("zh", withCountingReader(reads, () -> {
+                LanguageConfigService.invalidateUserLanguageCache();
+                return "zh";
+            }));
+            assertEquals("en", withCountingReader(reads, () -> "en"));
+            assertEquals(2, reads.get());
+        } finally {
+            LanguageConfigService.invalidateUserLanguageCache();
+        }
+    }
+
+    @Test
     public void treatsUnsupportedValuesAsAbsentAndCachesThem() {
         LanguageConfigService.invalidateUserLanguageCache();
         try {
