@@ -300,7 +300,7 @@ describe('MarkdownBlock linkify integration', () => {
     expect(document.querySelector('.markdown-content')?.textContent).toContain('42');
   });
 
-  it('hides Codex protocol blocks without hiding adjacent assistant text', () => {
+  it('hides the memory citation but keeps the proposed plan around adjacent assistant text', () => {
     render(
       <MarkdownBlock
         content={[
@@ -309,7 +309,7 @@ describe('MarkdownBlock linkify integration', () => {
           '<oai-mem-citation>MEMORY.md:73-73|note=[internal context]</oai-mem-citation>',
           '',
           '<proposed_plan>',
-          '- internal plan',
+          '- plan step',
           '</proposed_plan>',
           '',
           'After',
@@ -323,14 +323,12 @@ describe('MarkdownBlock linkify integration', () => {
     expect(renderedText).not.toContain('oai-mem-citation');
     expect(renderedText).not.toContain('MEMORY.md:73-73');
     expect(renderedText).not.toContain('proposed_plan');
-    expect(renderedText).not.toContain('internal plan');
+    // History has no plan card, so this body is the only copy of the plan.
+    expect(Array.from(document.querySelectorAll('.markdown-content li'), (li) => li.textContent)).toEqual(['plan step']);
   });
 
-  it.each([
-    '<oai-mem-citation>unfinished citation',
-    '<proposed_plan>\n- unfinished plan',
-  ])('hides an unfinished Codex protocol block at snapshot EOF: %s', (block) => {
-    render(<MarkdownBlock content={`Before\n\n${block}`} isStreaming />);
+  it('hides an unfinished memory citation at snapshot EOF while streaming', () => {
+    render(<MarkdownBlock content={'Before\n\n<oai-mem-citation>unfinished citation'} isStreaming />);
 
     const renderedText = document.querySelector('.markdown-content')?.textContent ?? '';
     expect(renderedText).toContain('Before');
@@ -338,21 +336,46 @@ describe('MarkdownBlock linkify integration', () => {
   });
 
   it.each(['oai-mem-citation', 'proposed_plan'])(
-    'hides the entire %s block across Markdown boundaries',
+    'keeps the rest of a finished message after an unclosed %s mention',
     (tag) => {
-      render(<MarkdownBlock content={[
-        'Before', '', `<${tag}>`,
-        'hidden `inline code`', '',
-        'hidden second paragraph', '',
-        '```text', 'hidden fenced code', '```',
-        `</${tag}>`, '', 'After',
-      ].join('\n')} />);
+      render(<MarkdownBlock content={`The parser looks for <${tag}> tags in prose.\n\nAfter that, ship it.`} />);
 
-      expect(Array.from(document.querySelectorAll('.markdown-content p'), (p) => p.textContent))
-        .toEqual(['Before', 'After']);
-      expect(document.querySelector('.markdown-content')?.textContent).not.toContain('hidden');
+      const renderedText = document.querySelector('.markdown-content')?.textContent ?? '';
+      expect(renderedText).toContain('tags in prose.');
+      expect(renderedText).toContain('After that, ship it.');
     },
   );
+
+  it('hides the entire memory citation across Markdown boundaries', () => {
+    render(<MarkdownBlock content={[
+      'Before', '', '<oai-mem-citation>',
+      'hidden `inline code`', '',
+      'hidden second paragraph', '',
+      '```text', 'hidden fenced code', '```',
+      '</oai-mem-citation>', '', 'After',
+    ].join('\n')} />);
+
+    expect(Array.from(document.querySelectorAll('.markdown-content p'), (p) => p.textContent))
+      .toEqual(['Before', 'After']);
+    expect(document.querySelector('.markdown-content')?.textContent).not.toContain('hidden');
+  });
+
+  it('renders a proposed plan body as Markdown across paragraphs and code', () => {
+    render(<MarkdownBlock content={[
+      'Before', '', '<proposed_plan>',
+      '# Plan title', '',
+      'Plan paragraph', '',
+      '```text', 'plan fenced code', '```',
+      '</proposed_plan>', '', 'After',
+    ].join('\n')} />);
+
+    expect(document.querySelector('.markdown-content h1')?.textContent).toBe('Plan title');
+    expect(Array.from(document.querySelectorAll('.markdown-content p'), (p) => p.textContent))
+      .toEqual(['Before', 'Plan paragraph', 'After']);
+    const text = document.querySelector('.markdown-content')?.textContent ?? '';
+    expect(text).toContain('plan fenced code');
+    expect(text).not.toContain('proposed_plan');
+  });
 
   it('preserves protocol tag examples inside code and surrounding prose spacing', () => {
     render(<MarkdownBlock content={[
@@ -368,13 +391,13 @@ describe('MarkdownBlock linkify integration', () => {
     expect(text).not.toContain('hidden');
   });
 
-  it('keeps protocol contents hidden as streaming crosses paragraphs and code', () => {
-    const { rerender } = render(<MarkdownBlock content="Before\n\n<proposed_plan>hidden" isStreaming />);
-    const block = 'Before\n\n<proposed_plan>hidden\n\n`hidden code`\n\nmore hidden';
+  it('keeps a memory citation hidden as streaming crosses paragraphs and code', () => {
+    const { rerender } = render(<MarkdownBlock content="Before\n\n<oai-mem-citation>hidden" isStreaming />);
+    const block = 'Before\n\n<oai-mem-citation>hidden\n\n`hidden code`\n\nmore hidden';
     rerender(<MarkdownBlock content={block} isStreaming />);
     expect(document.querySelector('.markdown-content')?.textContent).toBe('Before');
 
-    rerender(<MarkdownBlock content={`${block}\n</proposed_plan>\n\nAfter`} />);
+    rerender(<MarkdownBlock content={`${block}\n</oai-mem-citation>\n\nAfter`} />);
     expect(Array.from(document.querySelectorAll('.markdown-content p'), (p) => p.textContent))
       .toEqual(['Before', 'After']);
   });
