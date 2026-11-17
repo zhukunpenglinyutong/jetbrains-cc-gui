@@ -134,6 +134,10 @@ public class ClaudeSessionLiteReader {
         if (summary == null) {
             summary = firstPrompt;
         }
+        String reviewSummary = com.github.claudecodegui.markdown.MarkdownReviewPrompt.displaySummary(summary);
+        if (reviewSummary != null) {
+            summary = reviewSummary;
+        }
 
         // Skip metadata-only sessions (no title, no summary, no prompt)
         if (summary == null || summary.isEmpty()) {

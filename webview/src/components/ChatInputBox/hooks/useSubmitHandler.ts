@@ -1,9 +1,11 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
+import { expandQuoteTokens } from '../utils/quoteRegistry';
 import type { Attachment, ReasoningEffort } from '../types.js';
 import type { Dispatch, SetStateAction } from 'react';
 import { isCodexEffortIndependentCommand, parseCodexCommand } from '../../../hooks/codexCommandDispatcher';
 import { getCodexReasoningCapabilities, isCodexUltraCapabilityUnconfirmed } from '../../../utils/codexReasoningCapabilities';
 import { getSessionTransitionPending } from '../../../utils/sessionTransitionState';
+import { REVIEW_MESSAGE_MAX_CHARS } from '../../../utils/markdownReviewLimits';
 
 interface CompletionLike {
   close: () => void;
@@ -11,6 +13,7 @@ interface CompletionLike {
 
 export interface UseSubmitHandlerOptions {
   getTextContent: () => string;
+  captureReviewSubmission?: () => { text: string; onSubmitted: () => void; isCurrent?: () => boolean };
   attachments: Attachment[];
   sdkStatusLoading: boolean;
   sdkInstalled: boolean;
@@ -50,6 +53,7 @@ export interface UseSubmitHandlerOptions {
  */
 export function useSubmitHandler({
   getTextContent,
+  captureReviewSubmission,
   attachments,
   sdkStatusLoading,
   sdkInstalled,
@@ -74,10 +78,23 @@ export function useSubmitHandler({
   addToast,
   t,
 }: UseSubmitHandlerOptions) {
+  // Input clearing is deferred, so a second press inside that window would read
+  // the same still-present text and send it twice; trip this until it fires.
+  const submittingRef = useRef(false);
+
   return useCallback(() => {
     // Force fresh DOM read to avoid stale cache (e.g., after paste)
     invalidateCache();
-    const content = getTextContent();
+    const rawInput = getTextContent();
+    // A slash command must stay at the head of the message to reach the CLI; drafts wait for the next message.
+    // Zero-width marks are invisible to the slash menu; names may be non-ASCII (/审查); a path has a second '/'.
+    const isSlashCommand = /^\/[^\s/]+(?:\s|$)/.test(rawInput.replace(/[\u200B-\u200D\uFEFF]/g, '').trimStart());
+    const reviewSubmission = isSlashCommand ? undefined : captureReviewSubmission?.();
+    const reviews = reviewSubmission?.text ?? '';
+    // Review handoffs freeze quote text before the deferred clear; ordinary messages keep
+    // the chip tokens so a queued message restores its chips when edited.
+    const input = reviews ? expandQuoteTokens(rawInput) : rawInput;
+    const content = reviews ? [reviews, input.trim() ? input : ''].filter(Boolean).join('\n\n') : input;
     const cleanContent = content.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
 
     const command = currentProvider === 'codex' ? parseCodexCommand(cleanContent) : null;
@@ -116,6 +133,12 @@ export function useSubmitHandler({
     // session. Keep the draft intact during that decision.
     if (getSessionTransitionPending()) return;
 
+    if (!onSubmit) return;
+    if (reviews && content.length > REVIEW_MESSAGE_MAX_CHARS) {
+      addToast?.(t('markdownReview.tooLarge'), 'warning');
+      return;
+    }
+
     if (currentProvider === 'codex' && !isCodexEffortIndependentCommand(command)
         && isCodexUltraCapabilityUnconfirmed(selectedModel, reasoningEffort)) {
       addToast?.(t(getCodexReasoningCapabilities().status === 'unavailable'
@@ -135,26 +158,36 @@ export function useSubmitHandler({
     dollarCommandCompletion.close();
 
     // Record input history
-    recordInputHistory(content);
+    if (!reviews || input.trim()) recordInputHistory(reviews ? input : content);
 
     const attachmentsToSend = attachments.length > 0 ? [...attachments] : undefined;
 
-    // clearInput also drops any queued draft notification, so a stale debounced
-    // value cannot refill the input after submit.
     invalidateImagePastes?.();
-    clearInput();
-    if (externalAttachments === undefined) {
-      setInternalAttachments([]);
-      // Clear persisted images immediately so a remount cannot restore a submitted draft.
-      clearAttachmentsDraft?.();
-    }
 
-    // Call onSubmit even when loading - let parent handle queueing
+    const clearSubmittedDraft = () => {
+      clearInput();
+      if (externalAttachments === undefined) {
+        setInternalAttachments([]);
+        // Clear persisted images immediately so a remount cannot restore a submitted draft.
+        clearAttachmentsDraft?.();
+      }
+    };
+
+    // Defer clearing only for a review submission: the target check below must
+    // pass first, or a session switch would swallow the typed input and draft.
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    if (!reviews) clearSubmittedDraft();
     setTimeout(() => {
-      onSubmit?.(content, attachmentsToSend);
+      submittingRef.current = false;
+      if (reviews && reviewSubmission?.isCurrent && !reviewSubmission.isCurrent()) return;
+      onSubmit(content, attachmentsToSend);
+      reviewSubmission?.onSubmitted();
+      if (reviews) clearSubmittedDraft();
     }, 10);
   }, [
     getTextContent,
+    captureReviewSubmission,
     invalidateCache,
     attachments,
     sdkStatusLoading,

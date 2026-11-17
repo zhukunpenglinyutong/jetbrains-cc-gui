@@ -73,6 +73,20 @@ public class ClaudeSessionLiteReaderTest {
     }
 
     @Test
+    public void parseSessionInfoFromLite_truncatedReviewLastPromptGetsReadableTitle() {
+        String sessionId = "abc12345-1234-1234-1234-1234567890ab";
+        SessionLiteReader.LiteSessionFile lite = new SessionLiteReader.LiteSessionFile(
+                System.currentTimeMillis(), 1000,
+                "{\"type\":\"user\",\"content\":\"What is Java?\",\"timestamp\":\"2026-01-15T10:00:00Z\"}\n",
+                "{\"type\":\"last-prompt\",\"lastPrompt\":\"<ccgui-markdown-review>{\\\"batches\\\":[{\\\"annotations\\\":[{\\\"id\\\":\\\"0001\\\",\\\"path\\\":\\\"docs/plan.md\\\"\u2026\"}\n"
+        );
+
+        ClaudeSessionLiteReader.ClaudeLiteSessionInfo info = reader.parseSessionInfoFromLite(sessionId, lite);
+        assertNotNull(info);
+        assertEquals("Markdown review", info.summary);
+    }
+
+    @Test
     public void parseSessionInfoFromLite_noTitleReturnsNull() {
         String sessionId = "abc12345-1234-1234-1234-1234567890ab";
         SessionLiteReader.LiteSessionFile lite = new SessionLiteReader.LiteSessionFile(

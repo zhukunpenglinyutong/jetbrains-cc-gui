@@ -290,9 +290,12 @@ describe('useSubmitHandler', () => {
     expect(invalidateImagePastes).toHaveBeenCalledTimes(1);
     expect(close).toHaveBeenCalledTimes(5);
     expect(recordInputHistory).toHaveBeenCalledWith('hello');
-    expect(clearInput).toHaveBeenCalled();
+    // Ordinary submissions clear immediately; only review submissions keep the
+    // draft until their target check passes.
+    expect(clearInput).toHaveBeenCalledTimes(1);
 
     vi.advanceTimersByTime(20);
+    expect(clearInput).toHaveBeenCalledTimes(1);
     expect(onSubmit).toHaveBeenCalledTimes(1);
     expect(onSubmit).toHaveBeenCalledWith('hello', [createAttachment('a1')]);
     vi.useRealTimers();
