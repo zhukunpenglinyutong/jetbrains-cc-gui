@@ -339,8 +339,7 @@ function splitMarkdownBlocks(content: string): string[] {
 }
 
 /**
- * Strip system-internal XML tags injected by Claude Code's prompt protocol.
- * Mirrors `stripPromptXMLTags` from the CLI source (src/utils/messages.ts).
+ * Strip paired system-internal XML tags injected by the host prompt protocol.
  */
 const SYSTEM_XML_TAGS_RE =
   /<(commit_analysis|context|function_analysis|pr_analysis)>[\s\S]*?<\/\1>\n?/g;
@@ -388,6 +387,44 @@ function splitCodeFences(content: string, trackIndentedCode = true): string[] {
   return parts;
 }
 const INLINE_CODE_RE = /(`[^`\n]+`)/g;
+const CODEX_BLOCK_OPEN_RE = /<(oai-mem-citation|proposed_plan)>/g;
+
+/**
+ * Remove Codex protocol blocks before Markdown splits their paragraphs and code.
+ * Only prose may open a block; its body stays hidden through the closer or EOF,
+ * even when that body contains inline code or fences.
+ */
+function stripCodexBlocks(content: string): string {
+  if (!content.includes('<oai-mem-citation>') && !content.includes('<proposed_plan>')) {
+    return content;
+  }
+  let offset = 0;
+  let keptFrom = 0;
+  const visible: string[] = [];
+
+  for (const [fenceIndex, fencePart] of splitCodeFences(content).entries()) {
+    if (fenceIndex % 2 === 1) {
+      offset += fencePart.length;
+      continue;
+    }
+    for (const [inlineIndex, part] of fencePart.split(INLINE_CODE_RE).entries()) {
+      if (inlineIndex % 2 === 0) {
+        for (const match of part.matchAll(CODEX_BLOCK_OPEN_RE)) {
+          const start = offset + match.index;
+          if (start < keptFrom) continue;
+          visible.push(content.slice(keptFrom, start));
+          const closer = `</${match[1]}>`;
+          const end = content.indexOf(closer, start + match[0].length);
+          keptFrom = end === -1 ? content.length : end + closer.length;
+        }
+      }
+      offset += part.length;
+    }
+  }
+  visible.push(content.slice(keptFrom));
+  return visible.join('');
+}
+
 const DISPLAY_MATH_DELIMITER_LINE_RE = /^([ \t]*)\$\$\s*$/;
 const BRACKET_MATH_DELIMITER_RE = /(?<!\\)(\\\[|\\\]|\\\(|\\\))/g;
 const BRACKET_MATH_DELIMITER_MAP: Record<string, string> = {
@@ -1049,7 +1086,7 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
   // growing; every earlier block is memoized by source and never re-parsed,
   // so per-token render cost is O(last block) instead of O(document).
   const blocks = useMemo(
-    () => splitMarkdownBlocks(normalizedContent.replace(/[\r\n]+$/, '')),
+    () => splitMarkdownBlocks(stripCodexBlocks(normalizedContent).replace(/[\r\n]+$/, '')),
     [normalizedContent],
   );
 
