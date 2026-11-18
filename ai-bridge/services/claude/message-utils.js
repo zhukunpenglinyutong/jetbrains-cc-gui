@@ -7,10 +7,10 @@ import { isClaudeSdkAvailable, loadAnthropicSdk, loadBedrockSdk, loadClaudeSdk }
 import { existsSync } from 'fs';
 import {
   getClaudeProjectSessionFilePath as resolveClaudeProjectSessionFilePath,
+  getClaudeSettingsDisplayPath,
   getExistingClaudeProjectSessionFilePath
 } from '../../utils/path-utils.js';
 import { loadClaudeSettings } from '../../config/api-config.js';
-import { getClaudeSettingsDisplayPath } from '../../utils/path-utils.js';
 
 // SDK cache (module-internal, accessed via ensure* functions)
 let claudeSdk = null;

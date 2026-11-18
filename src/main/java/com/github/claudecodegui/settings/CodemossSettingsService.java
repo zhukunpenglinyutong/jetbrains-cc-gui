@@ -967,6 +967,14 @@ public class CodemossSettingsService {
         return withConfigTransaction(() -> providerManager.repairActiveProviderToClaudeSettings());
     }
 
+    /**
+     * Whether the repair above is skipped because settings.json already holds its own API
+     * token, key or base URL. See {@link ProviderManager#repairBlockedByOwnApiSettings()}.
+     */
+    public boolean repairBlockedByOwnApiSettings() throws IOException {
+        return withConfigTransaction(() -> providerManager.repairBlockedByOwnApiSettings());
+    }
+
     // ==================== Working Directory Management ====================
 
     public String getCustomWorkingDirectory(String projectPath) throws IOException {

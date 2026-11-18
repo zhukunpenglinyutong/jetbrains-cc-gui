@@ -1,7 +1,6 @@
 package com.github.claudecodegui.settings;
 
 import com.github.claudecodegui.util.ClaudeConfigDir;
-import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.util.SafeJsonFileOps;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -16,7 +15,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -36,6 +34,10 @@ public class ClaudeSettingsManager {
     private static final long READ_RETRY_DELAY_MS = 100;
     /** Read/re-apply rounds for one settings.json mutation before it fails explicitly. */
     private static final int MUTATION_ATTEMPTS = 3;
+
+    /** The env keys that together say which account and endpoint requests go to. */
+    private static final Set<String> API_SETTINGS_ENV_KEYS = Set.of(
+            "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL");
 
     /**
      * System-protected fields - these should never be overridden by provider configs
@@ -171,7 +173,7 @@ public class ClaudeSettingsManager {
                 }
             }
         }
-        throw new IOException("Could not update ~/.claude/settings.json after " + MUTATION_ATTEMPTS
+        throw new IOException("Could not update " + settingsPath + " after " + MUTATION_ATTEMPTS
                 + " attempt(s): it kept changing concurrently", lastError);
     }
 
@@ -576,6 +578,28 @@ public class ClaudeSettingsManager {
     }
 
     /**
+     * @return true when the active settings.json already carries any of the API token, API key or
+     *         base URL, i.e. it holds its own API settings that a provider must not be mixed into
+     * @throws IOException if settings.json cannot be read
+     */
+    public boolean hasOwnApiSettings() throws IOException {
+        return hasOwnApiSettings(readClaudeSettings());
+    }
+
+    private static boolean hasOwnApiSettings(JsonObject claudeSettings) {
+        if (claudeSettings == null || !claudeSettings.has("env") || !claudeSettings.get("env").isJsonObject()) {
+            return false;
+        }
+        JsonObject env = claudeSettings.getAsJsonObject("env");
+        for (String key : API_SETTINGS_ENV_KEYS) {
+            if (env.has(key) && !env.get(key).isJsonNull()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Fill in the provider-managed fields that settings.json is missing.
      *
      * @param claudeSettings the settings to repair (modified in place)
@@ -584,6 +608,14 @@ public class ClaudeSettingsManager {
      * @return true when at least one field or env key was added
      */
     private boolean repairIntoSettings(JsonObject claudeSettings, JsonObject settingsConfig, JsonObject provider) {
+        // A token, a key and a base URL only work as the set they were written as.
+        // Filling in the ones that are missing next to the user's own would send
+        // their credential to the provider's endpoint (or the reverse), so a file
+        // that has any of them is left alone.
+        if (hasOwnApiSettings(claudeSettings)) {
+            LOG.info("[ClaudeSettingsManager] settings.json has its own API settings, skipping repair");
+            return false;
+        }
         boolean changed = false;
 
         // 1. Repair top-level provider-managed fields.

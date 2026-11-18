@@ -1,7 +1,6 @@
 package com.github.claudecodegui.handler.provider;
 
 import com.github.claudecodegui.util.ClaudeConfigDir;
-import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.provider.claude.ClaudePlanUsageService;
 import com.github.claudecodegui.settings.ProviderManager;
@@ -15,7 +14,6 @@ import com.intellij.openapi.diagnostic.Logger;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 
 /**
  * Handles Claude provider CRUD operations and switching.

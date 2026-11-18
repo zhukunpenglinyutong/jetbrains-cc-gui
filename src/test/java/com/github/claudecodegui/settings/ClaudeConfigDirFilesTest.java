@@ -126,14 +126,58 @@ public class ClaudeConfigDirFilesTest {
     }
 
     @Test
-    public void aValueAlreadyInTheConfigDirectorysSettingsIsNotOverwritten() throws Exception {
+    public void aTokenAlreadyInTheConfigDirectorysSettingsIsNotPairedWithTheProvidersBaseUrl() throws Exception {
         write(profile.resolve("settings.json"), "{\"env\":{\"ANTHROPIC_AUTH_TOKEN\":\"user-token\"}}");
 
-        settingsManager.repairMissingProviderFields(provider());
+        assertFalse(settingsManager.repairMissingProviderFields(provider()));
 
         JsonObject env = read(profile.resolve("settings.json")).getAsJsonObject("env");
         assertEquals("user-token", env.get("ANTHROPIC_AUTH_TOKEN").getAsString());
+        assertFalse(env.has("ANTHROPIC_BASE_URL"));
+    }
+
+    @Test
+    public void aBaseUrlAlreadyInTheConfigDirectorysSettingsIsNotPairedWithTheProvidersToken() throws Exception {
+        write(profile.resolve("settings.json"), "{\"env\":{\"ANTHROPIC_BASE_URL\":\"https://user-proxy.example.invalid\"}}");
+
+        assertFalse(settingsManager.repairMissingProviderFields(provider()));
+
+        JsonObject env = read(profile.resolve("settings.json")).getAsJsonObject("env");
+        assertEquals("https://user-proxy.example.invalid", env.get("ANTHROPIC_BASE_URL").getAsString());
+        assertFalse(env.has("ANTHROPIC_AUTH_TOKEN"));
+    }
+
+    @Test
+    public void anApiKeyAlreadyInTheConfigDirectorysSettingsIsNotPairedWithTheProvidersBaseUrl() throws Exception {
+        write(profile.resolve("settings.json"), "{\"env\":{\"ANTHROPIC_API_KEY\":\"user-key\"}}");
+
+        assertFalse(settingsManager.repairMissingProviderFields(provider()));
+
+        JsonObject env = read(profile.resolve("settings.json")).getAsJsonObject("env");
+        assertEquals("user-key", env.get("ANTHROPIC_API_KEY").getAsString());
+        assertFalse(env.has("ANTHROPIC_BASE_URL"));
+        assertFalse(env.has("ANTHROPIC_AUTH_TOKEN"));
+    }
+
+    @Test
+    public void aDirectoryWithOtherEnvButNoApiSettingsStillGetsTheProvider() throws Exception {
+        write(profile.resolve("settings.json"), "{\"env\":{\"MY_FLAG\":\"1\"}}");
+
+        assertTrue(settingsManager.repairMissingProviderFields(provider()));
+
+        JsonObject env = read(profile.resolve("settings.json")).getAsJsonObject("env");
+        assertEquals("1", env.get("MY_FLAG").getAsString());
+        assertEquals("sk-ant-provider-token", env.get("ANTHROPIC_AUTH_TOKEN").getAsString());
         assertEquals("https://api.example.invalid", env.get("ANTHROPIC_BASE_URL").getAsString());
+    }
+
+    @Test
+    public void theConfigDirectoryReportsWhetherItHasItsOwnApiSettings() throws Exception {
+        assertFalse(settingsManager.hasOwnApiSettings());
+        write(profile.resolve("settings.json"), "{\"env\":{\"MY_FLAG\":\"1\"}}");
+        assertFalse(settingsManager.hasOwnApiSettings());
+        write(profile.resolve("settings.json"), "{\"env\":{\"ANTHROPIC_BASE_URL\":\"https://user-proxy.example.invalid\"}}");
+        assertTrue(settingsManager.hasOwnApiSettings());
     }
 
     @Test
@@ -152,6 +196,19 @@ public class ClaudeConfigDirFilesTest {
         write(profile.resolve(".claude.json"), "{\"mcpServers\":{\"profile-server\":{\"command\":\"node\"}}}");
 
         assertEquals(List.of("home-server"), serverIds());
+    }
+
+    @Test
+    public void anUnreadableClaudeJsonIsReportedWithTheConfigDirectorysPath() throws Exception {
+        write(profile.resolve(".claude.json"), "{ not json");
+
+        try {
+            serverIds();
+            org.junit.Assert.fail("an unparseable .claude.json must be reported");
+        } catch (java.io.IOException e) {
+            assertTrue(e.getMessage(), e.getMessage().contains(profile.resolve(".claude.json").toString()));
+            assertFalse(e.getMessage(), e.getMessage().contains("~/.claude.json"));
+        }
     }
 
     @Test

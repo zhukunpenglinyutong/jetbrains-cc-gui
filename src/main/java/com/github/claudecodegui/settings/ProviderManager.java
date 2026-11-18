@@ -690,6 +690,27 @@ public class ProviderManager {
      * touch settings.json — not even additively.
      */
     public boolean repairActiveProviderToClaudeSettings() throws IOException {
+        JsonObject activeProvider = repairableActiveProvider();
+        if (activeProvider == null) {
+            return false;
+        }
+        return claudeSettingsManager.repairMissingProviderFields(activeProvider);
+    }
+
+    /**
+     * @return true when {@link #repairActiveProviderToClaudeSettings()} would have a provider to
+     *         apply but leaves settings.json alone because it already holds its own API settings
+     * @throws IOException if settings.json cannot be read
+     */
+    public boolean repairBlockedByOwnApiSettings() throws IOException {
+        return repairableActiveProvider() != null && claudeSettingsManager.hasOwnApiSettings();
+    }
+
+    /**
+     * @return the active provider when it is one that owns settings.json and carries a payload to
+     *         repair from, otherwise null (local settings / CLI login / disabled / empty env)
+     */
+    private JsonObject repairableActiveProvider() {
         JsonObject config = configReader.apply(null);
 
         if (config.has("claude") &&
@@ -697,20 +718,20 @@ public class ProviderManager {
             String currentId = config.getAsJsonObject("claude").get("current").getAsString();
             if (isGlobalSettingsSyncExempt(currentId)) {
                 LOG.info("[ProviderManager] " + currentId + " provider active, skipping repair");
-                return false;
+                return null;
             }
         }
 
         JsonObject activeProvider = getActiveClaudeProvider();
         if (activeProvider == null) {
-            LOG.info("[ProviderManager] No active provider to repair in .claude/settings.json");
-            return false;
+            LOG.info("[ProviderManager] No active provider to repair in settings.json");
+            return null;
         }
         if (!hasEnvPayload(activeProvider)) {
             LOG.info("[ProviderManager] Active provider has empty env payload, skipping repair");
-            return false;
+            return null;
         }
-        return claudeSettingsManager.repairMissingProviderFields(activeProvider);
+        return activeProvider;
     }
 
     /**

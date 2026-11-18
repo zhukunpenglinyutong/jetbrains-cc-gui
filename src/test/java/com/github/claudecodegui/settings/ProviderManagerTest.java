@@ -12,6 +12,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 /**
  * Regression tests for ProviderManager.
@@ -170,6 +171,43 @@ public class ProviderManagerTest {
         boolean changed = manager.repairActiveProviderToClaudeSettings();
 
         assertFalse("Provider with empty env payload must skip repair", changed);
+    }
+
+    private ProviderManager managerWithActiveProviderAndSettings(String current, String settingsJson) {
+        JsonObject config = createConfigWithCurrent(current);
+        JsonObject provider = createProvider("Provider A");
+        JsonObject env = new JsonObject();
+        env.addProperty("ANTHROPIC_AUTH_TOKEN", "provider-token");
+        provider.getAsJsonObject("settingsConfig").add("env", env);
+        config.getAsJsonObject("claude").getAsJsonObject("providers").add("provider-a", provider);
+        return createProviderManager(new AtomicReference<>(config), JsonParser.parseString(settingsJson).getAsJsonObject());
+    }
+
+    /**
+     * A directory whose settings.json already holds its own token, key or base URL is not repaired,
+     * and the caller is told so it can say why.
+     */
+    @Test
+    public void repairIsBlockedWhenSettingsHoldItsOwnApiSettings() throws Exception {
+        ProviderManager manager = managerWithActiveProviderAndSettings("provider-a",
+                "{\"env\":{\"ANTHROPIC_BASE_URL\":\"https://user-proxy.example.invalid\"}}");
+
+        assertTrue(manager.repairBlockedByOwnApiSettings());
+    }
+
+    @Test
+    public void repairIsNotBlockedWhenSettingsHaveNoApiSettings() throws Exception {
+        ProviderManager manager = managerWithActiveProviderAndSettings("provider-a", "{\"env\":{\"MY_FLAG\":\"1\"}}");
+
+        assertFalse(manager.repairBlockedByOwnApiSettings());
+    }
+
+    @Test
+    public void repairIsNotReportedAsBlockedWhenNoProviderWouldBeApplied() throws Exception {
+        ProviderManager manager = managerWithActiveProviderAndSettings(ProviderManager.LOCAL_SETTINGS_PROVIDER_ID,
+                "{\"env\":{\"ANTHROPIC_AUTH_TOKEN\":\"user-token\"}}");
+
+        assertFalse(manager.repairBlockedByOwnApiSettings());
     }
 
     /**
