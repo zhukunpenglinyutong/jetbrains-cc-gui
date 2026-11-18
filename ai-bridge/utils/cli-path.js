@@ -122,6 +122,37 @@ const SHIM_PROG_RE = /^\s*SET\s+"?_prog=([^"\r\n]+)"?\s*$/i;
 const SHIM_TARGET_PREFIX = /^(?:[A-Za-z]:\\|%dp0%|%~dp0)/i;
 /** A native delegation line is exactly `"<target>" %*` (cmd-shim, no `_prog`). */
 const SHIM_NATIVE_LINE_RE = /^\s*"([^"]+)"\s+%\*\s*$/;
+/** What cmd-shim 4-8 writes before `"%_prog%"` on the delegation line (cmd-shim 3 writes nothing). */
+const SHIM_NODE_LINE_PREFIX = 'endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & ';
+/**
+ * Every other line npm's cmd-shim writes (cmd-shim 3 for npm 6, cmd-shim 4-8 for
+ * npm 7+). A shim with any other line is a hand-written wrapper (`set HTTPS_PROXY=...`,
+ * `cd /d ...`): spawning its target directly would skip that setup, so it stays on cmd.exe.
+ */
+const SHIM_BOILERPLATE_LINES = [
+  /^$/,
+  /^@ECHO off$/i,
+  /^GOTO start$/i,
+  /^:start$/i,
+  /^:find_dp0$/i,
+  /^SET dp0=%~dp0$/i,
+  /^EXIT \/b(?: %errorlevel%)?$/i,
+  /^SETLOCAL$/i,
+  /^ENDLOCAL$/i,
+  /^CALL :find_dp0$/i,
+  /^IF EXIST "[^"]+" \($/i,
+  /^\) ELSE \($/i,
+  /^\)$/,
+  /^SET PATHEXT=%PATHEXT:;\.JS;=;%$/i,
+];
+
+/** True for a cmd-shim line: boilerplate, a `_prog` assignment, or a `%*` delegation line. */
+function isCmdShimLine(line) {
+  const trimmed = line.trim();
+  return trimmed.includes('%*')
+    || SHIM_PROG_RE.test(trimmed)
+    || SHIM_BOILERPLATE_LINES.some((re) => re.test(trimmed));
+}
 
 /**
  * @typedef {{ kind: 'node', entry: string, nodeCommand: string }
@@ -202,7 +233,11 @@ function nodeDelegationTarget(lines) {
   for (const line of lines) {
     if (!line.includes('%*')) continue;
     const progIndex = line.indexOf(progToken);
-    if (progIndex < 0) continue;
+    // Every `%*` line must be the cmd-shim runtime call; anything in front of
+    // `"%_prog%"` other than cmd-shim's own prefix is a command we would skip.
+    if (progIndex < 0) return null;
+    const lead = line.slice(0, progIndex).trimStart();
+    if (lead && lead !== SHIM_NODE_LINE_PREFIX) return null;
     const tokens = tokenizeCmdLine(line.slice(progIndex + progToken.length));
     // Exactly `<quoted target> %*`: a flag between the runtime and the target
     // (`"%_prog%" --no-warnings "entry" %*`) cannot be reproduced here.
@@ -231,10 +266,11 @@ function nodeDelegationTarget(lines) {
  * - a native bin with no shebang: `"%dp0%\node_modules\...\bin\tool.exe"   %*`
  *   (opencode-ai >= 1.15.1 publishes such a binary).
  *
- * Everything is rejected unless the shape is unambiguous — a non-Node runtime
- * (bun/deno), a shebang flag between the runtime and the target, conditional
- * dispatch, an unresolved `%VAR%`, or a target that is neither a Node script
- * nor an `.exe`.
+ * Everything is rejected unless the shape is unambiguous — a relative shim
+ * path, any line cmd-shim does not write (a user wrapper's own setup), a non-Node
+ * runtime (bun/deno), a shebang flag between the runtime and the target,
+ * conditional dispatch, an unresolved `%VAR%`, or a target that is neither a
+ * Node script nor an `.exe`.
  *
  * @param {string} bin - shim path (quotes already stripped)
  * @returns {CmdShimTarget|null} delegate descriptor, or null when unresolved
@@ -242,6 +278,8 @@ function nodeDelegationTarget(lines) {
 export function resolveCmdShimTarget(bin) {
   if (typeof bin !== 'string' || !/\.(cmd|bat)$/i.test(bin.trim())) return null;
   const shimPath = bin.trim();
+  // A bare `tool.cmd` is found via the child's cwd/PATH, not this process's cwd.
+  if (!pathWin32.isAbsolute(shimPath)) return null;
   let content;
   try {
     content = readFileSync(shimPath, 'utf8');
@@ -249,6 +287,7 @@ export function resolveCmdShimTarget(bin) {
     return null;
   }
   const lines = content.split(/\r?\n/);
+  if (!lines.every(isCmdShimLine)) return null;
   const programs = lines
     .map((line) => SHIM_PROG_RE.exec(line))
     .filter((match) => match !== null)
@@ -336,30 +375,21 @@ export function resolveCliSpawn(
     // stay on cmd.exe — the redirect lives in that line.
     if (!redirectTo && isShim && args.some((arg) => typeof arg === 'string' && /[\r\n]/.test(arg))) {
       const shimTarget = resolveCmdShimTarget(normalized);
-      if (shimTarget?.kind === 'node') {
-        // Keep the CLI on the runtime its shim would use: the shim directory
-        // leads PATH so a bare `node` resolves the same way cmd.exe would.
+      if (shimTarget) {
+        // Same PATH as the cmd path below: the shim directory leads, so a bare
+        // `node` resolves to the runtime the shim itself would pick.
         const env = prependPathDir(
           { ...(options.env || process.env) },
           pathWin32.dirname(normalized),
         );
+        const direct = shimTarget.kind === 'node'
+          ? { file: shimTarget.nodeCommand, args: [shimTarget.entry, ...args] }
+          : { file: shimTarget.file, args };
         return {
-          file: shimTarget.nodeCommand,
-          args: [shimTarget.entry, ...args],
+          ...direct,
           options: {
             ...options,
             env,
-            shell: false,
-            windowsHide: options.windowsHide !== false,
-          },
-        };
-      }
-      if (shimTarget?.kind === 'native') {
-        return {
-          file: shimTarget.file,
-          args,
-          options: {
-            ...options,
             shell: false,
             windowsHide: options.windowsHide !== false,
           },
