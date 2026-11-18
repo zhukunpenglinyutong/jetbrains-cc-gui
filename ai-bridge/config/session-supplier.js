@@ -92,6 +92,20 @@ export function buildSessionCodexConfig(supplierId, { baseEnv = process.env, ...
   if (!selection) return null;
   if (selection.mode !== 'managed') return { authMode: 'cli_login', providerRevision: selection.revision };
   try {
+    return buildManagedCodexOverride(selection, baseEnv);
+  } catch (error) {
+    // The active supplier is already merged into the native config.toml, which may supply what its
+    // fragment omits (provider table, bearer token, headers, key): run it natively as before bindings.
+    const state = (dependencies.codexState ?? getCodexRuntimeState)();
+    if (state.access === 'managed' && state.currentId === supplierId) {
+      return { authMode: 'managed', providerRevision: selection.revision };
+    }
+    throw error;
+  }
+}
+
+function buildManagedCodexOverride(selection, baseEnv) {
+  try {
     const config = parse(selection.provider.configToml || '', { integersAsBigInt: 'asNeeded' });
     if (Object.hasOwn(config, 'mcp_servers') || Object.hasOwn(config, 'skills')) throw unavailable();
     const auth = JSON.parse(selection.provider.authJson || '{}');
