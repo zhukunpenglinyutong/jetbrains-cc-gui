@@ -23,12 +23,10 @@ public class RefreshFileHandler implements DiffActionHandler {
 
     private final HandlerContext context;
     private final Gson gson;
-    private final DiffFileOperations fileOperations;
 
-    public RefreshFileHandler(HandlerContext context, Gson gson, DiffFileOperations fileOperations) {
+    public RefreshFileHandler(HandlerContext context, Gson gson) {
         this.context = context;
         this.gson = gson;
-        this.fileOperations = fileOperations;
     }
 
     private static final String[] TYPES = {"refresh_file"};
@@ -52,10 +50,6 @@ public class RefreshFileHandler implements DiffActionHandler {
             String filePath = this.resolveFilePath(requestedPath, this.resolveWorkingDirectory());
             if (filePath == null) {
                 LOG.warn("refresh_file: Cannot resolve a relative path without a working directory");
-                return;
-            }
-            if (!fileOperations.isPathWithinProject(filePath)) {
-                LOG.warn("Security: file path outside project directory: " + filePath);
                 return;
             }
 

@@ -74,7 +74,7 @@ public class EditableDiffHandler implements DiffActionHandler {
         return TYPES;
     }
 
-    /** Opens the recorded changes after validating their project scope. */
+    /** Opens the recorded changes: writable ones inside the project, read-only ones outside it. */
     @Override
     public void handle(String type, String content) {
         try {
@@ -87,11 +87,6 @@ public class EditableDiffHandler implements DiffActionHandler {
             String filePath = nativePatch ? this.resolveFilePath(requestedPath, workingDirectory) : requestedPath;
             JsonArray operations = nativePatch ? this.freezeOperationPaths(suppliedOperations, workingDirectory) : suppliedOperations;
             JsonObject reviewOrigin = nativePatch ? this.captureReviewOrigin(operations) : null;
-
-            if (!this.fileOperations.isPathWithinProject(filePath)) {
-                LOG.warn("Security: file path outside project directory: " + filePath);
-                return;
-            }
 
             LOG.info("Showing editable diff for file: " + filePath + " with " + operations.size() + " operations, status: " + status);
 
@@ -108,6 +103,14 @@ public class EditableDiffHandler implements DiffActionHandler {
                 }
             }
 
+            if (!this.fileOperations.isPathWithinProject(filePath)) {
+                // Reviewing outside the project cannot write back, so show the change read-only instead of failing.
+                LOG.info("Showing read-only diff for file outside project directory: " + filePath);
+                ApplicationManager.getApplication().invokeLater(() ->
+                        this.showReadOnlyDiff(filePath, operations, status, nativePatch));
+                return;
+            }
+
             ApplicationManager.getApplication().invokeLater(() ->
                     this.showEditableDiff(filePath, requestedPath, operations, status, nativePatch, reviewOrigin));
         } catch (Exception e) {
@@ -118,38 +121,17 @@ public class EditableDiffHandler implements DiffActionHandler {
     void showEditableDiff(String filePath, String requestedPath, JsonArray operations, String status,
                           boolean nativePatch, JsonObject reviewOrigin) {
         try {
-            boolean isNewFile = "A".equals(status);
-            String currentContent = "";
-            Charset charset = StandardCharsets.UTF_8;
-
-            VirtualFile vFile = LocalFileSystem.getInstance().refreshAndFindFileByPath(NodeDetector.toVfsPath(filePath));
-            if (vFile != null) {
-                vFile.refresh(false, false);
-                charset = vFile.getCharset() != null ? vFile.getCharset() : StandardCharsets.UTF_8;
-                try {
-                    Document document = nativePatch ? FileDocumentManager.getInstance().getDocument(vFile) : null;
-                    currentContent = document == null ? new String(vFile.contentsToByteArray(), charset) : document.getText();
-                } catch (IOException e) {
-                    LOG.error("Failed to read file content: " + filePath, e);
-                    this.browserBridge.showErrorToast(ClaudeCodeGuiBundle.message("diff.fileReadFailedDetail", e.getMessage()));
-                    return;
-                }
+            ContentSnapshot snapshot = this.captureContent(filePath, operations, status, nativePatch);
+            if (snapshot == null) {
+                return;
             }
-
-            String originalContent = nativePatch
-                    ? FileChangeUndoPlan.rebuild(filePath, vFile == null ? null : currentContent, operations).content()
-                    : isNewFile
-                    ? ""
-                    : ContentRebuildUtil.rebuildBeforeContent(currentContent, operations);
-            if (originalContent == null) {
-                originalContent = "";
-            }
-            final String baselineContent = originalContent;
+            String originalContent = snapshot.originalContent();
+            String currentContent = snapshot.currentContent();
 
             String fileName = new File(filePath).getName();
             String tabName = ClaudeCodeGuiBundle.message("diff.tabName", fileName, operations.size());
 
-            InteractiveDiffRequest request = isNewFile
+            InteractiveDiffRequest request = snapshot.isNewFile()
                     ? InteractiveDiffRequest.forNewFile(filePath, currentContent, tabName)
                     : InteractiveDiffRequest.forModifiedFile(filePath, originalContent, currentContent, tabName);
 
@@ -160,7 +142,7 @@ public class EditableDiffHandler implements DiffActionHandler {
                         if (nativePatch) {
                             this.handleNativeDiffResult(result, filePath, requestedPath, operations, status, reviewOrigin);
                         } else {
-                            this.handleDiffResult(result, filePath, baselineContent, isNewFile);
+                            this.handleDiffResult(result, filePath, originalContent, snapshot.isNewFile());
                         }
                     })
                     .exceptionally(e -> {
@@ -179,6 +161,68 @@ public class EditableDiffHandler implements DiffActionHandler {
             LOG.error("Failed to show editable diff: " + e.getMessage(), e);
             this.browserBridge.showErrorToast(ClaudeCodeGuiBundle.message("diff.openFailedDetail", e.getMessage()));
         }
+    }
+
+    /** Shows the change without the accept/reject flow, whose write-back is confined to the project. */
+    void showReadOnlyDiff(String filePath, JsonArray operations, String status, boolean nativePatch) {
+        try {
+            ContentSnapshot snapshot = this.captureContent(filePath, operations, status, nativePatch);
+            if (snapshot == null) {
+                return;
+            }
+
+            String fileName = new File(filePath).getName();
+            FileType fileType = FileTypeManager.getInstance().getFileTypeByFileName(fileName);
+            DiffContentFactory contents = DiffContentFactory.getInstance();
+            SimpleDiffRequest request = new SimpleDiffRequest(
+                    ClaudeCodeGuiBundle.message("diff.readOnlyTabName", fileName, operations.size()),
+                    contents.create(this.context.getProject(), snapshot.originalContent(), fileType),
+                    contents.create(this.context.getProject(), snapshot.currentContent(), fileType),
+                    ClaudeCodeGuiBundle.message("diff.editBefore", fileName),
+                    ClaudeCodeGuiBundle.message("diff.editAfter", fileName)
+            );
+
+            DiffManager.getInstance().showDiff(this.context.getProject(), request);
+            LOG.info("Read-only diff view opened for: " + filePath);
+        } catch (IllegalArgumentException refused) {
+            LOG.warn("Showing recorded edits only for " + filePath + ": " + refused.getMessage());
+            this.showRecordedEdits(filePath, operations, refused.getMessage());
+        } catch (Exception e) {
+            LOG.error("Failed to show read-only diff: " + e.getMessage(), e);
+            this.browserBridge.showErrorToast(ClaudeCodeGuiBundle.message("diff.openFailedDetail", e.getMessage()));
+        }
+    }
+
+    /** Reads both sides of the review diff, or returns null after reporting a read failure. */
+    private ContentSnapshot captureContent(String filePath, JsonArray operations, String status, boolean nativePatch) {
+        boolean isNewFile = "A".equals(status);
+        String currentContent = "";
+        Charset charset = StandardCharsets.UTF_8;
+
+        VirtualFile vFile = LocalFileSystem.getInstance().refreshAndFindFileByPath(NodeDetector.toVfsPath(filePath));
+        if (vFile != null) {
+            vFile.refresh(false, false);
+            charset = vFile.getCharset() != null ? vFile.getCharset() : StandardCharsets.UTF_8;
+            try {
+                Document document = nativePatch ? FileDocumentManager.getInstance().getDocument(vFile) : null;
+                currentContent = document == null ? new String(vFile.contentsToByteArray(), charset) : document.getText();
+            } catch (IOException e) {
+                LOG.error("Failed to read file content: " + filePath, e);
+                this.browserBridge.showErrorToast(ClaudeCodeGuiBundle.message("diff.fileReadFailedDetail", e.getMessage()));
+                return null;
+            }
+        }
+
+        String originalContent = nativePatch
+                ? FileChangeUndoPlan.rebuild(filePath, vFile == null ? null : currentContent, operations).content()
+                : isNewFile
+                ? ""
+                : ContentRebuildUtil.rebuildBeforeContent(currentContent, operations);
+        return new ContentSnapshot(originalContent == null ? "" : originalContent, currentContent, isNewFile);
+    }
+
+    /** Both sides of a review diff, plus whether the change created the file. */
+    private record ContentSnapshot(String originalContent, String currentContent, boolean isNewFile) {
     }
 
     void showRecordedEdits(String filePath, JsonArray operations, String refusal) {

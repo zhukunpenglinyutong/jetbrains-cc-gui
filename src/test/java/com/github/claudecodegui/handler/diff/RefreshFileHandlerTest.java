@@ -11,8 +11,6 @@ import org.junit.rules.TemporaryFolder;
 
 import java.lang.reflect.Proxy;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -26,7 +24,7 @@ public class RefreshFileHandlerTest {
     @Rule
     public TemporaryFolder temporary = new TemporaryFolder();
 
-    /** Resolves and validates an attached-root file before a later directory switch. */
+    /** Resolves and freezes an attached-root file before a later directory switch. */
     @Test
     public void freezesAttachedRootRelativePathBeforeAsyncRefresh() throws Exception {
         Path base = this.temporary.newFolder("base").toPath();
@@ -37,19 +35,11 @@ public class RefreshFileHandlerTest {
         ClaudeSession session = new ClaudeSession(null, null, null, null);
         session.setCwd(attached.toString());
         context.setSession(session);
-        List<String> validated = new ArrayList<>();
         AtomicReference<String> refreshed = new AtomicReference<>();
         CountDownLatch refreshEntered = new CountDownLatch(1);
         CountDownLatch allowRefresh = new CountDownLatch(1);
         CountDownLatch refreshFinished = new CountDownLatch(1);
-        DiffFileOperations files = new DiffFileOperations(context) {
-            @Override
-            public boolean isPathWithinProject(String filePath) {
-                validated.add(filePath);
-                return Path.of(filePath).startsWith(attached);
-            }
-        };
-        RefreshFileHandler handler = new RefreshFileHandler(context, new Gson(), files) {
+        RefreshFileHandler handler = new RefreshFileHandler(context, new Gson()) {
             @Override
             void refreshFile(String filePath) {
                 refreshEntered.countDown();
@@ -67,7 +57,6 @@ public class RefreshFileHandlerTest {
 
         handler.handle("refresh_file", "{\"filePath\":\"src/A.ts\"}");
         try {
-            assertEquals(List.of(expected.toString()), validated);
             assertTrue("Refresh did not start", refreshEntered.await(5, TimeUnit.SECONDS));
             session.setCwd(other.toString());
         } finally {
@@ -78,53 +67,39 @@ public class RefreshFileHandlerTest {
         assertEquals(expected.toString(), refreshed.get());
     }
 
-    /** Validates the normalized traversal target and rejects it before scheduling work. */
+    /** A refresh only rereads disk state, so files outside the project roots are refreshed too. */
     @Test
-    public void rejectsRelativeTraversalOutsideContentRoots() throws Exception {
+    public void refreshesFilesOutsideProjectRoots() throws Exception {
         Path base = this.temporary.newFolder("base").toPath();
-        Path attached = this.temporary.newFolder("attached").toPath();
+        Path outside = this.temporary.newFolder("outside").toPath().resolve("outside.ts");
         HandlerContext context = this.context(base);
-        ClaudeSession session = new ClaudeSession(null, null, null, null);
-        session.setCwd(attached.toString());
-        context.setSession(session);
-        List<String> validated = new ArrayList<>();
         AtomicInteger refreshes = new AtomicInteger();
-        DiffFileOperations files = new DiffFileOperations(context) {
-            @Override
-            public boolean isPathWithinProject(String filePath) {
-                validated.add(filePath);
-                Path path = Path.of(filePath);
-                return path.startsWith(base) || path.startsWith(attached);
-            }
-        };
-        RefreshFileHandler handler = new RefreshFileHandler(context, new Gson(), files) {
+        AtomicReference<String> refreshed = new AtomicReference<>();
+        CountDownLatch refreshFinished = new CountDownLatch(1);
+        RefreshFileHandler handler = new RefreshFileHandler(context, new Gson()) {
             @Override
             void refreshFile(String filePath) {
                 refreshes.incrementAndGet();
+                refreshed.set(filePath);
+                refreshFinished.countDown();
             }
         };
+        JsonObject request = new JsonObject();
+        request.addProperty("filePath", outside.toString());
 
-        handler.handle("refresh_file", "{\"filePath\":\"../outside.ts\"}");
+        handler.handle("refresh_file", request.toString());
 
-        Path escaped = attached.resolve("../outside.ts").normalize();
-        assertEquals(List.of(escaped.toString()), validated);
-        assertEquals(0, refreshes.get());
+        assertTrue("Refresh did not finish", refreshFinished.await(5, TimeUnit.SECONDS));
+        assertEquals(1, refreshes.get());
+        assertEquals(outside.toString(), refreshed.get());
     }
 
     /** A relative request without either a session cwd or project base has no target. */
     @Test
     public void rejectsRelativePathWithoutWorkingDirectory() {
         HandlerContext context = this.context(null);
-        AtomicInteger validations = new AtomicInteger();
         AtomicInteger refreshes = new AtomicInteger();
-        DiffFileOperations files = new DiffFileOperations(context) {
-            @Override
-            public boolean isPathWithinProject(String filePath) {
-                validations.incrementAndGet();
-                return true;
-            }
-        };
-        RefreshFileHandler handler = new RefreshFileHandler(context, new Gson(), files) {
+        RefreshFileHandler handler = new RefreshFileHandler(context, new Gson()) {
             @Override
             void refreshFile(String filePath) {
                 refreshes.incrementAndGet();
@@ -133,7 +108,6 @@ public class RefreshFileHandlerTest {
 
         handler.handle("refresh_file", "{\"filePath\":\"src/A.ts\"}");
 
-        assertEquals(0, validations.get());
         assertEquals(0, refreshes.get());
     }
 
@@ -142,17 +116,9 @@ public class RefreshFileHandlerTest {
     public void keepsAbsolutePathWithoutWorkingDirectory() throws Exception {
         Path target = this.temporary.newFolder("absolute").toPath().resolve("src/A.ts");
         HandlerContext context = this.context(null);
-        List<String> validated = new ArrayList<>();
         AtomicReference<String> refreshed = new AtomicReference<>();
         CountDownLatch refreshFinished = new CountDownLatch(1);
-        DiffFileOperations files = new DiffFileOperations(context) {
-            @Override
-            public boolean isPathWithinProject(String filePath) {
-                validated.add(filePath);
-                return true;
-            }
-        };
-        RefreshFileHandler handler = new RefreshFileHandler(context, new Gson(), files) {
+        RefreshFileHandler handler = new RefreshFileHandler(context, new Gson()) {
             @Override
             void refreshFile(String filePath) {
                 refreshed.set(filePath);
@@ -164,7 +130,6 @@ public class RefreshFileHandlerTest {
 
         handler.handle("refresh_file", request.toString());
 
-        assertEquals(List.of(target.toString()), validated);
         assertTrue("Refresh did not finish", refreshFinished.await(5, TimeUnit.SECONDS));
         assertEquals(target.toString(), refreshed.get());
     }
