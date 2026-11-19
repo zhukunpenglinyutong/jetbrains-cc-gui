@@ -1437,7 +1437,8 @@
       "emptySession": "Não há conteúdo de conversa para gerar um título",
       "disabled": "A geração de títulos por IA está desativada nas configurações",
       "sessionNotFound": "Arquivo de sessão não encontrado",
-      "generationFailed": "Falha ao gerar o título, tente novamente mais tarde"
+      "generationFailed": "Falha ao gerar o título, tente novamente mais tarde",
+      "customTitle": "Esta sessão tem um título manual, que tem prioridade sobre o título da IA"
     },
     "copySessionId": "Copiar ID da sessão para CLI resume",
     "sessionIdCopied": "ID da sessão copiado",

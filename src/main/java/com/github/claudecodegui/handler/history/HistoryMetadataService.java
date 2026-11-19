@@ -3,6 +3,7 @@ package com.github.claudecodegui.handler.history;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.NodeJsServiceCaller;
 import com.github.claudecodegui.handler.core.HandlerContext;
+import com.github.claudecodegui.provider.claude.ClaudeHistoryReader;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
@@ -147,10 +148,20 @@ class HistoryMetadataService {
                     return;
                 }
 
-                LOG.info("[HistoryHandler] SessionId: " + sessionKey + ", projectPath: " + projectPath);
+                // With repository-matched history enabled, a row can belong to
+                // a sibling worktree of the same Git remote; its transcript
+                // lives under that worktree's project key, so resolve the cwd
+                // exactly like export/delete do (otherwise the daemon looks in
+                // the wrong project directory and the row ends in
+                // session_not_found).
+                String projectRoot = context.getProject() == null ? projectPath : context.getProject().getBasePath();
+                String historyCwd = new ClaudeHistoryReader()
+                        .resolveRepositoryHistoryCwd(sessionKey, projectPath, projectRoot, context.getSettingsService());
+
+                LOG.info("[HistoryHandler] SessionId: " + sessionKey + ", historyCwd: " + historyCwd);
 
                 context.getClaudeSDKBridge()
-                        .regenerateSessionTitle(sessionKey, projectPath)
+                        .regenerateSessionTitle(sessionKey, historyCwd)
                         .thenAccept(result -> {
                             boolean success = result.has("success") && result.get("success").getAsBoolean();
                             String title = result.has("title") && !result.get("title").isJsonNull()

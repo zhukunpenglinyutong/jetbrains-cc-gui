@@ -1755,7 +1755,8 @@
       "emptySession": "No conversation content to derive a title from",
       "disabled": "AI title generation is disabled in settings",
       "sessionNotFound": "Session transcript file not found",
-      "generationFailed": "Title generation failed, please try again later"
+      "generationFailed": "Title generation failed, please try again later",
+      "customTitle": "This session has a manual title, which takes precedence over the AI title"
     },
     "copySessionId": "Copy session ID for CLI resume",
     "sessionIdCopied": "Session ID copied",

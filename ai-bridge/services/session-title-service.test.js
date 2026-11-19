@@ -158,6 +158,17 @@ test('buildRegenerationInput truncates each prompt to its own budget so the firs
   assert.equal(buildRegenerationInput(['y'.repeat(600), 'z'.repeat(200)]), 'y'.repeat(400) + '\n\n' + 'z'.repeat(150));
 });
 
+// Truncation keeps the HEAD of an over-budget prompt: prompts open with the
+// request ("Please explain this stack trace…") and end with the paste, so
+// tail-keeping fed the model only the end of the paste and dropped the ask.
+test('buildRegenerationInput keeps the head of an over-budget prompt', () => {
+  const instruction = 'Please explain why this Java stack trace happens and fix it:\n';
+  const stackTrace = Array.from({ length: 40 }, (_, i) => '\tat com.example.Foo.bar(Foo.java:' + i + ')').join('\n');
+  const input = buildRegenerationInput([instruction + stackTrace]);
+  assert.ok(input.startsWith('Please explain why this Java stack trace happens'));
+  assert.ok(!input.includes('Foo.java:39'));
+});
+
 // ---------- regenerateSessionTitle ----------
 
 function regenerationHarness({
@@ -174,6 +185,9 @@ function regenerationHarness({
   const result = regenerateSessionTitle(SESSION_ID, null, {
     isEnabled: async () => enabled,
     resolveSessionFile: () => sessionFile,
+    // Default off so the harness never consults the developer's real
+    // session-titles.json (the production default would).
+    hasCustomTitle: () => false,
     generateTitle: async (input) => {
       calls.generated.push(input);
       return typeof generatedTitle === 'function' ? generatedTitle(input) : generatedTitle;
@@ -242,9 +256,29 @@ test('regenerateSessionTitle fails with a stable code and never touches the titl
 });
 
 test('regenerateSessionTitle rejects a missing session file and invalid session ids', async () => {
-  const missing = await regenerateSessionTitle(SESSION_ID, null, { resolveSessionFile: () => 'Z:/no/such/file.jsonl' });
+  const missing = await regenerateSessionTitle(SESSION_ID, null, {
+    resolveSessionFile: () => 'Z:/no/such/file.jsonl',
+    hasCustomTitle: () => false,
+  });
   assert.deepEqual(missing, { success: false, code: 'session_not_found' });
 
   const invalid = await regenerateSessionTitle('../escape-attempt', null);
   assert.deepEqual(invalid, { success: false, code: 'invalid_session' });
+});
+
+// The backend is the source of truth for manual titles (the webview's history
+// snapshot can be stale or miss the session entirely): a session renamed in
+// session-titles.json must not regenerate — a manual title wins over any AI
+// title, so the call would only produce a false success.
+test('regenerateSessionTitle refuses a session with a manual title before calling Haiku', async () => {
+  let generated = 0;
+  const result = await regenerateSessionTitle(SESSION_ID, null, {
+    hasCustomTitle: () => true,
+    generateTitle: async () => {
+      generated += 1;
+      return 'should never be reached';
+    },
+  });
+  assert.deepEqual(result, { success: false, code: 'custom_title' });
+  assert.equal(generated, 0);
 });

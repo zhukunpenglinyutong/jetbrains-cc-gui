@@ -1748,7 +1748,8 @@
       "emptySession": "会话没有可用的对话内容，无法生成标题",
       "disabled": "AI 标题生成已在设置中关闭",
       "sessionNotFound": "未找到会话记录文件",
-      "generationFailed": "标题生成失败，请稍后重试"
+      "generationFailed": "标题生成失败，请稍后重试",
+      "customTitle": "该会话已手动命名，手动标题优先于 AI 标题"
     },
     "copySessionId": "复制会话ID用于CLI恢复",
     "sessionIdCopied": "会话ID已复制",

@@ -1292,7 +1292,8 @@
       "emptySession": "タイトル生成に使える会話内容がありません",
       "disabled": "設定でAIタイトル生成が無効になっています",
       "sessionNotFound": "セッション記録ファイルが見つかりません",
-      "generationFailed": "タイトル生成に失敗しました。後でもう一度お試しください"
+      "generationFailed": "タイトル生成に失敗しました。後でもう一度お試しください",
+      "customTitle": "このセッションには手動のタイトルが設定されているため、AIタイトルより優先されます"
     },
     "copySessionId": "CLI resume用にセッションIDをコピー",
     "sessionIdCopied": "セッションIDをコピーしました",

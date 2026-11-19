@@ -1329,7 +1329,8 @@
       "emptySession": "會話沒有可用的對話內容，無法產生標題",
       "disabled": "AI 標題產生已在設定中關閉",
       "sessionNotFound": "未找到會話記錄檔案",
-      "generationFailed": "標題產生失敗，請稍後再試"
+      "generationFailed": "標題產生失敗，請稍後再試",
+      "customTitle": "該會話已手動命名，手動標題優先於 AI 標題"
     },
     "copySessionId": "複製會話ID用於CLI恢復",
     "sessionIdCopied": "會話ID已複製",

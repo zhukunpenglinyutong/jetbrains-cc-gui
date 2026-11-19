@@ -8,10 +8,11 @@ describe('native session titles', () => {
   const local = vi.fn();
   const settle = vi.fn();
   const addToast = vi.fn();
+  const setHistoryData = vi.fn();
   const options = { currentSessionIdRef: { current: 'root' }, currentProviderRef: { current: 'codex' },
     customSessionTitleRef: { current: null as string | null }, setRestoredSessionTitle: restored,
     setCustomSessionTitle: custom, applyHistoryTitleLocal: local, settleTitleRegeneration: settle,
-    addToast,
+    addToast, setHistoryData,
     historyDataRef: { current: null },
   } as unknown as UseWindowCallbacksOptions;
   beforeEach(() => {
@@ -91,9 +92,22 @@ describe('native session titles', () => {
     // Regression: loading a history session seeds customSessionTitle with the
     // displayed (AI) title and deriveSessionTitle prefers it, so the header
     // only shows the regenerated title if the result pushes it there.
-    it('pushes the regenerated title to the on-screen header of the current session', () => {
+    it('pushes the regenerated title to a seeded on-screen header slot', () => {
+      options.customSessionTitleRef.current = 'Old AI title';
       window.onTitleRegenerated!(JSON.stringify({ sessionId: 'root', success: true, title: 'Fix login button' }));
       expect(custom).toHaveBeenCalledWith('Fix login button');
+      expect(restored).not.toHaveBeenCalled();
+    });
+
+    // customSessionTitle is reserved for manual edits and seeded titles: an
+    // AI title landing there would be persisted as a manual title by the
+    // B-011 migration on the next setSessionId switch, permanently disabling
+    // regeneration for the session. Fresh sessions route through the restored
+    // (AI) slot instead.
+    it('routes the title through the AI slot when the manual slot is empty', () => {
+      window.onTitleRegenerated!(JSON.stringify({ sessionId: 'root', success: true, title: 'Fix login button' }));
+      expect(restored).toHaveBeenCalledWith({ sessionId: 'root', title: 'Fix login button' });
+      expect(custom).not.toHaveBeenCalled();
     });
 
     it('does not touch the header when the session has a manual title', () => {
@@ -112,6 +126,24 @@ describe('native session titles', () => {
       expect(settle).toHaveBeenCalledWith('root');
       expect(local).not.toHaveBeenCalled();
       expect(addToast).toHaveBeenCalledWith('history.titleRegenerateFailed.emptySession', 'error');
+    });
+    // The backend guard is the source of truth for manual titles (the UI
+    // snapshot can be stale or miss the session). Its response marks the row
+    // so both refresh buttons hide without waiting for a history reload.
+    it('marks the history row and toasts when the backend reports a manual title', () => {
+      options.historyDataRef.current = { success: true, sessions: [{ sessionId: 'root', title: 'Manual title' }] };
+      const update = vi.fn();
+      setHistoryData.mockImplementation(update);
+      window.onTitleRegenerated!(JSON.stringify({ sessionId: 'root', success: false, code: 'custom_title' }));
+      expect(settle).toHaveBeenCalledWith('root');
+      expect(addToast).toHaveBeenCalledWith('history.titleRegenerateFailed.customTitle', 'error');
+      expect(update).toHaveBeenCalledTimes(1);
+      const applyRowUpdate = update.mock.calls[0][0];
+      const previous = { success: true, sessions: [{ sessionId: 'root', title: 'Manual title' }, { sessionId: 'other', title: 'Other' }] };
+      expect(applyRowUpdate(previous).sessions).toEqual([
+        { sessionId: 'root', title: 'Manual title', hasCustomTitle: true },
+        { sessionId: 'other', title: 'Other' },
+      ]);
     });
     it('falls back to the generic message with the raw error for unknown codes', () => {
       window.onTitleRegenerated!(JSON.stringify({ sessionId: 'root', success: false, code: 'daemon_timeout', error: 'timed out' }));

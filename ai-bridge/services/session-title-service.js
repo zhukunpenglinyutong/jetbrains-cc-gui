@@ -6,6 +6,7 @@
 
 import { appendFile, mkdir, access, open as fsOpen, stat as fsStat, readFile } from 'fs/promises';
 import { existsSync } from 'fs';
+import { createRequire } from 'node:module';
 import { join } from 'path';
 import { setupApiKey, loadClaudeSettings, getCliUserAgent } from '../config/api-config.js';
 import { ensureAnthropicSdk, ensureBedrockSdk } from './claude/message-utils.js';
@@ -16,6 +17,14 @@ import { getExistingClaudeProjectSessionFilePath, getCodemossDir } from '../util
 
 const DEFAULT_HAIKU_MODEL = 'claude-haiku-4-5-20251001';
 const MAX_CONVERSATION_TEXT = 1000;
+
+// The manual-title store lives in a CJS module shared with the Java-side
+// service calls; load it through createRequire (same pattern as
+// gemini/message-service.js), lazily so importing this ESM module stays cheap.
+const require = createRequire(import.meta.url);
+function loadSessionTitlesService() {
+  return require('./session-titles-service.cjs');
+}
 // Aligns with Java HistoryDeleteService.SESSION_ID_PATTERN — alphanumeric,
 // dot, dash, underscore. Defeats path-traversal payloads in upstream payloads.
 const SESSION_ID_PATTERN = /^[A-Za-z0-9._-]+$/;
@@ -450,6 +459,22 @@ function truncateByCodePoints(text, maxCodePoints) {
 }
 
 /**
+ * Head-keeping counterpart of truncateByCodePoints for the regeneration
+ * input. A user prompt typically opens with the actual request and ends with
+ * a paste (stack trace, log, file dump); tail-truncating dropped the request
+ * and fed the model only the paste's tail.
+ */
+function truncateHeadByCodePoints(text, maxCodePoints) {
+  if (text.length <= maxCodePoints) {
+    return text;
+  }
+  const codePoints = Array.from(text);
+  return codePoints.length > maxCodePoints
+    ? codePoints.slice(0, maxCodePoints).join('')
+    : text;
+}
+
+/**
  * Number of recent prompts (beyond the first one) that feed a regeneration.
  * The first prompt anchors the session's topic; recent prompts let the title
  * track where the conversation ended up.
@@ -542,8 +567,10 @@ export function buildRegenerationInput(prompts) {
   const selected = prompts.length <= 1 + REGENERATE_RECENT_PROMPTS
     ? prompts
     : [prompts[0], ...prompts.slice(-REGENERATE_RECENT_PROMPTS)];
+  // Head-keeping truncation: prompts open with the request and end with a
+  // paste, so the head carries what the user actually asked for.
   return selected
-    .map((prompt, index) => truncateByCodePoints(
+    .map((prompt, index) => truncateHeadByCodePoints(
       prompt,
       index === 0 ? FIRST_PROMPT_CODE_POINT_BUDGET : RECENT_PROMPT_CODE_POINT_BUDGET,
     ))
@@ -567,9 +594,9 @@ export function buildRegenerationInput(prompts) {
  * @param {string|null} cwd - Working directory used to locate the session file
  * @param {object} [dependencies] - Test seams; each defaults to the real path
  * @returns {Promise<{success: boolean, title?: string, code?: string}>}
- *   code is a stable machine-readable failure reason (session_not_found,
- *   empty_session, disabled, generation_failed, persist_failed) the frontend
- *   maps to a friendly toast.
+ *   code is a stable machine-readable failure reason (custom_title,
+ *   session_not_found, empty_session, disabled, generation_failed,
+ *   persist_failed) the frontend maps to a friendly toast.
  */
 export async function regenerateSessionTitle(sessionId, cwd, dependencies = {}) {
   const {
@@ -578,10 +605,22 @@ export async function regenerateSessionTitle(sessionId, cwd, dependencies = {}) 
     readPrompts = (sessionFile) => collectRegenerationPrompts(sessionFile),
     generateTitle = (input) => callHaikuApi(input, sessionId),
     saveTitle = (title) => saveAiTitle(sessionId, title, cwd),
+    hasCustomTitle = () => loadSessionTitlesService().getTitle(sessionId) != null,
   } = dependencies;
 
   if (!sessionId || !isValidSessionId(sessionId)) {
     return { success: false, code: 'invalid_session' };
+  }
+
+  // The backend is the source of truth for manual titles: the webview hides
+  // the refresh button from its history snapshot, but that snapshot may be
+  // stale or missing the session (e.g. renamed from the chat header before
+  // the history view ever loaded). A manual title wins over any AI title
+  // (customTitle > aiTitle), so regenerating would burn a Haiku call only to
+  // report a success the next history load overrides — fail honestly instead.
+  if (hasCustomTitle()) {
+    logTitleEvent('info', 'Regenerate skipped: session has a manual title: ' + sessionId);
+    return { success: false, code: 'custom_title' };
   }
 
   const sessionFile = resolveSessionFile();
