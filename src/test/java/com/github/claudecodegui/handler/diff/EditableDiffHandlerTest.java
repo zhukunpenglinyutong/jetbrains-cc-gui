@@ -83,6 +83,76 @@ public class EditableDiffHandlerTest {
         assertEquals("first new\nsecond new", EditableDiffHandler.joinRecordedText(operations, "newString"));
     }
 
+    /** A change outside the project opens read-only, because its diff has no write boundary to apply against. */
+    @Test
+    public void showsOutsideProjectChangesReadOnly() throws Exception {
+        Path root = this.temporary.newFolder().toPath();
+        Path projectRoot = Files.createDirectory(root.resolve("project"));
+        Path outside = Files.createDirectory(root.resolve("outside"));
+        Path edited = outside.resolve("notes.md");
+        Files.writeString(edited, "after\n");
+        List<Runnable> queued = new ArrayList<>();
+        List<JsonObject> receipts = new ArrayList<>();
+        List<String> shown = new ArrayList<>();
+        Application previous = ApplicationManager.getApplication();
+        Application application = (Application) Proxy.newProxyInstance(Application.class.getClassLoader(),
+                new Class<?>[]{Application.class}, (proxy, method, args) -> {
+                    if ("invokeLater".equals(method.getName())) queued.add((Runnable) args[0]);
+                    return method.getReturnType() == boolean.class ? false : null;
+                });
+        ApplicationManager.setApplication(application);
+        try {
+            Project project = (Project) Proxy.newProxyInstance(Project.class.getClassLoader(), new Class<?>[]{Project.class},
+                    (proxy, method, args) -> "getBasePath".equals(method.getName()) ? projectRoot.toString() : null);
+            HandlerContext context = new HandlerContext(project, null, null, null, null);
+            DiffBrowserBridge bridge = new DiffBrowserBridge(context, new Gson()) {
+                /** Keeps the legacy receipt visible to the same collector. */
+                @Override
+                public void sendDiffResult(String filePath, String action, String content, String error) {
+                    this.sendDiffResult(filePath, action, content, error, null);
+                }
+
+                /** Records any decision the review would have offered for an outside-project edit. */
+                @Override
+                public void sendDiffResult(String filePath, String action, String content, String error, JsonObject origin) {
+                    receipts.add(origin == null ? new JsonObject() : origin);
+                }
+            };
+            EditableDiffHandler handler = new EditableDiffHandler(context, new Gson(), bridge, new DiffFileOperations(context)) {
+                /** The writable diff must not open where its result cannot be written back. */
+                @Override
+                void showEditableDiff(String filePath, String requestedPath, JsonArray operations, String status,
+                                      boolean nativePatch, JsonObject reviewOrigin) {
+                    throw new AssertionError("Outside-project edits must open read-only: " + filePath);
+                }
+
+                /** Only the external diff UI is replaced; the routing under test stays real. */
+                @Override
+                void showReadOnlyDiff(String filePath, JsonArray operations, String status, boolean nativePatch) {
+                    shown.add(filePath);
+                }
+            };
+            JsonObject operation = new JsonObject();
+            operation.addProperty("oldString", "before\n");
+            operation.addProperty("newString", "after\n");
+            JsonArray operations = new JsonArray();
+            operations.add(operation);
+            JsonObject request = new JsonObject();
+            request.addProperty("filePath", edited.toString());
+            request.addProperty("status", "M");
+            request.add("operations", operations);
+
+            handler.handle("show_editable_diff", request.toString());
+
+            assertEquals(1, queued.size());
+            queued.remove(0).run();
+            assertEquals(List.of(edited.toString()), shown);
+            assertTrue("A read-only review offers no decision", receipts.isEmpty());
+        } finally {
+            ApplicationManager.setApplication(previous);
+        }
+    }
+
     private void assertNativeApplyKeepsItsOrigin(String originalSessionId, boolean failWrite) throws Exception {
         Path root = this.temporary.newFolder().toPath();
         Path first = Files.createDirectory(root.resolve("first"));

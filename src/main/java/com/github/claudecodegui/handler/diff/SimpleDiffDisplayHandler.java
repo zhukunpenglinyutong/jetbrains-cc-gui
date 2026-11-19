@@ -33,12 +33,10 @@ public class SimpleDiffDisplayHandler implements DiffActionHandler {
 
     private final HandlerContext context;
     private final Gson gson;
-    private final DiffFileOperations fileOperations;
 
-    public SimpleDiffDisplayHandler(HandlerContext context, Gson gson, DiffFileOperations fileOperations) {
+    public SimpleDiffDisplayHandler(HandlerContext context, Gson gson) {
         this.context = context;
         this.gson = gson;
-        this.fileOperations = fileOperations;
     }
 
     private static final String[] TYPES = {
@@ -78,11 +76,6 @@ public class SimpleDiffDisplayHandler implements DiffActionHandler {
             String newContent = json.has("newContent") ? json.get("newContent").getAsString() : "";
             String title = json.has("title") ? json.get("title").getAsString() : null;
 
-            if (!fileOperations.isPathWithinProject(filePath)) {
-                LOG.warn("Security: file path outside project directory: " + filePath);
-                return;
-            }
-
             LOG.info("Showing diff for file: " + filePath);
 
             ApplicationManager.getApplication().invokeLater(() -> {
@@ -121,11 +114,6 @@ public class SimpleDiffDisplayHandler implements DiffActionHandler {
             String filePath = json.has("filePath") ? json.get("filePath").getAsString() : "";
             JsonArray edits = json.has("edits") ? json.getAsJsonArray("edits") : new JsonArray();
             String currentContent = json.has("currentContent") ? json.get("currentContent").getAsString() : null;
-
-            if (!fileOperations.isPathWithinProject(filePath)) {
-                LOG.warn("Security: file path outside project directory: " + filePath);
-                return;
-            }
 
             LOG.info("Showing multi-edit diff for file: " + filePath + " with " + edits.size() + " edits");
 
@@ -186,11 +174,6 @@ public class SimpleDiffDisplayHandler implements DiffActionHandler {
             String title = json.has("title") ? json.get("title").getAsString() : null;
 
             LOG.info("Showing edit preview diff for file: " + filePath + " with " + edits.size() + " edits");
-
-            if (!fileOperations.isPathWithinProject(filePath)) {
-                LOG.warn("Security: file path outside project directory: " + filePath);
-                return;
-            }
 
             ApplicationManager.getApplication().invokeLater(() -> {
                 try {
@@ -273,11 +256,6 @@ public class SimpleDiffDisplayHandler implements DiffActionHandler {
             String title = json.has("title") ? json.get("title").getAsString() : null;
 
             LOG.info("Showing edit full diff for file: " + filePath);
-
-            if (!fileOperations.isPathWithinProject(filePath)) {
-                LOG.warn("Security: file path outside project directory: " + filePath);
-                return;
-            }
 
             ApplicationManager.getApplication().invokeLater(() -> {
                 try {
