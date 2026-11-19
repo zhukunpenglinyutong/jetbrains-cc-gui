@@ -194,6 +194,7 @@ function processStreamMessage(msg, state, logPrefix) {
         // or duplicate this turn's index-0 block (see resetTurnBlockState). Mirrors
         // stream-event-processor.js — both streaming paths must reset identically.
         resetTurnBlockState(state);
+        state.streamedKindsThisMessage = new Set();
         // Emit BLOCK_RESET — mirrors stream-event-processor.js, see there for rationale.
         if (state.streamingEnabled) {
           process.stdout.write('[BLOCK_RESET]\n');
@@ -328,12 +329,13 @@ function emitTextDelta(currentText, state, blockIndex = 0) {
     return;
   }
   // Single-source the delta through the normalizer (see resolveSnapshotDelta).
-  // Emit gate (unchanged from the tail-fill fix):
-  //   - !hasStreamEvents: pre-stream fallback, emit the whole computed delta
-  //   - hasStreamEvents && hadPrevious: genuine tail-fill / snapshot correction
-  //   - hasStreamEvents && !hadPrevious: stream will deliver this block, suppress
-  const { delta, hadPrevious } = resolveSnapshotDelta(state, 'text', blockIndex, currentText);
-  if (delta && (!state.hasStreamEvents || hadPrevious)) {
+  // Emit gate:
+  //   - kind never streamed this message: the snapshot is the only source (no
+  //     stream events, or a relay that streams thinking_delta but no text_delta)
+  //   - hadPrevious: genuine tail-fill / snapshot correction
+  //   - otherwise the stream already delivers this kind, suppress
+  const { delta, hadPrevious, kindStreamed } = resolveSnapshotDelta(state, 'text', blockIndex, currentText);
+  if (delta && (!kindStreamed || hadPrevious)) {
     process.stdout.write(`[CONTENT_DELTA] ${JSON.stringify(delta)}\n`);
   }
   state.lastAssistantContent = currentText;
@@ -345,8 +347,8 @@ function emitThinkingDelta(thinkingText, state, blockIndex = 0) {
     console.log('[THINKING]', thinkingText);
     return;
   }
-  const { delta, hadPrevious } = resolveSnapshotDelta(state, 'thinking', blockIndex, thinkingText);
-  if (delta && (!state.hasStreamEvents || hadPrevious)) {
+  const { delta, hadPrevious, kindStreamed } = resolveSnapshotDelta(state, 'thinking', blockIndex, thinkingText);
+  if (delta && (!kindStreamed || hadPrevious)) {
     process.stdout.write(`[THINKING_DELTA] ${JSON.stringify(delta)}\n`);
   }
   state.lastThinkingContent = thinkingText;
