@@ -317,30 +317,8 @@
         "hint": "자동 복원과 수동 로드에 동일한 제한 시간(5~120초)을 적용합니다. 대화에서 다시 시도할 수 있습니다."
       },
       "promptEnhancer": {
-        "label": "Prompt Enhancer",
-        "modelLabel": "Enhancer Model",
-        "resetToDefault": "Restore Default",
-        "providerAvailable": "Available",
-        "providerUnavailable": "Currently unavailable",
-        "provider": {
-          "claude": "Claude Code",
-          "codex": "Codex",
-          "grok": "Grok CLI",
-          "kimi": "Kimi CLI",
-          "opencode": "OpenCode",
-          "pi": "PI CLI",
-          "omp": "OMP CLI",
-          "minimax": "MiniMax Code",
-          "zcode": "ZCode"
-        },
-        "currentProviderAuto": "Currently using automatic selection: {{provider}}",
-        "currentProviderManual": "Currently using manually selected provider: {{provider}}",
-        "currentProviderUnavailable": "The selected provider is currently unavailable: {{provider}}",
-        "modeLabel": "선택 방식",
-        "modeAuto": "자동",
-        "modeManual": "수동",
-        "autoSummary": "현재 채팅 CLI를 따름 · 현재 {{provider}}",
-        "autoUnavailable": "사용 가능한 CLI가 없습니다. 수동으로 전환해 선택하세요."
+        "title": "Prompt Enhancer",
+        "description": "Choose which provider and model should be used when enhancing prompts before sending them."
       },
       "diffExpanded": {
         "label": "Diff 기본 펼침",
@@ -440,2198 +418,2312 @@
         "label": "Git 원격 저장소로 세션 매칭",
         "enabled": "사용",
         "disabled": "사용 안 함",
-        "hint": "정규화된 원격 호스트, 소유자, 저장소가 같은 다른 디렉터리의 Codex 및 Claude Code 기록도 포함합니다. Git 정보를 읽을 수 없으면 작업 디렉터리로 매칭합니다."
-      "autoConvertSessionsOnExit": {
-        "label": "IDE 종료 시 세션을 CLI로 자동 변환",
-        "enabled": "활성화",
-        "disabled": "비활성화",
-        "hint": "플러그인이 SDK를 통해 만든 세션은 entrypoint가 sdk-cli라서 Claude Code CLI의 /resume 목록에 표시되지 않습니다. 활성화하면 IDE를 닫을 때 자동으로 변환됩니다."
-      }
-    },
-    "providers": "제공자 관리",
-    "providersDesc": "Claude와 Codex API 제공자 설정을 관리하고 다른 API 서비스 제공자 간 전환",
-    "providerTab": {
-      "claude": "Claude Code",
-      "codex": "Codex",
-      "cli": "CLI"
-    },
-    "pluginModels": {
-      "title": "사용자 지정 모델",
-      "description": "여기에 추가된 사용자 지정 모델은 모든 제공자에 표시되며, 모델 선택기 상단에 나타납니다",
-      "dialogTitle": "사용자 지정 모델 관리",
-      "manage": "모델 관리",
-      "pricing": {
-        "title": "가격(USD/100만 토큰)",
-        "optionalLabel": "선택",
-        "hint": "선택 사항입니다. 비워 두면 해당 토큰 유형의 기본 요금을 사용합니다.",
-        "inputLabel": "입력",
-        "outputLabel": "출력",
-        "cacheWriteLabel": "캐시 쓰기",
-        "cacheReadLabel": "캐시 읽기",
-        "inputShort": "입력",
-        "outputShort": "출력",
-        "cacheWriteShort": "캐시 쓰기",
-        "cacheReadShort": "캐시 읽기",
-        "invalidValue": "가격은 0 이상의 숫자여야 합니다",
-        "defaultPricing": "기본 요금 사용 중"
-      },
-      "contextWindow": {
-        "label": "최대 컨텍스트(K 토큰)",
-        "placeholder": "예: 500",
-        "hint": "선택 사항입니다. 토큰을 천 단위의 정수로 입력하세요(500 = 500,000 토큰). 플러그인의 사용량 표시에만 사용됩니다.",
-        "invalidValue": "최대 컨텍스트는 K 단위의 양의 정수여야 합니다",
-        "summary": "컨텍스트: {{value}} 토큰"
-      },
-      "configuredSectionTitle": "구성된 Claude 모델",
-      "configuredSectionDesc": "현재 Claude 제공자 또는 settings.json의 모델은 이미 모델 선택기에 표시됩니다. 여기서는 가격만 변경할 수 있습니다.",
-      "configuredEditHint": "이 모델은 현재 Claude 제공자 또는 settings.json에서 관리됩니다. 여기서는 가격만 변경할 수 있습니다.",
-      "customSectionTitle": "사용자 지정 모델",
-      "editPricing": "가격 편집"
-    },
-    "dependencies": "SDK 의존성",
-    "dependenciesDesc": "AI SDK 의존성 설치 및 업데이트 관리",
-    "dependency": {
-      "title": "SDK 의존성 관리",
-      "description": "AI SDK 의존성을 관리합니다. 처음 사용하기 전에 필요한 SDK를 설치하세요.",
-      "installPolicyTip": "설치 문제가 있으시면 오류를 터미널 CLI AI에 복사하여 해결하세요",
-      "claudeSdkName": "Claude Code SDK",
-      "claudeSdkDescription": "Claude AI 기능에 필요합니다. Claude Code SDK 및 관련 의존성을 포함합니다.",
-      "codexMigratedTitle": "Codex가 '제공자 관리 → CLI'로 이동했습니다",
-      "codexMigratedDesc": "Codex는 이제 여기서 SDK를 설치하지 않습니다. 이미 설치된 Codex CLI(@openai/codex)를 그대로 사용하며 채팅은 공식 app-server를 통해 실행됩니다. '제공자 관리 → CLI'에서 감지 상태를 확인하세요. 아직 설치되어 있지 않다면 터미널에서 npm install -g @openai/codex를 실행한 뒤 해당 페이지에서 Re-check를 누르세요.",
-      "loading": "의존성 상태 로딩 중...",
-      "install": "설치",
-      "installing": "설치 중...",
-      "uninstall": "제거",
-      "uninstalling": "제거 중...",
-      "update": "업데이트",
-      "updateAvailable": "업데이트 가능",
-      "installLogs": "설치 로그",
-      "waitingForLogs": "로그 출력 대기 중...",
-      "nodeNotConfigured": "Node.js가 설정되지 않았습니다. 먼저 기본 설정에서 Node.js 경로를 설정해주세요.",
-      "installSuccess": "{{name}} 설치 완료",
-      "installFailed": "설치 실패: {{error}}",
-      "uninstallSuccess": "{{name}}이(가) 제거되었습니다",
-      "uninstallFailed": "제거 실패: {{error}}",
-      "updating": "업데이트 중...",
-      "updateSuccess": "{{name}} 업데이트 완료",
-      "cliTransportBadge": "CLI · {{transport}}"
-    },
-    "usage": "사용 통계",
-    "usageDesc": "토큰 소비량, 비용 통계 및 사용 추이 분석 보기",
-    "mcp": "MCP 서버",
-    "mcpDesc": "Model Context Protocol 서버 설정 및 관리",
-    "permissions": "권한",
-    "permissionsDesc": "Claude Code 파일 접근 및 작업 권한 관리",
-    "codexPermissionsDesc": "Codex 권한 및 샌드박스 정책 관리",
-    "promptEnhancer": {
-      "title": "Prompt Enhancer",
-      "description": "Choose which provider and model should be used when enhancing prompts before sending them."
-    },
-    "permissionsPanel": {
-      "codexSandboxTitle": "Codex 샌드박스 모드",
-      "codexSandboxDesc": "Codex가 명령을 실행할 때의 시스템 접근 범위를 제어합니다. 기본값은 더 안전한 workspace-write(작업 영역 내 읽기/쓰기만 허용)입니다. adb, docker 등 시스템 수준 명령이 필요하면 danger-full-access로 전환하세요.",
-      "workspaceWriteTitle": "workspace-write",
-      "workspaceWriteDesc": "읽기/쓰기가 워크스페이스로 제한됩니다. 안전을 위해 시스템 수준 작업이 제한됩니다.",
-      "fullAccessTitle": "danger-full-access",
-      "fullAccessDesc": "더 높은 시스템 접근을 허용하며, adb나 docker 같은 추가 권한이 필요한 명령에 적합합니다.",
-      "hint": "이 설정은 Codex 프로세스 샌드박스에만 영향을 미치며 Claude Code 권한 동작은 변경하지 않습니다.",
-      "claudeTip": "Claude Code 승인 모드는 채팅 입력의 모드 선택기에서 설정합니다.",
-      "desired": "Desired: {{mode}}",
-      "effective": "Effective: {{mode}}",
-      "conflict": "Native policy rejected the requested access range.",
-      "source": "Source: {{source}}",
-      "readOnlyTitle": "Read only",
-      "readOnlyDesc": "Inspect files without writing to the workspace."
-    },
-    "commit": {
-      "title": "Commit AI",
-      "description": "AI 생성 Git 커밋 메시지 동작 설정",
-      "providerModel": {
-        "label": "커밋 모델 제공자",
-        "modelLabel": "커밋 모델",
-        "resetToDefault": "재설정",
-        "providerAvailable": "사용 가능",
-        "providerUnavailable": "사용 불가",
-        "currentProviderAuto": "현재 자동 선택 사용 중: {{provider}}",
-        "currentProviderManual": "현재 수동 선택된 제공자 사용 중: {{provider}}",
-        "currentProviderUnavailable": "선택된 제공자를 현재 사용할 수 없습니다: {{provider}}",
-        "modeLabel": "선택 방식",
-        "modeAuto": "자동",
-        "modeManual": "수동",
-        "autoSummary": "현재 채팅 CLI를 따름 · 현재 {{provider}}",
-        "autoUnavailable": "사용 가능한 CLI가 없습니다. 수동으로 전환해 선택하세요."
-      },
-      "prompt": {
-        "label": "추가 프롬프트",
-        "placeholder": "추가 요구사항을 입력하세요. 예: 영어로 커밋 생성, 이슈 번호 포함 등...",
-        "hint": "플러그인에는 CCG Commits 사양 프롬프트가 내장되어 있습니다. 여기에 추가하는 내용은 추가 요구사항으로 사용되며, AI가 사용자의 지시를 우선합니다."
-      },
-      "codeReview": {
-        "comingSoon": "곧 출시 예정",
-        "label": "Code Review AI 추가 프롬프트",
-        "placeholder": "이 기능은 개발 중입니다. 기대해주세요...",
-        "hint": "Code Review AI가 자동으로 코드를 리뷰하여 잠재적 문제를 식별하고 개선 제안을 합니다. 여기서 리뷰 기본설정 및 중점 영역을 설정할 수 있습니다."
-      }
-    },
-    "agents": "에이전트",
-    "agentsDesc": "AI 에이전트 관리 및 설정",
-    "skills": "스킬",
-    "skillsDesc": "스킬 모듈 관리 및 설정",
-    "other": {
-      "title": "기타 설정",
-      "description": "기타 설정 구성",
-      "historyCompletion": {
-        "label": "히스토리 입력 자동완성",
-        "enabled": "활성화",
-        "disabled": "비활성화",
-        "hint": "활성화하면 입력 기록을 기반으로 자동완성됩니다. Tab을 눌러 제안을 수락하세요.",
-        "manageHistory": "히스토리 관리",
-        "empty": "히스토리 기록 없음",
-        "clearAll": "전체 삭제",
-        "clearLow": "중요도 낮은 항목 삭제",
-        "clearLowHint": "중요도 ≤ 1인 기록 삭제",
-        "delete": "삭제",
-        "edit": "편집",
-        "add": "추가",
-        "importance": "중요도",
-        "editor": {
-          "addTitle": "히스토리 기록 추가",
-          "editTitle": "히스토리 기록 편집",
-          "contentLabel": "내용",
-          "contentPlaceholder": "히스토리 기록 내용을 입력하세요...",
-          "importanceLabel": "중요도",
-          "importanceHint": "중요도가 높을수록 자동완성에서 우선순위가 높아집니다"
-        },
-        "timeAgo": {
-          "yearsAgo_one": "{{count}}년 전",
-          "yearsAgo_other": "{{count}}년 전",
-          "monthsAgo_one": "{{count}}개월 전",
-          "monthsAgo_other": "{{count}}개월 전",
-          "daysAgo_one": "{{count}}일 전",
-          "daysAgo_other": "{{count}}일 전",
-          "hoursAgo_one": "{{count}}시간 전",
-          "hoursAgo_other": "{{count}}시간 전",
-          "minutesAgo_one": "{{count}}분 전",
-          "minutesAgo_other": "{{count}}분 전",
-          "justNow": "방금 전"
+        "hint": "정규화된 원격 호스트, 소유자, 저장소가 같은 다른 디렉터리의 Codex 및 Claude Code 기록도 포함합니다. Git 정보를 읽을 수 없으면 작업 디렉터리로 매칭합니다.",
+        "autoConvertSessionsOnExit": {
+          "label": "IDE 종료 시 세션을 CLI로 자동 변환",
+          "enabled": "활성화",
+          "disabled": "비활성화",
+          "hint": "플러그인이 SDK를 통해 만든 세션은 entrypoint가 sdk-cli라서 Claude Code CLI의 /resume 목록에 표시되지 않습니다. 활성화하면 IDE를 닫을 때 자동으로 변환됩니다."
         }
       },
-      "aiTitleGeneration": {
-        "label": "AI 세션 제목 자동 생성",
-        "enabled": "사용",
-        "disabled": "사용 안 함",
-        "hint": "활성화하면 새 세션의 첫 응답이 끝난 후 Haiku 모델이 짧은 제목을 자동 생성합니다. 비활성화하면 첫 사용자 메시지가 제목으로 표시됩니다."
+      "providers": "제공자 관리",
+      "providersDesc": "Claude와 Codex API 제공자 설정을 관리하고 다른 API 서비스 제공자 간 전환",
+      "providerTab": {
+        "claude": "Claude Code",
+        "codex": "Codex",
+        "cli": "CLI"
+      },
+      "pluginModels": {
+        "title": "사용자 지정 모델",
+        "description": "여기에 추가된 사용자 지정 모델은 모든 제공자에 표시되며, 모델 선택기 상단에 나타납니다",
+        "dialogTitle": "사용자 지정 모델 관리",
+        "manage": "모델 관리",
+        "pricing": {
+          "title": "가격(USD/100만 토큰)",
+          "optionalLabel": "선택",
+          "hint": "선택 사항입니다. 비워 두면 해당 토큰 유형의 기본 요금을 사용합니다.",
+          "inputLabel": "입력",
+          "outputLabel": "출력",
+          "cacheWriteLabel": "캐시 쓰기",
+          "cacheReadLabel": "캐시 읽기",
+          "inputShort": "입력",
+          "outputShort": "출력",
+          "cacheWriteShort": "캐시 쓰기",
+          "cacheReadShort": "캐시 읽기",
+          "invalidValue": "가격은 0 이상의 숫자여야 합니다",
+          "defaultPricing": "기본 요금 사용 중"
+        },
+        "contextWindow": {
+          "label": "최대 컨텍스트(K 토큰)",
+          "placeholder": "예: 500",
+          "hint": "선택 사항입니다. 토큰을 천 단위의 정수로 입력하세요(500 = 500,000 토큰). 플러그인의 사용량 표시에만 사용됩니다.",
+          "invalidValue": "최대 컨텍스트는 K 단위의 양의 정수여야 합니다",
+          "summary": "컨텍스트: {{value}} 토큰"
+        },
+        "configuredSectionTitle": "구성된 Claude 모델",
+        "configuredSectionDesc": "현재 Claude 제공자 또는 settings.json의 모델은 이미 모델 선택기에 표시됩니다. 여기서는 가격만 변경할 수 있습니다.",
+        "configuredEditHint": "이 모델은 현재 Claude 제공자 또는 settings.json에서 관리됩니다. 여기서는 가격만 변경할 수 있습니다.",
+        "customSectionTitle": "사용자 지정 모델",
+        "editPricing": "가격 편집"
+      },
+      "dependencies": "SDK 의존성",
+      "dependenciesDesc": "AI SDK 의존성 설치 및 업데이트 관리",
+      "dependency": {
+        "title": "SDK 의존성 관리",
+        "description": "AI SDK 의존성을 관리합니다. 처음 사용하기 전에 필요한 SDK를 설치하세요.",
+        "installPolicyTip": "설치 문제가 있으시면 오류를 터미널 CLI AI에 복사하여 해결하세요",
+        "claudeSdkName": "Claude Code SDK",
+        "claudeSdkDescription": "Claude AI 기능에 필요합니다. Claude Code SDK 및 관련 의존성을 포함합니다.",
+        "codexMigratedTitle": "Codex가 '제공자 관리 → CLI'로 이동했습니다",
+        "codexMigratedDesc": "Codex는 이제 여기서 SDK를 설치하지 않습니다. 이미 설치된 Codex CLI(@openai/codex)를 그대로 사용하며 채팅은 공식 app-server를 통해 실행됩니다. '제공자 관리 → CLI'에서 감지 상태를 확인하세요. 아직 설치되어 있지 않다면 터미널에서 npm install -g @openai/codex를 실행한 뒤 해당 페이지에서 Re-check를 누르세요.",
+        "loading": "의존성 상태 로딩 중...",
+        "install": "설치",
+        "installing": "설치 중...",
+        "uninstall": "제거",
+        "uninstalling": "제거 중...",
+        "update": "업데이트",
+        "updateAvailable": "업데이트 가능",
+        "installLogs": "설치 로그",
+        "waitingForLogs": "로그 출력 대기 중...",
+        "nodeNotConfigured": "Node.js가 설정되지 않았습니다. 먼저 기본 설정에서 Node.js 경로를 설정해주세요.",
+        "installSuccess": "{{name}} 설치 완료",
+        "installFailed": "설치 실패: {{error}}",
+        "uninstallSuccess": "{{name}}이(가) 제거되었습니다",
+        "uninstallFailed": "제거 실패: {{error}}",
+        "updating": "업데이트 중...",
+        "updateSuccess": "{{name}} 업데이트 완료",
+        "cliTransportBadge": "CLI · {{transport}}"
+      },
+      "usage": "사용 통계",
+      "usageDesc": "토큰 소비량, 비용 통계 및 사용 추이 분석 보기",
+      "mcp": "MCP 서버",
+      "mcpDesc": "Model Context Protocol 서버 설정 및 관리",
+      "permissions": "권한",
+      "permissionsDesc": "Claude Code 파일 접근 및 작업 권한 관리",
+      "codexPermissionsDesc": "Codex 권한 및 샌드박스 정책 관리",
+      "permissionsPanel": {
+        "codexSandboxTitle": "Codex 샌드박스 모드",
+        "codexSandboxDesc": "Codex가 명령을 실행할 때의 시스템 접근 범위를 제어합니다. 기본값은 더 안전한 workspace-write(작업 영역 내 읽기/쓰기만 허용)입니다. adb, docker 등 시스템 수준 명령이 필요하면 danger-full-access로 전환하세요.",
+        "workspaceWriteTitle": "workspace-write",
+        "workspaceWriteDesc": "읽기/쓰기가 워크스페이스로 제한됩니다. 안전을 위해 시스템 수준 작업이 제한됩니다.",
+        "fullAccessTitle": "danger-full-access",
+        "fullAccessDesc": "더 높은 시스템 접근을 허용하며, adb나 docker 같은 추가 권한이 필요한 명령에 적합합니다.",
+        "hint": "이 설정은 Codex 프로세스 샌드박스에만 영향을 미치며 Claude Code 권한 동작은 변경하지 않습니다.",
+        "claudeTip": "Claude Code 승인 모드는 채팅 입력의 모드 선택기에서 설정합니다.",
+        "desired": "Desired: {{mode}}",
+        "effective": "Effective: {{mode}}",
+        "conflict": "Native policy rejected the requested access range.",
+        "source": "Source: {{source}}",
+        "readOnlyTitle": "Read only",
+        "readOnlyDesc": "Inspect files without writing to the workspace."
+      },
+      "commit": {
+        "title": "Commit AI",
+        "description": "AI 생성 Git 커밋 메시지 동작 설정",
+        "providerModel": {
+          "label": "커밋 모델 제공자",
+          "modelLabel": "커밋 모델",
+          "resetToDefault": "재설정",
+          "providerAvailable": "사용 가능",
+          "providerUnavailable": "사용 불가",
+          "currentProviderAuto": "현재 자동 선택 사용 중: {{provider}}",
+          "currentProviderManual": "현재 수동 선택된 제공자 사용 중: {{provider}}",
+          "currentProviderUnavailable": "선택된 제공자를 현재 사용할 수 없습니다: {{provider}}",
+          "modeLabel": "선택 방식",
+          "modeAuto": "자동",
+          "modeManual": "수동",
+          "autoSummary": "현재 채팅 CLI를 따름 · 현재 {{provider}}",
+          "autoUnavailable": "사용 가능한 CLI가 없습니다. 수동으로 전환해 선택하세요."
+        },
+        "prompt": {
+          "label": "추가 프롬프트",
+          "placeholder": "추가 요구사항을 입력하세요. 예: 영어로 커밋 생성, 이슈 번호 포함 등...",
+          "hint": "플러그인에는 CCG Commits 사양 프롬프트가 내장되어 있습니다. 여기에 추가하는 내용은 추가 요구사항으로 사용되며, AI가 사용자의 지시를 우선합니다."
+        },
+        "codeReview": {
+          "comingSoon": "곧 출시 예정",
+          "label": "Code Review AI 추가 프롬프트",
+          "placeholder": "이 기능은 개발 중입니다. 기대해주세요...",
+          "hint": "Code Review AI가 자동으로 코드를 리뷰하여 잠재적 문제를 식별하고 개선 제안을 합니다. 여기서 리뷰 기본설정 및 중점 영역을 설정할 수 있습니다."
+        }
+      },
+      "agents": "에이전트",
+      "agentsDesc": "AI 에이전트 관리 및 설정",
+      "skills": "스킬",
+      "skillsDesc": "스킬 모듈 관리 및 설정",
+      "other": {
+        "title": "기타 설정",
+        "description": "기타 설정 구성",
+        "historyCompletion": {
+          "label": "히스토리 입력 자동완성",
+          "enabled": "활성화",
+          "disabled": "비활성화",
+          "hint": "활성화하면 입력 기록을 기반으로 자동완성됩니다. Tab을 눌러 제안을 수락하세요.",
+          "manageHistory": "히스토리 관리",
+          "empty": "히스토리 기록 없음",
+          "clearAll": "전체 삭제",
+          "clearLow": "중요도 낮은 항목 삭제",
+          "clearLowHint": "중요도 ≤ 1인 기록 삭제",
+          "delete": "삭제",
+          "edit": "편집",
+          "add": "추가",
+          "importance": "중요도",
+          "editor": {
+            "addTitle": "히스토리 기록 추가",
+            "editTitle": "히스토리 기록 편집",
+            "contentLabel": "내용",
+            "contentPlaceholder": "히스토리 기록 내용을 입력하세요...",
+            "importanceLabel": "중요도",
+            "importanceHint": "중요도가 높을수록 자동완성에서 우선순위가 높아집니다"
+          },
+          "timeAgo": {
+            "yearsAgo_one": "{{count}}년 전",
+            "yearsAgo_other": "{{count}}년 전",
+            "monthsAgo_one": "{{count}}개월 전",
+            "monthsAgo_other": "{{count}}개월 전",
+            "daysAgo_one": "{{count}}일 전",
+            "daysAgo_other": "{{count}}일 전",
+            "hoursAgo_one": "{{count}}시간 전",
+            "hoursAgo_other": "{{count}}시간 전",
+            "minutesAgo_one": "{{count}}분 전",
+            "minutesAgo_other": "{{count}}분 전",
+            "justNow": "방금 전"
+          }
+        },
+        "aiTitleGeneration": {
+          "label": "AI 세션 제목 자동 생성",
+          "enabled": "사용",
+          "disabled": "사용 안 함",
+          "hint": "활성화하면 새 세션의 첫 응답이 끝난 후 Haiku 모델이 짧은 제목을 자동 생성합니다. 비활성화하면 첫 사용자 메시지가 제목으로 표시됩니다."
+        }
+      },
+      "codexFeatureUnavailable": "이 설정 섹션은 Codex에서 아직 사용할 수 없습니다. Claude Code로 전환해주세요.",
+      "sidebar": {
+        "expand": "사이드바 펼치기",
+        "collapse": "사이드바 접기"
+      },
+      "community": "커뮤니티",
+      "communityDesc": "아래 QR 코드를 스캔하여 공식 WeChat 그룹에 참여하고 최신 소식과 기술 지원을 받으세요",
+      "versionHistory": "버전 히스토리",
+      "versionHistoryDesc": "모든 버전 업데이트 기록 보기",
+      "communityQrTip": "WeChat으로 스캔하여 커뮤니티에 참여하세요",
+      "communityQrAlt": "공식 WeChat 커뮤니티 QR 코드",
+      "socialDocs": "공식 문서",
+      "socialTitle": "팔로우하기",
+      "socialGithub": "GitHub 저장소 — Star를 눌러주세요!",
+      "socialX": "X (Twitter) @ZPeng31310",
+      "socialZhihu": "Zhihu @vscodeai",
+      "socialXiaohongshu": "Xiaohongshu (RED)",
+      "socialDouyin": "Douyin — 마우스를 올려 스캔하여 팔로우",
+      "socialYoutube": "YouTube 채널",
+      "douyinQrAlt": "Douyin QR 코드",
+      "douyinId": "Douyin ID: nengyongai",
+      "douyinCopied": "Douyin ID가 클립보드에 복사되었습니다",
+      "douyinCopyFailed": "복사에 실패했습니다. 수동으로 복사해주세요.",
+      "sponsor": "후원",
+      "sponsorDesc": "이 프로젝트가 도움이 되셨다면, 지속적인 유지보수를 위해 후원을 고려해주세요!",
+      "alipay": "Alipay",
+      "wechatPay": "WeChat Pay",
+      "paypal": "PayPal",
+      "provider": {
+        "backup": {
+          "exportInvalidConfig": "내보내기 실패: 저장된 공급자 설정이 검증을 통과하지 못했습니다. 백업 파일이 생성되지 않았습니다.",
+          "errorProvider": "저장된 공급자 중 {{index}}번째 항목을 확인하세요(로컬 설정 및 CLI 로그인 항목 제외).",
+          "errorField": "필드: {{field}}.",
+          "import": "가져오기",
+          "export": "내보내기",
+          "importFile": "CC GUI 백업에서 가져오기",
+          "importTitle": "{{engine}} 공급자 가져오기",
+          "exportTitle": "{{engine}} 공급자 내보내기",
+          "scope": "현재 탭에 저장된 공급자 설정(키 포함)만 전송합니다. 로컬 CLI 로그인 및 활성화 상태는 포함하지 않습니다.",
+          "mergeHint": "신뢰할 수 있는 파일만 가져오세요. 동일한 설정은 건너뛰고 다른 설정은 추가하며, 덮어쓰거나 자동 활성화하지 않습니다. 이름, 메모, ID 및 생성 시간은 중복 판정에서 제외됩니다.",
+          "selectFile": "설정 파일 선택",
+          "passwordOptional": "내보내기 암호(선택 사항)",
+          "passwordRequired": "파일 암호 입력",
+          "confirmPassword": "암호 확인",
+          "plaintextWarning": "확인: 암호를 설정하지 않으면 API 키가 일반 텍스트로 내보내집니다. 파일을 안전하게 보관하세요.",
+          "passwordHint": "8자 이상의 길고 고유한 암호를 권장합니다. 잊어버린 암호는 복구할 수 없습니다.",
+          "passwordShort": "암호는 8자 이상이어야 합니다.",
+          "passwordMismatch": "암호가 일치하지 않습니다.",
+          "working": "처리 중입니다. 잠시 기다려 주세요…",
+          "importSuccess": "가져오기 완료: {{imported}}개 추가, 중복 설정 {{skipped}}개 건너뜀.",
+          "exportSuccess": "설정을 내보냈습니다.",
+          "exportPartial": "공급자 {{exported}}개를 내보냈습니다. 검증을 통과하지 못한 저장된 공급자 {{skipped}}개를 건너뛰었습니다: {{positions}}(번호는 로컬 설정 및 CLI 로그인 항목 제외).",
+          "invalidFile": "잘못된 파일, 지원하지 않는 버전 또는 잘못된 설정입니다. 가져오지 않았습니다.",
+          "wrongEngine": "파일 유형이 현재 탭과 다릅니다. 해당 Claude Code / Codex 탭을 선택하세요.",
+          "tooLarge": "파일 또는 설정이 너무 큽니다(파일 최대 8 MiB, 공급자 최대 2000개).",
+          "empty": "처리할 공급자 설정이 없습니다.",
+          "wrongPassword": "암호가 틀렸거나 암호화 파일이 손상되었습니다. 가져오지 않았습니다.",
+          "failed": "작업에 실패했습니다. 파일 권한과 설정을 확인한 후 다시 시도하세요.",
+          "busy": "다른 가져오기/내보내기가 진행 중입니다. 나중에 다시 시도하세요.",
+          "timeout": "결과 대기 시간이 초과되었습니다. 작업이 진행 중일 수 있으므로 다시 시도하기 전에 목록이나 내보낸 파일을 확인하세요."
+        },
+        "currentConfig": "현재 ClaudeCode 설정",
+        "loading": "로딩 중...",
+        "noConfig": "설정 없음",
+        "emptyProvider": "설정된 제공자 없음",
+        "notConfigured": "설정되지 않음",
+        "apiKey": "API 키",
+        "apiKeyHelper": "API 키 도우미",
+        "baseUrl": "Base URL",
+        "provider": "제공자",
+        "source": "소스",
+        "show": "표시",
+        "hide": "숨기기",
+        "switchTo": "전환",
+        "addProvider": "제공자 추가",
+        "importProvider": "제공자 가져오기",
+        "importFrom": "가져오기 소스",
+        "importFromCcSwitch": "cc-switch에서 가져오기",
+        "edit": "편집",
+        "delete": "삭제",
+        "deleteConfirm": "제공자 삭제 확인",
+        "deleteMessage": "제공자 \"{{name}}\"을(를) 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
+        "convertLocal": "로컬로 변환",
+        "convertMessage": "변환 후 가져오기 소스와의 연결이 끊어집니다. 이 작업은 되돌릴 수 없습니다.",
+        "convertSuccess": "변환 성공, 새 ID가 생성되고 연결이 끊어졌습니다",
+        "importing": "가져오는 중...",
+        "allProviders": "모든 제공자",
+        "dragToSort": "드래그하여 순서 변경",
+        "import": "가져오기",
+        "importFromCcSwitchUpdate": "cc-switch에서 가져오기/업데이트",
+        "importFromCcSwitchFile": "가져올 cc-switch.db 파일 선택",
+        "importFromCcSwitchCli": "cc-switch CLI에서 가져오기/업데이트",
+        "importFromClaudeRouter": "Claude Code Router에서 가져오기/업데이트",
+        "featureComingSoon": "기능이 아직 구현되지 않았습니다. 곧 출시 예정",
+        "readingCcSwitch": "cc-switch 설정을 읽는 중...",
+        "editCcSwitchTitle": "cc-switch 설정 편집",
+        "editCcSwitchWarning": "cc-switch 설정을 편집 중입니다. 편집해도 cc-switch는 업데이트되지 않으며, 가져오기 시 변경 사항이 덮어쓸 수 있습니다. 편집하기 전에 로컬 설정으로 변환하는 것을 고려하세요.",
+        "continueEdit": "편집 계속",
+        "convertAndEdit": "변환 후 편집",
+        "convertToPlugin": "플러그인 설정으로 변환",
+        "convertConfirmMessage": "cc-switch 설정 \"{{name}}\"을(를) 플러그인 설정으로 변환하시겠습니까?",
+        "convertDetailMessage": "변환 후 cc-switch와의 ID 연결이 끊어지며, 향후 가져오기 시 이 설정이 덮어쓰이지 않습니다.",
+        "confirmConvert": "변환 확인",
+        "inUse": "사용 중",
+        "enable": "활성화",
+        "localProviderName": "로컬 settings.json",
+        "localProviderDescription": "~/.claude/settings.json의 설정을 직접 사용",
+        "localProviderHelp": "로컬 제공자 모드 사용 시:\n• 플러그인이 ~/.claude/settings.json 파일을 수정하지 않습니다\n• 설정을 수동으로 관리해야 합니다\n• 파일이 존재하고 유효한 JSON을 포함하는지 확인하세요\n• 수동 제어를 선호하는 고급 사용자에게 적합합니다",
+        "authorizeAndEnable": "승인 및 활성화",
+        "revokeAuthorization": "승인 취소",
+        "cliLoginProviderName": "CLI 로그인 상태",
+        "cliLoginProviderDescription": "터미널에서 이미 완료한 Claude CLI 로그인 상태를 재사용합니다",
+        "cliLoginAuthorizeTitle": "CLI 로그인 상태 승인",
+        "cliLoginAuthorizeMessage": "플러그인이 Claude CLI 로그인 세션을 API 요청에 사용할 수 있도록 합니다. 터미널에서 Claude CLI로 먼저 로그인해야 합니다.",
+        "cliLoginAuthorizeDetail": "플러그인은 인증을 Claude SDK의 기본 OAuth 흐름에 위임합니다. 언제든지 이 승인을 취소할 수 있습니다.",
+        "cliLoginDisableTitle": "CLI 로그인 승인 취소",
+        "cliLoginDisableMessage": "CLI 로그인 상태 사용을 중단하고 다른 공급자를 명시적으로 활성화할 때까지 Claude에 활성 공급자가 없는 상태가 됩니다.",
+        "cliLoginAccountInfo": "로그인됨: {{email}}",
+        "subscriptionTutorial": {
+          "entry": "구독 계정 가이드",
+          "dialogTitle": "구독 계정 사용 방법",
+          "tabAriaLabel": "구독 계정 가이드 탭",
+          "tabs": {
+            "claude": "Claude 구독",
+            "codex": "Codex 구독"
+          },
+          "code": {
+            "copy": "코드 복사",
+            "copied": "복사됨"
+          },
+          "providers": {
+            "claude": {
+              "title": "Claude Code 구독 계정 사용 방법",
+              "item1": "터미널에서 claude code CLI를 통해 Claude Code 구독 계정에 로그인하면 터미널에서 정상적으로 채팅할 수 있습니다",
+              "item2": "~/.claude/settings.json 파일과 .env 파일이 비어있는지 확인하세요",
+              "item3": "IDEA를 재시작하면 정상적으로 채팅할 수 있습니다",
+              "emptyConfigCodeLabel": "~/.claude/settings.json",
+              "emptyConfigCode": "{\n  \"env\": {\n  }\n}",
+              "noteTitle": "특수 사례 참고:",
+              "note1": "위 설정을 했는데도 플러그인이 응답하지 않으면 ~/.claude/settings.json .env를 다음과 같이 설정해보세요:",
+              "proxyConfigCodeLabel": "~/.claude/settings.json",
+              "proxyConfigCode": "{\n  \"env\": {\n    \"HTTP_PROXY\": \"http://127.0.0.1:7897\",\n    \"HTTPS_PROXY\": \"http://127.0.0.1:7897\"\n  }\n}",
+              "issuePrefix": "그래도 작동하지 않으면 GitHub에 이슈를 보고해주세요: ",
+              "issueUrl": "https://github.com/zhukunpenglinyutong/idea-claude-code-gui/issues"
+            },
+            "codex": {
+              "title": "Codex 구독 계정 설정",
+              "item1": "터미널 Codex CLI에서 codex login을 실행하여 로그인에 성공하면 터미널에서 채팅할 수 있습니다",
+              "item2": "IDEA를 재시작합니다",
+              "item3": "이제 정상적으로 채팅할 수 있습니다",
+              "emptyConfigCodeLabel": "",
+              "emptyConfigCode": "",
+              "noteTitle": "",
+              "note1": "",
+              "proxyConfigCodeLabel": "",
+              "proxyConfigCode": "",
+              "issuePrefix": "그래도 작동하지 않으면 GitHub에 이슈를 보고해주세요: ",
+              "issueUrl": "https://github.com/zhukunpenglinyutong/idea-claude-code-gui/issues"
+            }
+          }
+        },
+        "importDialog": {
+          "title": "cc-switch 설정 가져오기",
+          "summary": "{{total}}개 설정 발견, 포함:",
+          "newCount": "{{count}}개 신규",
+          "updateCount": "{{count}}개 업데이트",
+          "columnName": "이름",
+          "columnId": "ID",
+          "columnStatus": "상태",
+          "statusNew": "신규",
+          "statusUpdate": "업데이트",
+          "selectedCount": "{{count}}개 선택됨",
+          "confirmImport": "가져오기 확인"
+        },
+        "deleteProviderMessage": "제공자 \"{{name}}\"을(를) 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.",
+        "dialog": {
+          "addTitle": "제공자 추가",
+          "editTitle": "제공자 편집: {{name}}",
+          "addDescription": "새 제공자 정보 설정",
+          "securityNotice": "안내: 모든 설정은 사용자 컴퓨터에 로컬로 저장됩니다. 이 프로젝트는 100% 오픈소스입니다. 안심하고 사용하세요.",
+          "editDescription": "변경 사항은 즉시 현재 제공자에 적용됩니다.",
+          "providerName": "제공자 이름",
+          "providerNamePlaceholder": "예: Claude 공식",
+          "remark": "비고",
+          "remarkPlaceholder": "선택사항",
+          "apiKey": "API 키",
+          "apiKeyPlaceholder": "sk-ant-...",
+          "apiKeyHint": "API 키를 입력해주세요",
+          "apiUrl": "API 엔드포인트",
+          "apiUrlPlaceholder": "https://api.anthropic.com",
+          "apiUrlHint": "Claude API 호환 서비스 엔드포인트 주소를 입력하세요",
+          "modelMapping": "모델 매핑 (JSON env에 주입됨)",
+          "mainModel": "기본 모델",
+          "mainModelPlaceholder": "예: claude-sonnet-4-6",
+          "fableModel": "Fable 기본 모델",
+          "fableModelPlaceholder": "예: claude-fable-5",
+          "haikuModel": "Haiku 기본 모델",
+          "haikuModelPlaceholder": "예: claude-haiku-4-5",
+          "sonnetModel": "Sonnet 기본 모델",
+          "sonnetModelPlaceholder": "예: claude-sonnet-4-6",
+          "opusModel": "Opus 기본 모델",
+          "opusModelPlaceholder": "예: claude-opus-4-6",
+          "modelMappingHint": "선택사항: 사용할 기본 Claude 모델을 지정합니다. 비워두면 시스템 기본값을 사용합니다.",
+          "customModels": "사용자 지정 모델",
+          "customModelsHint": "이 제공자가 지원하는 추가 모델을 추가합니다. 사용자 지정 모델은 모델 선택기 목록 상단에 표시됩니다",
+          "jsonConfig": "JSON 설정",
+          "jsonConfigDescription": "여기에서 완전한 settings.json 내용을 설정할 수 있습니다. 모든 필드를 지원합니다 (예: model, alwaysThinkingEnabled, ccSwitchProviderId, codemossProviderId 등)",
+          "jsonError": "잘못된 JSON 형식",
+          "required": "*",
+          "showApiKey": "표시",
+          "hideApiKey": "숨기기",
+          "confirmAdd": "추가 확인",
+          "saveChanges": "변경 사항 저장",
+          "codeView": "코드",
+          "visualView": "비주얼",
+          "formatJson": "포맷",
+          "invalidJson": "잘못된 JSON 형식입니다. 코드 뷰로 전환하여 수정해주세요",
+          "presetGroup": "빠른 프리셋"
+        },
+        "presets": {
+          "custom": "사용자 지정",
+          "zhipu": "Zhipu GLM",
+          "kimi": "Kimi",
+          "kimiCoding": "Kimi Coding",
+          "deepseek": "DeepSeek",
+          "minimax": "MiniMax",
+          "xiaomi": "Xiaomi MiMo",
+          "xiaomiPlan": "Xiaomi MiMo Plan",
+          "qwen": "Alibaba Qwen",
+          "bailian": "Bailian",
+          "bailianCoding": "Bailian Coding",
+          "longcat": "LongCat",
+          "opencodeGo": "OpenCode Go",
+          "openrouter": "OpenRouter"
+        }
+      },
+      "comingSoon": "곧 출시 예정...",
+      "permissionsComingSoon": "권한 설정이 곧 출시됩니다...",
+      "agentsComingSoon": "에이전트 설정이 곧 출시됩니다...",
+      "skillsComingSoon": "스킬 설정이 곧 출시됩니다...",
+      "codexProvider": {
+        "title": "Codex 제공자 관리",
+        "description": "Codex 제공자 설정을 관리합니다. 설정은 ~/.codex/ 디렉토리에 기록됩니다",
+        "emptyProvider": "설정된 Codex 제공자가 없습니다. 추가를 클릭하여 생성하세요",
+        "deleteConfirmTitle": "삭제 확인",
+        "deleteConfirmMessage": "제공자 \"{{name}}\"을(를) 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
+        "dialog": {
+          "addTitle": "Codex 제공자 추가",
+          "editTitle": "제공자 편집: {{name}}",
+          "addDescription": "새 Codex 제공자를 설정합니다. ~/.codex/ 디렉토리에 기록됩니다",
+          "editDescription": "변경 사항은 즉시 ~/.codex/ 디렉토리에 적용됩니다",
+          "officialPreset": "OpenAI 공식 직접 연결",
+          "officialSectionHint": "직접 입력한 OPENAI_API_KEY를 사용하고 공식 엔드포인트 https://api.openai.com/v1에 연결합니다.",
+          "presetHint": "아래 프리셋은 Claude Code 제공자 세트와 일치하는 타사 또는 프록시 엔드포인트만 포함합니다.",
+          "providerName": "제공자 이름",
+          "providerNamePlaceholder": "예: Codex 공식",
+          "configJson": "설정",
+          "authJsonLabel": "설정",
+          "formatJson": "포맷",
+          "formatSuccess": "포맷 성공",
+          "formatError": "포맷 실패, 잘못된 JSON",
+          "nameRequired": "제공자 이름을 입력해주세요",
+          "configJsonError": "config.toml JSON 형식 오류",
+          "authJsonError": "auth.json JSON 형식 오류",
+          "configJsonHint": "model_provider, model, model_providers 등을 포함하는 JSON 객체",
+          "authJsonHint": "OPENAI_API_KEY 및 기타 인증 정보를 포함하는 JSON 객체",
+          "customModels": "사용자 지정 모델",
+          "customModelsHint": "이 제공자가 지원하는 추가 모델을 추가합니다. 사용자 지정 모델은 모델 선택 목록 상단에 표시됩니다",
+          "noCustomModels": "사용자 지정 모델 없음",
+          "addModel": "모델 추가",
+          "modelIdPlaceholder": "모델 ID (필수, 예: gpt-4o)",
+          "modelLabelPlaceholder": "표시 이름 (선택사항)",
+          "modelDescPlaceholder": "모델 설명 (선택사항)",
+          "cliLoginProviderName": "Codex CLI 로그인",
+          "cliLoginProviderDescription": "Codex CLI의 ChatGPT 구독 자격 증명 사용",
+          "cliLoginAuthorizeTitle": "Codex CLI 로그인 활성화",
+          "cliLoginAuthorizeMessage": "config.toml을 비우고 Codex CLI의 ChatGPT 구독 자격 증명을 사용합니다.",
+          "cliLoginAuthorizeDetail": "터미널에서 'codex login'으로 로그인했는지 확인하세요. 현재 config.toml은 백업됩니다.",
+          "cliLoginDisableTitle": "Codex CLI 로그인 비활성화",
+          "cliLoginDisableMessage": "이전 config.toml을 복원하고 API 키 인증 방식으로 전환합니다.",
+          "modelIdRequired": "모델 ID는 필수입니다",
+          "modelIdInvalid": "잘못된 모델 ID 형식 (영문자, 숫자, 점, 하이픈, 밑줄, 슬래시, 콜론만 허용)",
+          "modelIdDuplicate": "모델 ID가 이미 존재합니다",
+          "envVarsTitle": "Environment Variables",
+          "messageEnvLabel": "Message Environment Variables",
+          "messageEnvHint": "Custom environment variables injected into the Codex message subprocess",
+          "mcpEnvLabel": "MCP Environment Variables",
+          "mcpEnvHint": "Custom environment variables injected into the MCP tool discovery subprocess",
+          "envKeyPlaceholder": "ENV_KEY",
+          "envValuePlaceholder": "value",
+          "addEnvVar": "Add Variable",
+          "envKeyInvalid": "Invalid key name (must start with letter/underscore, alphanumeric only)",
+          "envKeyProtected": "Cannot set built-in variable: {{key}}",
+          "envKeyDuplicate": "Duplicate key: {{key}}",
+          "envValueTooLong": "값이 너무 깁니다 (최대 {{max}}자)"
+        }
+      },
+      "agent": {
+        "title": "프롬프트",
+        "create": "생성",
+        "export": "내보내기",
+        "import": "가져오기",
+        "createAgent": "프롬프트 생성",
+        "createAgentHint": "클릭하여 프롬프트 설정 페이지에서 생성",
+        "customAgents": "사용자 지정 프롬프트",
+        "noAgents": "사용자 지정 프롬프트 없음",
+        "noAgentsDropdown": "프롬프트 없음",
+        "loadFailed": "로딩 실패",
+        "loading": "로딩 중...",
+        "menu": "메뉴",
+        "addSuccess": "프롬프트 생성 완료",
+        "updateSuccess": "프롬프트 업데이트 완료",
+        "deleteSuccess": "프롬프트 삭제 완료",
+        "operationSuccess": "작업 성공",
+        "operationFailed": "작업 실패",
+        "deleteConfirmTitle": "삭제 확인",
+        "deleteConfirmMessage": "프롬프트 \"{{name}}\"을(를) 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
+        "clearAgent": "선택된 프롬프트 해제",
+        "dialog": {
+          "addTitle": "프롬프트 생성",
+          "editTitle": "프롬프트 편집",
+          "name": "이름",
+          "namePlaceholder": "프롬프트 이름을 입력하세요",
+          "nameRequired": "프롬프트 이름을 입력해주세요",
+          "prompt": "프롬프트",
+          "promptPlaceholder": "프롬프트의 역할, 톤, 워크플로우, 도구 기본설정 및 규칙을 입력하세요. (선택사항)",
+          "promptHint": "프롬프트는 대화 시작 시 시스템 지시사항으로 AI에 전송됩니다",
+          "confirmAdd": "생성",
+          "saveChanges": "저장"
+        },
+        "importDialog": {
+          "title": "프롬프트 가져오기",
+          "selectItems": "가져올 프롬프트를 선택하세요",
+          "summary": "총 {{total}}개 프롬프트:",
+          "newCount": "{{count}}개 신규",
+          "updateCount": "{{count}}개 업데이트",
+          "selectedCount": "{{count}}개 선택됨",
+          "conflictStrategy": "충돌 해결 전략",
+          "strategySkip": "건너뛰기",
+          "strategySkipDesc": "기존 프롬프트 건너뛰기",
+          "strategyOverwrite": "덮어쓰기",
+          "strategyOverwriteDesc": "기존 프롬프트 덮어쓰기",
+          "strategyDuplicate": "복제",
+          "strategyDuplicateDesc": "복제본 생성 (새 ID 생성)",
+          "conflictWarning": "{{count}}개 충돌 감지됨",
+          "columnName": "이름",
+          "columnId": "ID",
+          "columnStatus": "상태",
+          "statusNew": "신규",
+          "statusUpdate": "업데이트",
+          "importSuccess": "{{count}}개 프롬프트를 성공적으로 가져왔습니다",
+          "importFailed": "가져오기 실패",
+          "importPartialSuccess": "{{imported}}개 가져옴, {{skipped}}개 건너뜀, {{updated}}개 업데이트됨",
+          "noItemsSelected": "프롬프트를 하나 이상 선택해주세요",
+          "confirmImport": "가져오기 확인",
+          "exportSuccess": "프롬프트 내보내기 완료",
+          "exportFailed": "내보내기 실패",
+          "importFileError": "파일 읽기 실패",
+          "invalidFileFormat": "잘못된 파일 형식"
+        },
+        "exportDialog": {
+          "title": "프롬프트 내보내기",
+          "selectHint": "내보낼 프롬프트를 선택하세요",
+          "confirmExport": "내보내기 확인"
+        }
+      },
+      "prompts": "프롬프트 라이브러리",
+      "promptsDesc": "자주 사용하는 프롬프트 템플릿을 관리하여 채팅 중 빠르게 삽입",
+      "prompt": {
+        "title": "프롬프트 라이브러리",
+        "create": "생성",
+        "export": "내보내기",
+        "import": "가져오기",
+        "createPrompt": "프롬프트 생성",
+        "createPromptHint": "클릭하여 프롬프트 설정 페이지에서 생성",
+        "customPrompts": "사용자 지정 프롬프트",
+        "noPrompts": "사용자 지정 프롬프트 없음",
+        "noPromptsDropdown": "프롬프트 없음",
+        "loadFailed": "로딩 실패",
+        "loading": "로딩 중...",
+        "menu": "메뉴",
+        "addSuccess": "프롬프트 생성 완료",
+        "updateSuccess": "프롬프트 업데이트 완료",
+        "deleteSuccess": "프롬프트 삭제 완료",
+        "operationSuccess": "작업 성공",
+        "operationFailed": "작업 실패",
+        "deleteConfirmTitle": "삭제 확인",
+        "deleteConfirmMessage": "프롬프트 \"{{name}}\"을(를) 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
+        "description": "자주 사용하는 프롬프트 템플릿을 만드세요. 채팅 입력창에서 !를 입력하면 빠르게 선택하여 삽입할 수 있습니다",
+        "global": "전역 프롬프트",
+        "project": "프로젝트 프롬프트",
+        "projectScope": "프로젝트 프롬프트 - {{projectName}}",
+        "noProject": "활성 프로젝트 없음",
+        "copyToGlobal": "전역으로 복사",
+        "scopeLabel": {
+          "global": "전역",
+          "project": "프로젝트"
+        },
+        "copyToGlobalSuccess": "전역 프롬프트로 복사됨",
+        "projectPromptsUnavailable": "현재 프로젝트에서 프로젝트 프롬프트를 사용할 수 없습니다",
+        "dialog": {
+          "addTitle": "프롬프트 생성",
+          "editTitle": "프롬프트 편집",
+          "name": "이름",
+          "namePlaceholder": "프롬프트 이름을 입력하세요",
+          "nameRequired": "프롬프트 이름을 입력해주세요",
+          "content": "내용",
+          "contentPlaceholder": "프롬프트 내용을 입력하세요. {{variable}}과 같은 변수를 포함할 수 있습니다",
+          "contentHint": "프롬프트 내용은 선택 시 입력창에 직접 삽입됩니다",
+          "confirmAdd": "생성",
+          "saveChanges": "저장"
+        },
+        "importDialog": {
+          "title": "프롬프트 가져오기",
+          "selectItems": "가져올 프롬프트를 선택하세요",
+          "summary": "총 {{total}}개 프롬프트:",
+          "newCount": "{{count}}개 신규",
+          "updateCount": "{{count}}개 업데이트",
+          "selectedCount": "{{count}}개 선택됨",
+          "conflictStrategy": "충돌 해결 전략",
+          "strategySkip": "건너뛰기",
+          "strategySkipDesc": "기존 프롬프트 건너뛰기",
+          "strategyOverwrite": "덮어쓰기",
+          "strategyOverwriteDesc": "기존 프롬프트 덮어쓰기",
+          "strategyDuplicate": "복제",
+          "strategyDuplicateDesc": "복제본 생성 (새 ID 생성)",
+          "conflictWarning": "{{count}}개 충돌 감지됨",
+          "columnName": "이름",
+          "columnId": "ID",
+          "columnStatus": "상태",
+          "statusNew": "신규",
+          "statusUpdate": "업데이트",
+          "importSuccess": "{{count}}개 프롬프트를 성공적으로 가져왔습니다",
+          "importFailed": "가져오기 실패",
+          "importPartialSuccess": "{{imported}}개 가져옴, {{skipped}}개 건너뜀, {{updated}}개 업데이트됨",
+          "noItemsSelected": "프롬프트를 하나 이상 선택해주세요",
+          "confirmImport": "가져오기 확인",
+          "exportSuccess": "프롬프트 내보내기 완료",
+          "exportFailed": "내보내기 실패",
+          "importFileError": "파일 읽기 실패",
+          "invalidFileFormat": "잘못된 파일 형식"
+        },
+        "exportDialog": {
+          "title": "프롬프트 내보내기",
+          "selectHint": "내보낼 프롬프트를 선택하세요",
+          "confirmExport": "내보내기 확인"
+        }
+      },
+      "cli": {
+        "hint": "These CLIs must be installed and configured in your system terminal. The plugin only detects installation status and version — it will never install them for you. Confirm each CLI works in the terminal before coming back here to use it.",
+        "refresh": "Re-check",
+        "retry": "Retry",
+        "loading": "Checking CLI installation status…",
+        "loadFailed": "Detection failed. Please try again.",
+        "status": {
+          "installed": "Installed",
+          "notInstalled": "Not installed"
+        },
+        "viewInstallGuide": "Install guide",
+        "howToInstall": "Install guide",
+        "copy": "Copy",
+        "copied": "Copied to clipboard",
+        "copyFailed": "Failed to copy",
+        "tools": {
+          "codex": {
+            "name": "Codex CLI",
+            "description": "설치된 Codex CLI를 감지합니다. 버전 확인은 계정 설정을 읽지 않으며 채팅은 app-server를 사용합니다."
+          },
+          "minimax": {
+            "name": "MiniMax Code",
+            "description": "MiniMax 터미널 코딩 에이전트. Node.js 22.19+ / 24+ 필요(23 미지원); 명령: minimax / mcode"
+          },
+          "zcode": {
+            "name": "ZCode",
+            "description": "GLM 모델을 사용하는 Zhipu ZCode 데스크톱 코딩 앱"
+          },
+          "grok": {
+            "name": "Grok CLI",
+            "description": "xAI Grok terminal coding agent"
+          },
+          "kimi": {
+            "name": "Kimi CLI",
+            "description": "Moonshot Kimi Code CLI"
+          },
+          "opencode": {
+            "name": "OpenCode",
+            "description": "Open-source terminal AI coding agent"
+          },
+          "pi": {
+            "name": "PI CLI",
+            "description": "멀티 프로바이더 모델을 지원하는 미니멀 터미널 코딩 에이전트"
+          },
+          "omp": {
+            "name": "OMP CLI",
+            "description": "멀티 프로바이더 모델을 지원하는 Oh My Pi 터미널 코딩 에이전트"
+          }
+        },
+        "installDialog": {
+          "title": "Install {{name}}",
+          "lead": "Install {{name}} in your system terminal first and make sure `{{binary}}` is available, then come back and click Re-check. This plugin will not run the installer for you.",
+          "stepOpenTerminal": "Open your system terminal (Terminal / iTerm / PowerShell, etc.)",
+          "stepRunCommand": "Copy and run the install command below",
+          "stepVerify": "After install, run `{{binary}} --version` to verify",
+          "stepReturn": "Return here and click Re-check",
+          "primaryCommand": "Recommended install command (macOS / Linux)",
+          "windowsCommand": "Windows (PowerShell)",
+          "altCommand": "Alternative install method",
+          "openDocs": "Open official docs"
+        },
+        "listTitle": "로컬 CLI 도구",
+        "summary": "{{installed}} / {{total}} 설치됨",
+        "moreComingSoon": "곧 더 많은 CLI 지원 예정",
+        "copyPath": "경로 복사",
+        "visibility": {
+          "hide": "제공자 전환 메뉴에서 숨기기",
+          "show": "제공자 전환 메뉴에 표시"
+        }
+      },
+      "hooks": {
+        "title": "Hooks",
+        "description": "Codex 및 Claude Code 훅을 확인하고 안전하게 편집합니다.",
+        "refresh": "새로 고침",
+        "provider": "제공자",
+        "scope": "범위",
+        "all": "전체",
+        "allProviders": "모든 제공자",
+        "allScopes": "모든 범위",
+        "global": "사용자",
+        "project": "프로젝트",
+        "projectLocal": "프로젝트(로컬 재정의)",
+        "search": "Hooks 검색",
+        "searchPlaceholder": "이벤트, 명령 또는 경로 검색",
+        "noMatches": "조건에 맞는 Hook이 없습니다.",
+        "toggleUnavailable": "런타임 동작이 확인될 때까지 개별 전환을 사용할 수 없습니다.",
+        "enabled": "활성화됨",
+        "disabled": "비활성화됨",
+        "enable": "Hook 활성화",
+        "disable": "Hook 비활성화",
+        "managedToggleHint": "CC GUI가 관리하는 전환입니다. 원래 설정을 보존하고 복원할 수 있습니다.",
+        "nativeToggleHint": "Codex 사용자 설정을 변경합니다. 실행은 신뢰, 기능 설정 및 정책의 적용도 받습니다.",
+        "toggleFailed": "Hook 전환 실패",
+        "loading": "Hook 위치 검색 중…",
+        "empty": "발견된 Hook이 없습니다.",
+        "valid": "형식 인식됨",
+        "validationWarning": "검토 필요",
+        "matcher": "매처",
+        "noCommand": "명령 없음",
+        "readOnly": "읽기 전용",
+        "viewSource": "소스 보기",
+        "editSource": "소스 편집",
+        "sourcePreview": "Hook 소스 미리 보기",
+        "sourceTab": "소스",
+        "detailsTab": "세부 정보",
+        "viewMode": "Hook 보기",
+        "loadingSource": "소스 로드 중…",
+        "sourceEditor": "Hook 소스 편집기",
+        "affectedFile": "영향받는 파일",
+        "backupDirectory": "백업 디렉터리",
+        "latestBackup": "현재 편집 세션의 마지막 백업 복원",
+        "lastModified": "마지막 수정",
+        "event": "이벤트",
+        "format": "형식",
+        "revision": "리비전",
+        "command": "명령",
+        "validationIssues": "검증 문제",
+        "providerFields": "제공자별 필드",
+        "noProviderFields": "제공자별 필드 없음",
+        "none": "없음",
+        "reviewChanges": "변경 검토",
+        "hideChanges": "차이 숨기기",
+        "noChanges": "저장할 변경 없음",
+        "technicalInfo": "기술 정보",
+        "moreActions": "추가 작업",
+        "conflictTitle": "소스가 외부에서 변경되었습니다",
+        "conflictDescription": "외부 버전을 다시 로드하거나 초안을 유지하고 최신 리비전과 동기화하세요.",
+        "reloadExternal": "외부 버전 다시 로드",
+        "keepDraft": "초안 유지 및 동기화",
+        "discardDraft": "초안 버리기",
+        "discardChangesTitle": "저장하지 않은 변경을 버릴까요?",
+        "discardChangesMessage": "변경이 저장되지 않았습니다. 닫으면 복구할 수 없습니다.",
+        "backupOnSave": "저장 전에 백업 생성",
+        "save": "저장",
+        "saving": "저장 중…",
+        "restore": "현재 편집 세션의 마지막 백업 복원",
+        "saveFailed": "저장 실패",
+        "sourceLoadFailed": "소스 다시 로드 실패",
+        "noPreview": "미리 보기 없음.",
+        "sourceNotice": "소스 {{count}}개를 검토해야 합니다. 해당 항목의 작업이 제한됩니다.",
+        "sharedProjectWarning": "프로젝트 설정은 커밋되어 다른 사용자에게 영향을 줄 수 있습니다. 공유 전에 파일 차이를 확인하세요.",
+        "bridgeUnavailable": "IDE 연결을 사용할 수 없습니다. 설정 페이지를 다시 여세요.",
+        "sourceTimeout": "읽기 시간이 초과되었습니다. 편집 전에 소스를 다시 로드하세요.",
+        "mutationTimeout": "확인 시간이 초과되었습니다. 이미 저장되었을 수 있으므로 재시도 전에 새로 고치세요.",
+        "mutationConfirmedLate": "지연된 저장 확인을 받았습니다. 초안은 유지됩니다. 소스를 다시 로드하세요.",
+        "issues": {
+          "COMMAND_MISSING": "명령 없음",
+          "TYPE_MISSING": "유형 없음",
+          "HOOKS_NOT_OBJECT": "hooks는 객체여야 합니다",
+          "SETTINGS_NOT_OBJECT": "설정은 객체여야 합니다",
+          "INVALID_JSON": "잘못된 JSON",
+          "HOOK_ENTRY_NOT_OBJECT": "Hook 항목은 객체여야 합니다",
+          "INVALID_TOML": "잘못된 TOML",
+          "CODEX_HOOKS_NOT_TABLE": "Codex hooks는 테이블이어야 합니다",
+          "CODEX_HOOK_EVENT_NOT_ARRAY": "Hook 이벤트는 배열이어야 합니다",
+          "CODEX_HOOK_ENTRY_NOT_TABLE": "Hook 항목은 테이블이어야 합니다",
+          "CODEX_ENABLED_INVALID": "활성화 필드가 잘못되었습니다",
+          "CODEX_MATCHER_INVALID": "매처 필드가 잘못되었습니다",
+          "CODEX_COMMANDS_INVALID": "유효한 명령 또는 MCP 도구가 없습니다",
+          "CODEX_HOOKS_FEATURE_DISABLED": "Hooks 기능이 비활성화되었습니다",
+          "READ_FAILED": "읽기 실패",
+          "CODEX_EVENT_UNSUPPORTED": "검증된 형식에서 지원하지 않는 이벤트입니다",
+          "CODEX_HANDLER_UNSUPPORTED": "검증된 형식에서 지원하지 않는 처리 유형입니다",
+          "CODEX_HOOK_FILE_FIELDS_INVALID": "Hook 파일 필드가 잘못되었습니다",
+          "CODEX_STATE_INLINE_UNSUPPORTED": "인라인 상태를 안전하게 편집할 수 없습니다. 상태 테이블을 사용하세요.",
+          "LINKED_SOURCE_READ_ONLY": "링크 파일은 읽기 전용입니다. 원본 파일을 직접 편집하세요.",
+          "HOOK_SOURCE_UNAVAILABLE": "소스 파일을 사용할 수 없습니다."
+        },
+        "sharedToggleTitle": "공유 프로젝트 설정 변경 확인",
+        "sharedToggleMessage": "공유 .claude/settings.json 파일이 변경되어 다른 기여자에게 영향을 줄 수 있습니다. 비활성화된 훅의 복구 정보는 이 컴퓨터에만 저장됩니다.",
+        "confirmSharedToggle": "공유 설정 변경",
+        "sensitiveSourceWarning": "이 파일에는 자격 증명과 민감한 설정이 포함될 수 있습니다. 편집할 준비가 되면 표시하세요.",
+        "revealSource": "설정 표시",
+        "errors": {
+          "HOOK_SHARED_CONFIRMATION_REQUIRED": "먼저 공유 프로젝트 설정 변경을 확인하세요.",
+          "HOOK_CATALOG_TIMEOUT": "훅 새로 고침 시간이 초과되었습니다. 다른 훅을 변경하기 전에 새로 고치세요.",
+          "HOOK_REVISION_CONFLICT": "이 페이지 밖에서 파일이 변경되었습니다. 새로 고친 후 다시 시도하세요.",
+          "HOOK_RESTORE_CONFLICT": "복원할 수 없습니다. 파일에서 이 이벤트가 더 이상 목록이 아닙니다. 파일을 수정한 후 다시 시도하세요.",
+          "HOOK_TOGGLE_LOCKED": "이 파일에 다른 변경이 진행 중입니다. 잠시 후 다시 시도하세요.",
+          "HOOK_TOGGLE_LOCK_FAILED": "이 변경을 위해 파일을 잠글 수 없습니다.",
+          "HOOK_FILE_LOCKED": "이 파일에 다른 변경이 진행 중입니다. 잠시 후 다시 시도하세요.",
+          "HOOK_NOT_FOUND": "이 Hook이 더 이상 파일에 없습니다. 목록을 새로 고치세요.",
+          "HOOK_NOT_DISABLED": "이 Hook은 비활성화되어 있지 않습니다. 목록을 새로 고치세요.",
+          "HOOK_ALREADY_DISABLED": "이 Hook은 이미 비활성화되어 있습니다. 목록을 새로 고치세요.",
+          "HOOK_STATE_WRITE_FAILED": "비활성화 기록을 저장할 수 없습니다. 파일 변경은 가능한 범위에서 되돌렸습니다.",
+          "HOOK_TOGGLE_FAILED": "이 Hook을 변경할 수 없습니다.",
+          "INVALID_HOOK_PATH": "이 파일은 여기서 변경할 수 없습니다. 링크 파일과 알려진 위치 밖의 파일은 읽기 전용입니다.",
+          "INVALID_BACKUP_PATH": "백업 파일을 사용할 수 없습니다.",
+          "SOURCE_TOO_LARGE": "파일이 128 KB를 초과하여 여기서 편집할 수 없습니다.",
+          "INVALID_REQUEST": "요청이 잘못되었습니다. 페이지를 새로 고친 후 다시 시도하세요.",
+          "WRITE_FAILED": "파일을 저장할 수 없습니다.",
+          "RESTORE_FAILED": "백업을 복원할 수 없습니다.",
+          "UNSUPPORTED_HOOK_PROVIDER": "이 종류의 Hook은 여기서 변경할 수 없습니다.",
+          "UNKNOWN_ERROR": "알 수 없는 오류입니다."
+        }
       }
     },
-    "codexFeatureUnavailable": "이 설정 섹션은 Codex에서 아직 사용할 수 없습니다. Claude Code로 전환해주세요.",
-    "sidebar": {
-      "expand": "사이드바 펼치기",
-      "collapse": "사이드바 접기"
-    },
-    "community": "커뮤니티",
-    "communityDesc": "아래 QR 코드를 스캔하여 공식 WeChat 그룹에 참여하고 최신 소식과 기술 지원을 받으세요",
-    "versionHistory": "버전 히스토리",
-    "versionHistoryDesc": "모든 버전 업데이트 기록 보기",
-    "communityQrTip": "WeChat으로 스캔하여 커뮤니티에 참여하세요",
-    "communityQrAlt": "공식 WeChat 커뮤니티 QR 코드",
-    "socialDocs": "공식 문서",
-    "socialTitle": "팔로우하기",
-    "socialGithub": "GitHub 저장소 — Star를 눌러주세요!",
-    "socialX": "X (Twitter) @ZPeng31310",
-    "socialZhihu": "Zhihu @vscodeai",
-    "socialXiaohongshu": "Xiaohongshu (RED)",
-    "socialDouyin": "Douyin — 마우스를 올려 스캔하여 팔로우",
-    "socialYoutube": "YouTube 채널",
-    "douyinQrAlt": "Douyin QR 코드",
-    "douyinId": "Douyin ID: nengyongai",
-    "douyinCopied": "Douyin ID가 클립보드에 복사되었습니다",
-    "douyinCopyFailed": "복사에 실패했습니다. 수동으로 복사해주세요.",
-    "sponsor": "후원",
-    "sponsorDesc": "이 프로젝트가 도움이 되셨다면, 지속적인 유지보수를 위해 후원을 고려해주세요!",
-    "alipay": "Alipay",
-    "wechatPay": "WeChat Pay",
-    "paypal": "PayPal",
-    "provider": {
-      "backup": {
-        "exportInvalidConfig": "내보내기 실패: 저장된 공급자 설정이 검증을 통과하지 못했습니다. 백업 파일이 생성되지 않았습니다.",
-        "errorProvider": "저장된 공급자 중 {{index}}번째 항목을 확인하세요(로컬 설정 및 CLI 로그인 항목 제외).",
-        "errorField": "필드: {{field}}.",
-        "import": "가져오기",
-        "export": "내보내기",
-        "importFile": "CC GUI 백업에서 가져오기",
-        "importTitle": "{{engine}} 공급자 가져오기",
-        "exportTitle": "{{engine}} 공급자 내보내기",
-        "scope": "현재 탭에 저장된 공급자 설정(키 포함)만 전송합니다. 로컬 CLI 로그인 및 활성화 상태는 포함하지 않습니다.",
-        "mergeHint": "신뢰할 수 있는 파일만 가져오세요. 동일한 설정은 건너뛰고 다른 설정은 추가하며, 덮어쓰거나 자동 활성화하지 않습니다. 이름, 메모, ID 및 생성 시간은 중복 판정에서 제외됩니다.",
-        "selectFile": "설정 파일 선택",
-        "passwordOptional": "내보내기 암호(선택 사항)",
-        "passwordRequired": "파일 암호 입력",
-        "confirmPassword": "암호 확인",
-        "plaintextWarning": "확인: 암호를 설정하지 않으면 API 키가 일반 텍스트로 내보내집니다. 파일을 안전하게 보관하세요.",
-        "passwordHint": "8자 이상의 길고 고유한 암호를 권장합니다. 잊어버린 암호는 복구할 수 없습니다.",
-        "passwordShort": "암호는 8자 이상이어야 합니다.",
-        "passwordMismatch": "암호가 일치하지 않습니다.",
-        "working": "처리 중입니다. 잠시 기다려 주세요…",
-        "importSuccess": "가져오기 완료: {{imported}}개 추가, 중복 설정 {{skipped}}개 건너뜀.",
-        "exportSuccess": "설정을 내보냈습니다.",
-        "exportPartial": "공급자 {{exported}}개를 내보냈습니다. 검증을 통과하지 못한 저장된 공급자 {{skipped}}개를 건너뛰었습니다: {{positions}}(번호는 로컬 설정 및 CLI 로그인 항목 제외).",
-        "invalidFile": "잘못된 파일, 지원하지 않는 버전 또는 잘못된 설정입니다. 가져오지 않았습니다.",
-        "wrongEngine": "파일 유형이 현재 탭과 다릅니다. 해당 Claude Code / Codex 탭을 선택하세요.",
-        "tooLarge": "파일 또는 설정이 너무 큽니다(파일 최대 8 MiB, 공급자 최대 2000개).",
-        "empty": "처리할 공급자 설정이 없습니다.",
-        "wrongPassword": "암호가 틀렸거나 암호화 파일이 손상되었습니다. 가져오지 않았습니다.",
-        "failed": "작업에 실패했습니다. 파일 권한과 설정을 확인한 후 다시 시도하세요.",
-        "busy": "다른 가져오기/내보내기가 진행 중입니다. 나중에 다시 시도하세요.",
-        "timeout": "결과 대기 시간이 초과되었습니다. 작업이 진행 중일 수 있으므로 다시 시도하기 전에 목록이나 내보낸 파일을 확인하세요."
+    "history": {
+      "title": "히스토리",
+      "sessionDeleted": "세션 삭제됨",
+      "confirmDelete": "삭제 확인",
+      "deleteMessage": "이 세션을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
+      "deleteSession": "이 세션 삭제",
+      "selectMode": "Select",
+      "exitSelectMode": "Exit selection",
+      "selectedSessions": "{{count}} selected",
+      "selectAll": "Select all",
+      "clearSelection": "Clear",
+      "deleteSelected": "Delete selected",
+      "confirmDeleteSelected": "Confirm Delete",
+      "deleteSelectedMessage": "Are you sure you want to delete {{count}} selected sessions? This action cannot be undone.",
+      "selectSession": "Select session",
+      "selectSessionWithTitle": "Select {{title}}",
+      "exportSession": "세션 내보내기",
+      "exportSuccess": "세션 내보내기 완료",
+      "exportFailed": "내보내기 실패",
+      "favoriteSession": "즐겨찾기 추가",
+      "unfavoriteSession": "즐겨찾기 해제",
+      "favorited": "즐겨찾기에 추가됨",
+      "unfavorited": "즐겨찾기에서 해제됨",
+      "loading": "히스토리 로딩 중...",
+      "loadFailed": "로딩 실패",
+      "noSessions": "히스토리 세션 없음",
+      "noSessionsDesc": "현재 프로젝트에서 세션 기록을 찾을 수 없습니다",
+      "totalSessions": "{{count}}개 세션 · {{total}}개 메시지",
+      "totalSessionsOnly": "{{count}}개 세션",
+      "messageCount": "{{count}}개 메시지",
+      "messageCountUnknown": "메시지 수 미집계",
+      "searchPlaceholder": "세션 제목 검색...",
+      "noSearchResults": "일치하는 세션을 찾을 수 없습니다",
+      "tryOtherKeywords": "다른 검색어를 시도해보세요",
+      "deepSearchTooltip": "심층 검색 (캐시 비우고 다시 로드)",
+      "editTitle": "제목 편집",
+      "saveTitleButton": "저장",
+      "cancelEditButton": "취소",
+      "titleTooLong": "제목이 너무 깁니다 (최대 50자)",
+      "titleUpdated": "제목 업데이트됨",
+      "copySessionId": "CLI resume용 세션 ID 복사",
+      "sessionIdCopied": "세션 ID 복사됨",
+      "copyFailed": "복사 실패",
+      "convertToCliSession": "CLI 인식 세션으로 변환",
+      "convertButton": "CLI로 변환",
+      "convertSuccess": "세션이 CLI 인식 가능으로 변환되었습니다",
+      "convertFailed": "변환 실패",
+      "confirmConvert": "CLI 세션으로 변환하시겠습니까?",
+      "convertConfirmMessage": "세션의 entrypoint를 수정하여 Claude Code CLI의 /resume 목록에 표시되도록 합니다.",
+      "timeAgo": {
+        "yearsAgo": "년 전",
+        "monthsAgo": "개월 전",
+        "daysAgo": "일 전",
+        "hoursAgo": "시간 전",
+        "minutesAgo": "분 전",
+        "secondsAgo": "초 전"
       },
-      "currentConfig": "현재 ClaudeCode 설정",
-      "loading": "로딩 중...",
-      "noConfig": "설정 없음",
-      "emptyProvider": "설정된 제공자 없음",
-      "notConfigured": "설정되지 않음",
-      "apiKey": "API 키",
-      "apiKeyHelper": "API 키 도우미",
-      "baseUrl": "Base URL",
-      "provider": "제공자",
-      "source": "소스",
-      "show": "표시",
-      "hide": "숨기기",
-      "switchTo": "전환",
-      "addProvider": "제공자 추가",
-      "importProvider": "제공자 가져오기",
-      "importFrom": "가져오기 소스",
-      "importFromCcSwitch": "cc-switch에서 가져오기",
+      "conversionErrors": {
+        "INVALID_SESSION_ID": "잘못된 세션 ID",
+        "SESSION_ACTIVE": "현재 활성 세션은 변환할 수 없습니다. 먼저 새 세션을 시작한 후 이 세션을 변환하세요",
+        "SESSION_NOT_FOUND": "세션 파일을 찾을 수 없습니다",
+        "FILE_NOT_EXIST": "세션 파일이 존재하지 않습니다",
+        "FILE_LOCKED": "세션 파일이 다른 프로세스에서 사용 중입니다",
+        "NOT_SDK_SESSION": "이 세션은 SDK로 생성되지 않았습니다 (entrypoint가 sdk-cli가 아님)",
+        "ALREADY_CLI_SESSION": "이 세션은 이미 CLI 세션입니다",
+        "CONVERSION_FAILED": "변환 실패, 나중에 다시 시도하세요"
+      },
+      "entrypointLabel": {
+        "sdk-cli": "SDK 세션",
+        "claude-vscode": "VS Code",
+        "remote": "원격"
+      },
+      "entrypointTooltip": {
+        "sdk-cli": "이 세션은 SDK를 통해 플러그인에서 생성되었으며 CLI에 기본적으로 표시되지 않습니다. 터미널 CLI의 /resume 목록에 표시하려면 'CLI로 변환'을 클릭하세요",
+        "claude-vscode": "이 세션은 VS Code 확장에서 생성되었으며 CLI에 기본적으로 표시되지 않습니다. 터미널 CLI의 /resume 목록에 표시하려면 'CLI로 변환'을 클릭하세요",
+        "remote": "이 세션은 원격 Claude Code 인스턴스에서 생성되었습니다"
+      },
+      "loadMore": "Load more",
+      "convertAllPartial": "총 {{total}}개 중 {{count}}개 변환됨, {{failed}}개 실패",
+      "convertAllBridgeUnavailable": "IDE 연결을 사용할 수 없어 요청이 전송되지 않았습니다",
+      "convertAllSuccess": "세션 {{count}}개를 변환했습니다. 이제 CLI /resume에 표시됩니다",
+      "convertAllToCliSessionsEmptyTooltip": "변환할 SDK 또는 VS Code 세션이 없습니다. SDK나 VS Code 확장으로 만든 세션만 CLI 항목으로 변환할 수 있으며, Claude Code CLI로 직접 만든 세션은 이미 다시 열 수 있습니다.",
+      "convertAllTimeout": "변환 시간이 너무 오래 걸렸습니다. 목록을 새로 고쳤으니 잠시 후 확인해 주세요.",
+      "convertAllAlreadyRunning": "이미 변환이 진행 중입니다. 완료될 때까지 기다려 주세요",
+      "convertActiveHintTooltip": "먼저 이 세션을 종료하거나 닫은 다음 기록에서 변환하세요",
+      "convertAllToCliSessions": "모두 CLI로 변환 ({{count}})",
+      "convertActiveHint": "세션 종료 후 CLI로 변환",
+      "convertAllToCliSessionsLabel": "모두 CLI로 변환",
+      "convertAllToCliSessionsTooltip": "SDK로 만든 세션 {{count}}개를 CLI 항목으로 변환해 Claude Code CLI의 /resume 목록에 표시합니다. 현재 사용 중인 세션은 건너뜁니다.",
+      "sessionInUse": "사용 중인 세션은 삭제할 수 없습니다.",
+      "deleteFailed": "세션을 삭제하지 못했습니다. 다시 시도해 주세요.",
+      "confirmDirectoryTitle": "다른 디렉터리에서 세션을 여시겠습니까?",
+      "confirmDirectoryMessage": "명령과 파일 변경은 아래 디렉터리에서 실행됩니다.",
+      "executionDirectory": "실행 위치"
+    },
+    "permission": {
+      "dialogTitle": "권한 요청",
+      "allow": "한 번 허용",
+      "allowAlways": "항상 허용",
+      "deny": "거부",
+      "userDenied": "사용자가 권한 요청을 거부했습니다",
+      "fromExternalProcess": "외부 프로세스의 요청",
+      "tools": {
+        "Write": "파일 쓰기",
+        "Edit": "파일 편집",
+        "Read": "파일 읽기",
+        "ReadBatch": "파일 일괄 읽기",
+        "Bash": "명령 실행",
+        "TodoWrite": "할 일 쓰기",
+        "TodoRead": "할 일 읽기",
+        "WebSearch": "웹 검색",
+        "WebFetch": "웹 가져오기",
+        "execute": "{{toolName}} 실행",
+        "readDirectory": "디렉토리 읽기",
+        "timeoutWarning": "곧 답변해주세요, {{seconds}}초 후 대화상자가 닫힙니다"
+      },
+      "userCancelled": "Permission request cancelled",
+      "previewUnavailable": "Native file preview is unavailable. You can deny or cancel this request.",
+      "requestedPermissions": "Requested native permissions",
+      "allowWithRule": "Allow with this command rule",
+      "allowWithNetworkRule": "Allow with this network rule",
+      "codexDeliveryRetry": "Codex가 선택을 받지 못했습니다({{error}}). 다시 선택해 주세요.",
+      "codexDeliveryFailed": "Codex가 선택을 받지 못했습니다({{error}}). 대화가 계속되지 않으면 중지를 누른 뒤 다시 보내 주세요.",
+      "codexDeliveryUnconfirmed": "Codex가 아직 선택을 받았는지 확인하지 못했습니다({{error}}). 선택이 여전히 적용될 수 있으니 다시 응답하지 마세요. 대화가 계속되지 않으면 중지를 누른 뒤 다시 보내 주세요."
+    },
+    "modelConfig": {
+      "approvals": "승인",
+      "ultracode": {
+        "label": "Ultracode",
+        "description": "작업을 자동으로 위임하는 Claude 기본 워크플로입니다. 선택한 추론 수준을 유지합니다."
+      }
+    },
+    "askUserQuestion": {
+      "ompTitle": "OMP에서 몇 가지 질문이 있습니다",
+      "title": "Claude가 질문이 있습니다",
+      "progress": "질문 {{current}} / {{total}}",
+      "multiSelectHint": "여러 옵션을 선택할 수 있습니다",
+      "cancel": "취소",
+      "back": "뒤로",
+      "next": "다음",
+      "submit": "제출",
+      "otherOption": "기타",
+      "otherOptionDesc": "사용자 지정 답변 입력",
+      "customInputPlaceholder": "답변을 입력하세요...",
+      "timeoutWarning": "곧 답변해주세요, {{seconds}}초 후 대화상자가 닫힙니다",
+      "expand": "펼치기",
+      "collapse": "접기",
+      "clickToAnswer": "클릭하여 답변하기",
+      "recordTitle": "Codex 질문",
+      "recordAnswer": "내 답변",
+      "recordSkipped": "건너뜀(답변하지 않고 닫음)",
+      "answerNotSent": "다른 대화가 열려 있어 Codex 질문에 대한 답변을 보내지 못했습니다. 원래 대화로 돌아가 답변을 다시 보내 주세요."
+    },
+    "planApproval": {
+      "title": "계획 승인 대기 중",
+      "subtitle": "Claude가 계획을 완료했으며 실행할 준비가 되었습니다.",
+      "requestedPermissions": "요청된 권한",
+      "executionMode": "실행 모드",
+      "executionModeDescription": "Claude가 계획을 실행하는 방식을 선택하세요:",
+      "approve": "승인 및 실행",
+      "reject": "거부",
+      "toApprove": "승인하려면",
+      "toReject": "거부하려면",
+      "timeoutWarning": "곧 선택해주세요, {{seconds}}초 후 대화상자가 닫힙니다"
+    },
+    "toast": {
+      "switchSuccess": "전환 완료",
+      "thinkingEnabled": "사고 과정 활성화",
+      "thinkingDisabled": "사고 과정 비활성화",
+      "configLoading": "설정 로딩 중, 다시 시도해주세요",
+      "saveSuccess": "저장 완료",
+      "saveFailed": "저장 실패",
+      "deleteSuccess": "삭제 완료",
+      "operationFailed": "작업 실패",
+      "copySuccess": "{{label}}이(가) 클립보드에 복사됨",
+      "copyFailed": "복사 실패",
+      "newSessionCreatedReady": "새 세션이 생성되었습니다. 질문을 시작하세요",
+      "providerSwitchSuccess": "제공자가 전환되었습니다!",
+      "providerSwitchFailed": "제공자 전환 실패",
+      "operationSuccess": "작업 성공",
+      "pleaseEnterProviderName": "제공자 이름을 입력해주세요",
+      "invalidJsonConfig": "잘못된 JSON 설정 형식",
+      "providerAdded": "제공자 추가됨",
+      "providerUpdated": "제공자 업데이트됨",
+      "providerDeleted": "제공자 삭제됨",
+      "codexSettingsDispatchFailed": "Codex 설정을 IDE로 보낼 수 없습니다. 대화를 다시 열고 재시도하세요.",
+      "codexSettingsRuntimeInactive": "Codex 실행 환경이 비활성 상태입니다. 채팅을 다시 열고 재시도하세요.",
+      "codexSettingsServiceUnavailable": "Codex 서비스를 사용할 수 없습니다. 채팅을 다시 열고 재시도하세요.",
+      "codexSettingsUpdateFailed": "Codex 설정을 확인하지 못했습니다. 채팅을 다시 열고 재시도하세요."
+    },
+    "config": {
+      "clickToCopy": "클릭하여 복사",
+      "officialDocs": "공식 문서",
+      "switch": "전환",
+      "switchProvider": "제공자 전환",
+      "runtimeProvider": {
+        "title": "현재 제공자 전환",
+        "loading": "제공자 로드 중...",
+        "empty": "사용 가능한 제공자 없음",
+        "switched": "{{provider}}(으)로 전환됨"
+      },
+      "codexQuota": {
+        "title": "Codex 쿼터",
+        "loading": "쿼터를 불러오는 중...",
+        "unavailable": "쿼터를 사용할 수 없습니다",
+        "lastUpdated": "{{value}}에 업데이트됨",
+        "fiveHour": "5시간 사용량",
+        "weekly": "주간 사용량",
+        "windowRemainingPercent": "{{percent}}% 남음",
+        "windowRemainingPercentWithReset": "{{percent}}% 남음 · {{value}}에 초기화",
+        "windowUsedOnly": "{{used}} 사용됨",
+        "windowUnavailable": "사용 불가",
+        "apiKeyMode": "API 키 모드에서는 구독 쿼터가 없습니다"
+      },
+      "nodeProcesses": {
+        "title": "Node 프로세스 관리",
+        "badge": "{{total}}개 프로세스",
+        "badgeWithOrphan": "{{total}}개 · 고아 {{orphan}} ⚠",
+        "summary": "전체: {{total}} · 고아: {{orphan}}",
+        "loading": "프로세스 로드 중...",
+        "empty": "활성 Node 프로세스가 없습니다",
+        "refresh": "새로고침",
+        "groups": {
+          "daemon": "데몬 프로세스",
+          "channel": "진행 중인 대화",
+          "orphan": "고아 프로세스"
+        },
+        "kind": {
+          "daemonShort": "Daemon",
+          "channelShort": "대화",
+          "orphanShort": "고아"
+        },
+        "kill": "종료",
+        "interrupt": "중단",
+        "restart": "재시작",
+        "pending": "처리 중...",
+        "killAll": "모든 고아 정리 ({{count}})",
+        "killHint": "이 Node 프로세스를 강제 종료",
+        "killAllHint": "감지된 모든 고아 프로세스 종료",
+        "restartHint": "데몬을 정지합니다. 다음 메시지에서 자동으로 새 데몬이 시작됩니다",
+        "killConfirmTitle": "이 프로세스를 종료하시겠습니까?",
+        "killConfirm": "PID {{pid}}을(를) 종료하시겠습니까? 진행 중인 대화가 손실될 수 있습니다.",
+        "restartConfirmTitle": "데몬을 재시작하시겠습니까?",
+        "restartConfirm": "데몬을 재시작하시겠습니까? 진행 중인 대화가 중단됩니다.",
+        "killAllConfirmTitle": "모든 고아 프로세스를 정리하시겠습니까?",
+        "killAllConfirm": "고아 프로세스 {{count}}개를 모두 종료하시겠습니까?",
+        "killSuccess": "프로세스가 종료되었습니다",
+        "killAllSuccess": "고아 프로세스 {{count}}개를 정리했습니다",
+        "restartSuccess": "데몬이 중지되었습니다. 다음 메시지에서 새 인스턴스가 자동 시작됩니다",
+        "killFailed": "종료 실패: {{error}}",
+        "activeRequests": "진행 중 {{count}}건"
+      },
+      "link": "링크"
+    },
+    "markdown": {
+      "copyCode": "코드 복사",
+      "copyMessage": "메시지 복사",
+      "copySuccess": "복사됨!",
+      "quoteMessage": "메시지 인용",
+      "quoteSuccess": "인용됨!"
+    },
+    "contextMenu": {
+      "cut": "잘라내기",
+      "copy": "복사",
+      "paste": "붙여넣기",
+      "newline": "줄바꿈 삽입",
+      "quote": "인용",
+      "copyLink": "링크 주소 복사"
+    },
+    "usage": {
+      "checkingLabel": "tokentracker-cli 확인 중…",
+      "installingLabel": "tokentracker-cli 설치 중…",
+      "installingDesc": "잠시 걸릴 수 있습니다. 설치가 끝나면 앱이 다시 확인하고 로컬 서버를 시작합니다.",
+      "startingLabel": "tokentracker 서버 시작 중…",
+      "guideTitle": "사용 통계를 볼 수 있도록 tokentracker-cli를 설치하세요",
+      "guideDesc": "사용 통계는 tokentracker-cli가 제공합니다. 로컬 서버를 실행해 AI 도구들의 토큰 사용량을 모아 대시보드로 보여줍니다.",
+      "guideInstallLabel": "설치 명령어",
+      "guideCopy": "복사",
+      "guideCopied": "복사됨",
+      "guideInstallNow": "지금 설치",
+      "guideNoteHooks": "첫 실행 시 tokentracker 서버는 설치된 AI 도구에 hooks를 작성합니다(이것이 데이터 수집 방식입니다).",
+      "guideNoteTelemetry": "이 앱은 익명 텔레메트리를 비활성화했습니다.",
+      "errorTitle": "tokentracker 서버 시작 실패",
+      "errorRetry": "다시 시도"
+    },
+    "mcp": {
+      "title": "MCP 서버",
+      "whatIsMcp": "MCP란?",
+      "refreshStatus": "서버 상태 새로고침",
+      "add": "추가",
+      "manualConfig": "수동 설정",
+      "addFromMarket": "MCP 마켓에서 추가",
+      "marketComingSoon": "MCP 마켓 기능은 아직 구현되지 않았습니다. 곧 출시 예정",
+      "import": {
+        "menuLabel": "GitHub Copilot에서 가져오기",
+        "title": "GitHub Copilot에서 가져오기",
+        "description": "서버를 가져오려면 GitHub Copilot MCP 구성(루트 키 \"servers\")을 붙여넣으세요.",
+        "placeholder": "{\n  \"servers\": {\n    \"my-server\": {\n      \"command\": \"npx\",\n      \"args\": [\"-y\", \"my-mcp-server\"]\n    }\n  }\n}",
+        "previewButton": "미리보기",
+        "previewTitle": "가져올 서버",
+        "empty": "구성을 붙여넣고 미리보기를 클릭하세요.",
+        "footerHint": "가져오기 전에 서버와 이름 변경을 확인하세요.",
+        "renamedFrom": "{{id}}에서 이름 변경됨",
+        "renameSummary": "이름 충돌로 인해 {{count}}개 이름 변경됨",
+        "confirm": "{{count}}개 서버 가져오기"
+      },
+      "market": {
+        "title": "MCP 마켓플레이스",
+        "subtitle": "레지스트리 소스를 탐색하고 설치 가능한 MCP 서버를 추가합니다.",
+        "searchPlaceholder": "서버, 게시자 또는 태그 검색",
+        "allSources": "모든 소스",
+        "refresh": "마켓플레이스 새로고침",
+        "loading": "마켓플레이스 항목을 불러오는 중…",
+        "empty": "MCP 서버를 찾을 수 없습니다.",
+        "selectServer": "설치 세부 정보를 보려면 서버를 선택하세요.",
+        "footerHint": "서버를 추가하기 전에 명령, URL, 헤더 및 환경 변수 자리표시자를 확인하세요.",
+        "addServer": "서버 추가",
+        "official": "공식",
+        "installable": "설치 가능",
+        "browseOnly": "보기 전용",
+        "repository": "저장소",
+        "docs": "문서",
+        "homepage": "홈페이지",
+        "installOption": "설치 옵션",
+        "riskWarning": "이 옵션은 사용자 컴퓨터에서 명령을 실행합니다. 추가하기 전에 확인하세요.",
+        "riskWarningUnverified": "이 옵션은 인식되지 않은 명령을 실행합니다. 출처를 신뢰하는 경우에만 추가하세요.",
+        "noInstall": "이 소스는 검색 메타데이터만 제공합니다. 저장소 안내를 확인한 후 이 서버를 수동으로 추가하세요.",
+        "configPreview": "구성 미리보기"
+      },
+      "description": "설명",
+      "command": "명령어",
+      "url": "URL",
+      "homepage": "홈페이지",
+      "docs": "문서",
       "edit": "편집",
       "delete": "삭제",
-      "deleteConfirm": "제공자 삭제 확인",
-      "deleteMessage": "제공자 \"{{name}}\"을(를) 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
-      "convertLocal": "로컬로 변환",
-      "convertMessage": "변환 후 가져오기 소스와의 연결이 끊어집니다. 이 작업은 되돌릴 수 없습니다.",
-      "convertSuccess": "변환 성공, 새 ID가 생성되고 연결이 끊어졌습니다",
-      "importing": "가져오는 중...",
-      "allProviders": "모든 제공자",
-      "dragToSort": "드래그하여 순서 변경",
-      "import": "가져오기",
-      "importFromCcSwitchUpdate": "cc-switch에서 가져오기/업데이트",
-      "importFromCcSwitchFile": "가져올 cc-switch.db 파일 선택",
-      "importFromCcSwitchCli": "cc-switch CLI에서 가져오기/업데이트",
-      "importFromClaudeRouter": "Claude Code Router에서 가져오기/업데이트",
-      "featureComingSoon": "기능이 아직 구현되지 않았습니다. 곧 출시 예정",
-      "readingCcSwitch": "cc-switch 설정을 읽는 중...",
-      "editCcSwitchTitle": "cc-switch 설정 편집",
-      "editCcSwitchWarning": "cc-switch 설정을 편집 중입니다. 편집해도 cc-switch는 업데이트되지 않으며, 가져오기 시 변경 사항이 덮어쓸 수 있습니다. 편집하기 전에 로컬 설정으로 변환하는 것을 고려하세요.",
-      "continueEdit": "편집 계속",
-      "convertAndEdit": "변환 후 편집",
-      "convertToPlugin": "플러그인 설정으로 변환",
-      "convertConfirmMessage": "cc-switch 설정 \"{{name}}\"을(를) 플러그인 설정으로 변환하시겠습니까?",
-      "convertDetailMessage": "변환 후 cc-switch와의 ID 연결이 끊어지며, 향후 가져오기 시 이 설정이 덮어쓰이지 않습니다.",
-      "confirmConvert": "변환 확인",
-      "inUse": "사용 중",
-      "enable": "활성화",
-      "localProviderName": "로컬 settings.json",
-      "localProviderDescription": "~/.claude/settings.json의 설정을 직접 사용",
-      "localProviderHelp": "로컬 제공자 모드 사용 시:\n• 플러그인이 ~/.claude/settings.json 파일을 수정하지 않습니다\n• 설정을 수동으로 관리해야 합니다\n• 파일이 존재하고 유효한 JSON을 포함하는지 확인하세요\n• 수동 제어를 선호하는 고급 사용자에게 적합합니다",
-      "authorizeAndEnable": "승인 및 활성화",
-      "revokeAuthorization": "승인 취소",
-      "cliLoginProviderName": "CLI 로그인 상태",
-      "cliLoginProviderDescription": "터미널에서 이미 완료한 Claude CLI 로그인 상태를 재사용합니다",
-      "cliLoginAuthorizeTitle": "CLI 로그인 상태 승인",
-      "cliLoginAuthorizeMessage": "플러그인이 Claude CLI 로그인 세션을 API 요청에 사용할 수 있도록 합니다. 터미널에서 Claude CLI로 먼저 로그인해야 합니다.",
-      "cliLoginAuthorizeDetail": "플러그인은 인증을 Claude SDK의 기본 OAuth 흐름에 위임합니다. 언제든지 이 승인을 취소할 수 있습니다.",
-      "cliLoginDisableTitle": "CLI 로그인 승인 취소",
-      "cliLoginDisableMessage": "CLI 로그인 상태 사용을 중단하고 다른 공급자를 명시적으로 활성화할 때까지 Claude에 활성 공급자가 없는 상태가 됩니다.",
-      "cliLoginAccountInfo": "로그인됨: {{email}}",
-      "subscriptionTutorial": {
-        "entry": "구독 계정 가이드",
-        "dialogTitle": "구독 계정 사용 방법",
-        "tabAriaLabel": "구독 계정 가이드 탭",
-        "tabs": {
-          "claude": "Claude 구독",
-          "codex": "Codex 구독"
-        },
-        "code": {
-          "copy": "코드 복사",
-          "copied": "복사됨"
-        },
-        "providers": {
-          "claude": {
-            "title": "Claude Code 구독 계정 사용 방법",
-            "item1": "터미널에서 claude code CLI를 통해 Claude Code 구독 계정에 로그인하면 터미널에서 정상적으로 채팅할 수 있습니다",
-            "item2": "~/.claude/settings.json 파일과 .env 파일이 비어있는지 확인하세요",
-            "item3": "IDEA를 재시작하면 정상적으로 채팅할 수 있습니다",
-            "emptyConfigCodeLabel": "~/.claude/settings.json",
-            "emptyConfigCode": "{\n  \"env\": {\n  }\n}",
-            "noteTitle": "특수 사례 참고:",
-            "note1": "위 설정을 했는데도 플러그인이 응답하지 않으면 ~/.claude/settings.json .env를 다음과 같이 설정해보세요:",
-            "proxyConfigCodeLabel": "~/.claude/settings.json",
-            "proxyConfigCode": "{\n  \"env\": {\n    \"HTTP_PROXY\": \"http://127.0.0.1:7897\",\n    \"HTTPS_PROXY\": \"http://127.0.0.1:7897\"\n  }\n}",
-            "issuePrefix": "그래도 작동하지 않으면 GitHub에 이슈를 보고해주세요: ",
-            "issueUrl": "https://github.com/zhukunpenglinyutong/idea-claude-code-gui/issues"
-          },
-          "codex": {
-            "title": "Codex 구독 계정 설정",
-            "item1": "터미널 Codex CLI에서 codex login을 실행하여 로그인에 성공하면 터미널에서 채팅할 수 있습니다",
-            "item2": "IDEA를 재시작합니다",
-            "item3": "이제 정상적으로 채팅할 수 있습니다",
-            "emptyConfigCodeLabel": "",
-            "emptyConfigCode": "",
-            "noteTitle": "",
-            "note1": "",
-            "proxyConfigCodeLabel": "",
-            "proxyConfigCode": "",
-            "issuePrefix": "그래도 작동하지 않으면 GitHub에 이슈를 보고해주세요: ",
-            "issueUrl": "https://github.com/zhukunpenglinyutong/idea-claude-code-gui/issues"
-          }
-        }
-      },
-      "importDialog": {
-        "title": "cc-switch 설정 가져오기",
-        "summary": "{{total}}개 설정 발견, 포함:",
-        "newCount": "{{count}}개 신규",
-        "updateCount": "{{count}}개 업데이트",
-        "columnName": "이름",
-        "columnId": "ID",
-        "columnStatus": "상태",
-        "statusNew": "신규",
-        "statusUpdate": "업데이트",
-        "selectedCount": "{{count}}개 선택됨",
-        "confirmImport": "가져오기 확인"
-      },
-      "deleteProviderMessage": "제공자 \"{{name}}\"을(를) 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.",
-      "dialog": {
-        "addTitle": "제공자 추가",
-        "editTitle": "제공자 편집: {{name}}",
-        "addDescription": "새 제공자 정보 설정",
-        "securityNotice": "안내: 모든 설정은 사용자 컴퓨터에 로컬로 저장됩니다. 이 프로젝트는 100% 오픈소스입니다. 안심하고 사용하세요.",
-        "editDescription": "변경 사항은 즉시 현재 제공자에 적용됩니다.",
-        "providerName": "제공자 이름",
-        "providerNamePlaceholder": "예: Claude 공식",
-        "remark": "비고",
-        "remarkPlaceholder": "선택사항",
-        "apiKey": "API 키",
-        "apiKeyPlaceholder": "sk-ant-...",
-        "apiKeyHint": "API 키를 입력해주세요",
-        "apiUrl": "API 엔드포인트",
-        "apiUrlPlaceholder": "https://api.anthropic.com",
-        "apiUrlHint": "Claude API 호환 서비스 엔드포인트 주소를 입력하세요",
-        "modelMapping": "모델 매핑 (JSON env에 주입됨)",
-        "mainModel": "기본 모델",
-        "mainModelPlaceholder": "예: claude-sonnet-4-6",
-        "fableModel": "Fable 기본 모델",
-        "fableModelPlaceholder": "예: claude-fable-5",
-        "haikuModel": "Haiku 기본 모델",
-        "haikuModelPlaceholder": "예: claude-haiku-4-5",
-        "sonnetModel": "Sonnet 기본 모델",
-        "sonnetModelPlaceholder": "예: claude-sonnet-4-6",
-        "opusModel": "Opus 기본 모델",
-        "opusModelPlaceholder": "예: claude-opus-4-6",
-        "modelMappingHint": "선택사항: 사용할 기본 Claude 모델을 지정합니다. 비워두면 시스템 기본값을 사용합니다.",
-        "customModels": "사용자 지정 모델",
-        "customModelsHint": "이 제공자가 지원하는 추가 모델을 추가합니다. 사용자 지정 모델은 모델 선택기 목록 상단에 표시됩니다",
-        "jsonConfig": "JSON 설정",
-        "jsonConfigDescription": "여기에서 완전한 settings.json 내용을 설정할 수 있습니다. 모든 필드를 지원합니다 (예: model, alwaysThinkingEnabled, ccSwitchProviderId, codemossProviderId 등)",
-        "jsonError": "잘못된 JSON 형식",
-        "required": "*",
-        "showApiKey": "표시",
-        "hideApiKey": "숨기기",
-        "confirmAdd": "추가 확인",
-        "saveChanges": "변경 사항 저장",
-        "codeView": "코드",
-        "visualView": "비주얼",
-        "formatJson": "포맷",
-        "invalidJson": "잘못된 JSON 형식입니다. 코드 뷰로 전환하여 수정해주세요",
-        "presetGroup": "빠른 프리셋"
-      },
-      "presets": {
-        "custom": "사용자 지정",
-        "zhipu": "Zhipu GLM",
-        "kimi": "Kimi",
-        "kimiCoding": "Kimi Coding",
-        "deepseek": "DeepSeek",
-        "minimax": "MiniMax",
-        "xiaomi": "Xiaomi MiMo",
-        "xiaomiPlan": "Xiaomi MiMo Plan",
-        "qwen": "Alibaba Qwen",
-        "bailian": "Bailian",
-        "bailianCoding": "Bailian Coding",
-        "longcat": "LongCat",
-        "opencodeGo": "OpenCode Go",
-        "openrouter": "OpenRouter"
-      }
-    },
-    "comingSoon": "곧 출시 예정...",
-    "permissionsComingSoon": "권한 설정이 곧 출시됩니다...",
-    "agentsComingSoon": "에이전트 설정이 곧 출시됩니다...",
-    "skillsComingSoon": "스킬 설정이 곧 출시됩니다...",
-    "codexProvider": {
-      "title": "Codex 제공자 관리",
-      "description": "Codex 제공자 설정을 관리합니다. 설정은 ~/.codex/ 디렉토리에 기록됩니다",
-      "emptyProvider": "설정된 Codex 제공자가 없습니다. 추가를 클릭하여 생성하세요",
-      "deleteConfirmTitle": "삭제 확인",
-      "deleteConfirmMessage": "제공자 \"{{name}}\"을(를) 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
-      "dialog": {
-        "addTitle": "Codex 제공자 추가",
-        "editTitle": "제공자 편집: {{name}}",
-        "addDescription": "새 Codex 제공자를 설정합니다. ~/.codex/ 디렉토리에 기록됩니다",
-        "editDescription": "변경 사항은 즉시 ~/.codex/ 디렉토리에 적용됩니다",
-        "officialPreset": "OpenAI 공식 직접 연결",
-        "officialSectionHint": "직접 입력한 OPENAI_API_KEY를 사용하고 공식 엔드포인트 https://api.openai.com/v1에 연결합니다.",
-        "presetHint": "아래 프리셋은 Claude Code 제공자 세트와 일치하는 타사 또는 프록시 엔드포인트만 포함합니다.",
-        "providerName": "제공자 이름",
-        "providerNamePlaceholder": "예: Codex 공식",
-        "configJson": "설정",
-        "authJsonLabel": "설정",
-        "formatJson": "포맷",
-        "formatSuccess": "포맷 성공",
-        "formatError": "포맷 실패, 잘못된 JSON",
-        "nameRequired": "제공자 이름을 입력해주세요",
-        "configJsonError": "config.toml JSON 형식 오류",
-        "authJsonError": "auth.json JSON 형식 오류",
-        "configJsonHint": "model_provider, model, model_providers 등을 포함하는 JSON 객체",
-        "authJsonHint": "OPENAI_API_KEY 및 기타 인증 정보를 포함하는 JSON 객체",
-        "customModels": "사용자 지정 모델",
-        "customModelsHint": "이 제공자가 지원하는 추가 모델을 추가합니다. 사용자 지정 모델은 모델 선택 목록 상단에 표시됩니다",
-        "noCustomModels": "사용자 지정 모델 없음",
-        "addModel": "모델 추가",
-        "modelIdPlaceholder": "모델 ID (필수, 예: gpt-4o)",
-        "modelLabelPlaceholder": "표시 이름 (선택사항)",
-        "modelDescPlaceholder": "모델 설명 (선택사항)",
-        "cliLoginProviderName": "Codex CLI 로그인",
-        "cliLoginProviderDescription": "Codex CLI의 ChatGPT 구독 자격 증명 사용",
-        "cliLoginAuthorizeTitle": "Codex CLI 로그인 활성화",
-        "cliLoginAuthorizeMessage": "config.toml을 비우고 Codex CLI의 ChatGPT 구독 자격 증명을 사용합니다.",
-        "cliLoginAuthorizeDetail": "터미널에서 'codex login'으로 로그인했는지 확인하세요. 현재 config.toml은 백업됩니다.",
-        "cliLoginDisableTitle": "Codex CLI 로그인 비활성화",
-        "cliLoginDisableMessage": "이전 config.toml을 복원하고 API 키 인증 방식으로 전환합니다.",
-        "modelIdRequired": "모델 ID는 필수입니다",
-        "modelIdInvalid": "잘못된 모델 ID 형식 (영문자, 숫자, 점, 하이픈, 밑줄, 슬래시, 콜론만 허용)",
-        "modelIdDuplicate": "모델 ID가 이미 존재합니다",
-        "envVarsTitle": "Environment Variables",
-        "messageEnvLabel": "Message Environment Variables",
-        "messageEnvHint": "Custom environment variables injected into the Codex message subprocess",
-        "mcpEnvLabel": "MCP Environment Variables",
-        "mcpEnvHint": "Custom environment variables injected into the MCP tool discovery subprocess",
-        "envKeyPlaceholder": "ENV_KEY",
-        "envValuePlaceholder": "value",
-        "addEnvVar": "Add Variable",
-        "envKeyInvalid": "Invalid key name (must start with letter/underscore, alphanumeric only)",
-        "envKeyProtected": "Cannot set built-in variable: {{key}}",
-        "envKeyDuplicate": "Duplicate key: {{key}}",
-        "envValueTooLong": "값이 너무 깁니다 (최대 {{max}}자)"
-      }
-    },
-    "agent": {
-      "title": "프롬프트",
-      "create": "생성",
-      "export": "내보내기",
-      "import": "가져오기",
-      "createAgent": "프롬프트 생성",
-      "createAgentHint": "클릭하여 프롬프트 설정 페이지에서 생성",
-      "customAgents": "사용자 지정 프롬프트",
-      "noAgents": "사용자 지정 프롬프트 없음",
-      "noAgentsDropdown": "프롬프트 없음",
-      "loadFailed": "로딩 실패",
+      "noServers": "MCP 서버 없음",
+      "addServerHint": "'추가' 버튼을 클릭하여 서버를 추가하세요",
       "loading": "로딩 중...",
-      "menu": "메뉴",
-      "addSuccess": "프롬프트 생성 완료",
-      "updateSuccess": "프롬프트 업데이트 완료",
-      "deleteSuccess": "프롬프트 삭제 완료",
-      "operationSuccess": "작업 성공",
-      "operationFailed": "작업 실패",
-      "deleteConfirmTitle": "삭제 확인",
-      "deleteConfirmMessage": "프롬프트 \"{{name}}\"을(를) 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
-      "clearAgent": "선택된 프롬프트 해제",
-      "dialog": {
-        "addTitle": "프롬프트 생성",
-        "editTitle": "프롬프트 편집",
-        "name": "이름",
-        "namePlaceholder": "프롬프트 이름을 입력하세요",
-        "nameRequired": "프롬프트 이름을 입력해주세요",
-        "prompt": "프롬프트",
-        "promptPlaceholder": "프롬프트의 역할, 톤, 워크플로우, 도구 기본설정 및 규칙을 입력하세요. (선택사항)",
-        "promptHint": "프롬프트는 대화 시작 시 시스템 지시사항으로 AI에 전송됩니다",
-        "confirmAdd": "생성",
-        "saveChanges": "저장"
-      },
-      "importDialog": {
-        "title": "프롬프트 가져오기",
-        "selectItems": "가져올 프롬프트를 선택하세요",
-        "summary": "총 {{total}}개 프롬프트:",
-        "newCount": "{{count}}개 신규",
-        "updateCount": "{{count}}개 업데이트",
-        "selectedCount": "{{count}}개 선택됨",
-        "conflictStrategy": "충돌 해결 전략",
-        "strategySkip": "건너뛰기",
-        "strategySkipDesc": "기존 프롬프트 건너뛰기",
-        "strategyOverwrite": "덮어쓰기",
-        "strategyOverwriteDesc": "기존 프롬프트 덮어쓰기",
-        "strategyDuplicate": "복제",
-        "strategyDuplicateDesc": "복제본 생성 (새 ID 생성)",
-        "conflictWarning": "{{count}}개 충돌 감지됨",
-        "columnName": "이름",
-        "columnId": "ID",
-        "columnStatus": "상태",
-        "statusNew": "신규",
-        "statusUpdate": "업데이트",
-        "importSuccess": "{{count}}개 프롬프트를 성공적으로 가져왔습니다",
-        "importFailed": "가져오기 실패",
-        "importPartialSuccess": "{{imported}}개 가져옴, {{skipped}}개 건너뜀, {{updated}}개 업데이트됨",
-        "noItemsSelected": "프롬프트를 하나 이상 선택해주세요",
-        "confirmImport": "가져오기 확인",
-        "exportSuccess": "프롬프트 내보내기 완료",
-        "exportFailed": "내보내기 실패",
-        "importFileError": "파일 읽기 실패",
-        "invalidFileFormat": "잘못된 파일 형식"
-      },
-      "exportDialog": {
-        "title": "프롬프트 내보내기",
-        "selectHint": "내보낼 프롬프트를 선택하세요",
-        "confirmExport": "내보내기 확인"
-      }
-    },
-    "prompts": "프롬프트 라이브러리",
-    "promptsDesc": "자주 사용하는 프롬프트 템플릿을 관리하여 채팅 중 빠르게 삽입",
-    "prompt": {
-      "title": "프롬프트 라이브러리",
-      "create": "생성",
-      "export": "내보내기",
-      "import": "가져오기",
-      "createPrompt": "프롬프트 생성",
-      "createPromptHint": "클릭하여 프롬프트 설정 페이지에서 생성",
-      "customPrompts": "사용자 지정 프롬프트",
-      "noPrompts": "사용자 지정 프롬프트 없음",
-      "noPromptsDropdown": "프롬프트 없음",
-      "loadFailed": "로딩 실패",
-      "loading": "로딩 중...",
-      "menu": "메뉴",
-      "addSuccess": "프롬프트 생성 완료",
-      "updateSuccess": "프롬프트 업데이트 완료",
-      "deleteSuccess": "프롬프트 삭제 완료",
-      "operationSuccess": "작업 성공",
-      "operationFailed": "작업 실패",
-      "deleteConfirmTitle": "삭제 확인",
-      "deleteConfirmMessage": "프롬프트 \"{{name}}\"을(를) 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
-      "description": "자주 사용하는 프롬프트 템플릿을 만드세요. 채팅 입력창에서 !를 입력하면 빠르게 선택하여 삽입할 수 있습니다",
-      "global": "전역 프롬프트",
-      "project": "프로젝트 프롬프트",
-      "projectScope": "프로젝트 프롬프트 - {{projectName}}",
-      "noProject": "활성 프로젝트 없음",
-      "copyToGlobal": "전역으로 복사",
-      "scopeLabel": {
-        "global": "전역",
-        "project": "프로젝트"
-      },
-      "copyToGlobalSuccess": "전역 프롬프트로 복사됨",
-      "projectPromptsUnavailable": "현재 프로젝트에서 프로젝트 프롬프트를 사용할 수 없습니다",
-      "dialog": {
-        "addTitle": "프롬프트 생성",
-        "editTitle": "프롬프트 편집",
-        "name": "이름",
-        "namePlaceholder": "프롬프트 이름을 입력하세요",
-        "nameRequired": "프롬프트 이름을 입력해주세요",
-        "content": "내용",
-        "contentPlaceholder": "프롬프트 내용을 입력하세요. {{variable}}과 같은 변수를 포함할 수 있습니다",
-        "contentHint": "프롬프트 내용은 선택 시 입력창에 직접 삽입됩니다",
-        "confirmAdd": "생성",
-        "saveChanges": "저장"
-      },
-      "importDialog": {
-        "title": "프롬프트 가져오기",
-        "selectItems": "가져올 프롬프트를 선택하세요",
-        "summary": "총 {{total}}개 프롬프트:",
-        "newCount": "{{count}}개 신규",
-        "updateCount": "{{count}}개 업데이트",
-        "selectedCount": "{{count}}개 선택됨",
-        "conflictStrategy": "충돌 해결 전략",
-        "strategySkip": "건너뛰기",
-        "strategySkipDesc": "기존 프롬프트 건너뛰기",
-        "strategyOverwrite": "덮어쓰기",
-        "strategyOverwriteDesc": "기존 프롬프트 덮어쓰기",
-        "strategyDuplicate": "복제",
-        "strategyDuplicateDesc": "복제본 생성 (새 ID 생성)",
-        "conflictWarning": "{{count}}개 충돌 감지됨",
-        "columnName": "이름",
-        "columnId": "ID",
-        "columnStatus": "상태",
-        "statusNew": "신규",
-        "statusUpdate": "업데이트",
-        "importSuccess": "{{count}}개 프롬프트를 성공적으로 가져왔습니다",
-        "importFailed": "가져오기 실패",
-        "importPartialSuccess": "{{imported}}개 가져옴, {{skipped}}개 건너뜀, {{updated}}개 업데이트됨",
-        "noItemsSelected": "프롬프트를 하나 이상 선택해주세요",
-        "confirmImport": "가져오기 확인",
-        "exportSuccess": "프롬프트 내보내기 완료",
-        "exportFailed": "내보내기 실패",
-        "importFileError": "파일 읽기 실패",
-        "invalidFileFormat": "잘못된 파일 형식"
-      },
-      "exportDialog": {
-        "title": "프롬프트 내보내기",
-        "selectHint": "내보낼 프롬프트를 선택하세요",
-        "confirmExport": "내보내기 확인"
-      }
-    },
-    "cli": {
-      "hint": "These CLIs must be installed and configured in your system terminal. The plugin only detects installation status and version — it will never install them for you. Confirm each CLI works in the terminal before coming back here to use it.",
-      "refresh": "Re-check",
-      "retry": "Retry",
-      "loading": "Checking CLI installation status…",
-      "loadFailed": "Detection failed. Please try again.",
-      "status": {
-        "installed": "Installed",
-        "notInstalled": "Not installed"
-      },
-      "viewInstallGuide": "Install guide",
-      "howToInstall": "Install guide",
-      "copy": "Copy",
-      "copied": "Copied to clipboard",
-      "copyFailed": "Failed to copy",
-      "tools": {
-        "codex": {
-          "name": "Codex CLI",
-          "description": "설치된 Codex CLI를 감지합니다. 버전 확인은 계정 설정을 읽지 않으며 채팅은 app-server를 사용합니다."
-        },
-        "minimax": {
-          "name": "MiniMax Code",
-          "description": "MiniMax 터미널 코딩 에이전트. Node.js 22.19+ / 24+ 필요(23 미지원); 명령: minimax / mcode"
-        },
-        "zcode": {
-          "name": "ZCode",
-          "description": "GLM 모델을 사용하는 Zhipu ZCode 데스크톱 코딩 앱"
-        },
-        "grok": {
-          "name": "Grok CLI",
-          "description": "xAI Grok terminal coding agent"
-        },
-        "kimi": {
-          "name": "Kimi CLI",
-          "description": "Moonshot Kimi Code CLI"
-        },
-        "opencode": {
-          "name": "OpenCode",
-          "description": "Open-source terminal AI coding agent"
-        },
-        "pi": {
-          "name": "PI CLI",
-          "description": "멀티 프로바이더 모델을 지원하는 미니멀 터미널 코딩 에이전트"
-        },
-        "omp": {
-          "name": "OMP CLI",
-          "description": "멀티 프로바이더 모델을 지원하는 Oh My Pi 터미널 코딩 에이전트"
-        }
-      },
-      "installDialog": {
-        "title": "Install {{name}}",
-        "lead": "Install {{name}} in your system terminal first and make sure `{{binary}}` is available, then come back and click Re-check. This plugin will not run the installer for you.",
-        "stepOpenTerminal": "Open your system terminal (Terminal / iTerm / PowerShell, etc.)",
-        "stepRunCommand": "Copy and run the install command below",
-        "stepVerify": "After install, run `{{binary}} --version` to verify",
-        "stepReturn": "Return here and click Re-check",
-        "primaryCommand": "Recommended install command (macOS / Linux)",
-        "windowsCommand": "Windows (PowerShell)",
-        "altCommand": "Alternative install method",
-        "openDocs": "Open official docs"
-      },
-      "listTitle": "로컬 CLI 도구",
-      "summary": "{{installed}} / {{total}} 설치됨",
-      "moreComingSoon": "곧 더 많은 CLI 지원 예정",
-      "copyPath": "경로 복사",
-      "visibility": {
-        "hide": "제공자 전환 메뉴에서 숨기기",
-        "show": "제공자 전환 메뉴에 표시"
-      }
-    },
-    "hooks": {
-      "title": "Hooks",
-      "description": "Codex 및 Claude Code 훅을 확인하고 안전하게 편집합니다.",
-      "refresh": "새로 고침",
-      "provider": "제공자",
-      "scope": "범위",
-      "all": "전체",
-      "allProviders": "모든 제공자",
-      "allScopes": "모든 범위",
-      "global": "사용자",
-      "project": "프로젝트",
-      "projectLocal": "프로젝트(로컬 재정의)",
-      "search": "Hooks 검색",
-      "searchPlaceholder": "이벤트, 명령 또는 경로 검색",
-      "noMatches": "조건에 맞는 Hook이 없습니다.",
-      "toggleUnavailable": "런타임 동작이 확인될 때까지 개별 전환을 사용할 수 없습니다.",
+      "deleteTitle": "MCP 서버 삭제",
+      "deleteMessage": "서버 \"{{name}}\"을(를) 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.",
+      "deleteConfirm": "삭제",
+      "cancel": "취소",
       "enabled": "활성화됨",
       "disabled": "비활성화됨",
-      "enable": "Hook 활성화",
-      "disable": "Hook 비활성화",
-      "managedToggleHint": "CC GUI가 관리하는 전환입니다. 원래 설정을 보존하고 복원할 수 있습니다.",
-      "nativeToggleHint": "Codex 사용자 설정을 변경합니다. 실행은 신뢰, 기능 설정 및 정책의 적용도 받습니다.",
-      "toggleFailed": "Hook 전환 실패",
-      "loading": "Hook 위치 검색 중…",
-      "empty": "발견된 Hook이 없습니다.",
-      "valid": "형식 인식됨",
-      "validationWarning": "검토 필요",
-      "matcher": "매처",
-      "noCommand": "명령 없음",
-      "readOnly": "읽기 전용",
-      "viewSource": "소스 보기",
-      "editSource": "소스 편집",
-      "sourcePreview": "Hook 소스 미리 보기",
-      "sourceTab": "소스",
-      "detailsTab": "세부 정보",
-      "viewMode": "Hook 보기",
-      "loadingSource": "소스 로드 중…",
-      "sourceEditor": "Hook 소스 편집기",
-      "affectedFile": "영향받는 파일",
-      "backupDirectory": "백업 디렉터리",
-      "latestBackup": "현재 편집 세션의 마지막 백업 복원",
-      "lastModified": "마지막 수정",
-      "event": "이벤트",
-      "format": "형식",
-      "revision": "리비전",
-      "command": "명령",
-      "validationIssues": "검증 문제",
-      "providerFields": "제공자별 필드",
-      "noProviderFields": "제공자별 필드 없음",
-      "none": "없음",
-      "reviewChanges": "변경 검토",
-      "hideChanges": "차이 숨기기",
-      "noChanges": "저장할 변경 없음",
-      "technicalInfo": "기술 정보",
-      "moreActions": "추가 작업",
-      "conflictTitle": "소스가 외부에서 변경되었습니다",
-      "conflictDescription": "외부 버전을 다시 로드하거나 초안을 유지하고 최신 리비전과 동기화하세요.",
-      "reloadExternal": "외부 버전 다시 로드",
-      "keepDraft": "초안 유지 및 동기화",
-      "discardDraft": "초안 버리기",
-      "discardChangesTitle": "저장하지 않은 변경을 버릴까요?",
-      "discardChangesMessage": "변경이 저장되지 않았습니다. 닫으면 복구할 수 없습니다.",
-      "backupOnSave": "저장 전에 백업 생성",
-      "save": "저장",
-      "saving": "저장 중…",
-      "restore": "현재 편집 세션의 마지막 백업 복원",
-      "saveFailed": "저장 실패",
-      "sourceLoadFailed": "소스 다시 로드 실패",
-      "noPreview": "미리 보기 없음.",
-      "sourceNotice": "소스 {{count}}개를 검토해야 합니다. 해당 항목의 작업이 제한됩니다.",
-      "sharedProjectWarning": "프로젝트 설정은 커밋되어 다른 사용자에게 영향을 줄 수 있습니다. 공유 전에 파일 차이를 확인하세요.",
-      "bridgeUnavailable": "IDE 연결을 사용할 수 없습니다. 설정 페이지를 다시 여세요.",
-      "sourceTimeout": "읽기 시간이 초과되었습니다. 편집 전에 소스를 다시 로드하세요.",
-      "mutationTimeout": "확인 시간이 초과되었습니다. 이미 저장되었을 수 있으므로 재시도 전에 새로 고치세요.",
-      "mutationConfirmedLate": "지연된 저장 확인을 받았습니다. 초안은 유지됩니다. 소스를 다시 로드하세요.",
-      "issues": {
-        "COMMAND_MISSING": "명령 없음",
-        "TYPE_MISSING": "유형 없음",
-        "HOOKS_NOT_OBJECT": "hooks는 객체여야 합니다",
-        "SETTINGS_NOT_OBJECT": "설정은 객체여야 합니다",
-        "INVALID_JSON": "잘못된 JSON",
-        "HOOK_ENTRY_NOT_OBJECT": "Hook 항목은 객체여야 합니다",
-        "INVALID_TOML": "잘못된 TOML",
-        "CODEX_HOOKS_NOT_TABLE": "Codex hooks는 테이블이어야 합니다",
-        "CODEX_HOOK_EVENT_NOT_ARRAY": "Hook 이벤트는 배열이어야 합니다",
-        "CODEX_HOOK_ENTRY_NOT_TABLE": "Hook 항목은 테이블이어야 합니다",
-        "CODEX_ENABLED_INVALID": "활성화 필드가 잘못되었습니다",
-        "CODEX_MATCHER_INVALID": "매처 필드가 잘못되었습니다",
-        "CODEX_COMMANDS_INVALID": "유효한 명령 또는 MCP 도구가 없습니다",
-        "CODEX_HOOKS_FEATURE_DISABLED": "Hooks 기능이 비활성화되었습니다",
-        "READ_FAILED": "읽기 실패",
-        "CODEX_EVENT_UNSUPPORTED": "검증된 형식에서 지원하지 않는 이벤트입니다",
-        "CODEX_HANDLER_UNSUPPORTED": "검증된 형식에서 지원하지 않는 처리 유형입니다",
-        "CODEX_HOOK_FILE_FIELDS_INVALID": "Hook 파일 필드가 잘못되었습니다",
-        "CODEX_STATE_INLINE_UNSUPPORTED": "인라인 상태를 안전하게 편집할 수 없습니다. 상태 테이블을 사용하세요.",
-        "LINKED_SOURCE_READ_ONLY": "링크 파일은 읽기 전용입니다. 원본 파일을 직접 편집하세요.",
-        "HOOK_SOURCE_UNAVAILABLE": "소스 파일을 사용할 수 없습니다."
+      "deleted": "삭제됨",
+      "updated": "업데이트됨",
+      "saved": "저장됨",
+      "added": "추가됨",
+      "linkCopied": "링크가 복사되었습니다. 브라우저에서 열어주세요",
+      "configCopied": "설정이 클립보드에 복사되었습니다",
+      "copyFailed": "복사 실패, 수동으로 복사해주세요",
+      "connectionStatus": "연결 상태",
+      "serverVersion": "서버 버전",
+      "statusConnected": "연결됨",
+      "statusFailed": "연결 실패",
+      "statusNeedsAuth": "인증 필요",
+      "statusPending": "연결 중...",
+      "statusUnknown": "알 수 없음",
+      "errorDetails": "오류 세부정보",
+      "logs": {
+        "title": "연결 로그",
+        "empty": "아직 로그 없음",
+        "clear": "로그 지우기",
+        "close": "닫기",
+        "count": "{{count}}개 로그 항목",
+        "connected": "연결됨",
+        "failed": "연결 실패",
+        "needsAuth": "인증 필요",
+        "unknownError": "알 수 없는 오류",
+        "loadingServers": "MCP 서버 목록 로딩 중...",
+        "refreshingStatus": "MCP 서버 연결 상태 새로고침 중...",
+        "loadedToolsFromCache": "\"{{name}}\"의 도구를 캐시에서 로드함: {{count}}개 도구",
+        "forceRefreshingTools": "\"{{name}}\"의 도구를 강제 새로고침 중...",
+        "loadingTools": "\"{{name}}\"의 도구 로딩 중...",
+        "fastLoadCache": "캐시에서 빠른 로드: {{count}}개 서버 ({{seconds}}초 전 캐시됨)",
+        "loadedToolsFromCacheSimple": "캐시에서 도구 로드됨: {{count}}개 도구",
+        "usingCacheStrategy": "캐시 우선 전략 사용 중. 최신 데이터를 가져오려면 새로고침을 클릭하세요",
+        "firstLoad": "첫 로드, 서버 목록을 가져오는 중...",
+        "loadedServersSuccess": "서버 목록 로드됨: {{count}}개 서버 발견",
+        "loadedServersFailed": "서버 목록 로드 실패: {{error}}",
+        "statusUpdateComplete": "상태 업데이트 완료: {{total}}개 서버 ({{connected}}개 연결됨, {{failed}}개 실패, {{pending}}개 대기 중, {{needsAuth}}개 인증 필요)",
+        "loadedStatusFailed": "서버 상태 로드 실패: {{error}}",
+        "cleared": "새로고침 로그 지움",
+        "refreshingAll": "모든 MCP 서버 새로고침 중...",
+        "startRefresh": "새로고침 시작",
+        "forceRefreshingToolsServer": "\"{{name}}\"의 도구를 강제 새로고침 중...",
+        "startRefreshServer": "\"{{name}}\" 새로고침 시작 중...",
+        "checkingConnection": "연결 상태 확인 중",
+        "checkingConnectionServer": "서버 \"{{name}}\" - 연결 상태 확인 중...",
+        "refreshComplete": "서버 \"{{name}}\" 새로고침 완료",
+        "forceRefreshTools": "도구 강제 새로고침"
       },
-      "sharedToggleTitle": "공유 프로젝트 설정 변경 확인",
-      "sharedToggleMessage": "공유 .claude/settings.json 파일이 변경되어 다른 기여자에게 영향을 줄 수 있습니다. 비활성화된 훅의 복구 정보는 이 컴퓨터에만 저장됩니다.",
-      "confirmSharedToggle": "공유 설정 변경",
-      "sensitiveSourceWarning": "이 파일에는 자격 증명과 민감한 설정이 포함될 수 있습니다. 편집할 준비가 되면 표시하세요.",
-      "revealSource": "설정 표시",
-      "errors": {
-        "HOOK_SHARED_CONFIRMATION_REQUIRED": "먼저 공유 프로젝트 설정 변경을 확인하세요.",
-        "HOOK_CATALOG_TIMEOUT": "훅 새로 고침 시간이 초과되었습니다. 다른 훅을 변경하기 전에 새로 고치세요.",
-        "HOOK_REVISION_CONFLICT": "이 페이지 밖에서 파일이 변경되었습니다. 새로 고친 후 다시 시도하세요.",
-        "HOOK_RESTORE_CONFLICT": "복원할 수 없습니다. 파일에서 이 이벤트가 더 이상 목록이 아닙니다. 파일을 수정한 후 다시 시도하세요.",
-        "HOOK_TOGGLE_LOCKED": "이 파일에 다른 변경이 진행 중입니다. 잠시 후 다시 시도하세요.",
-        "HOOK_TOGGLE_LOCK_FAILED": "이 변경을 위해 파일을 잠글 수 없습니다.",
-        "HOOK_FILE_LOCKED": "이 파일에 다른 변경이 진행 중입니다. 잠시 후 다시 시도하세요.",
-        "HOOK_NOT_FOUND": "이 Hook이 더 이상 파일에 없습니다. 목록을 새로 고치세요.",
-        "HOOK_NOT_DISABLED": "이 Hook은 비활성화되어 있지 않습니다. 목록을 새로 고치세요.",
-        "HOOK_ALREADY_DISABLED": "이 Hook은 이미 비활성화되어 있습니다. 목록을 새로 고치세요.",
-        "HOOK_STATE_WRITE_FAILED": "비활성화 기록을 저장할 수 없습니다. 파일 변경은 가능한 범위에서 되돌렸습니다.",
-        "HOOK_TOGGLE_FAILED": "이 Hook을 변경할 수 없습니다.",
-        "INVALID_HOOK_PATH": "이 파일은 여기서 변경할 수 없습니다. 링크 파일과 알려진 위치 밖의 파일은 읽기 전용입니다.",
-        "INVALID_BACKUP_PATH": "백업 파일을 사용할 수 없습니다.",
-        "SOURCE_TOO_LARGE": "파일이 128 KB를 초과하여 여기서 편집할 수 없습니다.",
-        "INVALID_REQUEST": "요청이 잘못되었습니다. 페이지를 새로 고친 후 다시 시도하세요.",
-        "WRITE_FAILED": "파일을 저장할 수 없습니다.",
-        "RESTORE_FAILED": "백업을 복원할 수 없습니다.",
-        "UNSUPPORTED_HOOK_PROVIDER": "이 종류의 Hook은 여기서 변경할 수 없습니다.",
-        "UNKNOWN_ERROR": "알 수 없는 오류입니다."
-      }
-    }
-  },
-  "history": {
-    "title": "히스토리",
-    "sessionDeleted": "세션 삭제됨",
-    "confirmDelete": "삭제 확인",
-    "deleteMessage": "이 세션을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
-    "deleteSession": "이 세션 삭제",
-    "selectMode": "Select",
-    "exitSelectMode": "Exit selection",
-    "selectedSessions": "{{count}} selected",
-    "selectAll": "Select all",
-    "clearSelection": "Clear",
-    "deleteSelected": "Delete selected",
-    "confirmDeleteSelected": "Confirm Delete",
-    "deleteSelectedMessage": "Are you sure you want to delete {{count}} selected sessions? This action cannot be undone.",
-    "selectSession": "Select session",
-    "selectSessionWithTitle": "Select {{title}}",
-    "exportSession": "세션 내보내기",
-    "exportSuccess": "세션 내보내기 완료",
-    "exportFailed": "내보내기 실패",
-    "favoriteSession": "즐겨찾기 추가",
-    "unfavoriteSession": "즐겨찾기 해제",
-    "favorited": "즐겨찾기에 추가됨",
-    "unfavorited": "즐겨찾기에서 해제됨",
-    "loading": "히스토리 로딩 중...",
-    "loadFailed": "로딩 실패",
-    "noSessions": "히스토리 세션 없음",
-    "noSessionsDesc": "현재 프로젝트에서 세션 기록을 찾을 수 없습니다",
-    "totalSessions": "{{count}}개 세션 · {{total}}개 메시지",
-    "totalSessionsOnly": "{{count}}개 세션",
-    "messageCount": "{{count}}개 메시지",
-    "messageCountUnknown": "메시지 수 미집계",
-    "searchPlaceholder": "세션 제목 검색...",
-    "noSearchResults": "일치하는 세션을 찾을 수 없습니다",
-    "tryOtherKeywords": "다른 검색어를 시도해보세요",
-    "deepSearchTooltip": "심층 검색 (캐시 비우고 다시 로드)",
-    "editTitle": "제목 편집",
-    "saveTitleButton": "저장",
-    "cancelEditButton": "취소",
-    "titleTooLong": "제목이 너무 깁니다 (최대 50자)",
-    "titleUpdated": "제목 업데이트됨",
-    "copySessionId": "CLI resume용 세션 ID 복사",
-    "sessionIdCopied": "세션 ID 복사됨",
-    "copyFailed": "복사 실패",
-    "convertToCliSession": "CLI 인식 세션으로 변환",
-    "convertButton": "CLI로 변환",
-    "convertSuccess": "세션이 CLI 인식 가능으로 변환되었습니다",
-    "convertFailed": "변환 실패",
-    "confirmConvert": "CLI 세션으로 변환하시겠습니까?",
-    "convertConfirmMessage": "세션의 entrypoint를 수정하여 Claude Code CLI의 /resume 목록에 표시되도록 합니다.",
-    "timeAgo": {
-      "yearsAgo": "년 전",
-      "monthsAgo": "개월 전",
-      "daysAgo": "일 전",
-      "hoursAgo": "시간 전",
-      "minutesAgo": "분 전",
-      "secondsAgo": "초 전"
+      "presets": {
+        "fetch": "웹 페이지 스크래핑을 위한 웹 콘텐츠 가져오기 도구",
+        "time": "시간 및 시간대 유틸리티",
+        "memory": "지식 그래프 및 메모리 저장 도구",
+        "sequentialThinking": "순차적 사고 및 추론 도구",
+        "context7": "문서 검색 및 컨텍스트 검색 도구"
+      },
+      "help": {
+        "title": "MCP란?",
+        "protocol": {
+          "title": "Model Context Protocol",
+          "description": "MCP (Model Context Protocol)는 Anthropic이 개발한 오픈 프로토콜로, AI 모델이 외부 도구 및 데이터 소스에 안전하게 접근할 수 있게 합니다."
+        },
+        "features": {
+          "title": "주요 기능",
+          "toolExtension": {
+            "label": "도구 확장",
+            "description": "파일 시스템 및 네트워크 접근과 같은 기능을 Claude에 추가"
+          },
+          "dataConnection": {
+            "label": "데이터 연결",
+            "description": "데이터베이스 및 API와 같은 외부 데이터 소스에 연결"
+          },
+          "security": {
+            "label": "보안 및 제어",
+            "description": "엄격한 권한 제어 및 데이터 격리"
+          },
+          "integration": {
+            "label": "쉬운 통합",
+            "description": "다양한 프로그래밍 언어 및 런타임 환경 지원"
+          }
+        },
+        "configuration": {
+          "title": "설정 방법",
+          "description": "두 가지 설정 유형을 지원합니다:",
+          "stdio": {
+            "description": "표준 입출력을 통해 로컬 프로세스와 통신",
+            "example": "npx/uvx 명령으로 시작"
+          },
+          "httpSse": {
+            "description": "네트워크를 통해 원격 서버와 통신",
+            "example": "URL 주소"
+          }
+        },
+        "learnMore": {
+          "title": "더 알아보기",
+          "description": "공식 문서를 방문하세요:"
+        },
+        "gotIt": "확인"
+      },
+      "serverDialog": {
+        "addTitle": "수동 설정",
+        "editTitle": "서버 편집",
+        "rawConfig": "원본 설정 (JSON)",
+        "description": "MCP 서버 설정 JSON을 입력하세요 (NPX 또는 UVX 설정 권장)",
+        "securityWarning": "설정 전에 출처를 확인하고 위험을 평가해주세요",
+        "saving": "저장 중...",
+        "errors": {
+          "idExists": "서버 ID \"{{id}}\"가 이미 존재합니다",
+          "unrecognizedFormat": "인식할 수 없는 설정 형식",
+          "jsonParseError": "JSON 파싱 오류: {{message}}"
+        }
+      },
+      "tools": "도구",
+      "loadTools": "도구 목록 로드",
+      "notConnected": "연결되지 않음",
+      "loadFailed": "로드 실패",
+      "noTools": "도구 없음",
+      "clickToLoad": "클릭하여 로드",
+      "refreshLogs": "로그 새로고침",
+      "clearLogs": "로그 지우기",
+      "clear": "지우기",
+      "noRefreshLogs": "새로고침 로그 없음",
+      "refreshLogsHint": "새로고침 버튼을 클릭하면 여기에 상세한 새로고침 과정 정보가 표시됩니다",
+      "noParams": "매개변수 없음",
+      "required": "필수",
+      "optional": "선택사항",
+      "refreshServer": "{{name}} 새로고침",
+      "nativeStatus": "Native Codex MCP status"
     },
-    "conversionErrors": {
-      "INVALID_SESSION_ID": "잘못된 세션 ID",
-      "SESSION_ACTIVE": "현재 활성 세션은 변환할 수 없습니다. 먼저 새 세션을 시작한 후 이 세션을 변환하세요",
-      "SESSION_NOT_FOUND": "세션 파일을 찾을 수 없습니다",
-      "FILE_NOT_EXIST": "세션 파일이 존재하지 않습니다",
-      "FILE_LOCKED": "세션 파일이 다른 프로세스에서 사용 중입니다",
-      "NOT_SDK_SESSION": "이 세션은 SDK로 생성되지 않았습니다 (entrypoint가 sdk-cli가 아님)",
-      "ALREADY_CLI_SESSION": "이 세션은 이미 CLI 세션입니다",
-      "CONVERSION_FAILED": "변환 실패, 나중에 다시 시도하세요"
-    },
-    "entrypointLabel": {
-      "sdk-cli": "SDK 세션",
-      "claude-vscode": "VS Code",
-      "remote": "원격"
-    },
-    "entrypointTooltip": {
-      "sdk-cli": "이 세션은 SDK를 통해 플러그인에서 생성되었으며 CLI에 기본적으로 표시되지 않습니다. 터미널 CLI의 /resume 목록에 표시하려면 'CLI로 변환'을 클릭하세요",
-      "claude-vscode": "이 세션은 VS Code 확장에서 생성되었으며 CLI에 기본적으로 표시되지 않습니다. 터미널 CLI의 /resume 목록에 표시하려면 'CLI로 변환'을 클릭하세요",
-      "remote": "이 세션은 원격 Claude Code 인스턴스에서 생성되었습니다"
-    },
-    "loadMore": "Load more",
-    "convertAllPartial": "총 {{total}}개 중 {{count}}개 변환됨, {{failed}}개 실패",
-    "convertAllBridgeUnavailable": "IDE 연결을 사용할 수 없어 요청이 전송되지 않았습니다",
-    "convertAllSuccess": "세션 {{count}}개를 변환했습니다. 이제 CLI /resume에 표시됩니다",
-    "convertAllToCliSessionsEmptyTooltip": "변환할 SDK 또는 VS Code 세션이 없습니다. SDK나 VS Code 확장으로 만든 세션만 CLI 항목으로 변환할 수 있으며, Claude Code CLI로 직접 만든 세션은 이미 다시 열 수 있습니다.",
-    "convertAllTimeout": "변환 시간이 너무 오래 걸렸습니다. 목록을 새로 고쳤으니 잠시 후 확인해 주세요.",
-    "convertAllAlreadyRunning": "이미 변환이 진행 중입니다. 완료될 때까지 기다려 주세요",
-    "convertActiveHintTooltip": "먼저 이 세션을 종료하거나 닫은 다음 기록에서 변환하세요",
-    "convertAllToCliSessions": "모두 CLI로 변환 ({{count}})",
-    "convertActiveHint": "세션 종료 후 CLI로 변환",
-    "convertAllToCliSessionsLabel": "모두 CLI로 변환",
-    "convertAllToCliSessionsTooltip": "SDK로 만든 세션 {{count}}개를 CLI 항목으로 변환해 Claude Code CLI의 /resume 목록에 표시합니다. 현재 사용 중인 세션은 건너뜁니다."
-    "sessionInUse": "사용 중인 세션은 삭제할 수 없습니다.",
-    "deleteFailed": "세션을 삭제하지 못했습니다. 다시 시도해 주세요.",
-    "confirmDirectoryTitle": "다른 디렉터리에서 세션을 여시겠습니까?",
-    "confirmDirectoryMessage": "명령과 파일 변경은 아래 디렉터리에서 실행됩니다.",
-    "executionDirectory": "실행 위치"
-    "convertActiveHint": "Convert to CLI after ending the session",
-    "convertActiveHintTooltip": "End or close this session first, then convert it from the history list",
-    "convertAllToCliSessions": "Convert all to CLI ({{count}})",
-    "convertAllToCliSessionsTooltip": "Convert {{count}} session(s) created through the SDK into CLI entries so they appear in the Claude Code CLI /resume list. The session currently in use is skipped.",
-    "convertAllToCliSessionsLabel": "Convert all to CLI",
-    "convertAllToCliSessionsEmptyTooltip": "No SDK or VS Code sessions to convert. Only sessions created by the SDK or the VS Code extension can be turned into CLI entries; sessions created directly by the Claude Code CLI are already resumable.",
-    "convertAllSuccess": "{{count}} session(s) converted, now visible in CLI /resume",
-    "convertAllPartial": "Converted {{count}} of {{total}} session(s), {{failed}} failed",
-    "convertAllAlreadyRunning": "A conversion is already running, please wait for it to finish",
-    "convertAllTimeout": "The conversion took too long. The list has been refreshed, please check it in a moment.",
-    "convertAllBridgeUnavailable": "The bridge to the IDE is unavailable, so the request was not sent"
-  },
-  "permission": {
-    "dialogTitle": "권한 요청",
-    "allow": "한 번 허용",
-    "allowAlways": "항상 허용",
-    "deny": "거부",
-    "userDenied": "사용자가 권한 요청을 거부했습니다",
-    "fromExternalProcess": "외부 프로세스의 요청",
     "tools": {
-      "Write": "파일 쓰기",
-      "Edit": "파일 편집",
-      "Read": "파일 읽기",
-      "ReadBatch": "파일 일괄 읽기",
-      "Bash": "명령 실행",
-      "TodoWrite": "할 일 쓰기",
-      "TodoRead": "할 일 읽기",
-      "WebSearch": "웹 검색",
-      "WebFetch": "웹 가져오기",
-      "execute": "{{toolName}} 실행",
-      "readDirectory": "디렉토리 읽기",
-      "timeoutWarning": "곧 답변해주세요, {{seconds}}초 후 대화상자가 닫힙니다"
-    },
-    "userCancelled": "Permission request cancelled",
-    "previewUnavailable": "Native file preview is unavailable. You can deny or cancel this request.",
-    "requestedPermissions": "Requested native permissions",
-    "allowWithRule": "Allow with this command rule",
-    "allowWithNetworkRule": "Allow with this network rule",
-    "codexDeliveryRetry": "Codex가 선택을 받지 못했습니다({{error}}). 다시 선택해 주세요.",
-    "codexDeliveryFailed": "Codex가 선택을 받지 못했습니다({{error}}). 대화가 계속되지 않으면 중지를 누른 뒤 다시 보내 주세요.",
-    "codexDeliveryUnconfirmed": "Codex가 아직 선택을 받았는지 확인하지 못했습니다({{error}}). 선택이 여전히 적용될 수 있으니 다시 응답하지 마세요. 대화가 계속되지 않으면 중지를 누른 뒤 다시 보내 주세요."
-  },
-  "modelConfig": {
-    "approvals": "승인",
-    "ultracode": {
-      "label": "Ultracode",
-      "description": "작업을 자동으로 위임하는 Claude 기본 워크플로입니다. 선택한 추론 수준을 유지합니다."
-    }
-  },
-  "askUserQuestion": {
-    "ompTitle": "OMP에서 몇 가지 질문이 있습니다",
-    "title": "Claude가 질문이 있습니다",
-    "progress": "질문 {{current}} / {{total}}",
-    "multiSelectHint": "여러 옵션을 선택할 수 있습니다",
-    "cancel": "취소",
-    "back": "뒤로",
-    "next": "다음",
-    "submit": "제출",
-    "otherOption": "기타",
-    "otherOptionDesc": "사용자 지정 답변 입력",
-    "customInputPlaceholder": "답변을 입력하세요...",
-    "timeoutWarning": "곧 답변해주세요, {{seconds}}초 후 대화상자가 닫힙니다",
-    "expand": "펼치기",
-    "collapse": "접기",
-    "clickToAnswer": "클릭하여 답변하기",
-    "recordTitle": "Codex 질문",
-    "recordAnswer": "내 답변",
-    "recordSkipped": "건너뜀(답변하지 않고 닫음)",
-    "answerNotSent": "다른 대화가 열려 있어 Codex 질문에 대한 답변을 보내지 못했습니다. 원래 대화로 돌아가 답변을 다시 보내 주세요."
-  },
-  "planApproval": {
-    "title": "계획 승인 대기 중",
-    "subtitle": "Claude가 계획을 완료했으며 실행할 준비가 되었습니다.",
-    "requestedPermissions": "요청된 권한",
-    "executionMode": "실행 모드",
-    "executionModeDescription": "Claude가 계획을 실행하는 방식을 선택하세요:",
-    "approve": "승인 및 실행",
-    "reject": "거부",
-    "toApprove": "승인하려면",
-    "toReject": "거부하려면",
-    "timeoutWarning": "곧 선택해주세요, {{seconds}}초 후 대화상자가 닫힙니다"
-  },
-  "toast": {
-    "switchSuccess": "전환 완료",
-    "thinkingEnabled": "사고 과정 활성화",
-    "thinkingDisabled": "사고 과정 비활성화",
-    "configLoading": "설정 로딩 중, 다시 시도해주세요",
-    "saveSuccess": "저장 완료",
-    "saveFailed": "저장 실패",
-    "deleteSuccess": "삭제 완료",
-    "operationFailed": "작업 실패",
-    "copySuccess": "{{label}}이(가) 클립보드에 복사됨",
-    "copyFailed": "복사 실패",
-    "newSessionCreatedReady": "새 세션이 생성되었습니다. 질문을 시작하세요",
-    "providerSwitchSuccess": "제공자가 전환되었습니다!",
-    "providerSwitchFailed": "제공자 전환 실패",
-    "operationSuccess": "작업 성공",
-    "pleaseEnterProviderName": "제공자 이름을 입력해주세요",
-    "invalidJsonConfig": "잘못된 JSON 설정 형식",
-    "providerAdded": "제공자 추가됨",
-    "providerUpdated": "제공자 업데이트됨",
-    "providerDeleted": "제공자 삭제됨",
-    "codexSettingsDispatchFailed": "Codex 설정을 IDE로 보낼 수 없습니다. 대화를 다시 열고 재시도하세요.",
-    "codexSettingsRuntimeInactive": "Codex 실행 환경이 비활성 상태입니다. 채팅을 다시 열고 재시도하세요.",
-    "codexSettingsServiceUnavailable": "Codex 서비스를 사용할 수 없습니다. 채팅을 다시 열고 재시도하세요.",
-    "codexSettingsUpdateFailed": "Codex 설정을 확인하지 못했습니다. 채팅을 다시 열고 재시도하세요."
-  },
-  "config": {
-    "clickToCopy": "클릭하여 복사",
-    "officialDocs": "공식 문서",
-    "switch": "전환",
-    "switchProvider": "제공자 전환",
-    "runtimeProvider": {
-      "title": "현재 제공자 전환",
-      "loading": "제공자 로드 중...",
-      "empty": "사용 가능한 제공자 없음",
-      "switched": "{{provider}}(으)로 전환됨"
-    },
-    "codexQuota": {
-      "title": "Codex 쿼터",
-      "loading": "쿼터를 불러오는 중...",
-      "unavailable": "쿼터를 사용할 수 없습니다",
-      "lastUpdated": "{{value}}에 업데이트됨",
-      "fiveHour": "5시간 사용량",
-      "weekly": "주간 사용량",
-      "windowRemainingPercent": "{{percent}}% 남음",
-      "windowRemainingPercentWithReset": "{{percent}}% 남음 · {{value}}에 초기화",
-      "windowUsedOnly": "{{used}} 사용됨",
-      "windowUnavailable": "사용 불가",
-      "apiKeyMode": "API 키 모드에서는 구독 쿼터가 없습니다"
-    },
-    "nodeProcesses": {
-      "title": "Node 프로세스 관리",
-      "badge": "{{total}}개 프로세스",
-      "badgeWithOrphan": "{{total}}개 · 고아 {{orphan}} ⚠",
-      "summary": "전체: {{total}} · 고아: {{orphan}}",
-      "loading": "프로세스 로드 중...",
-      "empty": "활성 Node 프로세스가 없습니다",
-      "refresh": "새로고침",
-      "groups": {
-        "daemon": "데몬 프로세스",
-        "channel": "진행 중인 대화",
-        "orphan": "고아 프로세스"
+      "toolCall": "도구 호출",
+      "runCommand": "명령 실행",
+      "commandRead": "{{path}} 읽기",
+      "commandList": "{{path}} 목록 보기",
+      "commandSearch": "{{path}}에서 {{query}} 검색",
+      "commandApprovalReason": "승인 사유",
+      "patchToggleDiff": "변경 보기",
+      "errorOutput": "오류 세부 정보",
+      "resultUnknown": "개별 도구 실행 결과를 확인할 수 없습니다",
+      "patchNoDiff": "차이 정보 없음",
+      "patchKind": {
+        "add": "추가",
+        "delete": "삭제",
+        "update": "수정",
+        "move": "이동"
       },
-      "kind": {
-        "daemonShort": "Daemon",
-        "channelShort": "대화",
-        "orphanShort": "고아"
-      },
-      "kill": "종료",
-      "interrupt": "중단",
-      "restart": "재시작",
-      "pending": "처리 중...",
-      "killAll": "모든 고아 정리 ({{count}})",
-      "killHint": "이 Node 프로세스를 강제 종료",
-      "killAllHint": "감지된 모든 고아 프로세스 종료",
-      "restartHint": "데몬을 정지합니다. 다음 메시지에서 자동으로 새 데몬이 시작됩니다",
-      "killConfirmTitle": "이 프로세스를 종료하시겠습니까?",
-      "killConfirm": "PID {{pid}}을(를) 종료하시겠습니까? 진행 중인 대화가 손실될 수 있습니다.",
-      "restartConfirmTitle": "데몬을 재시작하시겠습니까?",
-      "restartConfirm": "데몬을 재시작하시겠습니까? 진행 중인 대화가 중단됩니다.",
-      "killAllConfirmTitle": "모든 고아 프로세스를 정리하시겠습니까?",
-      "killAllConfirm": "고아 프로세스 {{count}}개를 모두 종료하시겠습니까?",
-      "killSuccess": "프로세스가 종료되었습니다",
-      "killAllSuccess": "고아 프로세스 {{count}}개를 정리했습니다",
-      "restartSuccess": "데몬이 중지되었습니다. 다음 메시지에서 새 인스턴스가 자동 시작됩니다",
-      "killFailed": "종료 실패: {{error}}",
-      "activeRequests": "진행 중 {{count}}건"
-    },
-    "link": "링크"
-  },
-  "markdown": {
-    "copyCode": "코드 복사",
-    "copyMessage": "메시지 복사",
-    "copySuccess": "복사됨!",
-    "quoteMessage": "메시지 인용",
-    "quoteSuccess": "인용됨!"
-  },
-  "contextMenu": {
-    "cut": "잘라내기",
-    "copy": "복사",
-    "paste": "붙여넣기",
-    "newline": "줄바꿈 삽입",
-    "quote": "인용",
-    "copyLink": "링크 주소 복사"
-  },
-  "usage": {
-    "checkingLabel": "tokentracker-cli 확인 중…",
-    "installingLabel": "tokentracker-cli 설치 중…",
-    "installingDesc": "잠시 걸릴 수 있습니다. 설치가 끝나면 앱이 다시 확인하고 로컬 서버를 시작합니다.",
-    "startingLabel": "tokentracker 서버 시작 중…",
-    "guideTitle": "사용 통계를 볼 수 있도록 tokentracker-cli를 설치하세요",
-    "guideDesc": "사용 통계는 tokentracker-cli가 제공합니다. 로컬 서버를 실행해 AI 도구들의 토큰 사용량을 모아 대시보드로 보여줍니다.",
-    "guideInstallLabel": "설치 명령어",
-    "guideCopy": "복사",
-    "guideCopied": "복사됨",
-    "guideInstallNow": "지금 설치",
-    "guideNoteHooks": "첫 실행 시 tokentracker 서버는 설치된 AI 도구에 hooks를 작성합니다(이것이 데이터 수집 방식입니다).",
-    "guideNoteTelemetry": "이 앱은 익명 텔레메트리를 비활성화했습니다.",
-    "errorTitle": "tokentracker 서버 시작 실패",
-    "errorRetry": "다시 시도"
-  },
-  "mcp": {
-    "title": "MCP 서버",
-    "whatIsMcp": "MCP란?",
-    "refreshStatus": "서버 상태 새로고침",
-    "add": "추가",
-    "manualConfig": "수동 설정",
-    "addFromMarket": "MCP 마켓에서 추가",
-    "marketComingSoon": "MCP 마켓 기능은 아직 구현되지 않았습니다. 곧 출시 예정",
-    "import": {
-      "menuLabel": "GitHub Copilot에서 가져오기",
-      "title": "GitHub Copilot에서 가져오기",
-      "description": "서버를 가져오려면 GitHub Copilot MCP 구성(루트 키 \"servers\")을 붙여넣으세요.",
-      "placeholder": "{\n  \"servers\": {\n    \"my-server\": {\n      \"command\": \"npx\",\n      \"args\": [\"-y\", \"my-mcp-server\"]\n    }\n  }\n}",
-      "previewButton": "미리보기",
-      "previewTitle": "가져올 서버",
-      "empty": "구성을 붙여넣고 미리보기를 클릭하세요.",
-      "footerHint": "가져오기 전에 서버와 이름 변경을 확인하세요.",
-      "renamedFrom": "{{id}}에서 이름 변경됨",
-      "renameSummary": "이름 충돌로 인해 {{count}}개 이름 변경됨",
-      "confirm": "{{count}}개 서버 가져오기"
-    },
-    "market": {
-      "title": "MCP 마켓플레이스",
-      "subtitle": "레지스트리 소스를 탐색하고 설치 가능한 MCP 서버를 추가합니다.",
-      "searchPlaceholder": "서버, 게시자 또는 태그 검색",
-      "allSources": "모든 소스",
-      "refresh": "마켓플레이스 새로고침",
-      "loading": "마켓플레이스 항목을 불러오는 중…",
-      "empty": "MCP 서버를 찾을 수 없습니다.",
-      "selectServer": "설치 세부 정보를 보려면 서버를 선택하세요.",
-      "footerHint": "서버를 추가하기 전에 명령, URL, 헤더 및 환경 변수 자리표시자를 확인하세요.",
-      "addServer": "서버 추가",
-      "official": "공식",
-      "installable": "설치 가능",
-      "browseOnly": "보기 전용",
-      "repository": "저장소",
-      "docs": "문서",
-      "homepage": "홈페이지",
-      "installOption": "설치 옵션",
-      "riskWarning": "이 옵션은 사용자 컴퓨터에서 명령을 실행합니다. 추가하기 전에 확인하세요.",
-      "riskWarningUnverified": "이 옵션은 인식되지 않은 명령을 실행합니다. 출처를 신뢰하는 경우에만 추가하세요.",
-      "noInstall": "이 소스는 검색 메타데이터만 제공합니다. 저장소 안내를 확인한 후 이 서버를 수동으로 추가하세요.",
-      "configPreview": "구성 미리보기"
-    },
-    "description": "설명",
-    "command": "명령어",
-    "url": "URL",
-    "homepage": "홈페이지",
-    "docs": "문서",
-    "edit": "편집",
-    "delete": "삭제",
-    "noServers": "MCP 서버 없음",
-    "addServerHint": "'추가' 버튼을 클릭하여 서버를 추가하세요",
-    "loading": "로딩 중...",
-    "deleteTitle": "MCP 서버 삭제",
-    "deleteMessage": "서버 \"{{name}}\"을(를) 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.",
-    "deleteConfirm": "삭제",
-    "cancel": "취소",
-    "enabled": "활성화됨",
-    "disabled": "비활성화됨",
-    "deleted": "삭제됨",
-    "updated": "업데이트됨",
-    "saved": "저장됨",
-    "added": "추가됨",
-    "linkCopied": "링크가 복사되었습니다. 브라우저에서 열어주세요",
-    "configCopied": "설정이 클립보드에 복사되었습니다",
-    "copyFailed": "복사 실패, 수동으로 복사해주세요",
-    "connectionStatus": "연결 상태",
-    "serverVersion": "서버 버전",
-    "statusConnected": "연결됨",
-    "statusFailed": "연결 실패",
-    "statusNeedsAuth": "인증 필요",
-    "statusPending": "연결 중...",
-    "statusUnknown": "알 수 없음",
-    "errorDetails": "오류 세부정보",
-    "logs": {
-      "title": "연결 로그",
-      "empty": "아직 로그 없음",
-      "clear": "로그 지우기",
-      "close": "닫기",
-      "count": "{{count}}개 로그 항목",
-      "connected": "연결됨",
-      "failed": "연결 실패",
-      "needsAuth": "인증 필요",
-      "unknownError": "알 수 없는 오류",
-      "loadingServers": "MCP 서버 목록 로딩 중...",
-      "refreshingStatus": "MCP 서버 연결 상태 새로고침 중...",
-      "loadedToolsFromCache": "\"{{name}}\"의 도구를 캐시에서 로드함: {{count}}개 도구",
-      "forceRefreshingTools": "\"{{name}}\"의 도구를 강제 새로고침 중...",
-      "loadingTools": "\"{{name}}\"의 도구 로딩 중...",
-      "fastLoadCache": "캐시에서 빠른 로드: {{count}}개 서버 ({{seconds}}초 전 캐시됨)",
-      "loadedToolsFromCacheSimple": "캐시에서 도구 로드됨: {{count}}개 도구",
-      "usingCacheStrategy": "캐시 우선 전략 사용 중. 최신 데이터를 가져오려면 새로고침을 클릭하세요",
-      "firstLoad": "첫 로드, 서버 목록을 가져오는 중...",
-      "loadedServersSuccess": "서버 목록 로드됨: {{count}}개 서버 발견",
-      "loadedServersFailed": "서버 목록 로드 실패: {{error}}",
-      "statusUpdateComplete": "상태 업데이트 완료: {{total}}개 서버 ({{connected}}개 연결됨, {{failed}}개 실패, {{pending}}개 대기 중, {{needsAuth}}개 인증 필요)",
-      "loadedStatusFailed": "서버 상태 로드 실패: {{error}}",
-      "cleared": "새로고침 로그 지움",
-      "refreshingAll": "모든 MCP 서버 새로고침 중...",
-      "startRefresh": "새로고침 시작",
-      "forceRefreshingToolsServer": "\"{{name}}\"의 도구를 강제 새로고침 중...",
-      "startRefreshServer": "\"{{name}}\" 새로고침 시작 중...",
-      "checkingConnection": "연결 상태 확인 중",
-      "checkingConnectionServer": "서버 \"{{name}}\" - 연결 상태 확인 중...",
-      "refreshComplete": "서버 \"{{name}}\" 새로고침 완료",
-      "forceRefreshTools": "도구 강제 새로고침"
-    },
-    "presets": {
-      "fetch": "웹 페이지 스크래핑을 위한 웹 콘텐츠 가져오기 도구",
-      "time": "시간 및 시간대 유틸리티",
-      "memory": "지식 그래프 및 메모리 저장 도구",
-      "sequentialThinking": "순차적 사고 및 추론 도구",
-      "context7": "문서 검색 및 컨텍스트 검색 도구"
-    },
-    "help": {
-      "title": "MCP란?",
-      "protocol": {
-        "title": "Model Context Protocol",
-        "description": "MCP (Model Context Protocol)는 Anthropic이 개발한 오픈 프로토콜로, AI 모델이 외부 도구 및 데이터 소스에 안전하게 접근할 수 있게 합니다."
-      },
-      "features": {
-        "title": "주요 기능",
-        "toolExtension": {
-          "label": "도구 확장",
-          "description": "파일 시스템 및 네트워크 접근과 같은 기능을 Claude에 추가"
-        },
-        "dataConnection": {
-          "label": "데이터 연결",
-          "description": "데이터베이스 및 API와 같은 외부 데이터 소스에 연결"
-        },
-        "security": {
-          "label": "보안 및 제어",
-          "description": "엄격한 권한 제어 및 데이터 격리"
-        },
-        "integration": {
-          "label": "쉬운 통합",
-          "description": "다양한 프로그래밍 언어 및 런타임 환경 지원"
-        }
-      },
-      "configuration": {
-        "title": "설정 방법",
-        "description": "두 가지 설정 유형을 지원합니다:",
-        "stdio": {
-          "description": "표준 입출력을 통해 로컬 프로세스와 통신",
-          "example": "npx/uvx 명령으로 시작"
-        },
-        "httpSse": {
-          "description": "네트워크를 통해 원격 서버와 통신",
-          "example": "URL 주소"
-        }
-      },
-      "learnMore": {
-        "title": "더 알아보기",
-        "description": "공식 문서를 방문하세요:"
-      },
-      "gotIt": "확인"
-    },
-    "serverDialog": {
-      "addTitle": "수동 설정",
-      "editTitle": "서버 편집",
-      "rawConfig": "원본 설정 (JSON)",
-      "description": "MCP 서버 설정 JSON을 입력하세요 (NPX 또는 UVX 설정 권장)",
-      "securityWarning": "설정 전에 출처를 확인하고 위험을 평가해주세요",
-      "saving": "저장 중...",
-      "errors": {
-        "idExists": "서버 ID \"{{id}}\"가 이미 존재합니다",
-        "unrecognizedFormat": "인식할 수 없는 설정 형식",
-        "jsonParseError": "JSON 파싱 오류: {{message}}"
+      "contextEngine": "컨텍스트 엔진",
+      "task": "작업",
+      "promptLabel": "프롬프트",
+      "readFile": "파일 읽기",
+      "editFile": "파일 편집",
+      "writeFile": "파일 쓰기",
+      "replaceString": "문자열 교체",
+      "executeCommand": "명령 실행",
+      "search": "검색",
+      "fileMatch": "파일 매칭",
+      "webFetch": "웹 가져오기",
+      "webSearch": "웹 검색",
+      "delete": "삭제",
+      "explore": "탐색",
+      "createDirectory": "디렉토리 생성",
+      "moveFile": "파일 이동",
+      "copyFile": "파일 복사",
+      "listFiles": "파일 목록",
+      "findFile": "파일 찾기",
+      "todoList": "할 일 목록",
+      "editFileTitle": "파일 편집",
+      "clickToOpen": "{{filePath}} 열기",
+      "refreshFileInIdea": "IDEA에서 파일 새로고침",
+      "refreshFileInIdeaSuccess": "IDEA에서 이 파일을 수동으로 새로고침했습니다",
+      "showDiffInIdea": "IDEA에서 변경 사항 보기",
+      "diffButton": "Diff",
+      "editBatchTitle": "파일 일괄 편집",
+      "searchBatchTitle": "일괄 검색",
+      "editPrefix": "편집: {{fileName}}",
+      "lineRange": "{{start}}-{{end}}행",
+      "lineSingle": "{{line}}행",
+      "filePath": "파일 경로:",
+      "unknownTool": "알 수 없는 도구",
+      "bashGroupBatchRun": "명령 일괄 실행",
+      "bashGroupBatchExecution": "일괄 실행",
+      "bashGroupCompleted": "완료됨",
+      "bashGroupAllCompleted": "모두 완료",
+      "bashGroupFailed": "실패",
+      "bashGroupCopyCommand": "명령 복사",
+      "bashGroupCopyOutput": "출력 복사",
+      "bashGroupOutput": "출력",
+      "bashGroupOutputFailed": "실패",
+      "bashGroupRunning": "실행 중…",
+      "bashGroupNoOutput": "(출력 없음)",
+      "updatePlan": "계획 업데이트",
+      "applyPatch": "패치 적용",
+      "reportFindings": {
+        "title": "리뷰 지적 사항",
+        "findingsCount_one": "지적 {{count}}건",
+        "findingsCount_other": "지적 {{count}}건",
+        "confirmedCount_one": "확인됨 {{count}}건",
+        "confirmedCount_other": "확인됨 {{count}}건",
+        "plausibleCount_one": "검토 필요 {{count}}건",
+        "plausibleCount_other": "검토 필요 {{count}}건",
+        "confirmed": "확인됨",
+        "plausible": "검토 필요",
+        "fixed": "수정됨",
+        "skipped": "건너뜀",
+        "noChangeNeeded": "수정 불필요",
+        "empty": "지적 사항 없음",
+        "summaryLabel": "리뷰 요약",
+        "summary": "요약",
+        "failureScenario": "발생 시나리오",
+        "reviewLevel": "리뷰 수준: {{level}}",
+        "openFile": "{{filePath}} 열기",
+        "expandFinding": "지적 사항 펼치기",
+        "collapseFinding": "지적 사항 접기",
+        "expandReport": "리뷰 지적 사항 펼치기",
+        "collapseReport": "리뷰 지적 사항 접기",
+        "untitled": "제목 없는 지적"
       }
     },
-    "tools": "도구",
-    "loadTools": "도구 목록 로드",
-    "notConnected": "연결되지 않음",
-    "loadFailed": "로드 실패",
-    "noTools": "도구 없음",
-    "clickToLoad": "클릭하여 로드",
-    "refreshLogs": "로그 새로고침",
-    "clearLogs": "로그 지우기",
-    "clear": "지우기",
-    "noRefreshLogs": "새로고침 로그 없음",
-    "refreshLogsHint": "새로고침 버튼을 클릭하면 여기에 상세한 새로고침 과정 정보가 표시됩니다",
-    "noParams": "매개변수 없음",
-    "required": "필수",
-    "optional": "선택사항",
-    "refreshServer": "{{name}} 새로고침",
-    "nativeStatus": "Native Codex MCP status"
-  },
-  "tools": {
-    "toolCall": "도구 호출",
-    "runCommand": "명령 실행",
-    "commandRead": "{{path}} 읽기",
-    "commandList": "{{path}} 목록 보기",
-    "commandSearch": "{{path}}에서 {{query}} 검색",
-    "commandApprovalReason": "승인 사유",
-    "patchToggleDiff": "변경 보기",
-    "errorOutput": "오류 세부 정보",
-    "resultUnknown": "개별 도구 실행 결과를 확인할 수 없습니다",
-    "patchNoDiff": "차이 정보 없음",
-    "patchKind": {
-      "add": "추가",
-      "delete": "삭제",
-      "update": "수정",
-      "move": "이동"
+    "todo": {
+      "inProgress": "진행 중 {{completed}}/{{total}} 작업",
+      "allCompleted": "모두 완료 {{completed}}/{{total}} 작업",
+      "stopped": "중단됨"
     },
-    "contextEngine": "컨텍스트 엔진",
-    "task": "작업",
-    "promptLabel": "프롬프트",
-    "readFile": "파일 읽기",
-    "editFile": "파일 편집",
-    "writeFile": "파일 쓰기",
-    "replaceString": "문자열 교체",
-    "executeCommand": "명령 실행",
-    "search": "검색",
-    "fileMatch": "파일 매칭",
-    "webFetch": "웹 가져오기",
-    "webSearch": "웹 검색",
-    "delete": "삭제",
-    "explore": "탐색",
-    "createDirectory": "디렉토리 생성",
-    "moveFile": "파일 이동",
-    "copyFile": "파일 복사",
-    "listFiles": "파일 목록",
-    "findFile": "파일 찾기",
-    "todoList": "할 일 목록",
-    "editFileTitle": "파일 편집",
-    "clickToOpen": "{{filePath}} 열기",
-    "refreshFileInIdea": "IDEA에서 파일 새로고침",
-    "refreshFileInIdeaSuccess": "IDEA에서 이 파일을 수동으로 새로고침했습니다",
-    "showDiffInIdea": "IDEA에서 변경 사항 보기",
-    "diffButton": "Diff",
-    "editBatchTitle": "파일 일괄 편집",
-    "searchBatchTitle": "일괄 검색",
-    "editPrefix": "편집: {{fileName}}",
-    "lineRange": "{{start}}-{{end}}행",
-    "lineSingle": "{{line}}행",
-    "filePath": "파일 경로:",
-    "unknownTool": "알 수 없는 도구",
-    "bashGroupBatchRun": "명령 일괄 실행",
-    "bashGroupBatchExecution": "일괄 실행",
-    "bashGroupCompleted": "완료됨",
-    "bashGroupAllCompleted": "모두 완료",
-    "bashGroupFailed": "실패",
-    "bashGroupCopyCommand": "명령 복사",
-    "bashGroupCopyOutput": "출력 복사",
-    "bashGroupOutput": "출력",
-    "bashGroupOutputFailed": "실패",
-    "bashGroupRunning": "실행 중…",
-    "bashGroupNoOutput": "(출력 없음)",
-    "updatePlan": "계획 업데이트",
-    "applyPatch": "패치 적용",
-    "reportFindings": {
-      "title": "리뷰 지적 사항",
-      "findingsCount_one": "지적 {{count}}건",
-      "findingsCount_other": "지적 {{count}}건",
-      "confirmedCount_one": "확인됨 {{count}}건",
-      "confirmedCount_other": "확인됨 {{count}}건",
-      "plausibleCount_one": "검토 필요 {{count}}건",
-      "plausibleCount_other": "검토 필요 {{count}}건",
-      "confirmed": "확인됨",
-      "plausible": "검토 필요",
-      "fixed": "수정됨",
-      "skipped": "건너뜀",
-      "noChangeNeeded": "수정 불필요",
-      "empty": "지적 사항 없음",
-      "summaryLabel": "리뷰 요약",
-      "summary": "요약",
-      "failureScenario": "발생 시나리오",
-      "reviewLevel": "리뷰 수준: {{level}}",
-      "openFile": "{{filePath}} 열기",
-      "expandFinding": "지적 사항 펼치기",
-      "collapseFinding": "지적 사항 접기",
-      "expandReport": "리뷰 지적 사항 펼치기",
-      "collapseReport": "리뷰 지적 사항 접기",
-      "untitled": "제목 없는 지적"
-    }
-  },
-  "todo": {
-    "inProgress": "진행 중 {{completed}}/{{total}} 작업",
-    "allCompleted": "모두 완료 {{completed}}/{{total}} 작업",
-    "stopped": "중단됨"
-  },
-  "subagent": {
-    "process": {
-      "title": "에이전트 프로세스",
-      "prompt": "프롬프트",
-      "thought": "생각",
-      "filesRead_one": "파일 {{count}}개 읽기",
-      "filesRead_other": "파일 {{count}}개 읽기",
-      "otherTools": "기타 도구",
-      "result": "결과",
-      "showFullOutput": "전체 출력 보기",
-      "loading": "에이전트 프로세스 로드 중…",
-      "unavailable": "세션에 id가 생기기 전까지 프로세스 로그를 사용할 수 없습니다.",
-      "reportGenerated": "구조화된 분석 보고서가 생성됨",
-      "historyTruncated": "기록 {{count}}개를 생략하여 내역을 줄였습니다. 초기 작업과 최근 활동은 유지됩니다.",
-      "unitMs": "ms",
-      "unitS": "초",
-      "unitTools": "도구",
-      "unitTokens": "토큰"
-    }
-  },
-  "statusPanel": {
-    "todoTab": "계획",
-    "tasksTab": "작업",
-    "subagentTab": "서브에이전트",
-    "filesTab": "파일 변경",
-    "editsTab": "편집",
-    "noTodos": "실행 중인 작업 없음",
-    "noSubagents": "실행 중인 서브에이전트 없음",
-    "noFileChanges": "파일 변경 없음",
-    "showDiff": "Diff 보기",
-    "expand": "상태 패널 펼치기",
-    "collapse": "상태 패널 접기",
-    "undoChanges": "변경 취소",
-    "undoConfirmTitle": "파일 변경 취소",
-    "undoWillDelete": "이 파일은 새로 생성되었습니다. 취소하면 이 파일이 삭제됩니다.",
-    "undoWillRestore": "Claude의 수정 이전 상태로 파일을 복원합니다.",
-    "undoCannotUndo": "이 작업은 되돌릴 수 없습니다.",
-    "confirmUndo": "취소 확인",
-    "undoSuccess": "{{fileName}}의 변경 사항이 취소되었습니다",
-    "undoFailed": "취소 실패: {{error}}",
-    "discardAll": "모두 버리기",
-    "keepAll": "모두 유지",
-    "discardAllConfirmTitle": "모든 변경 사항 버리기",
-    "discardAllConfirmMessage": "모든 파일 변경 사항을 되돌립니다. 이 작업은 되돌릴 수 없습니다.",
-    "keepAllConfirmTitle": "모두 유지",
-    "keepAllConfirmMessage": "현재 변경 사항을 기준선으로 수락합니다. 이후 변경 사항은 처음부터 추적됩니다.",
-    "discardAllSuccess": "모든 변경 사항이 버려졌습니다",
-    "discardAllFailed": "버리기 실패: {{error}}",
-    "keepAllSuccess": "모든 변경 사항이 유지되었으며, 추적이 초기화되었습니다",
-    "multiAgentBadge": "다중 Agent",
-    "multiAgentEdited": "이 세션에서 {{count}}개 Agent가 이 파일을 수정했습니다. 주의해서 확인하세요"
-  },
-  "skills": {
-    "title": "스킬",
-    "all": "전체",
-    "global": "전역",
-    "local": "로컬",
-    "filterEnabled": "활성화된 스킬 필터",
-    "enabled": "활성화됨",
-    "filterDisabled": "비활성화된 스킬 필터",
-    "disabled": "비활성화됨",
-    "searchPlaceholder": "스킬 검색...",
-    "whatIsSkills": "스킬이란?",
-    "importSkill": "스킬 가져오기",
-    "importGlobalSkill": "전역 스킬 가져오기",
-    "importLocalSkill": "로컬 스킬 가져오기",
-    "importUserSkill": "사용자 스킬 가져오기",
-    "importRepoSkill": "저장소 스킬 가져오기",
-    "user": "사용자",
-    "repo": "저장소",
-    "description": "설명",
-    "noDescription": "설명 없음",
-    "noSkills": "스킬 없음",
-    "noMatchingSkills": "일치하는 스킬을 찾을 수 없습니다",
-    "importHint": "+ 버튼을 클릭하여 스킬 파일 또는 폴더를 가져오세요",
-    "deleteTitle": "스킬 삭제",
-    "deleteMessage": "{{scope}} 스킬 \"{{name}}\"을(를) 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.",
-    "deleteMessageGlobal": "전역",
-    "deleteMessageLocal": "로컬",
-    "deleteMessageUser": "사용자",
-    "deleteMessageRepo": "저장소",
-    "importSuccess": "{{count}}개 스킬을 성공적으로 가져왔습니다",
-    "importSuccessOne": "1개 스킬을 성공적으로 가져왔습니다",
-    "importPartialSuccess": "{{count}}/{{total}}개 스킬을 성공적으로 가져왔습니다. 일부 실패",
-    "importFailed": "스킬 가져오기 실패",
-    "deleteSuccess": "스킬 삭제 완료",
-    "toggleSuccess": "스킬 상태 업데이트됨",
-    "toggleFailed": "스킬 상태 업데이트 실패",
-    "deleteFailed": "스킬 삭제 실패",
-    "enableSuccess": "스킬 활성화됨: {{name}}",
-    "disableSuccess": "스킬 비활성화됨: {{name}}",
-    "operationFailed": "작업 실패: {{error}}",
-    "operationError": "스킬 작업 실패",
-    "refreshed": "스킬 목록 새로고침됨",
-    "help": {
-      "title": "스킬이란?",
-      "overview": {
-        "title": "개요",
-        "description": "스킬은 동적으로 로드되는 지시사항, 스크립트 및 리소스 폴더로, 특정 작업에 대한 Claude의 성능을 향상시킵니다. 스킬은 Claude에게 회사 브랜드 가이드라인에 따른 문서 작성, 조직 특화 워크플로우에 따른 데이터 분석, 개인 작업 자동화 등 특정 작업을 반복 가능한 방식으로 완료하는 방법을 가르칩니다."
-      },
-      "structure": {
-        "title": "스킬 구조",
-        "description": "스킬은 SKILL.md 파일을 포함하는 폴더입니다:",
-        "example": "my-skill/\n├── SKILL.md          # 필수: 스킬 정의 파일\n├── templates/        # 선택: 템플릿 파일\n└── references/       # 선택: 참고 자료"
-      },
-      "format": {
-        "title": "SKILL.md 형식",
-        "description": "SKILL.md 파일은 YAML 프론트매터 + 마크다운 형식을 사용합니다:",
-        "example": "---\nname: my-skill-name\ndescription: 스킬 설명 및 사용 시기\n---\n\n# 스킬 지시사항\n\n상세 지시 내용...",
-        "hint": "name과 description은 필수 필드입니다. 선택 필드로 license, allowed-tools, metadata가 있습니다"
-      },
-      "configuration": {
-        "title": "설정 방법",
-        "description": "스킬을 추가하는 방법:",
-        "localPath": {
-          "label": "로컬 경로",
-          "description": "SKILL.md를 포함하는 폴더 경로 지정"
-        },
-        "relativePath": {
-          "label": "상대 경로",
-          "description": "프로젝트 루트 기준, 예: ./skills/my-skill"
-        },
-        "absolutePath": {
-          "label": "절대 경로",
-          "description": "전체 파일 시스템 경로"
-        }
-      },
-      "tips": {
-        "title": "사용 팁",
-        "item1": "스킬 디렉토리에 유효한 SKILL.md 파일이 포함되어 있는지 확인하세요",
-        "item2": "스킬 이름은 소문자, 숫자, 하이픈만 사용해야 합니다 (hyphen-case)",
-        "item3": "스킬은 로드 후 Claude 세션에서 자동으로 적용됩니다",
-        "item4": "활성화/비활성화 토글로 개별 스킬 상태를 제어합니다",
-        "item5": "채팅에서 스킬 이름을 언급하여 사용하세요. 예: \"pdf 스킬을 사용하여 양식 필드를 추출해줘\""
-      },
-      "learnMore": {
-        "title": "더 알아보기",
-        "description": "스킬에 대한 더 많은 정보:",
-        "link1": "스킬이란?",
-        "link2": "사용자 지정 스킬 만들기",
-        "link3": "Anthropic 스킬 예제 저장소"
-      },
-      "codex": {
-        "title": "Codex 스킬이란?",
+    "subagent": {
+      "process": {
+        "title": "에이전트 프로세스",
+        "prompt": "프롬프트",
+        "thought": "생각",
+        "filesRead_one": "파일 {{count}}개 읽기",
+        "filesRead_other": "파일 {{count}}개 읽기",
+        "otherTools": "기타 도구",
+        "result": "결과",
+        "showFullOutput": "전체 출력 보기",
+        "loading": "에이전트 프로세스 로드 중…",
+        "unavailable": "세션에 id가 생기기 전까지 프로세스 로그를 사용할 수 없습니다.",
+        "reportGenerated": "구조화된 분석 보고서가 생성됨",
+        "historyTruncated": "기록 {{count}}개를 생략하여 내역을 줄였습니다. 초기 작업과 최근 활동은 유지됩니다.",
+        "unitMs": "ms",
+        "unitS": "초",
+        "unitTools": "도구",
+        "unitTokens": "토큰"
+      }
+    },
+    "statusPanel": {
+      "todoTab": "계획",
+      "tasksTab": "작업",
+      "subagentTab": "서브에이전트",
+      "filesTab": "파일 변경",
+      "editsTab": "편집",
+      "noTodos": "실행 중인 작업 없음",
+      "noSubagents": "실행 중인 서브에이전트 없음",
+      "noFileChanges": "파일 변경 없음",
+      "showDiff": "Diff 보기",
+      "expand": "상태 패널 펼치기",
+      "collapse": "상태 패널 접기",
+      "undoChanges": "변경 취소",
+      "undoConfirmTitle": "파일 변경 취소",
+      "undoWillDelete": "이 파일은 새로 생성되었습니다. 취소하면 이 파일이 삭제됩니다.",
+      "undoWillRestore": "Claude의 수정 이전 상태로 파일을 복원합니다.",
+      "undoCannotUndo": "이 작업은 되돌릴 수 없습니다.",
+      "confirmUndo": "취소 확인",
+      "undoSuccess": "{{fileName}}의 변경 사항이 취소되었습니다",
+      "undoFailed": "취소 실패: {{error}}",
+      "discardAll": "모두 버리기",
+      "keepAll": "모두 유지",
+      "discardAllConfirmTitle": "모든 변경 사항 버리기",
+      "discardAllConfirmMessage": "모든 파일 변경 사항을 되돌립니다. 이 작업은 되돌릴 수 없습니다.",
+      "keepAllConfirmTitle": "모두 유지",
+      "keepAllConfirmMessage": "현재 변경 사항을 기준선으로 수락합니다. 이후 변경 사항은 처음부터 추적됩니다.",
+      "discardAllSuccess": "모든 변경 사항이 버려졌습니다",
+      "discardAllFailed": "버리기 실패: {{error}}",
+      "keepAllSuccess": "모든 변경 사항이 유지되었으며, 추적이 초기화되었습니다",
+      "multiAgentBadge": "다중 Agent",
+      "multiAgentEdited": "이 세션에서 {{count}}개 Agent가 이 파일을 수정했습니다. 주의해서 확인하세요"
+    },
+    "skills": {
+      "title": "스킬",
+      "all": "전체",
+      "global": "전역",
+      "local": "로컬",
+      "filterEnabled": "활성화된 스킬 필터",
+      "enabled": "활성화됨",
+      "filterDisabled": "비활성화된 스킬 필터",
+      "disabled": "비활성화됨",
+      "searchPlaceholder": "스킬 검색...",
+      "whatIsSkills": "스킬이란?",
+      "importSkill": "스킬 가져오기",
+      "importGlobalSkill": "전역 스킬 가져오기",
+      "importLocalSkill": "로컬 스킬 가져오기",
+      "importUserSkill": "사용자 스킬 가져오기",
+      "importRepoSkill": "저장소 스킬 가져오기",
+      "user": "사용자",
+      "repo": "저장소",
+      "description": "설명",
+      "noDescription": "설명 없음",
+      "noSkills": "스킬 없음",
+      "noMatchingSkills": "일치하는 스킬을 찾을 수 없습니다",
+      "importHint": "+ 버튼을 클릭하여 스킬 파일 또는 폴더를 가져오세요",
+      "deleteTitle": "스킬 삭제",
+      "deleteMessage": "{{scope}} 스킬 \"{{name}}\"을(를) 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.",
+      "deleteMessageGlobal": "전역",
+      "deleteMessageLocal": "로컬",
+      "deleteMessageUser": "사용자",
+      "deleteMessageRepo": "저장소",
+      "importSuccess": "{{count}}개 스킬을 성공적으로 가져왔습니다",
+      "importSuccessOne": "1개 스킬을 성공적으로 가져왔습니다",
+      "importPartialSuccess": "{{count}}/{{total}}개 스킬을 성공적으로 가져왔습니다. 일부 실패",
+      "importFailed": "스킬 가져오기 실패",
+      "deleteSuccess": "스킬 삭제 완료",
+      "toggleSuccess": "스킬 상태 업데이트됨",
+      "toggleFailed": "스킬 상태 업데이트 실패",
+      "deleteFailed": "스킬 삭제 실패",
+      "enableSuccess": "스킬 활성화됨: {{name}}",
+      "disableSuccess": "스킬 비활성화됨: {{name}}",
+      "operationFailed": "작업 실패: {{error}}",
+      "operationError": "스킬 작업 실패",
+      "refreshed": "스킬 목록 새로고침됨",
+      "help": {
+        "title": "스킬이란?",
         "overview": {
           "title": "개요",
-          "description": "Codex 스킬은 .agents/skills/ 디렉토리에 저장된 지시사항 세트로, 특정 작업에 대한 Codex의 성능을 향상시킵니다. 채팅에서 $ 접두사를 사용하여 호출합니다."
+          "description": "스킬은 동적으로 로드되는 지시사항, 스크립트 및 리소스 폴더로, 특정 작업에 대한 Claude의 성능을 향상시킵니다. 스킬은 Claude에게 회사 브랜드 가이드라인에 따른 문서 작성, 조직 특화 워크플로우에 따른 데이터 분석, 개인 작업 자동화 등 특정 작업을 반복 가능한 방식으로 완료하는 방법을 가르칩니다."
         },
         "structure": {
           "title": "스킬 구조",
-          "description": "Codex 스킬은 SKILL.md 파일을 포함하는 폴더입니다:",
-          "example": ".agents/skills/\n└── my-skill/\n    ├── SKILL.md          # 필수: 스킬 정의 파일\n    ├── templates/        # 선택: 템플릿 파일\n    └── references/       # 선택: 참고 자료"
+          "description": "스킬은 SKILL.md 파일을 포함하는 폴더입니다:",
+          "example": "my-skill/\n├── SKILL.md          # 필수: 스킬 정의 파일\n├── templates/        # 선택: 템플릿 파일\n└── references/       # 선택: 참고 자료"
         },
         "format": {
           "title": "SKILL.md 형식",
           "description": "SKILL.md 파일은 YAML 프론트매터 + 마크다운 형식을 사용합니다:",
           "example": "---\nname: my-skill-name\ndescription: 스킬 설명 및 사용 시기\n---\n\n# 스킬 지시사항\n\n상세 지시 내용...",
-          "hint": "name과 description은 필수 필드입니다"
+          "hint": "name과 description은 필수 필드입니다. 선택 필드로 license, allowed-tools, metadata가 있습니다"
         },
         "configuration": {
-          "title": "설정",
-          "description": "Codex 스킬이 저장되는 위치:",
-          "userPath": {
-            "label": "사용자 디렉토리",
-            "description": "~/.agents/skills/, 모든 프로젝트에서 공유"
+          "title": "설정 방법",
+          "description": "스킬을 추가하는 방법:",
+          "localPath": {
+            "label": "로컬 경로",
+            "description": "SKILL.md를 포함하는 폴더 경로 지정"
           },
-          "repoPath": {
-            "label": "저장소 디렉토리",
-            "description": "{project-root}/.agents/skills/, 현재 프로젝트에서만 사용 가능"
+          "relativePath": {
+            "label": "상대 경로",
+            "description": "프로젝트 루트 기준, 예: ./skills/my-skill"
           },
-          "configToml": {
-            "label": "활성화/비활성화",
-            "description": "~/.codex/config.toml의 [[skills.config]] 항목으로 제어"
+          "absolutePath": {
+            "label": "절대 경로",
+            "description": "전체 파일 시스템 경로"
           }
         },
         "tips": {
           "title": "사용 팁",
           "item1": "스킬 디렉토리에 유효한 SKILL.md 파일이 포함되어 있는지 확인하세요",
-          "item2": "스킬 이름은 소문자, 숫자, 하이픈만 사용해야 합니다",
-          "item3": "채팅에서 $ 접두사를 입력하면 스킬 자동완성이 실행됩니다",
+          "item2": "스킬 이름은 소문자, 숫자, 하이픈만 사용해야 합니다 (hyphen-case)",
+          "item3": "스킬은 로드 후 Claude 세션에서 자동으로 적용됩니다",
           "item4": "활성화/비활성화 토글로 개별 스킬 상태를 제어합니다",
-          "item5": "비활성화된 스킬은 ~/.codex/config.toml에 기록됩니다"
+          "item5": "채팅에서 스킬 이름을 언급하여 사용하세요. 예: \"pdf 스킬을 사용하여 양식 필드를 추출해줘\""
         },
         "learnMore": {
           "title": "더 알아보기",
-          "description": "Codex 스킬에 대한 더 많은 정보:",
-          "link1": "Codex 스킬 문서"
+          "description": "스킬에 대한 더 많은 정보:",
+          "link1": "스킬이란?",
+          "link2": "사용자 지정 스킬 만들기",
+          "link3": "Anthropic 스킬 예제 저장소"
+        },
+        "codex": {
+          "title": "Codex 스킬이란?",
+          "overview": {
+            "title": "개요",
+            "description": "Codex 스킬은 .agents/skills/ 디렉토리에 저장된 지시사항 세트로, 특정 작업에 대한 Codex의 성능을 향상시킵니다. 채팅에서 $ 접두사를 사용하여 호출합니다."
+          },
+          "structure": {
+            "title": "스킬 구조",
+            "description": "Codex 스킬은 SKILL.md 파일을 포함하는 폴더입니다:",
+            "example": ".agents/skills/\n└── my-skill/\n    ├── SKILL.md          # 필수: 스킬 정의 파일\n    ├── templates/        # 선택: 템플릿 파일\n    └── references/       # 선택: 참고 자료"
+          },
+          "format": {
+            "title": "SKILL.md 형식",
+            "description": "SKILL.md 파일은 YAML 프론트매터 + 마크다운 형식을 사용합니다:",
+            "example": "---\nname: my-skill-name\ndescription: 스킬 설명 및 사용 시기\n---\n\n# 스킬 지시사항\n\n상세 지시 내용...",
+            "hint": "name과 description은 필수 필드입니다"
+          },
+          "configuration": {
+            "title": "설정",
+            "description": "Codex 스킬이 저장되는 위치:",
+            "userPath": {
+              "label": "사용자 디렉토리",
+              "description": "~/.agents/skills/, 모든 프로젝트에서 공유"
+            },
+            "repoPath": {
+              "label": "저장소 디렉토리",
+              "description": "{project-root}/.agents/skills/, 현재 프로젝트에서만 사용 가능"
+            },
+            "configToml": {
+              "label": "활성화/비활성화",
+              "description": "~/.codex/config.toml의 [[skills.config]] 항목으로 제어"
+            }
+          },
+          "tips": {
+            "title": "사용 팁",
+            "item1": "스킬 디렉토리에 유효한 SKILL.md 파일이 포함되어 있는지 확인하세요",
+            "item2": "스킬 이름은 소문자, 숫자, 하이픈만 사용해야 합니다",
+            "item3": "채팅에서 $ 접두사를 입력하면 스킬 자동완성이 실행됩니다",
+            "item4": "활성화/비활성화 토글로 개별 스킬 상태를 제어합니다",
+            "item5": "비활성화된 스킬은 ~/.codex/config.toml에 기록됩니다"
+          },
+          "learnMore": {
+            "title": "더 알아보기",
+            "description": "Codex 스킬에 대한 더 많은 정보:",
+            "link1": "Codex 스킬 문서"
+          }
         }
       }
-    }
-  },
-  "models": {
-    "addModel": "모델 추가",
-    "searchPlaceholder": "모델 검색",
-    "clearSearch": "검색 지우기",
-    "noModelsFound": "모델을 찾을 수 없습니다",
-    "noSearchMatches": "\"{{query}}\"와 일치하는 모델이 없습니다",
-    "hiddenModelCount": "+ {{count}}개 모델 더 있음. 입력하여 검색하세요.",
-    "pinned": "고정",
-    "pin": "고정",
-    "unpin": "고정 해제",
-    "retiredBadge": "지원 종료",
-    "retiredCustomHint": "API에서 더 이상 제공하지 않는 모델 ID입니다. 사용자 정의 모델로 추가했기 때문에 바꾸지 않고 그대로 전송합니다.",
-    "claude": {
-      "sonnet46": {
-        "label": "Sonnet 4.6",
-        "description": "Sonnet 4.6 · 기본 모델 사용"
+    },
+    "models": {
+      "addModel": "모델 추가",
+      "searchPlaceholder": "모델 검색",
+      "clearSearch": "검색 지우기",
+      "noModelsFound": "모델을 찾을 수 없습니다",
+      "noSearchMatches": "\"{{query}}\"와 일치하는 모델이 없습니다",
+      "hiddenModelCount": "+ {{count}}개 모델 더 있음. 입력하여 검색하세요.",
+      "pinned": "고정",
+      "pin": "고정",
+      "unpin": "고정 해제",
+      "retiredBadge": "지원 종료",
+      "retiredCustomHint": "API에서 더 이상 제공하지 않는 모델 ID입니다. 사용자 정의 모델로 추가했기 때문에 바꾸지 않고 그대로 전송합니다.",
+      "claude": {
+        "sonnet46": {
+          "label": "Sonnet 4.6",
+          "description": "Sonnet 4.6 · 기본 모델 사용"
+        },
+        "sonnet5": {
+          "label": "Sonnet 5",
+          "description": "Sonnet 5 · 기본 모델 사용"
+        },
+        "sonnet55": {
+          "label": "Sonnet 5.5",
+          "description": "Sonnet 5.5 · 최신 Sonnet 업그레이드"
+        },
+        "opus55": {
+          "label": "Opus 5.5",
+          "description": "Opus 5.5 · 최신 Opus 업그레이드"
+        },
+        "opus5": {
+          "label": "Opus 5",
+          "description": "Opus 5 · 이전 세대 Opus 모델"
+        },
+        "opus46_1m": {
+          "label": "Opus 4.6",
+          "description": "Opus 4.6 · 고성능 추론 모델"
+        },
+        "haiku45": {
+          "label": "Haiku 4.5",
+          "description": "Haiku 4.5 · 빠른 응답에 최적"
+        },
+        "fable52": {
+          "label": "Fable 5.2",
+          "description": "Fable 5.2 · 가장 강력함 · Mythos급"
+        },
+        "fable51": {
+          "label": "Fable 5.1",
+          "description": "Fable 5.1 · 이전 세대 Fable 모델"
+        }
       },
-      "sonnet5": {
-        "label": "Sonnet 5",
-        "description": "Sonnet 5 · 기본 모델 사용"
+      "longContext": {
+        "label": "1M",
+        "shortLabel": "1M 컨텍스트",
+        "tooltipEnabled": "1M 컨텍스트 켜기/끄기",
+        "tooltipDisabled": "Haiku에서는 1M 컨텍스트를 사용할 수 없습니다"
       },
-      "sonnet55": {
-        "label": "Sonnet 5.5",
-        "description": "Sonnet 5.5 · 최신 Sonnet 업그레이드"
-      },
-      "opus55": {
-        "label": "Opus 5.5",
-        "description": "Opus 5.5 · 최신 Opus 업그레이드"
-      },
-      "opus5": {
-        "label": "Opus 5",
-        "description": "Opus 5 · 이전 세대 Opus 모델"
-      },
-      "opus46_1m": {
-        "label": "Opus 4.6",
-        "description": "Opus 4.6 · 고성능 추론 모델"
-      },
-      "haiku45": {
-        "label": "Haiku 4.5",
-        "description": "Haiku 4.5 · 빠른 응답에 최적"
-      },
-      "fable52": {
-        "label": "Fable 5.2",
-        "description": "Fable 5.2 · 가장 강력함 · Mythos급"
-      },
-      "fable51": {
-        "label": "Fable 5.1",
-        "description": "Fable 5.1 · 이전 세대 Fable 모델"
+      "codex": {
+        "gpt6astra": {
+          "label": "GPT-6 Astra",
+          "description": "자율 컴퓨터 조작과 장기 에이전트 작업을 위한 차세대 플래그십 모델."
+        },
+        "gpt61sol": {
+          "label": "GPT-6.1 Sol",
+          "description": "복잡한 전문 작업을 위한 GPT-6.1 프런티어 모델."
+        },
+        "gpt6sol": {
+          "label": "GPT-6 Sol",
+          "description": "복잡한 전문 작업을 위한 GPT-6 프런티어 모델."
+        },
+        "gpt56sol": {
+          "label": "GPT-5.6 Sol",
+          "description": "복잡한 전문 작업을 위한 프런티어 모델."
+        },
+        "gpt56terra": {
+          "label": "GPT-5.6 Terra",
+          "description": "지능과 비용의 균형을 맞춘 GPT-5.6 모델."
+        },
+        "gpt6luna": {
+          "label": "GPT-6 Luna",
+          "description": "비용 민감형 워크로드에 최적화된 GPT-6 모델."
+        },
+        "gpt56luna": {
+          "label": "GPT-5.6 Luna",
+          "description": "비용 민감형 워크로드에 최적화된 GPT-5.6 모델."
+        },
+        "gpt55": {
+          "label": "GPT-5.5",
+          "description": "최신 프런티어 모델, 성능이 한층 강화되었습니다"
+        },
+        "gpt54": {
+          "label": "GPT-5.4",
+          "description": "향상된 기능의 최신 프론티어 모델."
+        }
       }
     },
-    "longContext": {
-      "label": "1M",
-      "shortLabel": "1M 컨텍스트",
-      "tooltipEnabled": "1M 컨텍스트 켜기/끄기",
-      "tooltipDisabled": "Haiku에서는 1M 컨텍스트를 사용할 수 없습니다"
+    "modes": {
+      "default": {
+        "label": "기본 모드",
+        "tooltip": "표준 권한 동작",
+        "description": "각 작업에 대해 수동 확인이 필요하며, 신중한 사용에 적합합니다"
+      },
+      "plan": {
+        "label": "계획 모드",
+        "tooltip": "계획 모드 - 읽기 전용 분석",
+        "description": "읽기 전용 도구만 사용하여 사용자 승인을 위한 계획을 생성합니다"
+      },
+      "acceptEdits": {
+        "label": "에이전트 모드",
+        "tooltip": "파일 편집 자동 수락",
+        "description": "파일 생성/편집을 자동으로 수락하여 확인 단계를 줄입니다"
+      },
+      "auto": {
+        "label": "자동 승인 모드",
+        "shortLabel": "자동 승인",
+        "tooltip": "공급자 기본 검토자가 승인 요청을 자동으로 처리하도록 합니다",
+        "description": "안전 경계를 유지하면서 공급자 기본 검토자를 사용합니다"
+      },
+      "bypassPermissions": {
+        "label": "완전 자동",
+        "shortLabel": "완전 자동",
+        "tooltip": "모든 권한 검사 우회",
+        "description": "완전 자동화, 모든 권한 검사를 우회합니다 [주의하여 사용]"
+      }
+    },
+    "workspaceDiff": {
+      "title": "작업 공간 변경 사항",
+      "staged": "스테이징됨",
+      "unstaged": "스테이징되지 않음",
+      "untracked": "추적되지 않음",
+      "noChanges": "변경 사항이 없습니다",
+      "binary": "바이너리",
+      "truncated": "작업 공간 스냅샷이 너무 커서 잘렸습니다",
+      "notGit": "현재 디렉터리는 Git 작업 트리가 아닙니다",
+      "refresh": "새로 고침",
+      "fileCount": "{{count}}개 파일"
+    },
+    "codexModes": {
+      "default": {
+        "label": "제안 (승인 필요)",
+        "tooltip": "Codex approval_policy=on-request – 파일 편집이나 셸 명령 실행 전에 확인합니다.",
+        "description": "가장 안전한 옵션. 모든 쓰기 또는 명령에 승인이 필요합니다."
+      },
+      "plan": {
+        "label": "계획 모드",
+        "tooltip": "네이티브 협업 계획 모드",
+        "description": "구현 전에 네이티브 계획을 생성합니다. 샌드박스와 승인 설정은 독립적으로 유지됩니다"
+      },
+      "acceptEdits": {
+        "label": "자동 편집",
+        "tooltip": "Codex approval_policy=on-request – 필요 시 승인을 요청합니다",
+        "description": "균형 잡힌 옵션. 일반적인 편집 흐름을 허용하면서도 필요 시 승인을 요구합니다."
+      },
+      "auto": {
+        "label": "대신 승인",
+        "shortLabel": "자동 승인",
+        "tooltip": "Codex approvals_reviewer=auto_review – 자동 검토자가 대상 승인 요청을 처리합니다.",
+        "description": "workspace-write 샌드박스를 유지하고 검토자가 승인할 수 없는 요청은 사용자에게 전달합니다."
+      },
+      "bypassPermissions": {
+        "label": "완전 자동",
+        "tooltip": "Codex approval_policy=never – 확인 없이 명령을 실행하고 파일을 작성합니다 (워크스페이스 샌드박스는 여전히 적용됨).",
+        "description": "자율 모드. Codex가 편집과 셸 명령을 즉시 실행합니다."
+      }
+    },
+    "ompApprovals": {
+      "title": "OMP 승인 모드 선택",
+      "default": {
+        "label": "기본값",
+        "description": "미설정 시 완전 자동(OMP의 tools.approvalMode)"
+      },
+      "alwaysAsk": {
+        "label": "묻기",
+        "description": "편집과 명령 실행 전에 묻습니다"
+      },
+      "write": {
+        "label": "편집 자동 승인",
+        "description": "명령 실행 전에만 묻습니다"
+      },
+      "yolo": {
+        "label": "완전 자동",
+        "description": "묻지 않습니다"
+      }
+    },
+    "ompModes": {
+      "default": {
+        "label": "기본",
+        "tooltip": "선택한 모델 사용 (또는 OMP auto)",
+        "description": "모델 드롭다운에서 선택한 모델을 사용하며, Auto로 설정된 경우 OMP CLI 기본값을 사용합니다."
+      },
+      "smol": {
+        "label": "Smol",
+        "tooltip": "빠른 모델 역할 (omp --model smol)",
+        "description": "omp의 smol 역할에 구성된 모델로 이 대화를 실행합니다. 모델 드롭다운을 재정의합니다."
+      },
+      "slow": {
+        "label": "Slow",
+        "tooltip": "추론 모델 역할 (omp --model slow)",
+        "description": "omp의 slow 역할에 구성된 모델로 이 대화를 실행합니다. 모델 드롭다운을 재정의합니다."
+      },
+      "plan": {
+        "label": "Plan",
+        "tooltip": "계획 모델 역할 (omp --model plan)",
+        "description": "omp의 plan 역할에 구성된 모델로 이 대화를 실행합니다. 모델 드롭다운을 재정의합니다."
+      }
+    },
+    "providers": {
+      "claude": {
+        "label": "Claude Code"
+      },
+      "codex": {
+        "label": "Codex"
+      },
+      "grok": {
+        "label": "Grok CLI"
+      },
+      "kimi": {
+        "label": "Kimi CLI"
+      },
+      "minimax": {
+        "label": "MiniMax Code"
+      },
+      "zcode": {
+        "label": "ZCode"
+      },
+      "gemini": {
+        "label": "Gemini Cli"
+      },
+      "opencode": {
+        "label": "OpenCode"
+      },
+      "pi": {
+        "label": "PI CLI"
+      },
+      "omp": {
+        "label": "OMP CLI"
+      }
+    },
+    "promptEnhancer": {
+      "title": "프롬프트 강화",
+      "tooltip": "프롬프트 강화",
+      "tooltipFull": "더 많은 컨텍스트를 제공하고 에이전트 응답을 개선하기 위해 프롬프트를 다시 작성합니다",
+      "shortcut": "⌘/",
+      "enhancing": "프롬프트 강화 중...",
+      "originalPrompt": "원본 프롬프트",
+      "enhancedPrompt": "강화된 프롬프트",
+      "useEnhanced": "강화된 버전 사용",
+      "keepOriginal": "원본 유지",
+      "enhanceFailed": "프롬프트 강화 실패",
+      "emptyPrompt": "먼저 프롬프트를 입력해주세요",
+      "copyEnhanced": "강화된 프롬프트 복사",
+      "modeLabel": "모드",
+      "modeAuto": "자동",
+      "modeManual": "수동",
+      "modeUnavailable": "사용 불가",
+      "providerLabel": "CLI",
+      "providerUnresolved": "CLI 미확인",
+      "modelLabel": "모델",
+      "modelUnresolved": "기본 모델",
+      "openSettings": "설정",
+      "openSettingsTooltip": "프롬프트 강화 설정 열기",
+      "resolvingUsage": "실행 설정 확인 중…"
+    },
+    "fileContext": {
+      "placeholder": "파일 컨텍스트",
+      "enableTitle": "파일 컨텍스트를 활성화하시겠습니까?",
+      "enableDescription": "활성화하면 에디터에서 현재 열린 파일 경로가 AI에 전송됩니다. 참고: 파일 경로만 전송되며 파일 내용은 전송되지 않습니다.",
+      "enable": "활성화",
+      "cancel": "취소"
+    },
+    "rewind": {
+      "title": "파일을 이전 상태로 되돌리기",
+      "tooltip": "되돌리기",
+      "tooltipFull": "이 메시지 시점의 파일 상태로 복원합니다",
+      "selectTitle": "되돌리기 지점 선택",
+      "noRewindableMessages": "이 세션에서 되돌릴 수 있는 메시지가 없습니다",
+      "rewindTo": "되돌리기 대상",
+      "impact": "영향",
+      "willRestore": "이 메시지 시점의 파일 상태로 복원합니다",
+      "changesLost": "이 시점 이후의 변경 사항이 손실됩니다",
+      "messagesAffected": "개 메시지 영향",
+      "historyKept": "대화 기록은 유지됩니다",
+      "cannotUndo": "이 작업은 되돌릴 수 없습니다.",
+      "restoreFiles": "파일 복원",
+      "restoring": "파일 복원 중...",
+      "success": "되돌리기 성공",
+      "successSimple": "되돌리기 성공",
+      "failed": "파일 복원 실패",
+      "notAvailable": "이 세션에서는 되돌리기를 사용할 수 없습니다",
+      "parseError": "결과 분석 실패"
+    },
+    "reasoning": {
+      "title": "추론 깊이 선택",
+      "low": {
+        "label": "낮음",
+        "description": "기본 추론으로 빠른 응답"
+      },
+      "medium": {
+        "label": "보통",
+        "description": "균형 잡힌 사고 (기본값)"
+      },
+      "high": {
+        "label": "높음",
+        "description": "복잡한 작업을 위한 심층 추론"
+      },
+      "xhigh": {
+        "label": "최대",
+        "description": "최대 추론 깊이"
+      },
+      "ultra": {
+        "label": "Ultra",
+        "description": "최대 추론 깊이와 자동 작업 위임"
+      }
+    },
+    "errorBoundary": {
+      "title": "문제가 발생했습니다",
+      "description": "애플리케이션에서 예기치 않은 오류가 발생했습니다. 아래 오류 세부정보를 복사하여 문제 해결을 위해 개발자에게 공유해주세요.",
+      "possibleCauses": "가능한 원인:",
+      "cause1": "Node.js가 설치되지 않았거나 올바르게 설정되지 않았습니다",
+      "cause2": "네트워크 연결 문제",
+      "cause3": "플러그인 또는 IDE 호환성 문제",
+      "cause4": "시스템 리소스 부족",
+      "errorDetails": "오류 세부정보",
+      "copyError": "오류 정보 복사",
+      "copied": "복사됨!",
+      "reload": "애플리케이션 다시 로드",
+      "helpText": "문제가 지속되면 오류 정보를 복사하여 GitHub에 이슈로 제출하거나 커뮤니티 그룹에서 공유해주세요."
+    },
+    "aiBridge": {
+      "claudeCodeInterrupted": "Claude Code가 중단되었습니다 (응답 시간 초과 또는 사용자 취소일 수 있음):",
+      "claudeCodeError": "Claude Code 오류:",
+      "errorMessage": "오류 메시지",
+      "currentApiKeySource": "현재 API 키 소스",
+      "currentApiKeyPreview": "현재 API 키 미리보기",
+      "currentBaseUrl": "현재 Base URL",
+      "source": "소스",
+      "notConfigured": "설정되지 않음",
+      "notConfiguredEmpty": "설정되지 않음 (값이 비어있거나 누락됨)",
+      "defaultBaseUrl": "기본값 (https://api.anthropic.com)",
+      "configTip": "팁: CLI는 환경 변수 또는 settings.json에서 읽을 수 있지만, 이 플러그인은 문제 방지를 위해 settings.json에서만 읽도록 지원합니다. 플러그인 우측 상단 설정 > 제공자 관리에서 설정할 수 있습니다",
+      "apiError": "API 오류",
+      "apiErrorCauses": "가능한 원인:\n1. API 키가 올바르게 설정되지 않았습니다\n2. 타사 프록시 서비스 설정 문제\n3. ~/.claude/settings.json의 설정을 확인해주세요",
+      "codexAuthError": "Codex 인증 오류:",
+      "codexAuthErrorChecks": "다음을 확인해주세요:\n1. 플러그인 설정의 Codex API 키가 올바른지\n2. API 키에 충분한 권한이 있는지\n3. 사용자 지정 Base URL을 사용하는 경우 주소가 올바른지",
+      "codexAuthTip": "팁: Codex에는 유효한 OpenAI API 키가 필요합니다",
+      "codexNetworkError": "Codex 네트워크 오류:",
+      "codexNetworkErrorChecks": "확인해주세요:\n1. 네트워크 연결이 정상인지\n2. 프록시를 사용하는 경우 프록시 설정이 올바른지\n3. 방화벽이 연결을 차단하고 있지 않은지",
+      "codexError": "Codex 오류:",
+      "codexErrorCheck": "네트워크 연결과 Codex 설정을 확인해주세요",
+      "codexThinkingHint": "Codex가 추론 항목을 반환하지 않았습니다. 사고 과정이 여전히 보이지 않으면 docs/codex/docs/config.md에서 hide_agent_reasoning/show_raw_agent_reasoning 설정을 참조하고, OpenAI 계정이 인증되었는지 확인해주세요.",
+      "userDeniedPermission": "사용자가 {{toolName}} 도구의 권한을 거부했습니다",
+      "userDidNotProvideAnswers": "사용자가 답변을 제공하지 않았습니다",
+      "dbMissingPath": "데이터베이스 파일 경로 인수가 누락되었습니다",
+      "dbFileNotExist": "데이터베이스 파일이 존재하지 않습니다",
+      "dbReadFailed": "데이터베이스 읽기 실패",
+      "dbParseProviderFailed": "제공자 설정 분석 실패",
+      "aiResponseEmpty": "AI 응답이 비어있습니다",
+      "enhancementFailed": "강화 실패",
+      "uploadedImages": "{{count}}개 이미지 업로드됨",
+      "uploadedAttachments": "첨부파일 업로드됨",
+      "emptyMessage": "빈 메시지",
+      "attachment": "첨부파일"
+    },
+    "changelog": {
+      "title": "새로운 기능",
+      "close": "확인",
+      "page": "{{current}} / {{total}}"
+    },
+    "error": {
+      "providerNotConfigured": "제공자가 설정되지 않았습니다",
+      "providerNotConfiguredDesc": "아직 AI 제공자가 구성되지 않았거나 로컬 구성 사용 권한이 승인되지 않았습니다. 대화를 시작하기 전에 제공자 관리 설정에서 구성을 완료해주세요.",
+      "goToProviderSettings": "설정으로 이동"
+    },
+    "errorDiagnostic": {
+      "copyCommand": "복사",
+      "copied": "복사됨",
+      "openDependencySettings": "종속성 관리 열기",
+      "recommended": "권장",
+      "updateClaudeSdk": "SDK 업데이트",
+      "updatingClaudeSdk": "업데이트 중...",
+      "updateClaudeSdkSuccess": "{{version}}(으)로 업데이트했습니다. 메시지를 다시 보내 주세요.",
+      "updateClaudeSdkFailed": "업데이트 실패: {{error}}",
+      "updateClaudeSdkFailedUnknown": "업데이트에 실패했습니다. 자세한 내용은 종속성 관리에서 확인하세요.",
+      "updateClaudeSdkTimedOut": "15분이 지나도 결과가 없습니다. 종속성 관리에서 업데이트 상태를 확인하세요.",
+      "updateClaudeSdkCustomCli": "SDK를 {{version}}(으)로 업데이트했지만 플러그인은 직접 지정한 Claude CLI({{path}})를 실행합니다. 방법 2로 업데이트하세요.",
+      "updateClaudeSdkAlreadyLatest": "{{version}}은(는) 이 플러그인이 지원하는 최신 SDK이지만, 이 모델에는 더 새로운 Claude Code가 필요합니다. 새 플러그인 버전이 나오면 플러그인을 업데이트하거나 다른 모델을 선택하세요.",
+      "codexWriterConflict": {
+        "title": "Codex 대화가 사용 중입니다",
+        "intro": "다른 Codex 클라이언트 또는 채팅 창이 이 대화의 쓰기 권한을 보유하고 있습니다.",
+        "reason": "대화가 만료되었다는 뜻은 아닙니다. 플러그인은 잠금을 삭제하거나 다른 클라이언트를 자동으로 중지하지 않습니다.",
+        "solutions": {
+          "releaseWriter": {
+            "title": "사용 중인 클라이언트에서 대화 해제",
+            "step0": "이 대화를 사용하는 Codex 클라이언트 또는 채팅 창에서 작업을 중지하고 대화를 닫거나 해제하세요.",
+            "step1": "해제된 것을 확인한 후 여기서 다시 보내세요. 강제로 접근하기 위해 쓰기 잠금 파일을 삭제하지 마세요."
+          }
+        }
+      },
+      "codexThreadClosing": {
+        "title": "Codex 대화를 닫는 중입니다",
+        "intro": "Codex가 이 대화를 닫는 작업을 완료하지 않아 아직 복원할 수 없습니다.",
+        "reason": "플러그인은 이 명시적인 종료 상태에 대해서만 작업 시작 전에 잠시 재시도합니다. 계속 실패하면 원래 오류를 표시합니다.",
+        "solutions": {
+          "waitForClose": {
+            "title": "이전 대화가 닫힐 때까지 대기",
+            "step0": "이전 Codex 클라이언트 또는 채팅 창에서 대화를 해제한 후 다시 시도하세요.",
+            "step1": "반복되면 이전 클라이언트가 대화를 해제한 후 기록 목록에서 대화를 다시 여세요."
+          }
+        }
+      },
+      "codexThreadHistoryMissing": {
+        "title": "Codex 기록을 찾을 수 없습니다",
+        "intro": "현재 Codex 실행 환경에서 이 대화의 원본 기록을 찾을 수 없습니다.",
+        "reason": "기록 디렉터리가 달라졌거나 첫 초기화가 완료되지 않아 발생할 수도 있습니다. 기록이 삭제되었다고 단정할 수 없습니다.",
+        "solutions": {
+          "checkStorage": {
+            "title": "원래 기록 위치 확인",
+            "step0": "Codex가 원래 CODEX_HOME과 같은 호스트 환경을 사용하는지 확인하세요. 로컬 환경과 WSL의 차이에 특히 주의하세요.",
+            "step1": "원래 기록 디렉터리 또는 백업을 복원한 후 기록 목록에서 대화를 다시 여세요."
+          },
+          "startNewIfMissing": {
+            "title": "기록을 복구할 수 없을 때만 새로 시작",
+            "step0": "원래 기록을 복구할 수 없다고 확인한 경우에만 새 대화를 만들고 필요한 맥락을 다시 제공하세요. 여기에 표시된 메시지만으로 Codex의 원본 맥락이 자동 복원되지는 않습니다."
+          }
+        }
+      },
+      "codexThreadArchived": {
+        "title": "Codex 대화가 보관되어 있습니다",
+        "intro": "Codex에서 이 대화가 보관 상태이므로 바로 재개할 수 없다고 보고했습니다.",
+        "reason": "보관 상태는 스레드 만료를 뜻하지 않습니다. 복원을 위해 새 대화를 만들 필요는 없습니다.",
+        "solutions": {
+          "unarchive": {
+            "title": "원래 대화의 보관 해제",
+            "step0": "원래 Codex 클라이언트에서 보관을 해제하거나 원래 오류에 표시된 보관 해제 명령을 따르세요.",
+            "step1": "플러그인의 기록 목록을 새로 고치고 이 대화를 다시 연 후 보내세요."
+          }
+        }
+      },
+      "codexThreadResumeConfiguration": {
+        "title": "Codex 설정으로 인해 복원할 수 없습니다",
+        "intro": "Codex가 설정을 불러오지 못했거나 필수 MCP 서버 초기화에 실패했습니다.",
+        "reason": "새 대화로 같은 설정 문제가 해결되지는 않습니다. 플러그인은 필수 서비스를 자동으로 비활성화하지 않습니다.",
+        "solutions": {
+          "repairConfiguration": {
+            "title": "Codex가 보고한 설정 문제 수정",
+            "step0": "원래 오류에서 실패한 설정 항목 또는 필수 MCP 서버를 확인하세요.",
+            "step1": "Codex, 제공업체 또는 MCP 설정에서 해당 설정, 인증 정보, 연결을 수정한 후 대화를 다시 열고 재시도하세요."
+          }
+        }
+      },
+      "codexThreadResume": {
+        "title": "Codex 대화를 복원할 수 없습니다",
+        "intro": "Codex가 이 대화 복원에 실패했습니다. 구체적인 원인은 아직 확인되지 않았습니다.",
+        "reason": "복원 실패만으로 대화 만료를 단정할 수 없습니다. 플러그인은 원래 대화를 유지하며 빈 대화로 자동 교체하지 않습니다.",
+        "solutions": {
+          "inspectCause": {
+            "title": "재시도 전 원래 오류 확인",
+            "step0": "원래 오류와 이 대화에서 사용한 제공업체, Codex 실행 환경, 기록 디렉터리를 확인하세요.",
+            "step1": "응답이나 도구 실행이 이미 표시된 경우 중복 작업을 피하도록 결과를 확인한 후 다시 보내세요."
+          },
+          "checkCli": {
+            "title": "Codex CLI 호환성 확인",
+            "step0": "터미널 버전을 플러그인의 CLI 페이지와 비교하세요. 사용자 지정 경로라면 해당 실행 파일에 --version을 지정하세요.",
+            "step1": "원래 오류가 지원되지 않는 CLI 또는 프로토콜 버전을 나타내면 공식 안내에 따라 Codex를 업데이트하고 CLI 감지를 새로 고치세요."
+          }
+        }
+      },
+      "sdkNativeBinaryMissing": {
+        "title": "SDK 설치 불완전 — 네이티브 바이너리 누락",
+        "intro": "이것은 Taobao npm 미러의 알려진 문제입니다(플러그인 버그가 아님). 미러가 플랫폼별 파일을 완전히 동기화하지 않았습니다. 아래 방법 중 하나로 수동 해결할 수 있습니다:",
+        "reason": "Taobao 미러가 동기화를 완료하면 이 문제가 자동으로 사라집니다. 걱정하지 마세요.",
+        "solutions": {
+          "switchRegistry": {
+            "title": "방법 1: 임시로 공식 레지스트리로 전환 후 재설치",
+            "step0": "1. 터미널에서 실행 (npm 공식 레지스트리로 전환):",
+            "step1": "2. 플러그인 설정의 '종속성 관리'를 열고 재설치 클릭:",
+            "step2": "3. 재설치 완료 후 Taobao 미러로 복원:"
+          },
+          "downgrade": {
+            "title": "방법 2: 버전 롤백",
+            "step0": "'종속성 관리'에서 SDK 버전을 v0.2.112 또는 그 이전으로 전환하세요. 전환 후 IDEA를 재시작해야 합니다."
+          }
+        }
+      },
+      "claudeCodeVersionTooOld": {
+        "title": "이 모델을 쓰기에는 Claude Code SDK 버전이 낮습니다",
+        "intro": "플러그인은 터미널의 claude 명령 대신 자체 SDK에 포함된 Claude Code를 실행합니다. 포함된 버전이 이 모델이 요구하는 버전보다 낮습니다.",
+        "reason": "SDK는 플러그인과 따로 설치되므로 플러그인이나 터미널의 claude 명령을 업데이트해도 SDK는 그대로입니다.",
+        "solutions": {
+          "updateSdk": {
+            "title": "방법 1: Claude Code SDK 업데이트",
+            "step0": "지원되는 최신 SDK를 설치합니다. 설치가 끝나면 플러그인이 Claude 프로세스를 다시 시작하므로 바로 메시지를 다시 보낼 수 있습니다."
+          },
+          "updateCustomCli": {
+            "title": "방법 2: 직접 지정한 Claude CLI 업데이트",
+            "step0": "'Claude CLI 경로 (재정의)'를 설정했다면 플러그인은 SDK 대신 그 바이너리를 실행합니다. 터미널에서 업데이트하세요:"
+          }
+        }
+      },
+      "claudeCodeWindowsTooOld": {
+        "title": "이 Windows 버전에서는 Claude Code를 시작할 수 없습니다",
+        "intro": "필요한 시스템 함수를 찾지 못해 Windows가 Claude Code 시작을 막았습니다(오류 0xC0000139). 보통 Windows가 너무 오래되었다는 뜻입니다. Claude Code 2.1.118 이상은 ClosePseudoConsole을 사용하며, 이 함수에는 Windows 10 버전 1809 또는 Windows Server 2019가 필요합니다.",
+        "reason": "Windows는 프로그램을 불러오는 단계, 즉 Claude Code가 실행되기 전에 거부하므로 모델, 제공자, 권한 설정을 바꿔도 해결되지 않습니다.",
+        "solutions": {
+          "updateWindows": {
+            "title": "방법 1: Windows 업데이트",
+            "step0": "Windows 10 버전 1809 이상 또는 Windows Server 2019 이상으로 업데이트하세요. 이 버전들에는 누락된 함수가 포함되어 있습니다."
+          },
+          "useOlderSdk": {
+            "title": "방법 2: 이전 SDK로 전환",
+            "step0": "'종속성 관리'에서 SDK 버전을 v0.2.112 또는 그 이전으로 전환하세요. 최신 모델은 이 버전을 허용하지 않을 수 있습니다. 모델이 더 새로운 Claude Code를 요구하면 다른 모델을 선택하거나 Windows를 업데이트하세요. SDK를 업데이트하면 이 오류가 다시 나타납니다."
+          },
+          "checkCustomCli": {
+            "title": "방법 3: 직접 지정한 Claude CLI 확인",
+            "step0": "'Claude CLI 경로 (재정의)'를 설정했다면 플러그인은 SDK 대신 그 바이너리를 실행하므로 SDK를 전환해도 효과가 없습니다. 경로를 지우거나 이전 Claude Code를 가리키도록 바꾸세요. Windows가 이미 최신이라면 이 항목을 먼저 확인하세요."
+          }
+        }
+      },
+      "spawnEbusy": {
+        "title": "spawn EBUSY — 자식 프로세스 시작 실패",
+        "intro": "이 오류는 일반적으로 Node.js 버전 비호환성 또는 불완전한 SDK 설치로 인해 발생합니다. 아래 두 가지 방법을 순서대로 시도해 보세요:",
+        "reason": "EBUSY는 Node.js가 리소스 사용 중으로 인해 자식 프로세스를 시작할 수 없을 때 발생하는 시스템 오류입니다. 일반적인 원인: Node.js 24 호환성 문제, 오래된 SDK 또는 Taobao 미러에서의 불완전한 설치.",
+        "solutions": {
+          "checkNodeVersion": {
+            "title": "방법 1: Node.js 버전 확인",
+            "step0": "터미널에서 아래 명령어를 실행하여 버전을 확인하세요. Node 22 또는 현재 LTS를 권장합니다 — Node 24에서 많은 오류가 보고되었으므로 Node 20 또는 22를 우선 사용하세요:"
+          },
+          "reinstallLatestSdk": {
+            "title": "방법 2: npm 공식 레지스트리에서 최신 SDK 재설치",
+            "step0": "1. npm 공식 레지스트리로 전환 (Taobao 미러는 최신 버전이 없을 수 있으므로 사용하지 마세요):",
+            "step1": "2. '종속성 관리'를 열고 최신 SDK를 재설치:"
+          }
+        }
+      },
+      "codexCliVersionTooOld": {
+        "title": "Codex CLI 버전이 낮아 이 권한 모드를 사용할 수 없습니다",
+        "intro": "완전 자동과 자동 승인 모드는 자동 검토 설정을 사용합니다. 현재 Codex CLI는 이 설정을 인식하지 못해 요청을 거부했으므로 메시지가 처리되지 않았습니다.",
+        "reason": "플러그인은 컴퓨터에서 찾은 Codex CLI를 실행하므로 플러그인을 업데이트해도 CLI는 업데이트되지 않습니다. 업데이트 후에도 오류가 계속되면 더 오래된 codex가 PATH 앞쪽에 있을 수 있습니다.",
+        "solutions": {
+          "updateCodexCli": {
+            "title": "방법 1: 공식 안내에 따라 CLI 설치 또는 업데이트",
+            "step0": "1. 공식 안내를 열고 실행 환경에 맞게 독립 설치 관리자, npm 또는 Homebrew를 선택하세요. 업데이트는 원래 설치 경로로 진행하고, 독립 설치 버전에 npm uninstall을 실행하지 마세요:",
+            "step1": "2. 새 터미널에서 버전이 변경되었는지 확인한 다음, IDE를 다시 시작하여 플러그인이 새 CLI를 사용하도록 합니다:"
+          },
+          "useDefaultMode": {
+            "title": "방법 2: 권한 모드를 임시로 전환",
+            "step0": "기본 모드로 전환하세요. 이 모드는 자동 검토를 사용하지 않으므로 CLI를 업데이트할 때까지 계속 작업할 수 있습니다. 그래도 오류가 계속되면 방법 1에 따라 CLI를 업데이트하세요."
+          }
+        }
+      },
+      "codexCliAppServerTooOld": {
+        "title": "Codex CLI 버전이 낮아 시작할 수 없습니다",
+        "intro": "로컬 Codex CLI는 버전을 정상적으로 출력하지만, 너무 오래된 버전이라 플러그인이 codex app-server를 시작할 때 전달하는 --listen 옵션을 인식하지 못해 바로 종료됩니다.",
+        "reason": "플러그인은 컴퓨터에서 찾은 Codex CLI를 실행하므로 플러그인을 업데이트해도 CLI는 업데이트되지 않습니다. 업데이트 후에도 오류가 계속되면 더 오래된 codex가 PATH 앞쪽에 있을 수 있습니다.",
+        "solutions": {
+          "updateCodexCli": {
+            "title": "방법 1: 공식 안내에 따라 CLI 설치 또는 업데이트",
+            "step0": "1. 공식 안내를 열고 실행 환경에 맞게 독립 설치 관리자, npm 또는 Homebrew를 선택하세요. 업데이트는 원래 설치 경로로 진행하고, 독립 설치 버전에 npm uninstall을 실행하지 마세요:",
+            "step1": "2. 새 터미널에서 버전이 변경되었는지 확인한 다음, IDE를 다시 시작하여 플러그인이 새 CLI를 사용하도록 합니다:"
+          },
+          "pointCodexBin": {
+            "title": "방법 2: 동작하는 바이너리를 플러그인에 지정",
+            "step0": "PATH에 있는 모든 codex를 확인하세요(Windows: where codex). 동작하는 것이 첫 번째가 아니면 CODEX_BIN 환경 변수를 전체 경로로 설정하고 IDE를 다시 시작하세요. 플러그인은 뒤의 설치로도 자동 폴백합니다."
+          }
+        }
+      },
+      "codexCliUnavailable": {
+        "title": "Codex CLI를 시작할 수 없습니다",
+        "intro": "Codex CLI 런타임이 응답하기 전에 종료되었습니다. 실패한 CLI 경로와 CLI가 출력한 내용은 위 오류에 표시됩니다. 대부분 Codex CLI 설치가 불완전한 것이 원인이며 플러그인 버그가 아닙니다.",
+        "reason": "플러그인은 컴퓨터에서 찾은 Codex CLI로 codex app-server를 시작합니다. 절반만 설치된 복사본(예: 플랫폼 바이너리가 없는 전역 npm 설치)은 종료 코드 1로 종료되며 해당 턴도 함께 실패합니다.",
+        "solutions": {
+          "reinstallCodexCli": {
+            "title": "방법 1: 공식 안내에 따라 CLI 설치 또는 업데이트",
+            "step0": "1. 공식 안내를 열고 실행 환경에 맞게 독립 설치 관리자, npm 또는 Homebrew를 선택하세요. 업데이트는 원래 설치 경로로 진행하고, 독립 설치 버전에 npm uninstall을 실행하지 마세요:",
+            "step1": "2. 새 터미널에서 버전을 확인하고, 제공자 관리 → CLI를 새로 고친 뒤 다시 보내세요:"
+          },
+          "pointCodexBin": {
+            "title": "방법 2: 동작하는 바이너리를 플러그인에 지정",
+            "step0": "PATH에 있는 모든 codex를 확인하세요(Windows: where codex). 동작하는 것이 첫 번째가 아니면 CODEX_BIN 환경 변수를 전체 경로로 설정하고 IDE를 다시 시작하세요. 플러그인은 뒤의 설치로도 자동 폴백합니다."
+          }
+        }
+      }
     },
     "codex": {
-      "gpt6astra": {
-        "label": "GPT-6 Astra",
-        "description": "자율 컴퓨터 조작과 장기 에이전트 작업을 위한 차세대 플래그십 모델."
-      },
-      "gpt61sol": {
-        "label": "GPT-6.1 Sol",
-        "description": "복잡한 전문 작업을 위한 GPT-6.1 프런티어 모델."
-      },
-      "gpt6sol": {
-        "label": "GPT-6 Sol",
-        "description": "복잡한 전문 작업을 위한 GPT-6 프런티어 모델."
-      },
-      "gpt56sol": {
-        "label": "GPT-5.6 Sol",
-        "description": "복잡한 전문 작업을 위한 프런티어 모델."
-      },
-      "gpt56terra": {
-        "label": "GPT-5.6 Terra",
-        "description": "지능과 비용의 균형을 맞춘 GPT-5.6 모델."
-      },
-      "gpt6luna": {
-        "label": "GPT-6 Luna",
-        "description": "비용 민감형 워크로드에 최적화된 GPT-6 모델."
-      },
-      "gpt56luna": {
-        "label": "GPT-5.6 Luna",
-        "description": "비용 민감형 워크로드에 최적화된 GPT-5.6 모델."
-      },
-      "gpt55": {
-        "label": "GPT-5.5",
-        "description": "최신 프런티어 모델, 성능이 한층 강화되었습니다"
-      },
-      "gpt54": {
-        "label": "GPT-5.4",
-        "description": "향상된 기능의 최신 프론티어 모델."
+      "plan": {
+        "title": "Codex plan",
+        "ready": "Plan ready",
+        "execute": "Execute plan",
+        "executing": "Executing…",
+        "adjust": "Continue adjusting"
       }
+    },
+    "sessionSupplier": {
+      "label": "공급자",
+      "choose": "공급자를 선택하세요",
+      "nextTurn": "다음 턴부터 적용",
+      "unavailable": "공급자를 사용할 수 없습니다. 메뉴를 다시 열어 재시도하거나 다른 공급자를 선택하세요."
     }
   },
-  "modes": {
-    "default": {
-      "label": "기본 모드",
-      "tooltip": "표준 권한 동작",
-      "description": "각 작업에 대해 수동 확인이 필요하며, 신중한 사용에 적합합니다"
-    },
-    "plan": {
-      "label": "계획 모드",
-      "tooltip": "계획 모드 - 읽기 전용 분석",
-      "description": "읽기 전용 도구만 사용하여 사용자 승인을 위한 계획을 생성합니다"
-    },
-    "acceptEdits": {
-      "label": "에이전트 모드",
-      "tooltip": "파일 편집 자동 수락",
-      "description": "파일 생성/편집을 자동으로 수락하여 확인 단계를 줄입니다"
-    },
-    "auto": {
-      "label": "자동 승인 모드",
-      "shortLabel": "자동 승인",
-      "tooltip": "공급자 기본 검토자가 승인 요청을 자동으로 처리하도록 합니다",
-      "description": "안전 경계를 유지하면서 공급자 기본 검토자를 사용합니다"
-    },
-    "bypassPermissions": {
-      "label": "완전 자동",
-      "shortLabel": "완전 자동",
-      "tooltip": "모든 권한 검사 우회",
-      "description": "완전 자동화, 모든 권한 검사를 우회합니다 [주의하여 사용]"
-    }
+  "convertActiveHint": "Convert to CLI after ending the session",
+  "convertActiveHintTooltip": "End or close this session first, then convert it from the history list",
+  "convertAllToCliSessions": "Convert all to CLI ({{count}})",
+  "convertAllToCliSessionsTooltip": "Convert {{count}} session(s) created through the SDK into CLI entries so they appear in the Claude Code CLI /resume list. The session currently in use is skipped.",
+  "convertAllToCliSessionsLabel": "Convert all to CLI",
+  "convertAllToCliSessionsEmptyTooltip": "No SDK or VS Code sessions to convert. Only sessions created by the SDK or the VS Code extension can be turned into CLI entries; sessions created directly by the Claude Code CLI are already resumable.",
+  "convertAllSuccess": "{{count}} session(s) converted, now visible in CLI /resume",
+  "convertAllPartial": "Converted {{count}} of {{total}} session(s), {{failed}} failed",
+  "convertAllAlreadyRunning": "A conversion is already running, please wait for it to finish",
+  "convertAllTimeout": "The conversion took too long. The list has been refreshed, please check it in a moment.",
+  "convertAllBridgeUnavailable": "The bridge to the IDE is unavailable, so the request was not sent",
+  "fr": {
+    "convertActiveHint": "Convertir en CLI après la fin de la session",
+    "convertActiveHintTooltip": "Terminez ou fermez cette session d'abord, puis convertissez-la depuis la liste de l'historique",
+    "convertAllToCliSessions": "Convertir tout en CLI ({{count}})",
+    "convertAllToCliSessionsTooltip": "Convertir {{count}} session(s) créées via le SDK en entrées CLI pour qu'elles apparaissent dans la liste /resume du CLI Claude Code. La session actuellement utilisée est ignorée.",
+    "convertAllToCliSessionsLabel": "Convertir tout en CLI",
+    "convertAllToCliSessionsEmptyTooltip": "Aucune session SDK ou VS Code à convertir. Seules les sessions créées par le SDK ou l'extension VS Code peuvent être transformées en entrées CLI ; les sessions créées directement par le CLI Claude Code sont déjà reprises.",
+    "convertAllSuccess": "{{count}} session(s) converties, maintenant visibles dans CLI /resume",
+    "convertAllPartial": "Converties {{count}} sur {{total}} session(s), {{failed}} échouées",
+    "convertAllAlreadyRunning": "Une conversion est déjà en cours, veuillez attendre qu'elle se termine",
+    "convertAllTimeout": "La conversion a pris trop de temps. La liste a été rafraîchie, veuillez vérifier dans un instant.",
+    "convertAllBridgeUnavailable": "Le pont vers l'IDE n'est pas disponible, donc la requête n'a pas été envoyée"
   },
-  "workspaceDiff": {
-    "title": "작업 공간 변경 사항",
-    "staged": "스테이징됨",
-    "unstaged": "스테이징되지 않음",
-    "untracked": "추적되지 않음",
-    "noChanges": "변경 사항이 없습니다",
-    "binary": "바이너리",
-    "truncated": "작업 공간 스냅샷이 너무 커서 잘렸습니다",
-    "notGit": "현재 디렉터리는 Git 작업 트리가 아닙니다",
-    "refresh": "새로 고침",
-    "fileCount": "{{count}}개 파일"
+  "hi": {
+    "convertActiveHint": "सत्र समाप्त होने के बाद CLI में बदलें",
+    "convertActiveHintTooltip": "पहले इस सत्र को समाप्त या बंद करें, फिर इसे इतिहास सूची से बदलें",
+    "convertAllToCliSessions": "सभी को CLI में बदलें ({{count}})",
+    "convertAllToCliSessionsTooltip": "SDK के माध्यम से बनाए गए {{count}} सत्रों को CLI प्रविष्टियों में बदलें ताकि वे Claude Code CLI /resume सूची में दिखाई दें। वर्तमान में उपयोग में सत्र को छोड़ दिया जाता है।",
+    "convertAllToCliSessionsLabel": "सभी को CLI में बदलें",
+    "convertAllToCliSessionsEmptyTooltip": "बदलने के लिए कोई SDK या VS Code सत्र नहीं। केवल SDK या VS Code एक्सटेंशन द्वारा बनाए गए सत्रों को CLI प्रविष्टियों में बदला जा सकता है; Claude Code CLI द्वारा सीधे बनाए गए सत्र पहले से ही फिर से शुरू करने योग्य हैं।",
+    "convertAllSuccess": "{{count}} सत्र बदले गए, अब CLI /resume में दृश्यमान",
+    "convertAllPartial": "Converties {{count}} sur {{total}} session(s), {{failed}} échouées",
+    "convertAllAlreadyRunning": "Une conversion est déjà en cours, veuillez attendre qu'elle se termine",
+    "convertAllTimeout": "La conversion a pris trop de temps. La liste a été rafraîchie, veuillez vérifier dans un instant.",
+    "convertAllBridgeUnavailable": "Le pont vers l'IDE n'est pas disponible, donc la requête n'a pas été envoyée"
   },
-  "codexModes": {
-    "default": {
-      "label": "제안 (승인 필요)",
-      "tooltip": "Codex approval_policy=on-request – 파일 편집이나 셸 명령 실행 전에 확인합니다.",
-      "description": "가장 안전한 옵션. 모든 쓰기 또는 명령에 승인이 필요합니다."
-    },
-    "plan": {
-      "label": "계획 모드",
-      "tooltip": "네이티브 협업 계획 모드",
-      "description": "구현 전에 네이티브 계획을 생성합니다. 샌드박스와 승인 설정은 독립적으로 유지됩니다"
-    },
-    "acceptEdits": {
-      "label": "자동 편집",
-      "tooltip": "Codex approval_policy=on-request – 필요 시 승인을 요청합니다",
-      "description": "균형 잡힌 옵션. 일반적인 편집 흐름을 허용하면서도 필요 시 승인을 요구합니다."
-    },
-    "auto": {
-      "label": "대신 승인",
-      "shortLabel": "자동 승인",
-      "tooltip": "Codex approvals_reviewer=auto_review – 자동 검토자가 대상 승인 요청을 처리합니다.",
-      "description": "workspace-write 샌드박스를 유지하고 검토자가 승인할 수 없는 요청은 사용자에게 전달합니다."
-    },
-    "bypassPermissions": {
-      "label": "완전 자동",
-      "tooltip": "Codex approval_policy=never – 확인 없이 명령을 실행하고 파일을 작성합니다 (워크스페이스 샌드박스는 여전히 적용됨).",
-      "description": "자율 모드. Codex가 편집과 셸 명령을 즉시 실행합니다."
-    }
+  "ja": {
+    "convertActiveHint": "セッション終了後に CLI に変換",
+    "convertActiveHintTooltip": "まずこのセッションを終了または閉じてから、履歴一覧から変換してください",
+    "convertAllToCliSessions": "すべてを CLI に変換 ({{count}})",
+    "convertAllToCliSessionsTooltip": "SDK で作成された {{count}} 件のセッションを CLI エントリに変換し、Claude Code CLI の /resume 一覧に表示されるようにします。現在使用中のセッションはスキップされます。",
+    "convertAllToCliSessionsLabel": "すべてを CLI に変換",
+    "convertAllToCliSessionsEmptyTooltip": "変換対象の SDK または VS Code セッションがありません。SDK または VS Code 拡張機能で作成されたセッションのみ CLI エントリに変換できます。Claude Code CLI で直接作成されたセッションはすでに再開可能です。",
+    "convertAllSuccess": "{{count}} 件のセッションを変換しました。CLI /resume に表示されます",
+    "convertAllPartial": "{{count}} / {{total}} 件のセッションを変換しました。{{failed}} 件失敗",
+    "convertAllAlreadyRunning": "変換処理が実行中です。完了までお待ちください",
+    "convertAllTimeout": "変換に時間がかかりすぎています。リストが更新されました。しばらくしてからご確認ください。",
+    "convertAllBridgeUnavailable": "IDE へのブリッジが利用できないため、リクエストが送信されませんでした"
   },
-  "ompApprovals": {
-    "title": "OMP 승인 모드 선택",
-    "default": {
-      "label": "기본값",
-      "description": "미설정 시 완전 자동(OMP의 tools.approvalMode)"
-    },
-    "alwaysAsk": {
-      "label": "묻기",
-      "description": "편집과 명령 실행 전에 묻습니다"
-    },
-    "write": {
-      "label": "편집 자동 승인",
-      "description": "명령 실행 전에만 묻습니다"
-    },
-    "yolo": {
-      "label": "완전 자동",
-      "description": "묻지 않습니다"
-    }
+  "ko": {
+    "convertActiveHint": "세션 종료 후 CLI로 변환",
+    "convertActiveHintTooltip": "먼저 이 세션을 종료하거나 닫은 다음, 기록 목록에서 변환하세요",
+    "convertAllToCliSessions": "모두 CLI로 변환 ({{count}})",
+    "convertAllToCliSessionsTooltip": "SDK를 통해 생성된 {{count}}개 세션을 CLI 항목으로 변환하여 Claude Code CLI /resume 목록에 표시되도록 합니다. 현재 사용 중인 세션은 건너뜁니다.",
+    "convertAllToCliSessionsLabel": "모두 CLI로 변환",
+    "convertAllToCliSessionsEmptyTooltip": "변환할 SDK 또는 VS Code 세션이 없습니다. SDK 또는 VS Code 확장에서 만든 세션만 CLI 항목으로 변환할 수 있습니다. Claude Code CLI로 직접 만든 세션은 이미 재개 가능합니다.",
+    "convertAllSuccess": "{{count}}개 세션이 변환되어 CLI /resume에 표시됨",
+    "convertAllPartial": "{{total}}개 중 {{count}}개 세션 변환 완료, {{failed}}개 실패",
+    "convertAllAlreadyRunning": "이미 변환이 실행 중입니다. 완료될 때까지 기다려 주세요.",
+    "convertAllTimeout": "변환에 시간이 너무 오래 걸립니다. 목록이 새로 고쳐졌으니 잠시 후 확인해 보세요.",
+    "convertAllBridgeUnavailable": "IDE 브리지를 사용할 수 없어 요청이 전송되지 않았습니다"
   },
-  "ompModes": {
-    "default": {
-      "label": "기본",
-      "tooltip": "선택한 모델 사용 (또는 OMP auto)",
-      "description": "모델 드롭다운에서 선택한 모델을 사용하며, Auto로 설정된 경우 OMP CLI 기본값을 사용합니다."
-    },
-    "smol": {
-      "label": "Smol",
-      "tooltip": "빠른 모델 역할 (omp --model smol)",
-      "description": "omp의 smol 역할에 구성된 모델로 이 대화를 실행합니다. 모델 드롭다운을 재정의합니다."
-    },
-    "slow": {
-      "label": "Slow",
-      "tooltip": "추론 모델 역할 (omp --model slow)",
-      "description": "omp의 slow 역할에 구성된 모델로 이 대화를 실행합니다. 모델 드롭다운을 재정의합니다."
-    },
-    "plan": {
-      "label": "Plan",
-      "tooltip": "계획 모델 역할 (omp --model plan)",
-      "description": "omp의 plan 역할에 구성된 모델로 이 대화를 실행합니다. 모델 드롭다운을 재정의합니다."
-    }
+  "pt-BR": {
+    "convertActiveHint": "Converter para CLI ao encerrar a sessão",
+    "convertActiveHintTooltip": "Encerre ou feche esta sessão primeiro e, depois, converta-a a partir da lista de histórico",
+    "convertAllToCliSessions": "Converter tudo para CLI ({{count}})",
+    "convertAllToCliSessionsTooltip": "Converte {{count}} sessão(ões) criadas via SDK em entradas de CLI para que apareçam na lista /resume do Claude Code CLI. A sessão em uso no momento é ignorada.",
+    "convertAllToCliSessionsLabel": "Converter tudo para CLI",
+    "convertAllToCliSessionsEmptyTooltip": "Nenhuma sessão de SDK ou VS Code para converter. Apenas sessões criadas pelo SDK ou pela extensão do VS Code podem ser transformadas em entradas de CLI; sessões criadas diretamente pelo CLI do Claude Code já são retomáveis.",
+    "convertAllSuccess": "{{count}} sessão(ões) convertida(s), agora visível na CLI /resume",
+    "convertAllPartial": "Convertidas {{count}} de {{total}} sessões, {{failed}} falharam",
+    "convertAllAlreadyRunning": "Uma conversão já está em andamento, aguarde a conclusão",
+    "convertAllTimeout": "A conversão demorou demais. A lista foi atualizada, verifique novamente em instantes.",
+    "convertAllBridgeUnavailable": "A ponte para a IDE está indisponível, então a solicitação não foi enviada"
   },
-  "providers": {
-    "claude": {
-      "label": "Claude Code"
-    },
-    "codex": {
-      "label": "Codex"
-    },
-    "grok": {
-      "label": "Grok CLI"
-    },
-    "kimi": {
-      "label": "Kimi CLI"
-    },
-    "minimax": {
-      "label": "MiniMax Code"
-    },
-    "zcode": {
-      "label": "ZCode"
-    },
-    "gemini": {
-      "label": "Gemini Cli"
-    },
-    "opencode": {
-      "label": "OpenCode"
-    },
-    "pi": {
-      "label": "PI CLI"
-    },
-    "omp": {
-      "label": "OMP CLI"
-    }
+  "ru": {
+    "convertActiveHint": "Преобразовать в CLI после завершения сессии",
+    "convertActiveHintTooltip": "Сначала завершите или закройте эту сессию, затем преобразуйте её из списка истории",
+    "convertAllToCliSessions": "Преобразовать все в CLI ({{count}})",
+    "convertAllToCliSessionsTooltip": "Преобразовать {{count}} сессий, созданных через SDK, в записи CLI, чтобы они появились в списке /resume Claude Code CLI. Текущая используемая сессия пропускается.",
+    "convertAllToCliSessionsLabel": "Преобразовать всё в CLI",
+    "convertAllToCliSessionsEmptyTooltip": "Нет сессий SDK или VS Code для конвертации. Только сессии, созданные SDK или расширением VS Code, можно превратить в записи CLI; сессии, созданные напрямую через CLI Claude Code, уже можно возобновить.",
+    "convertAllSuccess": "{{count}} сеанс(ов) преобразовано, теперь видно в CLI /resume",
+    "convertAllPartial": "Преобразовано {{count}} из {{total}} сессий, {{failed}} не удалось",
+    "convertAllAlreadyRunning": "Конвертация уже выполняется, дождитесь её завершения",
+    "convertAllTimeout": "Конвертация заняла слишком много времени. Список обновлён, проверьте через мгновение.",
+    "convertAllBridgeUnavailable": "Мост к IDE недоступен, поэтому запрос не был отправлен"
   },
-  "promptEnhancer": {
-    "title": "프롬프트 강화",
-    "tooltip": "프롬프트 강화",
-    "tooltipFull": "더 많은 컨텍스트를 제공하고 에이전트 응답을 개선하기 위해 프롬프트를 다시 작성합니다",
-    "shortcut": "⌘/",
-    "enhancing": "프롬프트 강화 중...",
-    "originalPrompt": "원본 프롬프트",
-    "enhancedPrompt": "강화된 프롬프트",
-    "useEnhanced": "강화된 버전 사용",
-    "keepOriginal": "원본 유지",
-    "enhanceFailed": "프롬프트 강화 실패",
-    "emptyPrompt": "먼저 프롬프트를 입력해주세요",
-    "copyEnhanced": "강화된 프롬프트 복사",
-    "modeLabel": "모드",
-    "modeAuto": "자동",
-    "modeManual": "수동",
-    "modeUnavailable": "사용 불가",
-    "providerLabel": "CLI",
-    "providerUnresolved": "CLI 미확인",
-    "modelLabel": "모델",
-    "modelUnresolved": "기본 모델",
-    "openSettings": "설정",
-    "openSettingsTooltip": "프롬프트 강화 설정 열기",
-    "resolvingUsage": "실행 설정 확인 중…"
+  "zh-TW": {
+    "convertActiveHint": "結束會話後可轉換為 CLI",
+    "convertActiveHintTooltip": "先結束或關閉此會話，然後從歷史列表轉換",
+    "convertAllToCliSessions": "全部轉換為 CLI（{{count}}）",
+    "convertAllToCliSessionsTooltip": "將 {{count}} 個透過 SDK 建立的會話轉換為 CLI 項目，以便它們出現在 Claude Code CLI 的 /resume 列表中。目前使用中的會話會被略過。",
+    "convertAllToCliSessionsLabel": "全部轉換為 CLI",
+    "convertAllToCliSessionsEmptyTooltip": "沒有 SDK 或 VS Code 會話可轉換。只有由 SDK 或 VS Code 擴充功能建立的會話才能轉換為 CLI 項目；直接由 Claude Code CLI 建立的會話已可繼續使用。",
+    "convertAllSuccess": "{{count}} 個會話已轉換，現可在 CLI /resume 中查看",
+    "convertAllPartial": "已轉換 {{count}} / {{total}} 個會話，{{failed}} 個失敗",
+    "convertAllAlreadyRunning": "轉換已在進行中，請等待完成",
+    "convertAllTimeout": "轉換耗時過長。清單已重新整理，請稍後再試。",
+    "convertAllBridgeUnavailable": "通往 IDE 的橋接不可用，因此請求未發送"
   },
-  "fileContext": {
-    "placeholder": "파일 컨텍스트",
-    "enableTitle": "파일 컨텍스트를 활성화하시겠습니까?",
-    "enableDescription": "활성화하면 에디터에서 현재 열린 파일 경로가 AI에 전송됩니다. 참고: 파일 경로만 전송되며 파일 내용은 전송되지 않습니다.",
-    "enable": "활성화",
-    "cancel": "취소"
+  "zh": {
+    "convertActiveHint": "结束会话后可转换为 CLI",
+    "convertActiveHintTooltip": "先结束或关闭此会话，然后从历史记录列表转换",
+    "convertAllToCliSessions": "全部转换为 CLI（{{count}}）",
+    "convertAllToCliSessionsTooltip": "将 {{count}} 个通过 SDK 创建的会话转换为 CLI 条目，以便它们出现在 Claude Code CLI 的 /resume 列表中。当前正在使用的会话会被跳过。",
+    "convertAllToCliSessionsLabel": "全部转换为 CLI",
+    "convertAllToCliSessionsEmptyTooltip": "没有 SDK 或 VS Code 会话可转换。只有由 SDK 或 VS Code 扩展创建的会话才能转换为 CLI 条目；直接由 Claude Code CLI 创建的会话已可恢复。",
+    "convertAllSuccess": "{{count}} 个会话已转换，现可在 CLI /resume 中查看",
+    "convertAllPartial": "已转换 {{count}} / {{total}} 个会话，{{failed}} 个失败",
+    "convertAllAlreadyRunning": "转换正在进行中，请等待完成",
+    "convertAllTimeout": "转换耗时过长。列表已刷新，请稍后再试。",
+    "convertAllBridgeUnavailable": "通往 IDE 的桥接不可用，因此请求未发送"
   },
-  "rewind": {
-    "title": "파일을 이전 상태로 되돌리기",
-    "tooltip": "되돌리기",
-    "tooltipFull": "이 메시지 시점의 파일 상태로 복원합니다",
-    "selectTitle": "되돌리기 지점 선택",
-    "noRewindableMessages": "이 세션에서 되돌릴 수 있는 메시지가 없습니다",
-    "rewindTo": "되돌리기 대상",
-    "impact": "영향",
-    "willRestore": "이 메시지 시점의 파일 상태로 복원합니다",
-    "changesLost": "이 시점 이후의 변경 사항이 손실됩니다",
-    "messagesAffected": "개 메시지 영향",
-    "historyKept": "대화 기록은 유지됩니다",
-    "cannotUndo": "이 작업은 되돌릴 수 없습니다.",
-    "restoreFiles": "파일 복원",
-    "restoring": "파일 복원 중...",
-    "success": "되돌리기 성공",
-    "successSimple": "되돌리기 성공",
-    "failed": "파일 복원 실패",
-    "notAvailable": "이 세션에서는 되돌리기를 사용할 수 없습니다",
-    "parseError": "결과 분석 실패"
-  },
-  "reasoning": {
-    "title": "추론 깊이 선택",
-    "low": {
-      "label": "낮음",
-      "description": "기본 추론으로 빠른 응답"
-    },
-    "medium": {
-      "label": "보통",
-      "description": "균형 잡힌 사고 (기본값)"
-    },
-    "high": {
-      "label": "높음",
-      "description": "복잡한 작업을 위한 심층 추론"
-    },
-    "xhigh": {
-      "label": "최대",
-      "description": "최대 추론 깊이"
-    },
-    "ultra": {
-      "label": "Ultra",
-      "description": "최대 추론 깊이와 자동 작업 위임"
-    }
-  },
-  "errorBoundary": {
-    "title": "문제가 발생했습니다",
-    "description": "애플리케이션에서 예기치 않은 오류가 발생했습니다. 아래 오류 세부정보를 복사하여 문제 해결을 위해 개발자에게 공유해주세요.",
-    "possibleCauses": "가능한 원인:",
-    "cause1": "Node.js가 설치되지 않았거나 올바르게 설정되지 않았습니다",
-    "cause2": "네트워크 연결 문제",
-    "cause3": "플러그인 또는 IDE 호환성 문제",
-    "cause4": "시스템 리소스 부족",
-    "errorDetails": "오류 세부정보",
-    "copyError": "오류 정보 복사",
-    "copied": "복사됨!",
-    "reload": "애플리케이션 다시 로드",
-    "helpText": "문제가 지속되면 오류 정보를 복사하여 GitHub에 이슈로 제출하거나 커뮤니티 그룹에서 공유해주세요."
-  },
-  "aiBridge": {
-    "claudeCodeInterrupted": "Claude Code가 중단되었습니다 (응답 시간 초과 또는 사용자 취소일 수 있음):",
-    "claudeCodeError": "Claude Code 오류:",
-    "errorMessage": "오류 메시지",
-    "currentApiKeySource": "현재 API 키 소스",
-    "currentApiKeyPreview": "현재 API 키 미리보기",
-    "currentBaseUrl": "현재 Base URL",
-    "source": "소스",
-    "notConfigured": "설정되지 않음",
-    "notConfiguredEmpty": "설정되지 않음 (값이 비어있거나 누락됨)",
-    "defaultBaseUrl": "기본값 (https://api.anthropic.com)",
-    "configTip": "팁: CLI는 환경 변수 또는 settings.json에서 읽을 수 있지만, 이 플러그인은 문제 방지를 위해 settings.json에서만 읽도록 지원합니다. 플러그인 우측 상단 설정 > 제공자 관리에서 설정할 수 있습니다",
-    "apiError": "API 오류",
-    "apiErrorCauses": "가능한 원인:\n1. API 키가 올바르게 설정되지 않았습니다\n2. 타사 프록시 서비스 설정 문제\n3. ~/.claude/settings.json의 설정을 확인해주세요",
-    "codexAuthError": "Codex 인증 오류:",
-    "codexAuthErrorChecks": "다음을 확인해주세요:\n1. 플러그인 설정의 Codex API 키가 올바른지\n2. API 키에 충분한 권한이 있는지\n3. 사용자 지정 Base URL을 사용하는 경우 주소가 올바른지",
-    "codexAuthTip": "팁: Codex에는 유효한 OpenAI API 키가 필요합니다",
-    "codexNetworkError": "Codex 네트워크 오류:",
-    "codexNetworkErrorChecks": "확인해주세요:\n1. 네트워크 연결이 정상인지\n2. 프록시를 사용하는 경우 프록시 설정이 올바른지\n3. 방화벽이 연결을 차단하고 있지 않은지",
-    "codexError": "Codex 오류:",
-    "codexErrorCheck": "네트워크 연결과 Codex 설정을 확인해주세요",
-    "codexThinkingHint": "Codex가 추론 항목을 반환하지 않았습니다. 사고 과정이 여전히 보이지 않으면 docs/codex/docs/config.md에서 hide_agent_reasoning/show_raw_agent_reasoning 설정을 참조하고, OpenAI 계정이 인증되었는지 확인해주세요.",
-    "userDeniedPermission": "사용자가 {{toolName}} 도구의 권한을 거부했습니다",
-    "userDidNotProvideAnswers": "사용자가 답변을 제공하지 않았습니다",
-    "dbMissingPath": "데이터베이스 파일 경로 인수가 누락되었습니다",
-    "dbFileNotExist": "데이터베이스 파일이 존재하지 않습니다",
-    "dbReadFailed": "데이터베이스 읽기 실패",
-    "dbParseProviderFailed": "제공자 설정 분석 실패",
-    "aiResponseEmpty": "AI 응답이 비어있습니다",
-    "enhancementFailed": "강화 실패",
-    "uploadedImages": "{{count}}개 이미지 업로드됨",
-    "uploadedAttachments": "첨부파일 업로드됨",
-    "emptyMessage": "빈 메시지",
-    "attachment": "첨부파일"
-  },
-  "changelog": {
-    "title": "새로운 기능",
-    "close": "확인",
-    "page": "{{current}} / {{total}}"
-  },
-  "error": {
-    "providerNotConfigured": "제공자가 설정되지 않았습니다",
-    "providerNotConfiguredDesc": "아직 AI 제공자가 구성되지 않았거나 로컬 구성 사용 권한이 승인되지 않았습니다. 대화를 시작하기 전에 제공자 관리 설정에서 구성을 완료해주세요.",
-    "goToProviderSettings": "설정으로 이동"
-  },
-  "errorDiagnostic": {
-    "copyCommand": "복사",
-    "copied": "복사됨",
-    "openDependencySettings": "종속성 관리 열기",
-    "recommended": "권장",
-    "updateClaudeSdk": "SDK 업데이트",
-    "updatingClaudeSdk": "업데이트 중...",
-    "updateClaudeSdkSuccess": "{{version}}(으)로 업데이트했습니다. 메시지를 다시 보내 주세요.",
-    "updateClaudeSdkFailed": "업데이트 실패: {{error}}",
-    "updateClaudeSdkFailedUnknown": "업데이트에 실패했습니다. 자세한 내용은 종속성 관리에서 확인하세요.",
-    "updateClaudeSdkTimedOut": "15분이 지나도 결과가 없습니다. 종속성 관리에서 업데이트 상태를 확인하세요.",
-    "updateClaudeSdkCustomCli": "SDK를 {{version}}(으)로 업데이트했지만 플러그인은 직접 지정한 Claude CLI({{path}})를 실행합니다. 방법 2로 업데이트하세요.",
-    "updateClaudeSdkAlreadyLatest": "{{version}}은(는) 이 플러그인이 지원하는 최신 SDK이지만, 이 모델에는 더 새로운 Claude Code가 필요합니다. 새 플러그인 버전이 나오면 플러그인을 업데이트하거나 다른 모델을 선택하세요.",
-    "codexWriterConflict": {
-      "title": "Codex 대화가 사용 중입니다",
-      "intro": "다른 Codex 클라이언트 또는 채팅 창이 이 대화의 쓰기 권한을 보유하고 있습니다.",
-      "reason": "대화가 만료되었다는 뜻은 아닙니다. 플러그인은 잠금을 삭제하거나 다른 클라이언트를 자동으로 중지하지 않습니다.",
-      "solutions": {
-        "releaseWriter": {
-          "title": "사용 중인 클라이언트에서 대화 해제",
-          "step0": "이 대화를 사용하는 Codex 클라이언트 또는 채팅 창에서 작업을 중지하고 대화를 닫거나 해제하세요.",
-          "step1": "해제된 것을 확인한 후 여기서 다시 보내세요. 강제로 접근하기 위해 쓰기 잠금 파일을 삭제하지 마세요."
-        }
-      }
-    },
-    "codexThreadClosing": {
-      "title": "Codex 대화를 닫는 중입니다",
-      "intro": "Codex가 이 대화를 닫는 작업을 완료하지 않아 아직 복원할 수 없습니다.",
-      "reason": "플러그인은 이 명시적인 종료 상태에 대해서만 작업 시작 전에 잠시 재시도합니다. 계속 실패하면 원래 오류를 표시합니다.",
-      "solutions": {
-        "waitForClose": {
-          "title": "이전 대화가 닫힐 때까지 대기",
-          "step0": "이전 Codex 클라이언트 또는 채팅 창에서 대화를 해제한 후 다시 시도하세요.",
-          "step1": "반복되면 이전 클라이언트가 대화를 해제한 후 기록 목록에서 대화를 다시 여세요."
-        }
-      }
-    },
-    "codexThreadHistoryMissing": {
-      "title": "Codex 기록을 찾을 수 없습니다",
-      "intro": "현재 Codex 실행 환경에서 이 대화의 원본 기록을 찾을 수 없습니다.",
-      "reason": "기록 디렉터리가 달라졌거나 첫 초기화가 완료되지 않아 발생할 수도 있습니다. 기록이 삭제되었다고 단정할 수 없습니다.",
-      "solutions": {
-        "checkStorage": {
-          "title": "원래 기록 위치 확인",
-          "step0": "Codex가 원래 CODEX_HOME과 같은 호스트 환경을 사용하는지 확인하세요. 로컬 환경과 WSL의 차이에 특히 주의하세요.",
-          "step1": "원래 기록 디렉터리 또는 백업을 복원한 후 기록 목록에서 대화를 다시 여세요."
-        },
-        "startNewIfMissing": {
-          "title": "기록을 복구할 수 없을 때만 새로 시작",
-          "step0": "원래 기록을 복구할 수 없다고 확인한 경우에만 새 대화를 만들고 필요한 맥락을 다시 제공하세요. 여기에 표시된 메시지만으로 Codex의 원본 맥락이 자동 복원되지는 않습니다."
-        }
-      }
-    },
-    "codexThreadArchived": {
-      "title": "Codex 대화가 보관되어 있습니다",
-      "intro": "Codex에서 이 대화가 보관 상태이므로 바로 재개할 수 없다고 보고했습니다.",
-      "reason": "보관 상태는 스레드 만료를 뜻하지 않습니다. 복원을 위해 새 대화를 만들 필요는 없습니다.",
-      "solutions": {
-        "unarchive": {
-          "title": "원래 대화의 보관 해제",
-          "step0": "원래 Codex 클라이언트에서 보관을 해제하거나 원래 오류에 표시된 보관 해제 명령을 따르세요.",
-          "step1": "플러그인의 기록 목록을 새로 고치고 이 대화를 다시 연 후 보내세요."
-        }
-      }
-    },
-    "codexThreadResumeConfiguration": {
-      "title": "Codex 설정으로 인해 복원할 수 없습니다",
-      "intro": "Codex가 설정을 불러오지 못했거나 필수 MCP 서버 초기화에 실패했습니다.",
-      "reason": "새 대화로 같은 설정 문제가 해결되지는 않습니다. 플러그인은 필수 서비스를 자동으로 비활성화하지 않습니다.",
-      "solutions": {
-        "repairConfiguration": {
-          "title": "Codex가 보고한 설정 문제 수정",
-          "step0": "원래 오류에서 실패한 설정 항목 또는 필수 MCP 서버를 확인하세요.",
-          "step1": "Codex, 제공업체 또는 MCP 설정에서 해당 설정, 인증 정보, 연결을 수정한 후 대화를 다시 열고 재시도하세요."
-        }
-      }
-    },
-    "codexThreadResume": {
-      "title": "Codex 대화를 복원할 수 없습니다",
-      "intro": "Codex가 이 대화 복원에 실패했습니다. 구체적인 원인은 아직 확인되지 않았습니다.",
-      "reason": "복원 실패만으로 대화 만료를 단정할 수 없습니다. 플러그인은 원래 대화를 유지하며 빈 대화로 자동 교체하지 않습니다.",
-      "solutions": {
-        "inspectCause": {
-          "title": "재시도 전 원래 오류 확인",
-          "step0": "원래 오류와 이 대화에서 사용한 제공업체, Codex 실행 환경, 기록 디렉터리를 확인하세요.",
-          "step1": "응답이나 도구 실행이 이미 표시된 경우 중복 작업을 피하도록 결과를 확인한 후 다시 보내세요."
-        },
-        "checkCli": {
-          "title": "Codex CLI 호환성 확인",
-          "step0": "터미널 버전을 플러그인의 CLI 페이지와 비교하세요. 사용자 지정 경로라면 해당 실행 파일에 --version을 지정하세요.",
-          "step1": "원래 오류가 지원되지 않는 CLI 또는 프로토콜 버전을 나타내면 공식 안내에 따라 Codex를 업데이트하고 CLI 감지를 새로 고치세요."
-        }
-      }
-    },
-    "sdkNativeBinaryMissing": {
-      "title": "SDK 설치 불완전 — 네이티브 바이너리 누락",
-      "intro": "이것은 Taobao npm 미러의 알려진 문제입니다(플러그인 버그가 아님). 미러가 플랫폼별 파일을 완전히 동기화하지 않았습니다. 아래 방법 중 하나로 수동 해결할 수 있습니다:",
-      "reason": "Taobao 미러가 동기화를 완료하면 이 문제가 자동으로 사라집니다. 걱정하지 마세요.",
-      "solutions": {
-        "switchRegistry": {
-          "title": "방법 1: 임시로 공식 레지스트리로 전환 후 재설치",
-          "step0": "1. 터미널에서 실행 (npm 공식 레지스트리로 전환):",
-          "step1": "2. 플러그인 설정의 '종속성 관리'를 열고 재설치 클릭:",
-          "step2": "3. 재설치 완료 후 Taobao 미러로 복원:"
-        },
-        "downgrade": {
-          "title": "방법 2: 버전 롤백",
-          "step0": "'종속성 관리'에서 SDK 버전을 v0.2.112 또는 그 이전으로 전환하세요. 전환 후 IDEA를 재시작해야 합니다."
-        }
-      }
-    },
-    "claudeCodeVersionTooOld": {
-      "title": "이 모델을 쓰기에는 Claude Code SDK 버전이 낮습니다",
-      "intro": "플러그인은 터미널의 claude 명령 대신 자체 SDK에 포함된 Claude Code를 실행합니다. 포함된 버전이 이 모델이 요구하는 버전보다 낮습니다.",
-      "reason": "SDK는 플러그인과 따로 설치되므로 플러그인이나 터미널의 claude 명령을 업데이트해도 SDK는 그대로입니다.",
-      "solutions": {
-        "updateSdk": {
-          "title": "방법 1: Claude Code SDK 업데이트",
-          "step0": "지원되는 최신 SDK를 설치합니다. 설치가 끝나면 플러그인이 Claude 프로세스를 다시 시작하므로 바로 메시지를 다시 보낼 수 있습니다."
-        },
-        "updateCustomCli": {
-          "title": "방법 2: 직접 지정한 Claude CLI 업데이트",
-          "step0": "'Claude CLI 경로 (재정의)'를 설정했다면 플러그인은 SDK 대신 그 바이너리를 실행합니다. 터미널에서 업데이트하세요:"
-        }
-      }
-    },
-    "claudeCodeWindowsTooOld": {
-      "title": "이 Windows 버전에서는 Claude Code를 시작할 수 없습니다",
-      "intro": "필요한 시스템 함수를 찾지 못해 Windows가 Claude Code 시작을 막았습니다(오류 0xC0000139). 보통 Windows가 너무 오래되었다는 뜻입니다. Claude Code 2.1.118 이상은 ClosePseudoConsole을 사용하며, 이 함수에는 Windows 10 버전 1809 또는 Windows Server 2019가 필요합니다.",
-      "reason": "Windows는 프로그램을 불러오는 단계, 즉 Claude Code가 실행되기 전에 거부하므로 모델, 제공자, 권한 설정을 바꿔도 해결되지 않습니다.",
-      "solutions": {
-        "updateWindows": {
-          "title": "방법 1: Windows 업데이트",
-          "step0": "Windows 10 버전 1809 이상 또는 Windows Server 2019 이상으로 업데이트하세요. 이 버전들에는 누락된 함수가 포함되어 있습니다."
-        },
-        "useOlderSdk": {
-          "title": "방법 2: 이전 SDK로 전환",
-          "step0": "'종속성 관리'에서 SDK 버전을 v0.2.112 또는 그 이전으로 전환하세요. 최신 모델은 이 버전을 허용하지 않을 수 있습니다. 모델이 더 새로운 Claude Code를 요구하면 다른 모델을 선택하거나 Windows를 업데이트하세요. SDK를 업데이트하면 이 오류가 다시 나타납니다."
-        },
-        "checkCustomCli": {
-          "title": "방법 3: 직접 지정한 Claude CLI 확인",
-          "step0": "'Claude CLI 경로 (재정의)'를 설정했다면 플러그인은 SDK 대신 그 바이너리를 실행하므로 SDK를 전환해도 효과가 없습니다. 경로를 지우거나 이전 Claude Code를 가리키도록 바꾸세요. Windows가 이미 최신이라면 이 항목을 먼저 확인하세요."
-        }
-      }
-    },
-    "spawnEbusy": {
-      "title": "spawn EBUSY — 자식 프로세스 시작 실패",
-      "intro": "이 오류는 일반적으로 Node.js 버전 비호환성 또는 불완전한 SDK 설치로 인해 발생합니다. 아래 두 가지 방법을 순서대로 시도해 보세요:",
-      "reason": "EBUSY는 Node.js가 리소스 사용 중으로 인해 자식 프로세스를 시작할 수 없을 때 발생하는 시스템 오류입니다. 일반적인 원인: Node.js 24 호환성 문제, 오래된 SDK 또는 Taobao 미러에서의 불완전한 설치.",
-      "solutions": {
-        "checkNodeVersion": {
-          "title": "방법 1: Node.js 버전 확인",
-          "step0": "터미널에서 아래 명령어를 실행하여 버전을 확인하세요. Node 22 또는 현재 LTS를 권장합니다 — Node 24에서 많은 오류가 보고되었으므로 Node 20 또는 22를 우선 사용하세요:"
-        },
-        "reinstallLatestSdk": {
-          "title": "방법 2: npm 공식 레지스트리에서 최신 SDK 재설치",
-          "step0": "1. npm 공식 레지스트리로 전환 (Taobao 미러는 최신 버전이 없을 수 있으므로 사용하지 마세요):",
-          "step1": "2. '종속성 관리'를 열고 최신 SDK를 재설치:"
-        }
-      }
-    },
-    "codexCliVersionTooOld": {
-      "title": "Codex CLI 버전이 낮아 이 권한 모드를 사용할 수 없습니다",
-      "intro": "완전 자동과 자동 승인 모드는 자동 검토 설정을 사용합니다. 현재 Codex CLI는 이 설정을 인식하지 못해 요청을 거부했으므로 메시지가 처리되지 않았습니다.",
-      "reason": "플러그인은 컴퓨터에서 찾은 Codex CLI를 실행하므로 플러그인을 업데이트해도 CLI는 업데이트되지 않습니다. 업데이트 후에도 오류가 계속되면 더 오래된 codex가 PATH 앞쪽에 있을 수 있습니다.",
-      "solutions": {
-        "updateCodexCli": {
-          "title": "방법 1: 공식 안내에 따라 CLI 설치 또는 업데이트",
-          "step0": "1. 공식 안내를 열고 실행 환경에 맞게 독립 설치 관리자, npm 또는 Homebrew를 선택하세요. 업데이트는 원래 설치 경로로 진행하고, 독립 설치 버전에 npm uninstall을 실행하지 마세요:",
-          "step1": "2. 새 터미널에서 버전이 변경되었는지 확인한 다음, IDE를 다시 시작하여 플러그인이 새 CLI를 사용하도록 합니다:"
-        },
-        "useDefaultMode": {
-          "title": "방법 2: 권한 모드를 임시로 전환",
-          "step0": "기본 모드로 전환하세요. 이 모드는 자동 검토를 사용하지 않으므로 CLI를 업데이트할 때까지 계속 작업할 수 있습니다. 그래도 오류가 계속되면 방법 1에 따라 CLI를 업데이트하세요."
-        }
-      }
-    },
-    "codexCliAppServerTooOld": {
-      "title": "Codex CLI 버전이 낮아 시작할 수 없습니다",
-      "intro": "로컬 Codex CLI는 버전을 정상적으로 출력하지만, 너무 오래된 버전이라 플러그인이 codex app-server를 시작할 때 전달하는 --listen 옵션을 인식하지 못해 바로 종료됩니다.",
-      "reason": "플러그인은 컴퓨터에서 찾은 Codex CLI를 실행하므로 플러그인을 업데이트해도 CLI는 업데이트되지 않습니다. 업데이트 후에도 오류가 계속되면 더 오래된 codex가 PATH 앞쪽에 있을 수 있습니다.",
-      "solutions": {
-        "updateCodexCli": {
-          "title": "방법 1: 공식 안내에 따라 CLI 설치 또는 업데이트",
-          "step0": "1. 공식 안내를 열고 실행 환경에 맞게 독립 설치 관리자, npm 또는 Homebrew를 선택하세요. 업데이트는 원래 설치 경로로 진행하고, 독립 설치 버전에 npm uninstall을 실행하지 마세요:",
-          "step1": "2. 새 터미널에서 버전이 변경되었는지 확인한 다음, IDE를 다시 시작하여 플러그인이 새 CLI를 사용하도록 합니다:"
-        },
-        "pointCodexBin": {
-          "title": "방법 2: 동작하는 바이너리를 플러그인에 지정",
-          "step0": "PATH에 있는 모든 codex를 확인하세요(Windows: where codex). 동작하는 것이 첫 번째가 아니면 CODEX_BIN 환경 변수를 전체 경로로 설정하고 IDE를 다시 시작하세요. 플러그인은 뒤의 설치로도 자동 폴백합니다."
-        }
-      }
-    },
-    "codexCliUnavailable": {
-      "title": "Codex CLI를 시작할 수 없습니다",
-      "intro": "Codex CLI 런타임이 응답하기 전에 종료되었습니다. 실패한 CLI 경로와 CLI가 출력한 내용은 위 오류에 표시됩니다. 대부분 Codex CLI 설치가 불완전한 것이 원인이며 플러그인 버그가 아닙니다.",
-      "reason": "플러그인은 컴퓨터에서 찾은 Codex CLI로 codex app-server를 시작합니다. 절반만 설치된 복사본(예: 플랫폼 바이너리가 없는 전역 npm 설치)은 종료 코드 1로 종료되며 해당 턴도 함께 실패합니다.",
-      "solutions": {
-        "reinstallCodexCli": {
-          "title": "방법 1: 공식 안내에 따라 CLI 설치 또는 업데이트",
-          "step0": "1. 공식 안내를 열고 실행 환경에 맞게 독립 설치 관리자, npm 또는 Homebrew를 선택하세요. 업데이트는 원래 설치 경로로 진행하고, 독립 설치 버전에 npm uninstall을 실행하지 마세요:",
-          "step1": "2. 새 터미널에서 버전을 확인하고, 제공자 관리 → CLI를 새로 고친 뒤 다시 보내세요:"
-        },
-        "pointCodexBin": {
-          "title": "방법 2: 동작하는 바이너리를 플러그인에 지정",
-          "step0": "PATH에 있는 모든 codex를 확인하세요(Windows: where codex). 동작하는 것이 첫 번째가 아니면 CODEX_BIN 환경 변수를 전체 경로로 설정하고 IDE를 다시 시작하세요. 플러그인은 뒤의 설치로도 자동 폴백합니다."
-        }
-      }
-    }
-  },
-  "codex": {
-    "plan": {
-      "title": "Codex plan",
-      "ready": "Plan ready",
-      "execute": "Execute plan",
-      "executing": "Executing…",
-      "adjust": "Continue adjusting"
-    }
-  },
-  "sessionSupplier": {
-    "label": "공급자",
-    "choose": "공급자를 선택하세요",
-    "nextTurn": "다음 턴부터 적용",
-    "unavailable": "공급자를 사용할 수 없습니다. 메뉴를 다시 열어 재시도하거나 다른 공급자를 선택하세요."
+  "es": {
+    "convertActiveHint": "Convertir a CLI al finalizar la sesión",
+    "convertActiveHintTooltip": "Finaliza o cierra esta sesión primero y luego conviértela desde la lista del historial",
+    "convertAllToCliSessions": "Convertir todo a CLI ({{count}})",
+    "convertAllToCliSessionsTooltip": "Convierte {{count}} sesión(es) creadas a través del SDK en entradas de CLI para que aparezcan en la lista /resume de Claude Code CLI. La sesión en uso actualmente se omite.",
+    "convertAllToCliSessionsLabel": "Convertir todo a CLI",
+    "convertAllToCliSessionsEmptyTooltip": "No hay sesiones de SDK o VS Code para convertir. Solo las sesiones creadas por el SDK o la extensión de VS Code pueden convertirse en entradas de CLI; las sesiones creadas directamente por el CLI de Claude Code ya son reanudables.",
+    "convertAllSuccess": "{{count}} sesión(es) convertidas, ahora visibles en CLI /resume",
+    "convertAllPartial": "Convertidas {{count}} de {{total}} sesión(es), {{failed}} fallaron",
+    "convertAllAlreadyRunning": "Ya hay una conversión en curso, por favor espera a que termine",
+    "convertAllTimeout": "La conversión tardó demasiado. La lista se ha actualizado, por favor comprueba en un momento.",
+    "convertAllBridgeUnavailable": "El puente hacia el IDE no está disponible, por lo que la solicitud no se envió"
   }
 }
