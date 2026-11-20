@@ -968,11 +968,13 @@ public class CodemossSettingsService {
     }
 
     /**
-     * Whether the repair above is skipped because settings.json already holds its own API
-     * token, key or base URL. See {@link ProviderManager#repairBlockedByOwnApiSettings()}.
+     * Bring the active provider into a newly chosen Claude config directory.
+     * See {@link ProviderManager#applyActiveProviderToConfigDirectory()}.
+     *
+     * @return true when the directory's own API settings kept the provider out
      */
-    public boolean repairBlockedByOwnApiSettings() throws IOException {
-        return withConfigTransaction(() -> providerManager.repairBlockedByOwnApiSettings());
+    public boolean applyActiveProviderToConfigDirectory() throws IOException {
+        return withConfigTransaction(() -> providerManager.applyActiveProviderToConfigDirectory());
     }
 
     // ==================== Working Directory Management ====================

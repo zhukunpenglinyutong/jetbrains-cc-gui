@@ -184,30 +184,23 @@ public class ProviderManagerTest {
     }
 
     /**
-     * A directory whose settings.json already holds its own token, key or base URL is not repaired,
-     * and the caller is told so it can say why.
+     * A directory whose settings.json holds a base URL the plugin did not write keeps it, and the
+     * caller is told so it can say why.
      */
     @Test
-    public void repairIsBlockedWhenSettingsHoldItsOwnApiSettings() throws Exception {
+    public void configDirectoryWithItsOwnApiSettingsIsReportedAndLeftAlone() throws Exception {
         ProviderManager manager = managerWithActiveProviderAndSettings("provider-a",
                 "{\"env\":{\"ANTHROPIC_BASE_URL\":\"https://user-proxy.example.invalid\"}}");
 
-        assertTrue(manager.repairBlockedByOwnApiSettings());
+        assertTrue(manager.applyActiveProviderToConfigDirectory());
     }
 
     @Test
-    public void repairIsNotBlockedWhenSettingsHaveNoApiSettings() throws Exception {
-        ProviderManager manager = managerWithActiveProviderAndSettings("provider-a", "{\"env\":{\"MY_FLAG\":\"1\"}}");
-
-        assertFalse(manager.repairBlockedByOwnApiSettings());
-    }
-
-    @Test
-    public void repairIsNotReportedAsBlockedWhenNoProviderWouldBeApplied() throws Exception {
+    public void configDirectoryIsNotReportedWhenNoProviderWouldBeApplied() throws Exception {
         ProviderManager manager = managerWithActiveProviderAndSettings(ProviderManager.LOCAL_SETTINGS_PROVIDER_ID,
                 "{\"env\":{\"ANTHROPIC_AUTH_TOKEN\":\"user-token\"}}");
 
-        assertFalse(manager.repairBlockedByOwnApiSettings());
+        assertFalse(manager.applyActiveProviderToConfigDirectory());
     }
 
     /**

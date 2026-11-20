@@ -698,12 +698,34 @@ public class ProviderManager {
     }
 
     /**
-     * @return true when {@link #repairActiveProviderToClaudeSettings()} would have a provider to
-     *         apply but leaves settings.json alone because it already holds its own API settings
-     * @throws IOException if settings.json cannot be read
+     * Bring the active provider into the settings.json of the Claude config directory that was
+     * just chosen (or restored). A provider switch only writes the directory active at the time,
+     * so this file may still hold the token and base URL the plugin wrote for an earlier
+     * provider; those are replaced as on a provider switch. API settings the plugin did not
+     * write are the user's own and are kept.
+     *
+     * @return true when the provider was not applied because the file holds the user's own API settings
+     * @throws IOException if settings.json cannot be read or written
      */
-    public boolean repairBlockedByOwnApiSettings() throws IOException {
-        return repairableActiveProvider() != null && claudeSettingsManager.hasOwnApiSettings();
+    public boolean applyActiveProviderToConfigDirectory() throws IOException {
+        JsonObject activeProvider = repairableActiveProvider();
+        if (activeProvider == null) {
+            return false;
+        }
+        JsonObject settings = claudeSettingsManager.readClaudeSettings();
+        if (!ClaudeSettingsManager.hasForeignApiSettings(settings, activeProvider)) {
+            claudeSettingsManager.repairMissingProviderFields(activeProvider);
+            return false;
+        }
+        JsonElement writerId = settings.get("codemossProviderId");
+        JsonObject writer = writerId != null && writerId.isJsonPrimitive()
+                ? getSavedClaudeProvider(writerId.getAsString())
+                : null;
+        if (writer == null || ClaudeSettingsManager.hasForeignApiSettings(settings, writer)) {
+            return true;
+        }
+        applyProviderToClaudeSettings(activeProvider);
+        return false;
     }
 
     /**

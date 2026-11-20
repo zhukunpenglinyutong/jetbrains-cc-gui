@@ -578,25 +578,29 @@ public class ClaudeSettingsManager {
     }
 
     /**
-     * @return true when the active settings.json already carries any of the API token, API key or
-     *         base URL, i.e. it holds its own API settings that a provider must not be mixed into
-     * @throws IOException if settings.json cannot be read
+     * @param claudeSettings the settings.json content
+     * @param provider       a provider entry (its {@code settingsConfig.env} is compared)
+     * @return true when settings.json holds a token, key or base URL that is not the value
+     *         {@code provider} writes: the user's own, or one written for another provider
      */
-    public boolean hasOwnApiSettings() throws IOException {
-        return hasOwnApiSettings(readClaudeSettings());
-    }
-
-    private static boolean hasOwnApiSettings(JsonObject claudeSettings) {
-        if (claudeSettings == null || !claudeSettings.has("env") || !claudeSettings.get("env").isJsonObject()) {
+    static boolean hasForeignApiSettings(JsonObject claudeSettings, JsonObject provider) {
+        JsonObject env = objectOrNull(claudeSettings, "env");
+        if (env == null) {
             return false;
         }
-        JsonObject env = claudeSettings.getAsJsonObject("env");
+        JsonObject providerEnv = objectOrNull(objectOrNull(provider, "settingsConfig"), "env");
         for (String key : API_SETTINGS_ENV_KEYS) {
-            if (env.has(key) && !env.get(key).isJsonNull()) {
+            JsonElement value = env.get(key);
+            if (value != null && !value.isJsonNull()
+                    && (providerEnv == null || !value.equals(providerEnv.get(key)))) {
                 return true;
             }
         }
         return false;
+    }
+
+    private static JsonObject objectOrNull(JsonObject parent, String key) {
+        return parent != null && parent.has(key) && parent.get(key).isJsonObject() ? parent.getAsJsonObject(key) : null;
     }
 
     /**
@@ -609,11 +613,11 @@ public class ClaudeSettingsManager {
      */
     private boolean repairIntoSettings(JsonObject claudeSettings, JsonObject settingsConfig, JsonObject provider) {
         // A token, a key and a base URL only work as the set they were written as.
-        // Filling in the ones that are missing next to the user's own would send
-        // their credential to the provider's endpoint (or the reverse), so a file
-        // that has any of them is left alone.
-        if (hasOwnApiSettings(claudeSettings)) {
-            LOG.info("[ClaudeSettingsManager] settings.json has its own API settings, skipping repair");
+        // Filling in the ones that are missing next to different ones would send
+        // the user's credential to the provider's endpoint (or the reverse), so a
+        // file whose values are not this provider's is left alone.
+        if (hasForeignApiSettings(claudeSettings, provider)) {
+            LOG.info("[ClaudeSettingsManager] settings.json has other API settings, skipping repair");
             return false;
         }
         boolean changed = false;

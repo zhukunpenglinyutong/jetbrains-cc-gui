@@ -171,13 +171,85 @@ public class ClaudeConfigDirFilesTest {
         assertEquals("https://api.example.invalid", env.get("ANTHROPIC_BASE_URL").getAsString());
     }
 
+    private static JsonObject provider(String id, String token, String baseUrl) {
+        JsonObject provider = provider();
+        provider.addProperty("id", id);
+        JsonObject env = provider.getAsJsonObject("settingsConfig").getAsJsonObject("env");
+        env.addProperty("ANTHROPIC_AUTH_TOKEN", token);
+        env.addProperty("ANTHROPIC_BASE_URL", baseUrl);
+        return provider;
+    }
+
+    /** A ProviderManager whose saved providers are {@code p1} and {@code p2}, with {@code current} active. */
+    private ProviderManager providerManager(String current) {
+        JsonObject providers = new JsonObject();
+        providers.add("p1", provider("p1", "token-1", "https://one.example.invalid"));
+        providers.add("p2", provider("p2", "token-2", "https://two.example.invalid"));
+        JsonObject claude = new JsonObject();
+        claude.addProperty("current", current);
+        claude.add("providers", providers);
+        JsonObject config = new JsonObject();
+        config.add("claude", claude);
+        return new ProviderManager(new Gson(), v -> config, c -> { }, null, settingsManager);
+    }
+
+    private JsonObject profileEnv() throws Exception {
+        return read(profile.resolve("settings.json")).getAsJsonObject("env");
+    }
+
     @Test
-    public void theConfigDirectoryReportsWhetherItHasItsOwnApiSettings() throws Exception {
-        assertFalse(settingsManager.hasOwnApiSettings());
-        write(profile.resolve("settings.json"), "{\"env\":{\"MY_FLAG\":\"1\"}}");
-        assertFalse(settingsManager.hasOwnApiSettings());
-        write(profile.resolve("settings.json"), "{\"env\":{\"ANTHROPIC_BASE_URL\":\"https://user-proxy.example.invalid\"}}");
-        assertTrue(settingsManager.hasOwnApiSettings());
+    public void aFreshDirectoryGetsTheActiveProvider() throws Exception {
+        assertFalse(providerManager("p2").applyActiveProviderToConfigDirectory());
+
+        assertEquals("token-2", profileEnv().get("ANTHROPIC_AUTH_TOKEN").getAsString());
+        assertEquals("https://two.example.invalid", profileEnv().get("ANTHROPIC_BASE_URL").getAsString());
+    }
+
+    /**
+     * A provider switch only writes the directory active at the time. Returning to a directory the
+     * plugin filled for an earlier provider must bring the current one in, not keep the old one.
+     */
+    @Test
+    public void aDirectoryTheProviderWroteForAnEarlierProviderSwitchesToTheActiveOne() throws Exception {
+        settingsManager.applyProviderToClaudeSettings(provider("p1", "token-1", "https://one.example.invalid"));
+
+        assertFalse(providerManager("p2").applyActiveProviderToConfigDirectory());
+
+        assertEquals("token-2", profileEnv().get("ANTHROPIC_AUTH_TOKEN").getAsString());
+        assertEquals("https://two.example.invalid", profileEnv().get("ANTHROPIC_BASE_URL").getAsString());
+        assertEquals("p2", read(profile.resolve("settings.json")).get("codemossProviderId").getAsString());
+    }
+
+    @Test
+    public void aDirectoryWithTheActiveProvidersSettingsGetsItsMissingFields() throws Exception {
+        write(profile.resolve("settings.json"), "{\"env\":{\"ANTHROPIC_AUTH_TOKEN\":\"token-2\"},"
+                + "\"codemossProviderId\":\"p2\"}");
+
+        assertFalse(providerManager("p2").applyActiveProviderToConfigDirectory());
+
+        assertEquals("https://two.example.invalid", profileEnv().get("ANTHROPIC_BASE_URL").getAsString());
+    }
+
+    @Test
+    public void aDirectoryWithTheUsersOwnTokenIsKeptAndReported() throws Exception {
+        write(profile.resolve("settings.json"), "{\"env\":{\"ANTHROPIC_AUTH_TOKEN\":\"user-token\"}}");
+
+        assertTrue(providerManager("p2").applyActiveProviderToConfigDirectory());
+
+        assertEquals("user-token", profileEnv().get("ANTHROPIC_AUTH_TOKEN").getAsString());
+        assertFalse(profileEnv().has("ANTHROPIC_BASE_URL"));
+    }
+
+    /** codemossProviderId alone does not make a value the plugin's: one changed by hand is the user's. */
+    @Test
+    public void aTokenChangedByHandAfterTheProviderWroteItIsKeptAndReported() throws Exception {
+        write(profile.resolve("settings.json"), "{\"env\":{\"ANTHROPIC_AUTH_TOKEN\":\"user-token\","
+                + "\"ANTHROPIC_BASE_URL\":\"https://one.example.invalid\"},\"codemossProviderId\":\"p1\"}");
+
+        assertTrue(providerManager("p2").applyActiveProviderToConfigDirectory());
+
+        assertEquals("user-token", profileEnv().get("ANTHROPIC_AUTH_TOKEN").getAsString());
+        assertEquals("https://one.example.invalid", profileEnv().get("ANTHROPIC_BASE_URL").getAsString());
     }
 
     @Test

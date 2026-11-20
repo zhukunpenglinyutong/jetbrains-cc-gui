@@ -106,32 +106,27 @@ public class ClaudeConfigDirHandler {
 
     /**
      * A managed provider keeps its credentials in {@code settings.json}, and that file now belongs to
-     * the active directory. Fill them in when the new one has no API settings of its own, so the next
-     * chat request finds the provider's key without a manual provider switch. A directory that already
-     * has a token, key or base URL is left alone: mixing those with the provider's would send the
-     * user's credential to the provider's endpoint.
+     * the active directory. Bring the provider in, so the next chat request finds its key without a
+     * manual provider switch. A directory with API settings of its own is left alone: mixing those
+     * with the provider's would send the user's credential to the provider's endpoint.
      *
      * @return true when the provider was not applied because the directory has its own API settings
      */
     private boolean applyActiveProviderToNewDirectory() {
         try {
-            if (context.getSettingsService().repairBlockedByOwnApiSettings()) {
-                return true;
-            }
-            context.getSettingsService().repairActiveProviderToClaudeSettings();
+            return context.getSettingsService().applyActiveProviderToConfigDirectory();
         } catch (Exception e) {
             LOG.warn("[ClaudeConfigDirHandler] Could not apply the active provider to the new directory: "
                     + e.getMessage());
+            return false;
         }
-        return false;
     }
 
     /** The toast shown once the directory is saved (or cleared). */
     static String savedMessage(String path, boolean providerSkipped) {
-        if (path.isEmpty()) {
-            return "Claude config directory cleared";
-        }
-        String saved = "Claude config directory saved: " + path;
+        String saved = path.isEmpty()
+                ? "Claude config directory cleared"
+                : "Claude config directory saved: " + path;
         if (!providerSkipped) {
             return saved;
         }

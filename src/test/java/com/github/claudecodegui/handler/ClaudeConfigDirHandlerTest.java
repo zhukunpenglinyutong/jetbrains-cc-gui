@@ -112,8 +112,16 @@ public class ClaudeConfigDirHandlerTest {
     }
 
     @Test
-    public void clearedMessageIgnoresTheSkippedProvider() {
+    public void clearedMessageNamesNoDirectory() {
         assertEquals("Claude config directory cleared", ClaudeConfigDirHandler.savedMessage("", false));
+    }
+
+    /** Clearing returns to ~/.claude, whose settings.json can hold API settings of its own as well. */
+    @Test
+    public void clearedMessageExplainsAProviderThatWasNotApplied() {
+        String message = ClaudeConfigDirHandler.savedMessage("", true);
+        assertTrue(message.startsWith("Claude config directory cleared"));
+        assertTrue(message.contains("own API settings"));
     }
 
     @Test
