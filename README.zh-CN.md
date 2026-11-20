@@ -33,6 +33,8 @@
 
 [CC GUI（Claude, Codex and More） 下载](https://plugins.jetbrains.com/plugin/29342-cc-gui-claude-or-codex-)
 
+Windows 用户请看 [Windows 安装与排错指南（英文）](docs/WINDOWS_GUIDE.md)。
+
 ---
 
 ## 核心特性
