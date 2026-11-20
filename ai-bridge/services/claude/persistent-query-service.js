@@ -69,7 +69,7 @@ import {
 import { projectTrustFor, settingSourcesFor } from './project-trust.js';
 import { resolveStallTimeoutMs, takeWithStallTimeout, trackToolActivity } from './turn-stall-watchdog.js';
 import { generateSessionTitle } from '../session-title-service.js';
-import { getClaudeCliPathOverride } from '../../utils/claude-cli-path.js';
+import { getClaudeCliPathOverride, claudeCliSdkOptions } from '../../utils/claude-cli-path.js';
 import { withUltracodeSetting } from './ultracode.js';
 
 const SUPPORTED_EFFORT_LEVELS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
@@ -197,7 +197,7 @@ function buildQueryOptions(workingDirectory, sdkModelName, permissionMode, maxTh
     // version could silently drop bypass and change permission behavior.
     ...(permissionMode === 'bypassPermissions' && { allowDangerouslySkipPermissions: true }),
     ...(mcpServers && { mcpServers }),
-    ...(claudeCliOverride && { pathToClaudeCodeExecutable: claudeCliOverride }),
+    ...claudeCliSdkOptions(claudeCliOverride),
     systemPrompt: {
       type: 'preset',
       preset: 'claude_code',
