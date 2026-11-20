@@ -34,6 +34,8 @@ A powerful IntelliJ IDEA plugin that provides a visual interface for **Claude Co
 
 [CC GUI（Claude, Codex and More） Installation](https://plugins.jetbrains.com/plugin/29342-cc-gui-claude-or-codex-)
 
+Windows users: see the [Windows Setup & Troubleshooting Guide](docs/WINDOWS_GUIDE.md).
+
 ---
 
 ## Performance Tips
@@ -208,6 +210,3 @@ Recently, many bloggers have recommended this project on their own initiative, a
 [github-license-link]: https://github.com/zhukunpenglinyutong/idea-claude-code-gui/blob/main/LICENSE
 [github-stars-shield]: https://img.shields.io/github/stars/zhukunpenglinyutong/idea-claude-code-gui?color=ffcb47&labelColor=black&style=flat-square
 [github-mit]: https://img.shields.io/badge/github-MIT-blue?logo=github
----
-### 📖 Documentation
-- [Windows Setup & Troubleshooting Guide](docs/WINDOWS_GUIDE.md)
