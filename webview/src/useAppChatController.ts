@@ -141,7 +141,8 @@ export const useAppChatController = ({
     customSessionTitle, setCustomSessionTitle,
     restoredSessionTitle, setRestoredSessionTitle,
     historyData, setHistoryData,
-    currentSessionIdRef, customSessionTitleRef,
+    regeneratingTitleSessionIds, setRegeneratingTitleSessionIds,
+    currentSessionIdRef, customSessionTitleRef, historyDataRef,
   } = useSession();
 
   // ── UI state (UIStateContext) ──
@@ -233,10 +234,11 @@ export const useAppChatController = ({
     handleConfirmNewSession, handleCancelNewSession,
     handleConfirmInterrupt, handleCancelInterrupt,
     loadHistorySession, deleteHistorySession, deleteHistorySessions, exportHistorySession,
-    toggleFavoriteSession, updateHistoryTitle, applyHistoryTitleLocal, convertToCliSession,
+    toggleFavoriteSession, updateHistoryTitle, applyHistoryTitleLocal, regenerateHistoryTitle,
+    settleTitleRegeneration, convertToCliSession,
   } = useSessionManagement({
     messages, loading, historyData, currentSessionId, currentSessionIdRef, currentProvider,
-    setHistoryData, setMessages, setCurrentView, setCurrentSessionId,
+    setHistoryData, setRegeneratingTitleSessionIds, setMessages, setCurrentView, setCurrentSessionId,
     setCustomSessionTitle, setUsagePercentage, setUsageUsedTokens, setUsageMaxTokens,
     setStatus, setLoading, setIsThinking, setStreamingActive,
     setTaskEvents,
@@ -281,8 +283,9 @@ export const useAppChatController = ({
     forceClosePermissionDialog, forceCloseAskUserQuestionDialog, forceClosePlanApprovalDialog,
     openContextUsageDialog, updateContextUsageData,
     closeContextUsageDialog,
-    customSessionTitleRef, currentSessionIdRef, updateHistoryTitle, applyHistoryTitleLocal,
+    customSessionTitleRef, currentSessionIdRef, historyDataRef, updateHistoryTitle, applyHistoryTitleLocal,
     setCustomSessionTitle,
+    setRegeneratingTitleSessionIds, settleTitleRegeneration,
     setRestoredSessionTitle,
     setPermissionDialogTimeoutSeconds,
     setStartupHistoryLoadState,
@@ -515,7 +518,9 @@ export const useAppChatController = ({
     onContinueCodexPlan: handleContinueCodexPlan,
     // Session management
     createNewSession, forceCreateNewSession, loadHistorySession, deleteHistorySession, deleteHistorySessions,
-    exportHistorySession, toggleFavoriteSession, updateHistoryTitle, convertToCliSession,
+    exportHistorySession, toggleFavoriteSession, updateHistoryTitle, applyHistoryTitleLocal,
+    regenerateHistoryTitle, convertToCliSession,
+    regeneratingTitleSessionIds,
     showNewSessionConfirm, handleConfirmNewSession, handleCancelNewSession,
     showInterruptConfirm, handleConfirmInterrupt, handleCancelInterrupt,
     // Rewind
