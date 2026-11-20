@@ -1,6 +1,6 @@
 package com.github.claudecodegui.settings;
 
-import com.github.claudecodegui.bridge.NodeDetector;
+import com.github.claudecodegui.util.ClaudeConfigDir;
 import com.github.claudecodegui.util.SafeJsonFileOps;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -11,7 +11,6 @@ import com.intellij.openapi.diagnostic.Logger;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -105,7 +104,7 @@ public class McpServerManager {
             claudeJson = SafeJsonFileOps.readJsonObject(
                     SafeJsonFileOps.backupPathOf(claudeJsonPath), 2, READ_RETRY_DELAY_MS);
             if (claudeJson == null) {
-                throw new IOException("~/.claude.json exists but could not be parsed, and no usable backup is available;"
+                throw new IOException(claudeJsonPath + " exists but could not be parsed, and no usable backup is available;"
                         + " make sure it is readable and holds a valid JSON object");
             }
             LOG.warn("[McpServerManager] ~/.claude.json is unreadable — showing the last known good copy from "
@@ -288,7 +287,7 @@ public class McpServerManager {
         } catch (IOException e) {
             // The primary file exists: never fork the write into the legacy
             // store, which would hide the failure and split the config.
-            throw new IOException("Failed to update ~/.claude.json: " + e.getMessage(), e);
+            throw new IOException("Failed to update " + claudeJsonPath + ": " + e.getMessage(), e);
         }
 
         LOG.info("[McpServerManager] Upserted MCP server in ~/.claude.json: " + serverId
@@ -393,7 +392,7 @@ public class McpServerManager {
                                     return writer -> gson.toJson(current, writer);
                                 }));
             } catch (IOException e) {
-                throw new IOException("Failed to delete MCP server from ~/.claude.json: " + e.getMessage(), e);
+                throw new IOException("Failed to delete MCP server from " + claudeJsonPath + ": " + e.getMessage(), e);
             }
 
             if (removed.get()) {
@@ -538,7 +537,7 @@ public class McpServerManager {
      * @return the path of the shared Claude CLI config
      */
     private static Path claudeJsonPath() {
-        return Paths.get(NodeDetector.resolveHomeForFileOps(), ".claude.json");
+        return ClaudeConfigDir.claudeJson();
     }
 
     /**

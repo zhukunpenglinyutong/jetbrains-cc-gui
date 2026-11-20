@@ -961,11 +961,11 @@ test('provider-management contract: both routing layers carry the request in eac
   }
 });
 
-test('setupApiKey keeps reading the settings.json the plugin writes when CLAUDE_CONFIG_DIR points elsewhere', () => {
+test('setupApiKey reads the settings.json inside CLAUDE_CONFIG_DIR', () => {
   const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-api-config-'));
   const otherProfile = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-other-profile-'));
-  const claudeDir = path.join(tempHome, '.claude');
-  fs.mkdirSync(claudeDir, { recursive: true });
+  const claudeDir = otherProfile;
+  fs.mkdirSync(path.join(tempHome, '.claude'), { recursive: true });
   writeCodemossClaudeConfig(tempHome, 'provider-a', {
     'provider-a': { name: 'Provider A', settingsConfig: {} }
   });
@@ -986,7 +986,7 @@ test('setupApiKey keeps reading the settings.json the plugin writes when CLAUDE_
   assert.equal(result.result.baseUrl, 'https://api.anthropic.com');
 });
 
-test('setupApiKey does not pick up managed credentials from the CLAUDE_CONFIG_DIR profile', () => {
+test('setupApiKey does not fall back to ~/.claude/settings.json when CLAUDE_CONFIG_DIR is set', () => {
   const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-api-config-'));
   const otherProfile = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-other-profile-'));
   fs.mkdirSync(path.join(tempHome, '.claude'), { recursive: true });
@@ -994,8 +994,8 @@ test('setupApiKey does not pick up managed credentials from the CLAUDE_CONFIG_DI
     'provider-a': { name: 'Provider A', settingsConfig: {} }
   });
   fs.writeFileSync(
-    path.join(otherProfile, 'settings.json'),
-    JSON.stringify({ env: { ANTHROPIC_AUTH_TOKEN: 'sk-ant-profile-token' } }),
+    path.join(tempHome, '.claude', 'settings.json'),
+    JSON.stringify({ env: { ANTHROPIC_AUTH_TOKEN: 'sk-ant-default-dir-token' } }),
     'utf8'
   );
 
@@ -1007,8 +1007,8 @@ test('setupApiKey does not pick up managed credentials from the CLAUDE_CONFIG_DI
 test('a managed provider keeps routing credentials into the Claude process env when CLAUDE_CONFIG_DIR is set', () => {
   const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-api-config-'));
   const otherProfile = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-other-profile-'));
-  const claudeDir = path.join(tempHome, '.claude');
-  fs.mkdirSync(claudeDir, { recursive: true });
+  const claudeDir = otherProfile;
+  fs.mkdirSync(path.join(tempHome, '.claude'), { recursive: true });
   writeCodemossClaudeConfig(tempHome, 'provider-a', {
     'provider-a': { name: 'Provider A', settingsConfig: {} }
   });

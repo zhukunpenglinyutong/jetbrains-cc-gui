@@ -7,6 +7,7 @@ import org.junit.rules.TemporaryFolder;
 import java.io.File;
 import java.nio.file.Path;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -103,6 +104,33 @@ public class ClaudeConfigDirHandlerTest {
                 tmp.getRoot().getPath(), false, null, linux -> true);
         assertNotNull(error);
         assertTrue(error.contains("does not exist"));
+    }
+
+    @Test
+    public void savedMessageNamesTheDirectory() {
+        assertEquals("Claude config directory saved: /p", ClaudeConfigDirHandler.savedMessage("/p", false));
+    }
+
+    @Test
+    public void clearedMessageNamesNoDirectory() {
+        assertEquals("Claude config directory cleared", ClaudeConfigDirHandler.savedMessage("", false));
+    }
+
+    /** Clearing returns to ~/.claude, whose settings.json can hold API settings of its own as well. */
+    @Test
+    public void clearedMessageExplainsAProviderThatWasNotApplied() {
+        String message = ClaudeConfigDirHandler.savedMessage("", true);
+        assertTrue(message.startsWith("Claude config directory cleared"));
+        assertTrue(message.contains("own API settings"));
+    }
+
+    @Test
+    public void savedMessageExplainsAProviderThatWasNotApplied() {
+        String message = ClaudeConfigDirHandler.savedMessage("/p", true);
+        assertTrue(message.startsWith("Claude config directory saved: /p"));
+        assertTrue(message.contains("own API settings"));
+        assertTrue(message.contains("Local settings.json"));
+        assertTrue(message.contains("select the provider again"));
     }
 
     @Test

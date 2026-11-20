@@ -1,6 +1,6 @@
 package com.github.claudecodegui.settings;
 
-import com.github.claudecodegui.bridge.NodeDetector;
+import com.github.claudecodegui.util.ClaudeConfigDir;
 import com.github.claudecodegui.util.SafeJsonFileOps;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -15,7 +15,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -35,6 +34,10 @@ public class ClaudeSettingsManager {
     private static final long READ_RETRY_DELAY_MS = 100;
     /** Read/re-apply rounds for one settings.json mutation before it fails explicitly. */
     private static final int MUTATION_ATTEMPTS = 3;
+
+    /** The env keys that together say which account and endpoint requests go to. */
+    private static final Set<String> API_SETTINGS_ENV_KEYS = Set.of(
+            "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL");
 
     /**
      * System-protected fields - these should never be overridden by provider configs
@@ -170,7 +173,7 @@ public class ClaudeSettingsManager {
                 }
             }
         }
-        throw new IOException("Could not update ~/.claude/settings.json after " + MUTATION_ATTEMPTS
+        throw new IOException("Could not update " + settingsPath + " after " + MUTATION_ATTEMPTS
                 + " attempt(s): it kept changing concurrently", lastError);
     }
 
@@ -265,9 +268,9 @@ public class ClaudeSettingsManager {
      * @throws IOException on read/write failures
      */
     public void syncMcpToClaudeSettings(boolean allowEmptyOverwrite) throws IOException {
-        Path claudeJsonPath = Paths.get(NodeDetector.resolveHomeForFileOps(), ".claude.json");
+        Path claudeJsonPath = ClaudeConfigDir.claudeJson();
         if (!Files.exists(claudeJsonPath)) {
-            LOG.info("[ClaudeSettingsManager] ~/.claude.json not found, skipping MCP sync");
+            LOG.info("[ClaudeSettingsManager] " + claudeJsonPath + " not found, skipping MCP sync");
             return;
         }
 
@@ -383,8 +386,7 @@ public class ClaudeSettingsManager {
      */
     public JsonObject readCliLoginAccountInfo() {
         try {
-            String homeDir = NodeDetector.resolveHomeForFileOps();
-            Path claudeJsonPath = Paths.get(homeDir, ".claude.json");
+            Path claudeJsonPath = ClaudeConfigDir.claudeJson();
             File claudeJsonFile = claudeJsonPath.toFile();
 
             if (!claudeJsonFile.exists()) {
@@ -576,6 +578,32 @@ public class ClaudeSettingsManager {
     }
 
     /**
+     * @param claudeSettings the settings.json content
+     * @param provider       a provider entry (its {@code settingsConfig.env} is compared)
+     * @return true when settings.json holds a token, key or base URL that is not the value
+     *         {@code provider} writes: the user's own, or one written for another provider
+     */
+    static boolean hasForeignApiSettings(JsonObject claudeSettings, JsonObject provider) {
+        JsonObject env = objectOrNull(claudeSettings, "env");
+        if (env == null) {
+            return false;
+        }
+        JsonObject providerEnv = objectOrNull(objectOrNull(provider, "settingsConfig"), "env");
+        for (String key : API_SETTINGS_ENV_KEYS) {
+            JsonElement value = env.get(key);
+            if (value != null && !value.isJsonNull()
+                    && (providerEnv == null || !value.equals(providerEnv.get(key)))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static JsonObject objectOrNull(JsonObject parent, String key) {
+        return parent != null && parent.has(key) && parent.get(key).isJsonObject() ? parent.getAsJsonObject(key) : null;
+    }
+
+    /**
      * Fill in the provider-managed fields that settings.json is missing.
      *
      * @param claudeSettings the settings to repair (modified in place)
@@ -584,6 +612,14 @@ public class ClaudeSettingsManager {
      * @return true when at least one field or env key was added
      */
     private boolean repairIntoSettings(JsonObject claudeSettings, JsonObject settingsConfig, JsonObject provider) {
+        // A token, a key and a base URL only work as the set they were written as.
+        // Filling in the ones that are missing next to different ones would send
+        // the user's credential to the provider's endpoint (or the reverse), so a
+        // file whose values are not this provider's is left alone.
+        if (hasForeignApiSettings(claudeSettings, provider)) {
+            LOG.info("[ClaudeSettingsManager] settings.json has other API settings, skipping repair");
+            return false;
+        }
         boolean changed = false;
 
         // 1. Repair top-level provider-managed fields.

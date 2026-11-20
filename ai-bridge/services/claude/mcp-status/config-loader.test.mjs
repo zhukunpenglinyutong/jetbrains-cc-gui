@@ -231,3 +231,68 @@ test('the MCP list and the status info apply the same trust gate to ${VAR} expan
   const trustedInfo = await loadAllMcpServersInfo(projectDir, true);
   assert.equal(trustedInfo.enabled[0].config.env.TARGET_URL, 'https://attacker.example/steal');
 }));
+
+function withConfigDir(dir, fn) {
+  return async () => {
+    const saved = process.env.CLAUDE_CONFIG_DIR;
+    process.env.CLAUDE_CONFIG_DIR = dir;
+    try {
+      await fn();
+    } finally {
+      if (saved === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+      else process.env.CLAUDE_CONFIG_DIR = saved;
+    }
+  };
+}
+
+test('MCP servers come from .claude.json inside CLAUDE_CONFIG_DIR, not from the home directory', async () => {
+  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-mcp-profile-'));
+  try {
+    writeConfig({ mcpServers: { homeServer: { command: 'node', args: ['home.js'] } } });
+    fs.writeFileSync(path.join(profile, '.claude.json'), JSON.stringify({
+      mcpServers: { profileServer: { command: 'node', args: ['profile.js'] } }
+    }));
+    await withConfigDir(profile, async () => {
+      const result = await loadMcpServersConfigAsRecord();
+      assert.deepEqual(Object.keys(result), ['profileServer']);
+    })();
+    const afterwards = await loadMcpServersConfigAsRecord();
+    assert.deepEqual(Object.keys(afterwards), ['homeServer']);
+  } finally {
+    clearConfig();
+    fs.rmSync(profile, { recursive: true, force: true });
+  }
+});
+
+test('a custom config directory without .claude.json has no MCP servers even if the home one has some', async () => {
+  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-mcp-profile-'));
+  try {
+    writeConfig({ mcpServers: { homeServer: { command: 'node' } } });
+    await withConfigDir(profile, async () => {
+      assert.equal(await loadMcpServersConfigAsRecord(), null);
+    })();
+  } finally {
+    clearConfig();
+    fs.rmSync(profile, { recursive: true, force: true });
+  }
+});
+
+test('${VAR} in MCP servers is expanded from the settings.json inside CLAUDE_CONFIG_DIR', async () => {
+  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-mcp-profile-'));
+  const homeSettings = path.join(tempHome, '.claude', 'settings.json');
+  try {
+    fs.mkdirSync(path.dirname(homeSettings), { recursive: true });
+    fs.writeFileSync(homeSettings, JSON.stringify({ env: { MCP_TOKEN: 'from-home' } }));
+    fs.writeFileSync(path.join(profile, 'settings.json'), JSON.stringify({ env: { MCP_TOKEN: 'from-profile' } }));
+    fs.writeFileSync(path.join(profile, '.claude.json'), JSON.stringify({
+      mcpServers: { tokened: { command: 'node', args: ['s.js'], env: { TOKEN: '${MCP_TOKEN}' } } }
+    }));
+    await withConfigDir(profile, async () => {
+      const result = await loadMcpServersConfigAsRecord();
+      assert.equal(result.tokened.env.TOKEN, 'from-profile');
+    })();
+  } finally {
+    fs.rmSync(homeSettings, { force: true });
+    fs.rmSync(profile, { recursive: true, force: true });
+  }
+});

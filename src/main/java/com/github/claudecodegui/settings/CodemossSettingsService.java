@@ -967,6 +967,16 @@ public class CodemossSettingsService {
         return withConfigTransaction(() -> providerManager.repairActiveProviderToClaudeSettings());
     }
 
+    /**
+     * Bring the active provider into a newly chosen Claude config directory.
+     * See {@link ProviderManager#applyActiveProviderToConfigDirectory()}.
+     *
+     * @return true when the directory's own API settings kept the provider out
+     */
+    public boolean applyActiveProviderToConfigDirectory() throws IOException {
+        return withConfigTransaction(() -> providerManager.applyActiveProviderToConfigDirectory());
+    }
+
     // ==================== Working Directory Management ====================
 
     public String getCustomWorkingDirectory(String projectPath) throws IOException {

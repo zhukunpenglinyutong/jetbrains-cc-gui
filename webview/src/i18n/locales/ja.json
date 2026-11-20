@@ -316,7 +316,7 @@
       "claudeConfigDir": {
         "label": "Claude 設定ディレクトリ（オーバーライド）",
         "placeholder": "例: ~/.claude-work — 空欄の場合は CLAUDE_CONFIG_DIR または ~/.claude を使用",
-        "hint": "任意。チャット履歴、セッション操作、Claude プロセスは ~/.claude の代わりにこのディレクトリを読み込みます。プラグインの設定ページで管理する MCP サーバー、スキル、Hooks は引き続き ~/.claude を使います。使用統計はこれを ~/.claude に加えて集計し（プロファイル別ではなく合算）、実行中の統計サーバーは次回の同期で取り込みます。クリアしても集計済みの使用量は残ります。絶対パスまたは ~/… を指定してください。WSL の node では /home/me/.claude-work のような Linux パスも使えます（Windows の CLAUDE_CONFIG_DIR は使われません）。同じプロファイルの Claude CLI パスと組み合わせてください。保存時にデーモンが再起動されます。"
+        "hint": "任意。チャット履歴、セッション操作、Claude プロセスは ~/.claude の代わりにこのディレクトリを読み込みます。プラグインの settings.json と MCP サーバーはこのディレクトリに従い、スキルと Hooks のページは引き続き ~/.claude を使います。使用統計はこれを ~/.claude に加えて集計し（プロファイル別ではなく合算）、実行中の統計サーバーは次回の同期で取り込みます。クリアしても集計済みの使用量は残ります。絶対パスまたは ~/… を指定してください。WSL の node では /home/me/.claude-work のような Linux パスも使えます（Windows の CLAUDE_CONFIG_DIR は使われません）。同じプロファイルの Claude CLI パスと組み合わせてください。保存時にデーモンが再起動されます。"
       },
       "workingDirectory": {
         "label": "作業ディレクトリ",

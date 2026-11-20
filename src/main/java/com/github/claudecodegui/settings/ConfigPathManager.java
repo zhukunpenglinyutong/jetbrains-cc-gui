@@ -1,6 +1,7 @@
 package com.github.claudecodegui.settings;
 
 import com.github.claudecodegui.bridge.NodeDetector;
+import com.github.claudecodegui.util.ClaudeConfigDir;
 import com.github.claudecodegui.util.PlatformUtils;
 import com.intellij.openapi.diagnostic.Logger;
 
@@ -71,11 +72,11 @@ public class ConfigPathManager {
     }
 
     /**
-     * Get the Claude settings.json path.
+     * Get the Claude settings.json path: {@code ~/.claude/settings.json}, or the one inside the
+     * configured Claude config directory.
      */
     public Path getClaudeSettingsPath() {
-        String homeDir = NodeDetector.resolveHomeForFileOps();
-        return Paths.get(homeDir, CLAUDE_DIR_NAME, CLAUDE_SETTINGS_FILE_NAME);
+        return ClaudeConfigDir.settingsJson();
     }
 
     /**

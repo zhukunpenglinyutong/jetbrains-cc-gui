@@ -72,8 +72,10 @@ public class ClaudeConfigDirHandler {
                     }
                 }
 
+                boolean providerSkipped = false;
                 if (failure == null) {
                     TokenTrackerScanRoots.syncFromSettings();
+                    providerSkipped = applyActiveProviderToNewDirectory();
                     // CLAUDE_CONFIG_DIR is injected at daemon spawn: other chat tabs replace their
                     // daemon on their next idle request, this tab restarts now.
                     ClaudeSDKBridge.markSdkChanged();
@@ -85,11 +87,12 @@ public class ClaudeConfigDirHandler {
                 }
 
                 final String error = failure;
+                final boolean skipped = providerSkipped;
                 ApplicationManager.getApplication().invokeLater(() -> {
                     sendPath(pathArg);
                     if (error == null) {
-                        context.callJavaScript("window.showSwitchSuccess", context.escapeJs(
-                                pathArg.isEmpty() ? "Claude config directory cleared" : "Claude config directory saved: " + pathArg));
+                        context.callJavaScript("window.showSwitchSuccess",
+                                context.escapeJs(savedMessage(pathArg, skipped)));
                     } else {
                         context.callJavaScript("window.showError", context.escapeJs(error));
                     }
@@ -99,6 +102,36 @@ public class ClaudeConfigDirHandler {
                 showError("Failed to save Claude config directory: " + e.getMessage());
             }
         }, AppExecutorUtil.getAppExecutorService());
+    }
+
+    /**
+     * A managed provider keeps its credentials in {@code settings.json}, and that file now belongs to
+     * the active directory. Bring the provider in, so the next chat request finds its key without a
+     * manual provider switch. A directory with API settings of its own is left alone: mixing those
+     * with the provider's would send the user's credential to the provider's endpoint.
+     *
+     * @return true when the provider was not applied because the directory has its own API settings
+     */
+    private boolean applyActiveProviderToNewDirectory() {
+        try {
+            return context.getSettingsService().applyActiveProviderToConfigDirectory();
+        } catch (Exception e) {
+            LOG.warn("[ClaudeConfigDirHandler] Could not apply the active provider to the new directory: "
+                    + e.getMessage());
+            return false;
+        }
+    }
+
+    /** The toast shown once the directory is saved (or cleared). */
+    static String savedMessage(String path, boolean providerSkipped) {
+        String saved = path.isEmpty()
+                ? "Claude config directory cleared"
+                : "Claude config directory saved: " + path;
+        if (!providerSkipped) {
+            return saved;
+        }
+        return saved + ". This directory has its own API settings, so the active provider was not applied."
+                + " Choose \"Local settings.json\" to use them, or select the provider again to replace them.";
     }
 
     private void sendPath(String path) {

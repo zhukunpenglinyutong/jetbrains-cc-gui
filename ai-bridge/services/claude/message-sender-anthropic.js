@@ -5,7 +5,7 @@
 
 import { randomUUID } from 'crypto';
 import { loadClaudeSettings, getCliUserAgent } from '../../config/api-config.js';
-import { selectWorkingDirectory } from '../../utils/path-utils.js';
+import { getClaudeSettingsDisplayPath, selectWorkingDirectory } from '../../utils/path-utils.js';
 import { resolveModelFromSettings } from '../../utils/model-utils.js';
 import { loadSessionHistory, persistJsonlMessage } from './session-service.js';
 import { ensureAnthropicSdk, ensureBedrockSdk, truncateErrorContent } from './message-utils.js';
@@ -133,7 +133,7 @@ export async function sendMessageWithAnthropicSDK(message, resumeSessionId, cwd,
 Possible causes:
 1. API Key is not configured correctly
 2. Third-party proxy service configuration issue
-3. Please check the configuration in ~/.claude/settings.json`
+3. Please check the configuration in ${getClaudeSettingsDisplayPath()}`
       }];
 
       const assistantMsg = {

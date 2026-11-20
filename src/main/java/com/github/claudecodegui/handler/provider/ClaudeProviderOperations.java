@@ -1,6 +1,6 @@
 package com.github.claudecodegui.handler.provider;
 
-import com.github.claudecodegui.bridge.NodeDetector;
+import com.github.claudecodegui.util.ClaudeConfigDir;
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.provider.claude.ClaudePlanUsageService;
 import com.github.claudecodegui.settings.ProviderManager;
@@ -14,7 +14,6 @@ import com.intellij.openapi.diagnostic.Logger;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 
 /**
  * Handles Claude provider CRUD operations and switching.
@@ -266,7 +265,7 @@ public class ClaudeProviderOperations {
 
             if (ProviderManager.LOCAL_SETTINGS_PROVIDER_ID.equals(id)) {
                 // Validate settings.json exists
-                Path settingsPath = Paths.get(NodeDetector.resolveHomeForFileOps(), ".claude", "settings.json");
+                Path settingsPath = ClaudeConfigDir.settingsJson();
                 if (!Files.exists(settingsPath)) {
                     LOG.warn("[ProviderHandler] Local settings.json does not exist at: " + settingsPath);
                     ApplicationManager.getApplication().invokeLater(() -> {

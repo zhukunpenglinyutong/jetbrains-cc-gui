@@ -74,25 +74,50 @@ export function getCodemossDir() {
 }
 
 /**
+ * The directory named by CLAUDE_CONFIG_DIR, or null when the variable is unset or blank.
+ * @returns {string|null}
+ */
+function configDirOverride() {
+  const override = process.env.CLAUDE_CONFIG_DIR;
+  return typeof override === 'string' && override.trim() ? resolve(override.trim()) : null;
+}
+
+/**
  * Get the .claude configuration directory path.
  * @returns {string} The ~/.claude directory path
  */
 export function getClaudeDir() {
-  const override = process.env.CLAUDE_CONFIG_DIR;
-  if (typeof override === 'string' && override.trim()) {
-    return resolve(override.trim());
-  }
-  return join(getRealHomeDir(), '.claude');
+  return configDirOverride() ?? join(getRealHomeDir(), '.claude');
 }
 
 /**
- * Path of the settings.json the plugin itself writes for managed providers.
- * Always ~/.claude/settings.json, whatever CLAUDE_CONFIG_DIR says, because the Java side
- * (ClaudeSettingsManager) writes there and the bridge must read the same file.
+ * Path of the settings.json the plugin itself writes for managed providers: settings.json inside
+ * the Claude config directory (~/.claude by default, CLAUDE_CONFIG_DIR when set). The Java side
+ * (ClaudeSettingsManager) writes the same file, because it resolves the directory the same way and
+ * hands it to this process through CLAUDE_CONFIG_DIR.
  * @returns {string}
  */
 export function getPluginClaudeSettingsPath() {
-  return join(getRealHomeDir(), '.claude', 'settings.json');
+  return join(getClaudeDir(), 'settings.json');
+}
+
+/**
+ * Path of the Claude CLI's global state file (.claude.json: account, MCP servers, project trust).
+ * It sits in the home directory by default and moves into CLAUDE_CONFIG_DIR when that is set.
+ * @returns {string}
+ */
+export function getClaudeJsonPath() {
+  const override = configDirOverride();
+  return override ? join(override, '.claude.json') : join(getRealHomeDir(), '.claude.json');
+}
+
+/**
+ * Settings path as shown to the user: the familiar ~/.claude/settings.json by default, the real path
+ * when CLAUDE_CONFIG_DIR points elsewhere.
+ * @returns {string}
+ */
+export function getClaudeSettingsDisplayPath() {
+  return configDirOverride() ? getPluginClaudeSettingsPath() : '~/.claude/settings.json';
 }
 
 const CLAUDE_SESSION_ID_PATTERN = /^[A-Za-z0-9._-]+$/;

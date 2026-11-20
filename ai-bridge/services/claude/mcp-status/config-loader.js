@@ -6,7 +6,7 @@
 import { existsSync } from 'fs';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
-import { getRealHomeDir } from '../../../utils/path-utils.js';
+import { getClaudeJsonPath, getPluginClaudeSettingsPath } from '../../../utils/path-utils.js';
 import { log } from './logger.js';
 
 /**
@@ -67,7 +67,7 @@ async function loadEnvExpansionSources(cwd, projectTrusted) {
 
   const sources = [
     { label: 'project settings.local.json', file: cwd && projectTrusted === true ? join(cwd, '.claude', 'settings.local.json') : null, into: projectEnv },
-    { label: 'user settings.json', file: join(getRealHomeDir(), '.claude', 'settings.json'), into: userEnv }
+    { label: 'user settings.json', file: getPluginClaudeSettingsPath(), into: userEnv }
   ];
 
   for (const source of sources) {
@@ -174,10 +174,10 @@ function validateConfigStructure(config) {
  * @returns {Promise<{mcpServers: Object, disabledServers: Set<string>} | null>} Parse result, or null on failure
  */
 async function parseMcpConfig(cwd = null, projectTrusted = false) {
-  const claudeJsonPath = join(getRealHomeDir(), '.claude.json');
+  const claudeJsonPath = getClaudeJsonPath();
 
   if (!existsSync(claudeJsonPath)) {
-    log('info', '~/.claude.json not found');
+    log('info', `${claudeJsonPath} not found`);
     return null;
   }
 
