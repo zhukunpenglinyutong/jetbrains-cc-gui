@@ -489,6 +489,30 @@ const REGENERATE_RECENT_PROMPTS = 4;
 const FIRST_PROMPT_CODE_POINT_BUDGET = 400;
 const RECENT_PROMPT_CODE_POINT_BUDGET = 150;
 
+// The plugin's per-turn IDE context block (persistent-query-service.js), leading
+// since #2092 and trailing before it. Mirrors Java PluginIdeContext.
+const IDE_CONTEXT_PREFIX = '<system-reminder>\nThe following IDE context applies to the user message below.\n';
+const LEGACY_IDE_CONTEXT_PREFIX = '<system-reminder>\nThe following IDE context applies only to this user message.\n';
+const IDE_CONTEXT_SUFFIX = '\n</system-reminder>';
+
+/**
+ * Drop the plugin's IDE context block from a user row, as Java
+ * PluginIdeContext.visibleContent does for history. Left in, the leading block
+ * made every prompt look like '<' plumbing (empty_session whenever a file was
+ * open) and the legacy trailing block fed file paths and selected code to the
+ * title model.
+ */
+function withoutPluginIdeContext(row) {
+  const content = row.message?.content;
+  if (!Array.isArray(content) || content.length < 2) return row;
+  const isContext = (block, prefix) => block?.type === 'text' && typeof block.text === 'string'
+    && block.text.startsWith(prefix) && block.text.endsWith(IDE_CONTEXT_SUFFIX);
+  const index = isContext(content[0], IDE_CONTEXT_PREFIX) ? 0
+    : isContext(content.at(-1), LEGACY_IDE_CONTEXT_PREFIX) ? content.length - 1 : -1;
+  if (index < 0) return row;
+  return { ...row, message: { ...row.message, content: content.filter((_, i) => i !== index) } };
+}
+
 /**
  * Extract the user prompt a row contributes to a session's topic, mirroring
  * the CLI's firstPrompt scan. Returns null for anything that is not real user
@@ -504,7 +528,7 @@ function userPromptFromRow(row) {
   if (row.isMeta === true) return null;
   if (row.isCompactSummary === true || row.isVisibleInTranscriptOnly === true || row.isSidechain === true) return null;
   if (isInterruptionMarker(row)) return null;
-  const text = extractTextContent(row).trim();
+  const text = extractTextContent(withoutPluginIdeContext(row)).trim();
   if (!text || text.startsWith('<')) return null;
   return text;
 }

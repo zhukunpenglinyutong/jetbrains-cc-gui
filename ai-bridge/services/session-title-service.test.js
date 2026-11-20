@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -135,6 +135,35 @@ test('collectSessionUserPrompts skips compaction summaries, transcript-only and 
     userRow('补充移动端样式'),
   ];
   assert.deepEqual(collectSessionUserPrompts(rows), ['修复登录按钮', '补充移动端样式']);
+});
+
+// Every turn sent with a file open carries the plugin's IDE context block:
+// leading since #2092, trailing before it. A leading '<system-reminder>' made
+// the whole prompt look like CLI plumbing, so regeneration hit empty_session.
+const IDE_CONTEXT = '<system-reminder>\nThe following IDE context applies to the user message below.\n'
+  + 'Active file: /repo/src/Login.java\n</system-reminder>';
+const LEGACY_IDE_CONTEXT = '<system-reminder>\nThe following IDE context applies only to this user message.\n'
+  + 'Selected code: button.onClick(null);\n</system-reminder>';
+
+test('collectSessionUserPrompts drops the plugin IDE context block in both layouts', () => {
+  const blocksRow = (...texts) => ({
+    type: 'user', message: { role: 'user', content: texts.map((text) => ({ type: 'text', text })) },
+  });
+  const rows = [
+    blocksRow(IDE_CONTEXT, '[Attachment: notes.txt]', 'Fix the login button crash'),
+    blocksRow('Add a unit test', LEGACY_IDE_CONTEXT),
+    // A lone block is the user's own text, even when it quotes the wrapper.
+    blocksRow(IDE_CONTEXT),
+  ];
+  assert.deepEqual(collectSessionUserPrompts(rows),
+    ['[Attachment: notes.txt]\nFix the login button crash', 'Add a unit test']);
+});
+
+// Same drift guard as Java ClaudeIdeContextPresentationTest: the bridge must
+// still write the wrapper this filter removes.
+test('the bridge still writes the IDE context wrapper the title filter removes', () => {
+  const bridge = readFileSync(new URL('./claude/persistent-query-service.js', import.meta.url), 'utf8');
+  assert.ok(bridge.includes('text: `' + IDE_CONTEXT.split('Active file')[0].replace(/\n/g, '\\n')));
 });
 
 test('buildRegenerationInput anchors on the first prompt and keeps recent ones', () => {
