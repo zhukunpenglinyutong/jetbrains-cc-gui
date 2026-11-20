@@ -9,12 +9,17 @@ import { setupApiKey, buildCliEnv, buildWebviewControlledSettingsOverride } from
 import { getExistingClaudeProjectSessionFilePath, getRealHomeDir, selectWorkingDirectory } from '../../utils/path-utils.js';
 import { ensureClaudeSdk, hasClaudeProjectSessionFile, waitForClaudeProjectSessionFile, isNoConversationFoundError } from './message-utils.js';
 import { getActiveQueryResult, getActiveSessionIds } from './message-session-registry.js';
-import { getClaudeCliPathOverride } from '../../utils/claude-cli-path.js';
+import { getClaudeCliPathOverride, claudeCliSdkOptions } from '../../utils/claude-cli-path.js';
 import { isUserTextMessage } from './session-service.js';
 import { selectConversationChain } from './conversation-chain.js';
 
 export function buildRewindQueryOptions(sessionId, workingDirectory) {
   const claudeCliOverride = getClaudeCliPathOverride();
+  const stderr = (data) => {
+    if (data && data.trim()) {
+      console.log(`[SDK-STDERR] ${data.trim()}`);
+    }
+  };
   return {
     resume: sessionId,
     cwd: workingDirectory,
@@ -39,12 +44,8 @@ export function buildRewindQueryOptions(sessionId, workingDirectory) {
       behavior: 'deny',
       message: 'Rewind operation'
     }),
-    stderr: (data) => {
-      if (data && data.trim()) {
-        console.log(`[SDK-STDERR] ${data.trim()}`);
-      }
-    },
-    ...(claudeCliOverride && { pathToClaudeCodeExecutable: claudeCliOverride })
+    stderr,
+    ...claudeCliSdkOptions(claudeCliOverride, { stderr })
   };
 }
 
