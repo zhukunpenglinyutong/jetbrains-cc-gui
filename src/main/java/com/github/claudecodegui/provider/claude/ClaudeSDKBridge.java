@@ -695,11 +695,12 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
      * never queued behind an active turn) and returns its result envelope:
      * {success, title} on success or {success:false, code} on failure.
      *
-     * @param sessionId The session whose title should be regenerated
-     * @param cwd       Working directory used to locate the session file
+     * @param sessionId  The session whose title should be regenerated
+     * @param cwd        Working directory used to locate the session file
+     * @param supplierId Supplier the conversation is bound to, or null for the global profile
      * @return CompletableFuture with the daemon response as JsonObject
      */
-    public CompletableFuture<JsonObject> regenerateSessionTitle(String sessionId, String cwd) {
+    public CompletableFuture<JsonObject> regenerateSessionTitle(String sessionId, String cwd, String supplierId) {
         DaemonBridge db = this.daemonCoordinator.getDaemonBridge();
         if (db == null) {
             return CompletableFuture.completedFuture(regenerationError("daemon_unavailable",
@@ -710,6 +711,9 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
         params.addProperty("sessionId", sessionId);
         if (cwd != null && !cwd.isEmpty()) {
             params.addProperty("cwd", cwd);
+        }
+        if (supplierId != null && !supplierId.isBlank()) {
+            params.addProperty("supplierId", supplierId);
         }
 
         AtomicReference<JsonObject> resultRef = new AtomicReference<>();

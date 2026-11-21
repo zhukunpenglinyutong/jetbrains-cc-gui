@@ -1041,8 +1041,8 @@ async function runDaemonMain() {
     // the out-of-band stdout writer, so a concurrent active request is never
     // disturbed.
     if (request.method === 'claude.regenerateTitle') {
-      const { sessionId, cwd } = request.params || {};
-      regenerateSessionTitle(sessionId, cwd || null)
+      const { sessionId, cwd, supplierId } = request.params || {};
+      regenerateSessionTitle(sessionId, cwd || null, supplierId ?? null)
         .then((result) => writeRawLine({ id: request.id || '0', done: true, ...result }))
         .catch((error) => writeRawLine({
           id: request.id || '0',
