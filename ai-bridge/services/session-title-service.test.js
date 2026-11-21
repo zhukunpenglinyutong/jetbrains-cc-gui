@@ -11,6 +11,7 @@ import {
   regenerateSessionTitle,
   __testing,
 } from './session-title-service.js';
+import { buildSessionClaudeConfig } from '../config/session-supplier.js';
 
 // Silence daemon-event lines the service writes via the out-of-band stdout
 // writer so they don't interleave with the test runner's TAP output.
@@ -205,20 +206,29 @@ function regenerationHarness({
   enabled = true,
   generatedTitle = '修复登录按钮移动端问题',
   persistSucceeds = true,
+  supplierId = null,
+  resolveSupplier = () => null,
 } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'title-regen-'));
   const sessionFile = join(dir, SESSION_ID + '.jsonl');
   writeFileSync(sessionFile, rows.map((row) => JSON.stringify(row)).join('\n') + '\n', 'utf8');
 
-  const calls = { generated: [], saved: [] };
-  const result = regenerateSessionTitle(SESSION_ID, null, {
+  const calls = { generated: [], saved: [], supplierIds: [], suppliers: [] };
+  const result = regenerateSessionTitle(SESSION_ID, null, supplierId, {
     isEnabled: async () => enabled,
     resolveSessionFile: () => sessionFile,
     // Default off so the harness never consults the developer's real
     // session-titles.json (the production default would).
     hasCustomTitle: () => false,
-    generateTitle: async (input) => {
+    // Default to the global profile so the harness never reads the developer's
+    // real supplier configuration.
+    resolveSupplier: (id) => {
+      calls.supplierIds.push(id);
+      return resolveSupplier(id);
+    },
+    generateTitle: async (input, supplier) => {
       calls.generated.push(input);
+      calls.suppliers.push(supplier);
       return typeof generatedTitle === 'function' ? generatedTitle(input) : generatedTitle;
     },
     saveTitle: async (title) => {
@@ -285,7 +295,7 @@ test('regenerateSessionTitle fails with a stable code and never touches the titl
 });
 
 test('regenerateSessionTitle rejects a missing session file and invalid session ids', async () => {
-  const missing = await regenerateSessionTitle(SESSION_ID, null, {
+  const missing = await regenerateSessionTitle(SESSION_ID, null, null, {
     resolveSessionFile: () => 'Z:/no/such/file.jsonl',
     hasCustomTitle: () => false,
   });
@@ -301,7 +311,7 @@ test('regenerateSessionTitle rejects a missing session file and invalid session 
 // title, so the call would only produce a false success.
 test('regenerateSessionTitle refuses a session with a manual title before calling Haiku', async () => {
   let generated = 0;
-  const result = await regenerateSessionTitle(SESSION_ID, null, {
+  const result = await regenerateSessionTitle(SESSION_ID, null, null, {
     hasCustomTitle: () => true,
     generateTitle: async () => {
       generated += 1;
@@ -310,4 +320,47 @@ test('regenerateSessionTitle refuses a session with a manual title before callin
   });
   assert.deepEqual(result, { success: false, code: 'custom_title' });
   assert.equal(generated, 0);
+});
+
+// A conversation bound to a supplier (per-conversation suppliers) must title
+// through that supplier, as the first-turn title does: the global profile can
+// be another account or CLI login.
+const SUPPLIER_CONFIG = { claude: { current: 'global-a', providers: {
+  'global-a': { settingsConfig: { env: {
+    ANTHROPIC_AUTH_TOKEN: 'token-a', ANTHROPIC_BASE_URL: 'https://global-a.example.invalid' } } },
+  'conversation-b': { settingsConfig: { env: {
+    ANTHROPIC_AUTH_TOKEN: 'token-b', ANTHROPIC_BASE_URL: 'https://conversation-b.example.invalid',
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: 'haiku-on-b' } } },
+} } };
+const resolveFixtureSupplier = (id) => buildSessionClaudeConfig(id, { config: SUPPLIER_CONFIG, baseEnv: {} });
+
+test('regenerateSessionTitle titles through the supplier the conversation is bound to', async () => {
+  const bound = regenerationHarness({ supplierId: 'conversation-b', resolveSupplier: resolveFixtureSupplier });
+  const result = await bound.result;
+  bound.cleanup();
+  assert.deepEqual(result, { success: true, title: '修复登录按钮移动端问题' });
+  assert.deepEqual(bound.calls.supplierIds, ['conversation-b']);
+  const [supplier] = bound.calls.suppliers;
+  assert.equal(supplier.env.ANTHROPIC_BASE_URL, 'https://conversation-b.example.invalid');
+  assert.equal(supplier.env.ANTHROPIC_AUTH_TOKEN, 'token-b');
+  assert.equal(supplier.settings.env.ANTHROPIC_DEFAULT_HAIKU_MODEL, 'haiku-on-b');
+
+  // Without a binding the global profile stays in charge, as before.
+  const unbound = regenerationHarness({ resolveSupplier: resolveFixtureSupplier });
+  await unbound.result;
+  unbound.cleanup();
+  assert.deepEqual(unbound.calls.suppliers, [null]);
+});
+
+test('regenerateSessionTitle fails with supplier_unavailable before calling the model', async () => {
+  const h = regenerationHarness({ supplierId: 'deleted-supplier', resolveSupplier: resolveFixtureSupplier });
+  const result = await h.result;
+  h.cleanup();
+  assert.deepEqual(result, {
+    success: false,
+    code: 'supplier_unavailable',
+    error: 'The conversation supplier is unavailable or invalid. Select a configured supplier.',
+  });
+  assert.deepEqual(h.calls.generated, []);
+  assert.deepEqual(h.calls.saved, []);
 });
