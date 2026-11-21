@@ -55,7 +55,7 @@ public class ClaudeNotifier {
     public static void showSuccess(@NotNull Project project, @Nullable String title, String message) {
         show(project, "Claude [OK]", message, 5000);
         // Show the task completion visual notification toast
-        SystemNotificationService.getInstance().showVisualNotificationToast(project, title, message);
+        SystemNotificationService.getInstance().showVisualNotificationToast(project, title, message, null);
         // Play the task completion notification sound
         SoundNotificationService.getInstance().playTaskCompleteSound();
     }
