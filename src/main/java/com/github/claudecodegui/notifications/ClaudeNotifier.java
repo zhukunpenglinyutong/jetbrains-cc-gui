@@ -3,6 +3,7 @@ package com.github.claudecodegui.notifications;
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
 import com.github.claudecodegui.session.ClaudeSession;
 import com.github.claudecodegui.session.SessionState;
+import com.github.claudecodegui.util.NotificationSource;
 import com.github.claudecodegui.util.SoundNotificationService;
 import com.github.claudecodegui.util.SystemNotificationService;
 import com.google.gson.JsonArray;
@@ -44,18 +45,22 @@ public class ClaudeNotifier {
     }
 
     public static void showSuccess(@NotNull Project project, String message) {
-        showSuccess(project, null, message);
+        showSuccess(project, null, message, null);
     }
 
     /**
      * Show task completion notification with an optional dynamic title.
      * When {@code title} is null/blank, the toast falls back to the i18n
      * default ({@code notifier.taskComplete.title}).
+     *
+     * @param source the chat tab that finished, so the toast can name it and focus it
+     *               on click; {@code null} for notifications that don't come from a tab
      */
-    public static void showSuccess(@NotNull Project project, @Nullable String title, String message) {
+    public static void showSuccess(@NotNull Project project, @Nullable String title, String message,
+                                   @Nullable NotificationSource source) {
         show(project, "Claude [OK]", message, 5000);
         // Show the task completion visual notification toast
-        SystemNotificationService.getInstance().showVisualNotificationToast(project, title, message);
+        SystemNotificationService.getInstance().showVisualNotificationToast(project, title, message, source);
         // Play the task completion notification sound
         SoundNotificationService.getInstance().playTaskCompleteSound();
     }

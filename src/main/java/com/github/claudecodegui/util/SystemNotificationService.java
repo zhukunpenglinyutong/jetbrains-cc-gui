@@ -51,6 +51,9 @@ public class SystemNotificationService {
     // CJK and Latin scripts, avoiding HTML JLabel height-measurement issues
     // that can clip wrapped titles inside BoxLayout.
     private static final int MAX_TITLE_LENGTH = 35;
+    // The tab caption is a single-line plain label that Swing ellipsizes when it runs out
+    // of width; this cap only keeps a very long custom name from bloating pack().
+    private static final int MAX_TAB_NAME_LENGTH = 40;
     private static final int MESSAGE_ELLIPSIS_TAIL = 3;
     private static final int WINDOW_WIDTH = 380;
     private static final int AUTO_CLOSE_MS = 10_000;
@@ -94,16 +97,20 @@ public class SystemNotificationService {
      * Show visual notification window with a fallback title.
      */
     public void showVisualNotificationToast(@NotNull Project project, String message) {
-        showVisualNotificationToast(project, null, message);
+        showVisualNotificationToast(project, null, message, null);
     }
 
     /**
      * Show visual notification window with an explicit dynamic title.
      * When {@code title} is null/blank, the i18n default
      * {@code notifier.taskComplete.title} is used.
+     *
+     * @param source the chat tab the notification belongs to, or {@code null} when it
+     *               does not come from a tab; see {@link NotificationSource}
      */
-    public void showVisualNotificationToast(@NotNull Project project, @Nullable String title, String message) {
-        showVisualNotificationToast(project, title, message, isTaskCompletionEnabled());
+    public void showVisualNotificationToast(@NotNull Project project, @Nullable String title, String message,
+                                            @Nullable NotificationSource source) {
+        showVisualNotificationToast(project, title, message, source, isTaskCompletionEnabled());
     }
 
     /**
@@ -111,11 +118,14 @@ public class SystemNotificationService {
      * {@code askUserQuestionNotificationEnabled} setting (opt-in, default false).
      * Reuses the same slide-in toast window as the task-completion notification so
      * the visual effect matches it exactly.
+     *
+     * @param source the chat tab that is waiting for an answer, or {@code null}
      */
-    public void showAskUserQuestionReminderToast(@NotNull Project project) {
+    public void showAskUserQuestionReminderToast(@NotNull Project project, @Nullable NotificationSource source) {
         showVisualNotificationToast(project,
             ClaudeCodeGuiBundle.message("notifier.askUserQuestion.title"),
             ClaudeCodeGuiBundle.message("notifier.askUserQuestion.message"),
+            source,
             isAskUserQuestionEnabled());
     }
 
@@ -125,7 +135,8 @@ public class SystemNotificationService {
      * accidentally drive another feature's toast.
      */
     private void showVisualNotificationToast(@NotNull Project project, @Nullable String title,
-                                             String message, boolean enabled) {
+                                             String message, @Nullable NotificationSource source,
+                                             boolean enabled) {
         ApplicationManager.getApplication().invokeLater(() -> {
             if (project.isDisposed()) {
                 return;
@@ -137,7 +148,8 @@ public class SystemNotificationService {
                 disposeActiveWindow();
 
                 String resolvedTitle = sanitizeTitle(title);
-                JWindow window = createNotificationWindow(project, resolvedTitle, sanitizeMessage(message));
+                JWindow window = createNotificationWindow(project, resolveTabCaption(source), resolvedTitle,
+                    sanitizeMessage(message), source);
                 activeNotificationWindow = window;
 
                 Point position = getNotificationPosition(window, project);
@@ -222,13 +234,32 @@ public class SystemNotificationService {
         return truncateAndEscape(chosen, MAX_TITLE_LENGTH);
     }
 
+    /**
+     * Resolve the tab caption shown above the title. Returns {@code null} when there is
+     * no source tab or its name is blank, so the toast keeps its old two-line layout.
+     * The caption is a plain-text label (HTML rendering disabled), so the name is only
+     * truncated here, not HTML-escaped.
+     */
+    @Nullable
+    String resolveTabCaption(@Nullable NotificationSource source) {
+        String tabName = source == null ? null : source.tabName();
+        if (tabName == null || tabName.trim().isEmpty()) {
+            return null;
+        }
+        return truncate(tabName.trim(), MAX_TAB_NAME_LENGTH);
+    }
+
     private String truncateAndEscape(String text, int maxLength) {
+        return escapeHtml(truncate(text, maxLength));
+    }
+
+    private static String truncate(String text, int maxLength) {
         int cpCount = text.codePointCount(0, text.length());
         if (cpCount > maxLength) {
             int end = text.offsetByCodePoints(0, maxLength - MESSAGE_ELLIPSIS_TAIL);
-            text = text.substring(0, end) + "...";
+            return text.substring(0, end) + "...";
         }
-        return escapeHtml(text);
+        return text;
     }
 
     private static String escapeHtml(String input) {
@@ -258,7 +289,9 @@ public class SystemNotificationService {
         return sb.toString();
     }
 
-    private JWindow createNotificationWindow(@NotNull Project project, String escapedTitle, String escapedMessage) {
+    private JWindow createNotificationWindow(@NotNull Project project, @Nullable String tabCaption,
+                                             String escapedTitle, String escapedMessage,
+                                             @Nullable NotificationSource source) {
         JWindow window = new JWindow();
         window.setAlwaysOnTop(true);
 
@@ -283,7 +316,7 @@ public class SystemNotificationService {
         accentBar.setBackground(accentColor);
         accentBar.setPreferredSize(new Dimension(JBUI.scale(ACCENT_BAR_WIDTH), 0));
 
-        JPanel textPanel = buildTextPanel(escapedTitle, escapedMessage, textColor, subtextColor);
+        JPanel textPanel = buildTextPanel(tabCaption, escapedTitle, escapedMessage, textColor, subtextColor);
         JButton closeButton = createCloseButton(window, isDark, subtextColor);
 
         JPanel rightPanel = new JPanel(new BorderLayout());
@@ -301,7 +334,8 @@ public class SystemNotificationService {
         window.pack();
         window.setSize(JBUI.scale(WINDOW_WIDTH), window.getHeight());
 
-        // Whole-window click activates IDE; clicks on the close button are handled by its own listener.
+        // Whole-window click activates the IDE and then the source tab, if any;
+        // clicks on the close button are handled by its own listener.
         window.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
@@ -312,11 +346,28 @@ public class SystemNotificationService {
                     window.dispose();
                     activeNotificationWindow = null;
                     activateIdeWindow(project);
+                    focusSourceTab(source);
                 }
             }
         });
 
         return window;
+    }
+
+    /**
+     * Run the source tab's focus action after the IDE frame is in front. It runs second
+     * so a detached chat window, which has its own frame, ends up on top of the IDE.
+     */
+    void focusSourceTab(@Nullable NotificationSource source) {
+        Runnable focusAction = source == null ? null : source.focusAction();
+        if (focusAction == null) {
+            return;
+        }
+        try {
+            focusAction.run();
+        } catch (Exception e) {
+            LOG.debug("[SystemNotification] Failed to focus the source tab: " + e.getMessage());
+        }
     }
 
     /**
@@ -333,12 +384,25 @@ public class SystemNotificationService {
         return JBUI.scale(Math.max(budget, 160));
     }
 
-    private JPanel buildTextPanel(String escapedTitle, String escapedMessage, Color textColor, Color subtextColor) {
+    private JPanel buildTextPanel(@Nullable String tabCaption, String escapedTitle, String escapedMessage,
+                                  Color textColor, Color subtextColor) {
         JPanel textPanel = new JPanel();
         textPanel.setLayout(new BoxLayout(textPanel, BoxLayout.Y_AXIS));
         textPanel.setOpaque(false);
 
         int textWidth = computeTextWidthPx();
+
+        if (tabCaption != null) {
+            // Plain single-line label: Swing ellipsizes it when the name is too wide, and
+            // html.disable keeps a tab name that starts with "<html>" from being rendered.
+            JLabel tabLabel = new JLabel(tabCaption);
+            tabLabel.putClientProperty("html.disable", Boolean.TRUE);
+            tabLabel.setFont(tabLabel.getFont().deriveFont(12f));
+            tabLabel.setForeground(subtextColor);
+            tabLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+            textPanel.add(tabLabel);
+            textPanel.add(Box.createVerticalStrut(JBUI.scale(4)));
+        }
 
         JLabel titleLabel = new JLabel(
             "<html><body style='width: " + textWidth + "px; margin: 0;'>"

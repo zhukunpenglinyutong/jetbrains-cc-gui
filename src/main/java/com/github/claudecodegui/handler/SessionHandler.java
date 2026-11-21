@@ -261,7 +261,8 @@ public class SessionHandler extends BaseMessageHandler {
                         ClaudeNotifier.showSuccess(
                             project,
                             ClaudeNotifier.buildTitleFromSession(session),
-                            ClaudeNotifier.buildPreviewFromSession(session, "Task completed"));
+                            ClaudeNotifier.buildPreviewFromSession(session, "Task completed"),
+                            context.notificationSource());
                     }
                 })
                 .exceptionally(ex -> {
@@ -439,7 +440,8 @@ public class SessionHandler extends BaseMessageHandler {
                         ClaudeNotifier.showSuccess(
                             project,
                             ClaudeNotifier.buildTitleFromSession(session),
-                            ClaudeNotifier.buildPreviewFromSession(session, "Task completed"));
+                            ClaudeNotifier.buildPreviewFromSession(session, "Task completed"),
+                            context.notificationSource());
                     }
                 })
                 .exceptionally(ex -> {
