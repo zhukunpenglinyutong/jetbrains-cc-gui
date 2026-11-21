@@ -3185,10 +3185,12 @@ public class ClaudeChatWindow {
             return;
         }
         if ("claude".equals(session.getProvider()) && session.getError() == null) {
+            HandlerContext ctx = this.handlerContext;
             com.github.claudecodegui.notifications.ClaudeNotifier.showSuccess(
                 project,
                 com.github.claudecodegui.notifications.ClaudeNotifier.buildTitleFromSession(session),
-                com.github.claudecodegui.notifications.ClaudeNotifier.buildPreviewFromSession(session, "Task completed"));
+                com.github.claudecodegui.notifications.ClaudeNotifier.buildPreviewFromSession(session, "Task completed"),
+                ctx == null ? null : ctx.notificationSource());
         }
     }
 
