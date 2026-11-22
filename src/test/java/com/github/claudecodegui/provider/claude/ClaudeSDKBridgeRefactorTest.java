@@ -91,22 +91,25 @@ public class ClaudeSDKBridgeRefactorTest {
 
         JsonObject params = builder.buildSendParams(
                 "hello",
-                null,
-                null,
-                null,
-                null,
-                null,
-                attachments,
-                null,
-                null,
-                null,
-                null,
-                null
+                null,           // sessionId
+                null,           // runtimeSessionEpoch
+                null,           // cwd
+                null,           // permissionMode
+                null,           // model
+                attachments,    // attachments
+                null,           // openedFiles
+                null,           // agentPrompt
+                null,           // streaming
+                null,           // disableThinking
+                null,           // reasoningEffort
+                null,           // maxThinkingTokens
+                null,           // envFile
+                null            // runtimeSignature
         );
 
         assertFalse(params.has("attachments"));
         assertEquals("", params.get("sessionId").getAsString());
-        assertEquals("", params.get("cwd").getAsString());
+        assertFalse(params.has("cwd"));
     }
 
     @Test
