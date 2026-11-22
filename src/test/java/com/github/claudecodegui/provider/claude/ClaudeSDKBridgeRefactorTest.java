@@ -228,6 +228,8 @@ public class ClaudeSDKBridgeRefactorTest {
                 null,
                 null,
                 null,
+                null,
+                null,
                 callback
         ).get();
 

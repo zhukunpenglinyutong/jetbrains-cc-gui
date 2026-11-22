@@ -51,7 +51,9 @@ class ClaudeDaemonRequestExecutor {
             Boolean streaming,
             Boolean disableThinking,
             String reasoningEffort,
+            Integer maxThinkingTokens,
             String envFile,
+            String runtimeSignature,
             MessageCallback callback
     ) {
         return CompletableFuture.supplyAsync(() -> {
@@ -76,7 +78,9 @@ class ClaudeDaemonRequestExecutor {
                         streaming,
                         disableThinking,
                         reasoningEffort,
-                        envFile
+                        maxThinkingTokens != null ? maxThinkingTokens : null,
+                        envFile,
+                        runtimeSignature
                 );
 
                 boolean hasAttachments = attachments != null && !attachments.isEmpty() && params.has("attachments");

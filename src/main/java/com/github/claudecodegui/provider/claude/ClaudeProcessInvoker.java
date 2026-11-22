@@ -75,7 +75,9 @@ class ClaudeProcessInvoker {
             Boolean streaming,
             Boolean disableThinking,
             String reasoningEffort,
+            Integer maxThinkingTokens,
             String envFile,
+            String runtimeSignature,
             MessageCallback callback
     ) {
         AtomicBoolean errorAlreadyReported = new AtomicBoolean(false);
@@ -115,7 +117,9 @@ class ClaudeProcessInvoker {
                         streaming,
                         disableThinking,
                         reasoningEffort,
-                        envFile
+                        maxThinkingTokens,
+                        envFile,
+                        runtimeSignature
                 );
                 String stdinJson = gson.toJson(stdinInput);
                 if (stdinInput.has("envFile")) {

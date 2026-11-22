@@ -103,6 +103,7 @@ public class SessionState {
     private volatile String sessionId;
     private volatile String channelId;
     private volatile String runtimeSessionEpoch = UUID.randomUUID().toString();
+    private volatile String runtimeSignature = null;
 
     // State callbacks and history loads also run on provider and worker threads.
     private volatile boolean busy = false;
@@ -155,6 +156,8 @@ public class SessionState {
     private volatile String provider = "claude";
     // Reasoning effort (thinking depth). Null means "do not override SDK/settings".
     private volatile String reasoningEffort = null;
+    // Max thinking tokens (thinking budget). Null means "do not override SDK/settings".
+    private volatile Integer maxThinkingTokens = null;
     // Codex service tier: null = use Codex defaults, "fast" = Codex /fast.
     private volatile String codexServiceTier = null;
     private volatile String dshPreset = "";
@@ -284,6 +287,14 @@ public class SessionState {
         return reasoningEffort;
     }
 
+    public Integer getMaxThinkingTokens() {
+        return maxThinkingTokens;
+    }
+
+    public void setMaxThinkingTokens(Integer maxThinkingTokens) {
+        this.maxThinkingTokens = maxThinkingTokens;
+    }
+
     public String getCodexServiceTier() {
         return codexServiceTier;
     }
@@ -294,6 +305,14 @@ public class SessionState {
 
     public String getRuntimeSessionEpoch() {
         return runtimeSessionEpoch;
+    }
+
+    public String getRuntimeSignature() {
+        return runtimeSignature;
+    }
+
+    public void setRuntimeSignature(String runtimeSignature) {
+        this.runtimeSignature = runtimeSignature;
     }
 
     public List<String> getSlashCommands() {

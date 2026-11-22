@@ -2,10 +2,10 @@ package com.github.claudecodegui.provider.claude;
 
 import com.github.claudecodegui.bridge.EnvironmentConfigurator;
 import com.github.claudecodegui.bridge.NodeDetector;
-import com.github.claudecodegui.bridge.NodeProcessRunner;
 import com.github.claudecodegui.bridge.ProcessManager;
 import com.github.claudecodegui.provider.common.SessionHistoryIncompleteException;
 import com.github.claudecodegui.provider.common.SessionHistoryNotFoundException;
+import com.github.claudecodegui.util.PlatformUtils;
 import com.github.claudecodegui.util.UserMessageSanitizer;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -13,12 +13,20 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.function.Supplier;
@@ -219,15 +227,76 @@ class ClaudeSessionQueryService {
 
         ProcessBuilder pb = new ProcessBuilder(command);
         pb.directory(workDir);
-        pb.redirectErrorStream(true);
+        // Do NOT merge stderr into stdout (pb.redirectErrorStream(true)).
+        // Large stdout payloads (>64KB, the OS pipe buffer) are written
+        // across multiple uv_write chunks. If stderr is merged into the
+        // same pipe, console.error/console.warn calls can interleave at
+        // the byte level, inserting raw newlines mid-JSON and causing
+        // Gson MalformedJsonException: Unterminated string.
         envConfigurator.updateProcessEnvironment(pb, node);
 
-        // L5 fix: register with ProcessManager so cleanupAllProcesses sees this child.
-        // NodeProcessRunner fails rather than returning stdout it has not read to EOF.
-        NodeProcessRunner.Result result = NodeProcessRunner.run(
-                pb, processManager, "claude-session-query", null, processTimeoutSeconds);
+        // Use custom process execution with separate stderr draining (like executeMarkerQuery)
+        Process process = null;
+        long startTime = System.currentTimeMillis();
+        try {
+            process = pb.start();
+            final Process finalProcess = process;
+            processManager.registerProcess("claude-session-query", finalProcess);
 
-        String outputStr = result.output().trim();
+            CompletableFuture<String> stdoutFuture = new CompletableFuture<>();
+            StringBuilder stdoutBuilder = new StringBuilder();
+            Thread stdoutThread = new Thread(() -> {
+                try (BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(finalProcess.getInputStream(), StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        stdoutBuilder.append(line).append('\n');
+                    }
+                    stdoutFuture.complete(stdoutBuilder.toString());
+                } catch (IOException e) {
+                    stdoutFuture.completeExceptionally(e);
+                }
+            });
+            stdoutThread.setDaemon(true);
+            stdoutThread.start();
+
+            // Drain stderr in a daemon thread so the pipe buffer never fills
+            Thread stderrThread = new Thread(() -> {
+                try (BufferedReader errReader = new BufferedReader(
+                        new InputStreamReader(finalProcess.getErrorStream(), StandardCharsets.UTF_8))) {
+                    String errLine;
+                    while ((errLine = errReader.readLine()) != null) {
+                        log.debug("[" + logPrefix + "] [stderr] " + errLine);
+                    }
+                } catch (Exception e) {
+                    log.debug("[" + logPrefix + "] stderr drain exception: " + e.getMessage());
+                }
+            });
+            stderrThread.setDaemon(true);
+            stderrThread.start();
+
+            if (!process.waitFor(processTimeoutSeconds, TimeUnit.SECONDS)) {
+                PlatformUtils.terminateProcess(process);
+                throw new TimeoutException("Node.js process timed out after " + processTimeoutSeconds + " seconds");
+            }
+
+            int exitCode = process.exitValue();
+            log.debug("[" + logPrefix + "] Process exited with code: " + exitCode);
+
+            String outputStr;
+            try {
+                outputStr = stdoutFuture.get(2000, TimeUnit.MILLISECONDS);
+            } catch (TimeoutException e) {
+                throw new IOException("Node.js process exited but its stdout was still open after 2000 ms; refusing to use possibly truncated output");
+            } catch (ExecutionException e) {
+                throw new IOException("Failed to read Node.js process output: " + e.getCause().getMessage(), e.getCause());
+            }
+
+            outputStr = outputStr.trim();
+            log.debug("[" + logPrefix + "] Captured stdout length: " + outputStr.length());
+            if (outputStr.isEmpty()) {
+                log.warn("[" + logPrefix + "] STDOUT IS EMPTY! Exit code: " + exitCode);
+            }
         log.debug("[" + logPrefix + "] Raw output length: " + outputStr.length());
         if (log.isDebugEnabled()) {
             log.debug("[" + logPrefix + "] Raw output (first 300 chars): "
@@ -259,7 +328,18 @@ class ClaudeSessionQueryService {
         log.debug("[" + logPrefix + "] JSON parsed successfully, success="
                 + (jsonResult.has("success") ? jsonResult.get("success").getAsBoolean() : "null"));
         return jsonResult;
-    }
+            } finally {
+                if (process != null) {
+                    try {
+                        if (process.isAlive()) {
+                            PlatformUtils.terminateProcess(process);
+                        }
+                    } finally {
+                        processManager.unregisterProcess("claude-session-query", process);
+                    }
+                }
+            }
+        }
 
     static JsonObject normalizeClaudeHistoryMessage(JsonObject originalMessage) {
         if (originalMessage == null

@@ -199,10 +199,14 @@ class ClaudeDaemonCoordinator {
     }
 
     void prewarmDaemonAsync(String cwd, String runtimeSessionEpoch) {
-        prewarmDaemonAsync(cwd, runtimeSessionEpoch, null);
+        prewarmDaemonAsync(cwd, runtimeSessionEpoch, null, null);
     }
 
-    void prewarmDaemonAsync(String cwd, String runtimeSessionEpoch, String sessionId) {
+    void prewarmDaemonAsync(String cwd, String runtimeSessionEpoch, String runtimeSignature) {
+        prewarmDaemonAsync(cwd, runtimeSessionEpoch, runtimeSignature, null);
+    }
+
+    void prewarmDaemonAsync(String cwd, String runtimeSessionEpoch, String runtimeSignature, String sessionId) {
         CompletableFuture<?> previous = prewarmFuture;
         if (previous != null && !previous.isDone()) {
             previous.cancel(true);
@@ -244,6 +248,7 @@ class ClaudeDaemonCoordinator {
                 }
                 params.addProperty("sessionId", sessionId != null ? sessionId : "");
                 params.addProperty("runtimeSessionEpoch", runtimeSessionEpoch != null ? runtimeSessionEpoch : "");
+                params.addProperty("runtimeSignature", runtimeSignature != null ? runtimeSignature : "");
                 params.addProperty("permissionMode", "");
                 params.addProperty("model", "");
                 params.addProperty("streaming", true);
@@ -288,7 +293,7 @@ class ClaudeDaemonCoordinator {
         });
     }
 
-    void resetPersistentRuntime(String runtimeSessionEpoch) {
+    void resetPersistentRuntime(String runtimeSessionEpoch, String runtimeSignature) {
         DaemonBridge daemon = daemonBridge;
         if (daemon == null || !daemon.isAlive()) {
             log.info("[DaemonCoordinator] Skip runtime reset; daemon unavailable for epoch="
@@ -299,6 +304,7 @@ class ClaudeDaemonCoordinator {
         try {
             JsonObject params = new JsonObject();
             params.addProperty("runtimeSessionEpoch", runtimeSessionEpoch != null ? runtimeSessionEpoch : "");
+            params.addProperty("runtimeSignature", runtimeSignature != null ? runtimeSignature : "");
             CompletableFuture<Boolean> resetFuture = daemon.sendCommand(
                     "claude.resetRuntime",
                     params,

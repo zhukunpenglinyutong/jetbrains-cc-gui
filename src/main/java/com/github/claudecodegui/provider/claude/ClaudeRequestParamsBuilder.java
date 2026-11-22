@@ -39,7 +39,7 @@ class ClaudeRequestParamsBuilder {
             String reasoningEffort
     ) {
         return buildSendParams(message, sessionId, runtimeSessionEpoch, cwd, permissionMode, model,
-                attachments, openedFiles, agentPrompt, streaming, disableThinking, reasoningEffort, null);
+                attachments, openedFiles, agentPrompt, streaming, disableThinking, reasoningEffort, null, null, null);
     }
 
     JsonObject buildSendParams(
@@ -55,12 +55,35 @@ class ClaudeRequestParamsBuilder {
             Boolean streaming,
             Boolean disableThinking,
             String reasoningEffort,
-            String envFile
+            String envFile,
+            String runtimeSignature
+    ) {
+        return buildSendParams(message, sessionId, runtimeSessionEpoch, cwd, permissionMode, model,
+                attachments, openedFiles, agentPrompt, streaming, disableThinking, reasoningEffort, null, envFile, runtimeSignature);
+    }
+
+    JsonObject buildSendParams(
+            String message,
+            String sessionId,
+            String runtimeSessionEpoch,
+            String cwd,
+            String permissionMode,
+            String model,
+            List<ClaudeSession.Attachment> attachments,
+            JsonObject openedFiles,
+            String agentPrompt,
+            Boolean streaming,
+            Boolean disableThinking,
+            String reasoningEffort,
+            Integer maxThinkingTokens,
+            String envFile,
+            String runtimeSignature
     ) {
         JsonObject params = new JsonObject();
         params.addProperty("message", message);
         params.addProperty("sessionId", sessionId != null ? sessionId : "");
         params.addProperty("runtimeSessionEpoch", runtimeSessionEpoch != null ? runtimeSessionEpoch : "");
+        params.addProperty("runtimeSignature", runtimeSignature != null ? runtimeSignature : "");
         // Contract: "cwd" is either a real absolute project directory or absent.
         // Writing "" instead made the Node side treat it as an unknown cwd, while
         // buildDaemonEnv() rejected the very same value via isValidCwd() and dropped
@@ -94,6 +117,9 @@ class ClaudeRequestParamsBuilder {
         }
         if (reasoningEffort != null && !reasoningEffort.trim().isEmpty()) {
             params.addProperty("reasoningEffort", reasoningEffort);
+        }
+        if (maxThinkingTokens != null) {
+            params.addProperty("maxThinkingTokens", maxThinkingTokens);
         }
         if (envFile != null && !envFile.isEmpty() && !"null".equals(envFile) && !"undefined".equals(envFile)) {
             params.addProperty("envFile", envFile);

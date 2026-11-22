@@ -33,7 +33,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.LinkedHashMap;
-import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.regex.Pattern;
@@ -221,7 +220,11 @@ public class McpServerManager {
             return new ArrayList<>(byId.values());
         }
 
-        // Only fall back to ~/.codemoss/config.json when ~/.claude.json does not exist at all
+        // Legacy fallback to ~/.codemoss/config.json ONLY when ~/.claude.json does not exist at all.
+        // This is a one-time migration aid for users who haven't migrated to ~/.claude.json yet.
+        // When ~/.claude.json exists (even if empty or unreadable), it is the authoritative store
+        // and we NEVER fall back to legacy config. This preserves the primary store's semantics
+        // and its concurrent-writer protections (SafeJsonFileOps).
         if (!Files.exists(claudeJsonPath)) {
             LOG.info("[McpServerManager] ~/.claude.json not found, falling back to ~/.codemoss/config.json");
             JsonObject config = configReader.apply(null);
@@ -355,10 +358,7 @@ public class McpServerManager {
             // Use SafeJsonFileOps.mutateJsonAtomically for optimistic concurrency control
             // This handles concurrent writes from the CLI by re-reading and re-applying intent
             SafeJsonFileOps.mutateJsonAtomically(claudeJsonPath, 5, 50, current -> {
-                JsonObject claudeJson = current;
-                if (claudeJson == null) {
-                    claudeJson = new JsonObject();
-                }
+                JsonObject claudeJson = current != null ? current : new JsonObject();
 
                 // Ensure mcpServers object exists
                 if (!claudeJson.has("mcpServers") || !claudeJson.get("mcpServers").isJsonObject()) {
@@ -464,30 +464,13 @@ public class McpServerManager {
             // Don't fall back to legacy config on write failure - fail explicitly
             throw e;
         }
-
-        // Do NOT fall back to ~/.codemoss/config.json on write failure
-        // The authoritative store is ~/.claude.json; a write failure should be reported
-        throw new IOException("Failed to upsert MCP server in ~/.claude.json");
-    }
-            if (s.has("id") && s.get("id").getAsString().equals(serverId)) {
-                servers.set(i, server); // Replace
-                found = true;
-                break;
-            }
-        }
-
-        if (!found) {
-            servers.add(server);
-        }
-
-        configWriter.accept(config);
-        LOG.info("[McpServerManager] Upserted MCP server in ~/.codemoss/config.json: " + serverId);
     }
 
     /**
      * Delete an MCP server.
-     * Prefers deleting from ~/.claude.json (standard Claude CLI location),
-     * falling back to ~/.codemoss/config.json.
+     * Prefers deleting from ~/.claude.json (standard Claude CLI location).
+     * Does NOT fall back to legacy ~/.codemoss/config.json on write failure.
+     * The authoritative store is ~/.claude.json; a write failure is reported explicitly.
      */
     public boolean deleteMcpServer(String serverId) throws IOException {
         return deleteMcpServer(serverId, null, "global");
@@ -1725,10 +1708,6 @@ public class McpServerManager {
                         // Mark as project-local (read-only in UI)
                         server.addProperty("source", "project");
 
-                        // Set enabled/disabled status
-                        boolean isEnabled = !disabledServers.contains(serverId);
-                        server.addProperty("enabled", isEnabled);
-
                         // Approval state for the project-scoped .mcp.json supply-chain gate,
                         // resolved from TRUSTED sources only (user settings.json, managed
                         // settings, and the project's own git-untracked settings.local.json —
@@ -1740,6 +1719,13 @@ public class McpServerManager {
                         // git repository, and false when the gate granted nothing at all. The
                         // UI has to show this rather than presenting it as a plain approval.
                         server.addProperty(KEY_TRUST_VERIFIED, approval.isTrustVerified());
+
+                        // For project-local servers, the enabled state is driven by the approval
+                        // gate (settings.local.json), not by .mcp.json's disabledMcpServers.
+                        // The UI toggle is disabled for project-local servers, so the only way
+                        // to enable/disable them is through approve/reject.
+                        boolean isEnabled = "approved".equals(approval.getStatus());
+                        server.addProperty("enabled", isEnabled);
 
                         servers.add(server);
                     }

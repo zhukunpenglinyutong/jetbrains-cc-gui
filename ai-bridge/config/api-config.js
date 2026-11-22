@@ -223,7 +223,44 @@ export function isDangerousEnvVar(varName) {
 // would become the value returned by getClaudeCliPathOverride(), allowing
 // a project to hijack the CLI binary. These must be rejected on the env-file
 // path while retaining the trusted IDE configuration path.
-const ENV_FILE_DENYLIST_EXTRA = new Set(['PATH', 'CLAUDE_CODE_PATH', 'GROK_CLI_PATH']);
+const ENV_FILE_DENYLIST_EXTRA = new Set([
+  // Path manipulation — a single PATH=/tmp/attacker line would redirect every
+  // subsequent spawn (node, npx, claude CLI, npx, etc.) into an attacker directory.
+  'PATH',
+
+  // Provider executable overrides — an auto-discovered .env containing any of
+  // these would hijack the CLI binary launched by the daemon/app-server.
+  'CLAUDE_CODE_PATH',
+  'GROK_CLI_PATH',
+  'GROK_BIN',
+  'GROK_PATH',
+  'KIMI_BIN',
+  'KIMI_PATH',
+  'KIMI_CLI_PATH',
+  'KIMI_CODE_BIN',
+  'OPENCODE_BIN',
+  'OPENCODE_PATH',
+  'OPENCODE_CLI_PATH',
+  'PI_BIN',
+  'PI_PATH',
+  'PI_CLI_PATH',
+  'OMP_BIN',
+  'OMP_PATH',
+  'OMP_CLI_PATH',
+  'MINIMAX_BIN',
+  'MINIMAX_PATH',
+  'MINIMAX_CLI_PATH',
+  'MCODE_BIN',
+  'OPENCODE_BIN',
+  'OPENCODE_PATH',
+  'OPENCODE_CLI_PATH',
+  'PI_BIN',
+  'PI_PATH',
+  'PI_CLI_PATH',
+  'OMP_BIN',
+  'OMP_PATH',
+  'OMP_CLI_PATH',
+]);
 
 /**
  * Whether an env var must be rejected when it originates from a .env file.

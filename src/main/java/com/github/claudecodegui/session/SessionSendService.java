@@ -777,6 +777,8 @@ public class SessionSendService {
                         streaming,
                         false,
                         requestedReasoningEffort != null ? requestedReasoningEffort : state.getReasoningEffort(),
+                        state.getMaxThinkingTokens(),
+                        state.getRuntimeSignature(),
                         handler
                 ).thenApply(result -> null);
     }

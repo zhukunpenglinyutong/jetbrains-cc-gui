@@ -671,8 +671,13 @@ async function parseMcpConfig(cwd = null) {
       }
     } catch (e) {
       log('warn', 'Failed to read ~/.claude.json:', e.message);
-      return null;
+      // Do not return null — continue to try loading .mcp.json even if ~/.claude.json is unreadable
+      config = null;
     }
+  } else {
+    log('info', '[MCP Config] ~/.claude.json not found; attempting to load project .mcp.json only');
+    config = null;
+  }
 
   // Normalize the path to match the path format used in config
   let normalizedCwd = cwd;
@@ -797,8 +802,6 @@ async function parseMcpConfig(cwd = null) {
   return { mcpServers, disabledServers };
 }
 
-export { loadProjectMcpJson, mergeProjectMcpServers, getApprovedProjectServers, getDeniedProjectServers, isProjectServerApproved, classifyProjectServerApproval, isProjectServerTrustVerified, getProjectMcpApproval };
-
 /**
  * Read MCP server configuration from ~/.claude.json
  * Supports two modes:
@@ -872,7 +875,7 @@ export async function loadAllMcpServersInfo(cwd = null) {
     // Process servers resolved from project/global config (the parseMcpConfig result) first
     for (const [serverName, serverConfig] of Object.entries(mcpServers)) {
       processedNames.add(serverName);
-      classifyServer(serverName, serverConfig, disabledServers, result, cwd);
+      await classifyServer(serverName, serverConfig, disabledServers, result, cwd);
     }
 
     // If cwd is specified, global servers may have been overridden by project config.
@@ -883,7 +886,7 @@ export async function loadAllMcpServersInfo(cwd = null) {
         for (const [serverName, serverConfig] of Object.entries(globalParsed.mcpServers)) {
           if (processedNames.has(serverName)) continue; // Already covered by project config, skip
           processedNames.add(serverName);
-          classifyServer(serverName, serverConfig, globalParsed.disabledServers, result, cwd);
+          await classifyServer(serverName, serverConfig, globalParsed.disabledServers, result, cwd);
         }
       }
     }
@@ -910,7 +913,7 @@ export async function loadAllMcpServersInfo(cwd = null) {
  * @param {Object} result - Accumulator mutated in place
  * @param {string|null} cwd - Project root, for the project approval gate
  */
-function classifyServer(serverName, serverConfig, disabledServers, result, cwd = null) {
+async function classifyServer(serverName, serverConfig, disabledServers, result, cwd = null) {
   const isProjectScoped = Boolean(serverConfig && serverConfig.source === 'project');
   const trustVerified = isProjectScoped
     ? isProjectServerTrustVerified(serverName, cwd)
@@ -926,6 +929,28 @@ function classifyServer(serverName, serverConfig, disabledServers, result, cwd =
       : 'Invalid config structure';
     result.invalid.push({ name: serverName, reason, trustVerified });
   } else {
+    // For project-scoped servers, enforce fingerprint verification in the runtime gate.
+    // An approval is only valid while the server spec matches what was approved.
+    if (isProjectScoped && cwd) {
+      const currentFingerprint = fingerprintOfServerSpec(serverConfig);
+      const storedFingerprints = await loadProjectMcpFingerprints(cwd);
+      const storedFingerprint = storedFingerprints.get(serverName);
+      if (!currentFingerprint) {
+        log('warn', `[MCP Approve] Project server "${serverName}" fingerprint could not be computed; treating as invalid`);
+        result.invalid.push({ name: serverName, reason: 'Fingerprint could not be computed', trustVerified: false });
+        return;
+      }
+      if (!storedFingerprint) {
+        log('warn', `[MCP Approve] Project server "${serverName}" has no stored fingerprint; treating as pending`);
+        result.disabled.push(serverName);
+        return;
+      }
+      if (currentFingerprint !== storedFingerprint) {
+        log('warn', `[MCP Approve] Project server "${serverName}" fingerprint mismatch (spec changed since approval); treating as rejected`);
+        result.disabled.push(serverName);
+        return;
+      }
+    }
     // trustVerified sits on the ENTRY, never inside `config` — this config object
     // is also what feeds the SDK `mcpServers` spawn option.
     result.enabled.push({ name: serverName, config: serverConfig, trustVerified });
