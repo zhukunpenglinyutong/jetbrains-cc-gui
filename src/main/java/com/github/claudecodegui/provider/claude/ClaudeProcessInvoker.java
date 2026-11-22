@@ -76,9 +76,7 @@ class ClaudeProcessInvoker {
             Boolean streaming,
             Boolean disableThinking,
             String reasoningEffort,
-Integer maxThinkingTokens,
-            String envFile,
-            String runtimeSignature,
+            boolean ultracode,
             boolean projectTrusted,
             MessageCallback callback
     ) {
@@ -119,9 +117,7 @@ Integer maxThinkingTokens,
                         streaming,
                         disableThinking,
                         reasoningEffort,
-maxThinkingTokens,
-                        envFile,
-                        runtimeSignature,
+                        false,
                         projectTrusted
                 );
                 stdinInput.addProperty("executionScope", callback.executionScope());

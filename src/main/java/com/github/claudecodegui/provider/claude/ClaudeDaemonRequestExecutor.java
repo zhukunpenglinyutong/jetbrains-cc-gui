@@ -52,9 +52,7 @@ class ClaudeDaemonRequestExecutor {
             Boolean streaming,
             Boolean disableThinking,
             String reasoningEffort,
-Integer maxThinkingTokens,
-            String envFile,
-            String runtimeSignature,
+            boolean ultracode,
             boolean projectTrusted,
             MessageCallback callback
     ) {
@@ -80,9 +78,7 @@ Integer maxThinkingTokens,
                         streaming,
                         disableThinking,
                         reasoningEffort,
-maxThinkingTokens != null ? maxThinkingTokens : null,
-                        envFile,
-                        runtimeSignature,
+                        false,
                         projectTrusted
                 );
 

@@ -520,7 +520,6 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             String runtimeSignature,
             MessageCallback callback
     ) {
-String normalizedCwd = normalizeCwdForNode(cwd);
         String envFile = resolveEnvFile(cwd);
         String runtimeSig = runtimeSignature != null ? runtimeSignature : "";
         boolean ultracode = false;
@@ -550,15 +549,11 @@ String normalizedCwd = normalizeCwdForNode(cwd);
             MessageCallback callback
     ) {
         String normalizedCwd = normalizeCwdForNode(cwd);
-        String envFile = resolveEnvFile(cwd);
-        String runtimeSig = "";
-        Integer maxThinkingTokens = null;
         boolean projectTrusted = false;
         return sendMessageWithAllOptions(
                 channelId, message, sessionId, runtimeSessionEpoch, cwd, attachments,
                 permissionMode, model, openedFiles, agentPrompt, streaming, disableThinking,
-                reasoningEffort, maxThinkingTokens, envFile, runtimeSig,
-                ultracode, projectTrusted, callback);
+                reasoningEffort, ultracode, projectTrusted, callback);
     }
 
     private CompletableFuture<SDKResult> sendMessageWithAllOptions(
@@ -575,9 +570,6 @@ String normalizedCwd = normalizeCwdForNode(cwd);
             Boolean streaming,
             Boolean disableThinking,
             String reasoningEffort,
-            Integer maxThinkingTokens,
-            String envFile,
-            String runtimeSignature,
             boolean ultracode,
             boolean projectTrusted,
             MessageCallback callback
@@ -589,7 +581,7 @@ String normalizedCwd = normalizeCwdForNode(cwd);
         if (db != null) {
             return sendMessageViaDaemon(db, channelId, message, sessionId, runtimeSessionEpoch, normalizedCwd,
                     attachments, permissionMode, model, openedFiles, agentPrompt,
-                    streaming, disableThinking, reasoningEffort, maxThinkingTokens, envFile, runtimeSignature, ultracode, projectTrusted, callback);
+                    streaming, disableThinking, reasoningEffort, ultracode, projectTrusted, callback);
         }
 
         // Fallback: per-process mode (spawns a new Node.js process per request)
@@ -608,9 +600,6 @@ String normalizedCwd = normalizeCwdForNode(cwd);
                 streaming,
                 disableThinking,
                 reasoningEffort,
-maxThinkingTokens,
-                envFile,
-                runtimeSignature,
                 ultracode,
                 projectTrusted,
                 callback

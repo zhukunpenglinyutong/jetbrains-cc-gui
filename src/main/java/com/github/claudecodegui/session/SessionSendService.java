@@ -1027,11 +1027,8 @@ public class SessionSendService {
                         agentPrompt,
                         streaming,
                         false,
-resolveEffectiveReasoningEffort("claude", requestedReasoningEffort, state.getReasoningEffort()),
-                        state.getMaxThinkingTokens(),
-                        state.getRuntimeSignature(),
+                        resolveEffectiveReasoningEffort("claude", requestedReasoningEffort, state.getReasoningEffort()),
                         claudeUltracode,
-                        false,
                         handler
                 ));
     }
