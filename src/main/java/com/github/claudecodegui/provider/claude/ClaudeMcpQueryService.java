@@ -78,32 +78,11 @@ class ClaudeMcpQueryService {
         return stdinInput;
     }
 
-CompletableFuture<List<JsonObject>> getMcpServerStatus(String cwd) {
-        return getMcpServerStatus(cwd, null, false);
-    }
-
-    CompletableFuture<List<JsonObject>> getMcpServerStatus(String cwd, List<String> serverNames) {
-        return getMcpServerStatus(cwd, serverNames, false);
-    }
-
-    /**
-     * Query MCP server status, optionally restricted to specific servers.
-     *
-     * @param cwd          working directory used to resolve project-scoped config
-     * @param serverNames  when non-empty, the bridge only verifies these servers
-     *                     instead of spawning/fetching every configured one
-     * @param projectTrusted whether the IDE trusts the project (controls repo-local env expansion)
-     */
-    CompletableFuture<List<JsonObject>> getMcpServerStatus(String cwd, List<String> serverNames, boolean projectTrusted) {
+    CompletableFuture<List<JsonObject>> getMcpServerStatus(String cwd, boolean projectTrusted) {
         return CompletableFuture.supplyAsync(() -> {
-            boolean filtered = serverNames != null && !serverNames.isEmpty();
-            log.info("[McpStatus] Starting getMcpServerStatus, cwd=" + cwd
-                    + (filtered ? ", serverNames=" + serverNames : ""));
+            log.info("[McpStatus] Starting getMcpServerStatus, cwd=" + cwd);
 
             JsonObject stdinInput = buildStatusInput(cwd, projectTrusted);
-            if (filtered) {
-                stdinInput.add("serverNames", gson.toJsonTree(serverNames));
-            }
 
             MarkerResult result = executeMarkerQuery(
                     MCP_STATUS_CHANNEL_ID,
@@ -243,12 +222,7 @@ CompletableFuture<List<JsonObject>> getMcpServerStatus(String cwd) {
 
             ProcessBuilder pb = new ProcessBuilder(command);
             pb.directory(bridgeDir);
-            // Do NOT merge stderr into stdout (pb.redirectErrorStream(true)).
-            // Large stdout payloads (>64KB, the OS pipe buffer) are written
-            // across multiple uv_write chunks. If stderr is merged into the
-            // same pipe, console.error/console.warn calls can interleave at
-            // the byte level, inserting raw newlines mid-JSON and causing
-            // Gson MalformedJsonException: Unterminated string.
+            pb.redirectErrorStream(true);
             envConfigurator.updateProcessEnvironment(pb, node);
             pb.environment().put("CLAUDE_USE_STDIN", "true");
 
@@ -261,23 +235,6 @@ CompletableFuture<List<JsonObject>> getMcpServerStatus(String cwd) {
             CountDownLatch markerLatch = new CountDownLatch(1);
             AtomicReference<String> markerJson = new AtomicReference<>(null);
             final StringBuilder output = new StringBuilder();
-
-            // Drain stderr in a daemon thread so the pipe buffer never fills
-            // and blocks the Node process. Diagnostic output is logged at
-            // debug level only and never interferes with stdout JSON.
-            Thread stderrDrainThread = new Thread(() -> {
-                try (BufferedReader errReader = new BufferedReader(
-                        new InputStreamReader(finalProcess.getErrorStream(), StandardCharsets.UTF_8))) {
-                    String errLine;
-                    while ((errLine = errReader.readLine()) != null) {
-                        log.debug(logPrefix + " [stderr] " + errLine);
-                    }
-                } catch (Exception e) {
-                    log.debug(logPrefix + " stderr drain exception: " + e.getMessage());
-                }
-            });
-            stderrDrainThread.setDaemon(true);
-            stderrDrainThread.start();
 
             Thread readerThread = new Thread(() -> {
                 try (BufferedReader reader = new BufferedReader(

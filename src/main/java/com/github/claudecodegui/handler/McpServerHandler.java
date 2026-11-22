@@ -3,18 +3,15 @@ package com.github.claudecodegui.handler;
 import com.github.claudecodegui.handler.core.BaseMessageHandler;
 import com.github.claudecodegui.handler.core.HandlerContext;
 
-import com.github.claudecodegui.settings.McpServerManager;
 import com.github.claudecodegui.startup.BridgePreloader;
 import com.google.gson.Gson;
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 
 import javax.swing.*;
-import java.util.ArrayList;
+import java.io.IOException;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -33,10 +30,7 @@ public class McpServerHandler extends BaseMessageHandler {
         "add_mcp_server",
         "update_mcp_server",
         "delete_mcp_server",
-"toggle_mcp_server",
-        "validate_mcp_server",
-        "approve_mcp_json_server",
-        "reject_mcp_json_server"
+        "toggle_mcp_server"
     };
 
     public McpServerHandler(HandlerContext context) {
@@ -55,7 +49,7 @@ public class McpServerHandler extends BaseMessageHandler {
                 handleGetMcpServers();
                 return true;
             case "get_mcp_server_status":
-                handleGetMcpServerStatus(content);
+                handleGetMcpServerStatus();
                 return true;
             case "get_mcp_server_tools":
                 handleGetMcpServerTools(content);
@@ -71,15 +65,6 @@ public class McpServerHandler extends BaseMessageHandler {
                 return true;
             case "toggle_mcp_server":
                 handleToggleMcpServer(content);
-                return true;
-case "validate_mcp_server":
-                handleValidateMcpServer(content);
-                return true;
-            case "approve_mcp_json_server":
-                handleApproveMcpJsonServer(content);
-                return true;
-            case "reject_mcp_json_server":
-                handleRejectMcpJsonServer(content);
                 return true;
             default:
                 return false;
@@ -107,10 +92,21 @@ case "validate_mcp_server":
                 callJavaScript("window.updateMcpServers", escapeJs(serversJson));
             });
         } catch (Exception e) {
-            LOG.error("[McpServerHandler] Failed to get MCP servers: " + e.getMessage(), e);
-            // Send empty array so frontend exits loading state instead of hanging
+            String reason = Objects.toString(e.getMessage(), e.getClass().getSimpleName());
+            if (e instanceof IOException) {
+                // A user-fixable config state (e.g. an unreadable ~/.claude.json): the
+                // toast below reports it, so skip the IDE's internal-error notice.
+                LOG.warn("[McpServerHandler] Failed to get MCP servers: " + reason, e);
+            } else {
+                LOG.error("[McpServerHandler] Failed to get MCP servers: " + reason, e);
+            }
+            // Send empty array so frontend exits loading state instead of hanging,
+            // and say why: a silent empty list looks exactly like lost servers.
             ApplicationManager.getApplication().invokeLater(() -> {
                 callJavaScript("window.updateMcpServers", escapeJs("[]"));
+                String errorMsg = escapeJs(com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message(
+                        "mcp.loadServersFailedWithReason", reason));
+                callJavaScript("window.showError", errorMsg);
             });
         }
     }
@@ -118,48 +114,17 @@ case "validate_mcp_server":
     /**
      * Get MCP server connection status.
      * Retrieves real-time MCP server connection status via Claude SDK.
-     *
-     * <p>The optional {@code serverNames} array in the payload restricts the check to the named
-     * servers. The response is then delivered to a separate JS callback so the webview can merge
-     * it into the existing status map instead of replacing every entry.
      */
-    private void handleGetMcpServerStatus(String content) {
+    private void handleGetMcpServerStatus() {
         try {
             String cwd = context.getProject() != null
                 ? context.getProject().getBasePath()
                 : null;
 
             // Wait for bridge to be ready first (prevents issues when bridge is still extracting on first load)
-            waitForBridgeAndFetchStatus(cwd, parseServerNames(content));
+            waitForBridgeAndFetchStatus(cwd);
         } catch (Exception e) {
             LOG.error("[McpServerHandler] Failed to get MCP server status: " + e.getMessage(), e);
-        }
-    }
-
-    /**
-     * Read the optional serverNames array from a request payload.
-     * Returns null when absent, malformed, or empty — meaning "check every server".
-     */
-    private static List<String> parseServerNames(String content) {
-        if (content == null || content.isEmpty()) {
-            return null;
-        }
-        try {
-            JsonObject json = new Gson().fromJson(content, JsonObject.class);
-            if (json == null || !json.has("serverNames") || !json.get("serverNames").isJsonArray()) {
-                return null;
-            }
-            List<String> names = new ArrayList<>();
-            for (JsonElement element : json.getAsJsonArray("serverNames")) {
-                if (element.isJsonPrimitive() && !element.getAsString().isEmpty()) {
-                    names.add(element.getAsString());
-                }
-            }
-            return names.isEmpty() ? null : names;
-        } catch (Exception e) {
-            // A malformed filter must not break the request — fall back to a full check.
-            LOG.warn("[McpServerHandler] Ignoring malformed serverNames filter: " + e.getMessage());
-            return null;
         }
     }
 
@@ -167,20 +132,7 @@ case "validate_mcp_server":
      * Wait for bridge readiness then fetch server status.
      * Solves the issue where bridge not being ready on first load returns empty list.
      */
-    private void waitForBridgeAndFetchStatus(String cwd, List<String> serverNames) {
-        boolean isPartial = serverNames != null && !serverNames.isEmpty();
-        // A full response replaces the webview's status map; a partial one only merges into it.
-        // Getting this wrong on the error paths would wipe every server's status.
-        String statusCallback = isPartial
-            ? "window.updateMcpServerStatusPartial"
-            : "window.updateMcpServerStatus";
-        // A partial response is authoritative for the servers it asked about: a rejected
-        // project .mcp.json server is dropped from the config entirely and therefore
-        // comes back with no entry at all. Handing the names to the webview lets it
-        // drop that server's stale status instead of leaving a green "connected" dot.
-        // Passed on the error paths too, so a failed check cannot leave a stale badge.
-        String requestedNamesJson = escapeJs(new Gson().toJson(
-            isPartial ? serverNames : new ArrayList<String>()));
+    private void waitForBridgeAndFetchStatus(String cwd) {
         CompletableFuture.runAsync(() -> {
             try {
                 // If bridge not ready, wait up to 10 seconds
@@ -196,14 +148,13 @@ case "validate_mcp_server":
                 }
 
                 // Get server status
-                context.getClaudeSDKBridge().getMcpServerStatus(cwd, serverNames)
+                context.getClaudeSDKBridge().getMcpServerStatus(cwd)
                     .thenAccept(statusList -> {
                         Gson gson = new Gson();
                         String statusJson = gson.toJson(statusList);
 
                         // Add debug logging to help troubleshoot name matching issues
-                        LOG.info("[McpServerHandler] MCP server status received: " + statusList.size() + " servers"
-                            + (isPartial ? " (partial: " + serverNames + ")" : ""));
+                        LOG.info("[McpServerHandler] MCP server status received: " + statusList.size() + " servers");
                         for (JsonObject status : statusList) {
                             if (status.has("name")) {
                                 String serverName = status.get("name").getAsString();
@@ -213,14 +164,14 @@ case "validate_mcp_server":
                         }
 
                         ApplicationManager.getApplication().invokeLater(() -> {
-                            callJavaScript(statusCallback, escapeJs(statusJson), requestedNamesJson);
+                            callJavaScript("window.updateMcpServerStatus", escapeJs(statusJson));
                         });
                     })
                     .exceptionally(e -> {
                         LOG.error("[McpServerHandler] Failed to get MCP server status: "
                             + e.getMessage(), e);
                         ApplicationManager.getApplication().invokeLater(() -> {
-                            callJavaScript(statusCallback, escapeJs("[]"), requestedNamesJson);
+                            callJavaScript("window.updateMcpServerStatus", escapeJs("[]"));
                         });
                         return null;
                     });
@@ -228,7 +179,7 @@ case "validate_mcp_server":
                 LOG.error("[McpServerHandler] Error while waiting for bridge or fetching status: "
                     + e.getMessage(), e);
                 ApplicationManager.getApplication().invokeLater(() -> {
-                    callJavaScript(statusCallback, escapeJs("[]"), requestedNamesJson);
+                    callJavaScript("window.updateMcpServerStatus", escapeJs("[]"));
                 });
             }
         });
@@ -340,12 +291,8 @@ case "validate_mcp_server":
         try {
             Gson gson = new Gson();
             JsonObject server = gson.fromJson(content, JsonObject.class);
-            String projectPath = context.getProject() != null
-                ? context.getProject().getBasePath()
-                : null;
-            String scope = server.has("scope") ? server.get("scope").getAsString() : "global";
 
-            context.getSettingsService().upsertMcpServer(server, projectPath, scope);
+            context.getSettingsService().upsertMcpServer(server);
 
             ApplicationManager.getApplication().invokeLater(() -> {
                 handleGetMcpServers();
@@ -367,12 +314,8 @@ case "validate_mcp_server":
             Gson gson = new Gson();
             JsonObject json = gson.fromJson(content, JsonObject.class);
             String serverId = json.get("id").getAsString();
-            String projectPath = context.getProject() != null
-                ? context.getProject().getBasePath()
-                : null;
-            String scope = json.has("scope") ? json.get("scope").getAsString() : "global";
 
-            boolean success = context.getSettingsService().deleteMcpServer(serverId, projectPath, scope);
+            boolean success = context.getSettingsService().deleteMcpServer(serverId);
 
             if (success) {
                 ApplicationManager.getApplication().invokeLater(() -> {
@@ -417,10 +360,8 @@ case "validate_mcp_server":
 
             ApplicationManager.getApplication().invokeLater(() -> {
                 handleGetMcpServers();
-                // Also refresh status so the UI shows the latest connection state.
-                // Full check on purpose: toggling changes the effective config, and this
-                // path is not part of the targeted approve/reject flow.
-                handleGetMcpServerStatus(null);
+                // Also refresh status so the UI shows the latest connection state
+                handleGetMcpServerStatus();
             });
         } catch (Exception e) {
             LOG.error("[McpServerHandler] Failed to toggle MCP server: " + e.getMessage(), e);
@@ -428,131 +369,5 @@ case "validate_mcp_server":
                 callJavaScript("window.showError", escapeJs("切换 MCP 服务器状态失败: " + e.getMessage()));
             });
         }
-    }
-/**
-     * Validate MCP server configuration.
-     */
-    private void handleValidateMcpServer(String content) {
-        try {
-            Gson gson = new Gson();
-            JsonObject server = gson.fromJson(content, JsonObject.class);
-
-            Map<String, Object> validation = context.getSettingsService().validateMcpServer(server);
-            String validationJson = gson.toJson(validation);
-
-            ApplicationManager.getApplication().invokeLater(() -> {
-                callJavaScript("window.mcpServerValidated", escapeJs(validationJson));
-            });
-        } catch (Exception e) {
-            LOG.error("[McpServerHandler] Failed to validate MCP server: " + e.getMessage(), e);
-        }
-    }
-
-    /**
-     * Approve a project-scoped .mcp.json server.
-     * Persists the approval (together with a sha256 fingerprint of the approved
-     * spec) to the project's .claude/settings.local.json and refreshes the server
-     * list so the UI reflects the new approval state.
-     */
-    private void handleApproveMcpJsonServer(String content) {
-        try {
-            Gson gson = new Gson();
-            JsonObject json = gson.fromJson(content, JsonObject.class);
-            String serverId = json.has("serverId") ? json.get("serverId").getAsString() : null;
-
-            if (serverId == null || serverId.isEmpty()) {
-                LOG.warn("[McpServerHandler] approve_mcp_json_server: missing serverId");
-                showError(com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("mcp.serverIdRequired"));
-                return;
-            }
-
-            String projectPath = context.getProject() != null
-                ? context.getProject().getBasePath()
-                : null;
-
-            if (projectPath == null || projectPath.isEmpty()) {
-                LOG.warn("[McpServerHandler] approve_mcp_json_server: project path is null or empty");
-                showError(com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("mcp.projectPathRequired"));
-                return;
-            }
-
-            // The id arrives from the webview, so it is not trusted until it has been
-            // length/character-checked and matched against a real .mcp.json entry.
-            String invalid = McpServerManager.validateProjectMcpServerId(serverId, projectPath);
-            if (invalid != null) {
-                LOG.warn("[McpServerHandler] approve_mcp_json_server: rejected serverId — " + invalid);
-                showError(com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message(
-                    "mcp.approveServerFailedWithReason", invalid));
-                return;
-            }
-
-            context.getSettingsService().approveProjectMcpJsonServer(serverId, projectPath);
-
-            LOG.info("[McpServerHandler] Approved project MCP server: " + serverId);
-            ApplicationManager.getApplication().invokeLater(() -> {
-                callJavaScript("window.mcpServerApproved", escapeJs(serverId));
-                handleGetMcpServers();
-            });
-        } catch (Exception e) {
-            LOG.error("[McpServerHandler] Failed to approve MCP JSON server: " + e.getMessage(), e);
-            showError(com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message(
-                "mcp.approveServerFailedWithReason", e.getMessage()));
-        }
-    }
-
-    /**
-     * Reject a project-scoped .mcp.json server.
-     * Persists the rejection to the project's .claude/settings.local.json and
-     * refreshes the server list so the UI reflects the new rejection state.
-     */
-    private void handleRejectMcpJsonServer(String content) {
-        try {
-            Gson gson = new Gson();
-            JsonObject json = gson.fromJson(content, JsonObject.class);
-            String serverId = json.has("serverId") ? json.get("serverId").getAsString() : null;
-
-            if (serverId == null || serverId.isEmpty()) {
-                LOG.warn("[McpServerHandler] reject_mcp_json_server: missing serverId");
-                showError(com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("mcp.serverIdRequired"));
-                return;
-            }
-
-            String projectPath = context.getProject() != null
-                ? context.getProject().getBasePath()
-                : null;
-
-            if (projectPath == null || projectPath.isEmpty()) {
-                LOG.warn("[McpServerHandler] reject_mcp_json_server: project path is null or empty");
-                showError(com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("mcp.projectPathRequired"));
-                return;
-            }
-
-            String invalid = McpServerManager.validateProjectMcpServerId(serverId, projectPath);
-            if (invalid != null) {
-                LOG.warn("[McpServerHandler] reject_mcp_json_server: rejected serverId — " + invalid);
-                showError(com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message(
-                    "mcp.rejectServerFailedWithReason", invalid));
-                return;
-            }
-
-            context.getSettingsService().rejectProjectMcpJsonServer(serverId, projectPath);
-
-            LOG.info("[McpServerHandler] Rejected project MCP server: " + serverId);
-            ApplicationManager.getApplication().invokeLater(() -> {
-                callJavaScript("window.mcpServerRejected", escapeJs(serverId));
-                handleGetMcpServers();
-            });
-        } catch (Exception e) {
-            LOG.error("[McpServerHandler] Failed to reject MCP JSON server: " + e.getMessage(), e);
-            showError(com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message(
-                "mcp.rejectServerFailedWithReason", e.getMessage()));
-        }
-    }
-
-    /** Report a message to the webview through the existing error channel. */
-    private void showError(String message) {
-        ApplicationManager.getApplication().invokeLater(() -> {
-            callJavaScript("window.showError", escapeJs(message));
-        });
     }
 }
