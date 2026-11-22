@@ -4,7 +4,6 @@ import com.github.claudecodegui.session.ClaudeSession;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import com.intellij.openapi.diagnostic.Logger;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -18,7 +17,6 @@ import java.util.function.UnaryOperator;
  */
 class ClaudeRequestParamsBuilder {
 
-private static final Logger LOG = Logger.getInstance(ClaudeRequestParamsBuilder.class);
     private static final Predicate<String> UNTRUSTED = cwd -> false;
 
     private final Gson gson;
@@ -84,67 +82,12 @@ private static final Logger LOG = Logger.getInstance(ClaudeRequestParamsBuilder.
             boolean ultracode,
             boolean projectTrusted
     ) {
-        return buildSendParams(message, sessionId, runtimeSessionEpoch, cwd, permissionMode, model,
-                attachments, openedFiles, agentPrompt, streaming, disableThinking, reasoningEffort, null, null, null, null, ultracode, projectTrusted);
-    }
-
-    JsonObject buildSendParams(
-            String message,
-            String sessionId,
-            String runtimeSessionEpoch,
-            String cwd,
-            String permissionMode,
-            String model,
-            List<ClaudeSession.Attachment> attachments,
-            JsonObject openedFiles,
-            String agentPrompt,
-            Boolean streaming,
-            Boolean disableThinking,
-            String reasoningEffort,
-            String envFile,
-            String runtimeSignature,
-            boolean projectTrusted
-    ) {
-        return buildSendParams(message, sessionId, runtimeSessionEpoch, cwd, permissionMode, model,
-                attachments, openedFiles, agentPrompt, streaming, disableThinking, reasoningEffort, null, envFile, runtimeSignature, false, false, projectTrusted);
-    }
-
-    JsonObject buildSendParams(
-            String message,
-            String sessionId,
-            String runtimeSessionEpoch,
-            String cwd,
-            String permissionMode,
-            String model,
-            List<ClaudeSession.Attachment> attachments,
-            JsonObject openedFiles,
-            String agentPrompt,
-            Boolean streaming,
-            Boolean disableThinking,
-            String reasoningEffort,
-            Integer maxThinkingTokens,
-            String envFile,
-            String runtimeSignature,
-            boolean ultracode,
-            boolean projectTrusted
-    ) {
         JsonObject params = new JsonObject();
         addSessionSupplier(params);
         params.addProperty("message", message);
         params.addProperty("sessionId", sessionId != null ? sessionId : "");
         params.addProperty("runtimeSessionEpoch", runtimeSessionEpoch != null ? runtimeSessionEpoch : "");
-        params.addProperty("runtimeSignature", runtimeSignature != null ? runtimeSignature : "");
-        // Contract: "cwd" is either a real absolute project directory or absent.
-        // Writing "" instead made the Node side treat it as an unknown cwd, while
-        // buildDaemonEnv() rejected the very same value via isValidCwd() and dropped
-        // IDEA_PROJECT_PATH — so the bridge ended up with no base directory at all
-        // and every env file / relative path resolved against the bridge install dir.
-        String baseDir = ClaudeBridgeUtils.resolveBaseDir(cwd);
-        if (baseDir != null) {
-            params.addProperty("cwd", baseDir);
-        } else {
-            LOG.debug("[ClaudeRequestParamsBuilder] no valid cwd — omitting \"cwd\" so the bridge falls back to IDEA_PROJECT_PATH (value=" + cwd + ")");
-        }
+        params.addProperty("cwd", cwd != null ? cwd : "");
         params.addProperty("permissionMode", permissionMode != null ? permissionMode : "");
         params.addProperty("model", model != null ? model : "");
 
@@ -170,14 +113,6 @@ private static final Logger LOG = Logger.getInstance(ClaudeRequestParamsBuilder.
         if (reasoningEffort != null && !reasoningEffort.trim().isEmpty()
                 && !"ultra".equals(reasoningEffort.trim())) {
             params.addProperty("reasoningEffort", reasoningEffort);
-        }
-if (maxThinkingTokens != null) {
-            params.addProperty("maxThinkingTokens", maxThinkingTokens);
-        }
-        if (envFile != null && !envFile.isEmpty() && !"null".equals(envFile) && !"undefined".equals(envFile)) {
-            params.addProperty("envFile", envFile);
-        } else {
-            LOG.debug("[ClaudeRequestParamsBuilder] envFile is null/empty/notValid (value=" + envFile + ")");
         }
         params.addProperty("projectTrusted", projectTrusted);
 

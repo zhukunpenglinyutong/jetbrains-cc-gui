@@ -4,14 +4,11 @@ import com.google.gson.JsonObject;
 
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.session.ClaudeSession;
-import com.github.claudecodegui.settings.CodemossSettingsService;
 import com.github.claudecodegui.model.NodeDetectionResult;
 import com.github.claudecodegui.provider.common.BaseSDKBridge;
-import com.github.claudecodegui.provider.common.EnvFileResolver;
 import com.github.claudecodegui.provider.common.MessageCallback;
 import com.github.claudecodegui.provider.common.DaemonBridge;
 import com.github.claudecodegui.provider.common.SDKResult;
-import com.github.claudecodegui.util.PathUtils;
 
 import java.io.File;
 import java.util.List;
@@ -43,7 +40,6 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
 
     private final ClaudeStreamAdapter streamAdapter;
     private final ClaudeRequestParamsBuilder requestParamsBuilder;
-    private final CodemossSettingsService settingsService = new CodemossSettingsService();
     private final ClaudeJsonOutputExtractor jsonOutputExtractor;
     private final ClaudeDaemonCoordinator daemonCoordinator;
     private final ClaudeProcessInvoker processInvoker;
@@ -161,40 +157,13 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
      * @param sessionId The historical session ID to resume
      */
     public void prewarmDaemonAsync(String cwd, String runtimeSessionEpoch, String sessionId) {
-        daemonCoordinator.prewarmDaemonAsync(normalizeCwdForNode(cwd), runtimeSessionEpoch, null, sessionId, false);
-    }
-
-    /**
-     * Prewarm daemon asynchronously with explicit runtime signature.
-     *
-     * @param cwd Working directory
-     * @param runtimeSessionEpoch Session epoch for cache invalidation
-     * @param runtimeSignature Runtime signature for cache invalidation
-     * @param sessionId The historical session ID to resume (optional)
-     */
-    public void prewarmDaemonAsync(String cwd, String runtimeSessionEpoch, String runtimeSignature, String sessionId) {
-        daemonCoordinator.prewarmDaemonAsync(normalizeCwdForNode(cwd), runtimeSessionEpoch, runtimeSignature, sessionId, false);
-    }
-
-    /**
-     * Prewarm daemon asynchronously for a specific session.
-     * Creates a runtime that loads the session's context via --resume.
-     *
-     * @param cwd Working directory
-     * @param runtimeSessionEpoch Session epoch for cache invalidation
-     * @param sessionId The historical session ID to resume
-     */
-    public void prewarmDaemonAsync(String cwd, String runtimeSessionEpoch, String sessionId, boolean projectTrusted) {
-        String normalizedCwd = normalizeCwdForNode(cwd);
-        daemonCoordinator.prewarmDaemonAsync(normalizedCwd, runtimeSessionEpoch, null, sessionId, projectTrusted);
+        ClaudeRequestParamsBuilder.RequestCwd requestCwd = resolveRequestCwd(cwd);
+        daemonCoordinator.prewarmDaemonAsync(requestCwd.nodeCwd(), runtimeSessionEpoch, sessionId,
+                requestCwd.projectTrusted());
     }
 
     public void resetPersistentRuntime(String runtimeSessionEpoch) {
-        daemonCoordinator.resetPersistentRuntime(runtimeSessionEpoch, null);
-    }
-
-    public void resetPersistentRuntime(String runtimeSessionEpoch, String runtimeSignature) {
-        daemonCoordinator.resetPersistentRuntime(runtimeSessionEpoch, runtimeSignature);
+        daemonCoordinator.resetPersistentRuntime(runtimeSessionEpoch);
     }
 
     @Override
@@ -391,7 +360,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             List<ClaudeSession.Attachment> attachments,
             MessageCallback callback
     ) {
-        return sendMessage(channelId, message, sessionId, null, cwd, attachments, null, null, null, null, null, null, null, null, null, callback);
+        return sendMessage(channelId, message, sessionId, null, cwd, attachments, null, null, null, null, null, false, callback);
     }
 
     /**
@@ -409,7 +378,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             String agentPrompt,
             MessageCallback callback
     ) {
-        return sendMessage(channelId, message, sessionId, null, cwd, attachments, permissionMode, model, openedFiles, agentPrompt, null, null, null, null, null, callback);
+        return sendMessage(channelId, message, sessionId, null, cwd, attachments, permissionMode, model, openedFiles, agentPrompt, null, false, callback);
     }
 
     /**
@@ -428,7 +397,7 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             Boolean streaming,
             MessageCallback callback
     ) {
-        return sendMessage(channelId, message, sessionId, null, cwd, attachments, permissionMode, model, openedFiles, agentPrompt, streaming, null, null, null, null, callback);
+        return sendMessage(channelId, message, sessionId, null, cwd, attachments, permissionMode, model, openedFiles, agentPrompt, streaming, false, callback);
     }
 
     /**
@@ -448,7 +417,8 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             Boolean disableThinking,
             MessageCallback callback
     ) {
-        return sendMessage(channelId, message, sessionId, null, cwd, attachments, permissionMode, model, openedFiles, agentPrompt, streaming, disableThinking, null, null, null, callback);
+        return sendMessage(channelId, message, sessionId, null, cwd, attachments, permissionMode,
+                model, openedFiles, agentPrompt, streaming, disableThinking, callback);
     }
 
     /**
@@ -469,9 +439,8 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             Boolean disableThinking,
             MessageCallback callback
     ) {
-        return sendMessage(channelId, message, sessionId, runtimeSessionEpoch, cwd, attachments,
-            permissionMode, model, openedFiles, agentPrompt, streaming, disableThinking,
-            null, null, null, callback);
+        return sendMessage(channelId, message, sessionId, runtimeSessionEpoch, cwd, attachments, permissionMode,
+                model, openedFiles, agentPrompt, streaming, disableThinking, null, callback);
     }
 
     /**
@@ -491,44 +460,11 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             Boolean streaming,
             Boolean disableThinking,
             String reasoningEffort,
-            String runtimeSignature,
             MessageCallback callback
     ) {
-        return sendMessage(channelId, message, sessionId, runtimeSessionEpoch, cwd,
-                attachments, permissionMode, model, openedFiles, agentPrompt,
-                streaming, disableThinking, reasoningEffort, null, runtimeSignature, callback);
-    }
-
-    /**
-     * Send message in existing channel (streaming response, with all options including streaming flag, disableThinking, reasoningEffort, and maxThinkingTokens).
-     */
-    public CompletableFuture<SDKResult> sendMessage(
-            String channelId,
-            String message,
-            String sessionId,
-            String runtimeSessionEpoch,
-            String cwd,
-            List<ClaudeSession.Attachment> attachments,
-            String permissionMode,
-            String model,
-            JsonObject openedFiles,
-            String agentPrompt,
-            Boolean streaming,
-            Boolean disableThinking,
-            String reasoningEffort,
-            Integer maxThinkingTokens,
-            String runtimeSignature,
-            MessageCallback callback
-    ) {
-        String envFile = resolveEnvFile(cwd);
-        String runtimeSig = runtimeSignature != null ? runtimeSignature : "";
-        boolean ultracode = false;
-        boolean projectTrusted = false;
-        return sendMessageWithAllOptions(
-                channelId, message, sessionId, runtimeSessionEpoch, cwd, attachments,
+        return sendMessage(channelId, message, sessionId, runtimeSessionEpoch, cwd, attachments,
                 permissionMode, model, openedFiles, agentPrompt, streaming, disableThinking,
-                reasoningEffort, maxThinkingTokens, envFile, runtimeSig,
-                ultracode, projectTrusted, callback);
+                reasoningEffort, false, callback);
     }
 
     public CompletableFuture<SDKResult> sendMessage(
@@ -548,33 +484,9 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             boolean ultracode,
             MessageCallback callback
     ) {
-        String normalizedCwd = normalizeCwdForNode(cwd);
-        boolean projectTrusted = false;
-        return sendMessageWithAllOptions(
-                channelId, message, sessionId, runtimeSessionEpoch, cwd, attachments,
-                permissionMode, model, openedFiles, agentPrompt, streaming, disableThinking,
-                reasoningEffort, ultracode, projectTrusted, callback);
-    }
-
-    private CompletableFuture<SDKResult> sendMessageWithAllOptions(
-            String channelId,
-            String message,
-            String sessionId,
-            String runtimeSessionEpoch,
-            String cwd,
-            List<ClaudeSession.Attachment> attachments,
-            String permissionMode,
-            String model,
-            JsonObject openedFiles,
-            String agentPrompt,
-            Boolean streaming,
-            Boolean disableThinking,
-            String reasoningEffort,
-            boolean ultracode,
-            boolean projectTrusted,
-            MessageCallback callback
-    ) {
-        String normalizedCwd = normalizeCwdForNode(cwd);
+        ClaudeRequestParamsBuilder.RequestCwd requestCwd = resolveRequestCwd(cwd);
+        String normalizedCwd = requestCwd.nodeCwd();
+        boolean projectTrusted = requestCwd.projectTrusted();
 
         // Try daemon mode first (avoids per-request Node.js process spawning)
         DaemonBridge db = daemonCoordinator.getDaemonBridge();
@@ -604,57 +516,6 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
                 projectTrusted,
                 callback
         );
-    }
-
-    private String resolveEnvFile(String cwd) {
-        try {
-            String envFile = settingsService.getEnvFile(cwd);
-
-            // State 3: the user explicitly opted out — load nothing, and never
-            // fall back to the repository-controlled <cwd>/.env.
-            if (CodemossSettingsService.isEnvFileDisabled(envFile)) {
-                LOG.debug("[ClaudeSDKBridge.resolveEnvFile] env file explicitly disabled for cwd=" + cwd);
-                return null;
-            }
-
-            String projectDir = EnvFileResolver.resolveProjectDir(cwd);
-
-            // State 1: never configured — try the default ".env" in the project root
-            // so users get automatic env loading without any configuration.
-            if (envFile == null) {
-                if (projectDir != null) {
-                    java.io.File defaultEnvFile = new java.io.File(projectDir, ".env");
-                    if (defaultEnvFile.exists() && defaultEnvFile.isFile()) {
-                        String discovered = PathUtils.normalizeAbsolute(defaultEnvFile.getPath());
-                        LOG.debug("[ClaudeSDKBridge.resolveEnvFile] auto-discovered default .env at " + discovered);
-                        return discovered;
-                    }
-                    LOG.debug("[ClaudeSDKBridge.resolveEnvFile] no env file configured and no .env found in project dir");
-                } else {
-                    LOG.debug("[ClaudeSDKBridge.resolveEnvFile] envFile is null and no project dir for default discovery");
-                }
-                return null;
-            }
-
-            // State 2: explicitly configured. Relative paths always resolve against
-            // the project directory — never against the IDE process CWD, which would
-            // make the loaded file depend on where the IDE was launched from.
-            java.io.File envFileObj = new java.io.File(envFile);
-            if (!envFileObj.isAbsolute()) {
-                if (projectDir == null) {
-                    LOG.debug("[ClaudeSDKBridge.resolveEnvFile] refusing to resolve relative env file without a project dir");
-                    return null;
-                }
-                envFileObj = new java.io.File(projectDir, envFile);
-            }
-            String resolved = PathUtils.normalizeAbsolute(envFileObj.getPath());
-            LOG.debug("[ClaudeSDKBridge.resolveEnvFile] envFile=" + resolved);
-            return resolved;
-
-        } catch (Exception e) {
-            LOG.warn("[ClaudeSDKBridge] Failed to read env file setting: " + e.getMessage());
-            return null;
-        }
     }
 
     /**
@@ -689,21 +550,8 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
      * Get MCP server connection status.
      */
     public CompletableFuture<List<JsonObject>> getMcpServerStatus(String cwd) {
-return getMcpServerStatus(cwd, null, false);
-    }
-
-    /**
-     * Get MCP server connection status, optionally restricted to specific servers.
-     * Verifying a server spawns a process (stdio) or issues a request (http/sse),
-     * so a targeted list avoids re-checking every configured server.
-     */
-    public CompletableFuture<List<JsonObject>> getMcpServerStatus(String cwd, List<String> serverNames) {
-        return getMcpServerStatus(cwd, serverNames, false);
-    }
-
-    public CompletableFuture<List<JsonObject>> getMcpServerStatus(String cwd, List<String> serverNames, boolean projectTrusted) {
-        String normalizedCwd = normalizeCwdForNode(cwd);
-        return mcpQueryService.getMcpServerStatus(normalizedCwd, serverNames, projectTrusted);
+        ClaudeRequestParamsBuilder.RequestCwd requestCwd = resolveRequestCwd(cwd);
+        return mcpQueryService.getMcpServerStatus(requestCwd.nodeCwd(), requestCwd.projectTrusted());
     }
 
     /**
@@ -1046,9 +894,6 @@ return getMcpServerStatus(cwd, null, false);
             Boolean streaming,
             Boolean disableThinking,
             String reasoningEffort,
-Integer maxThinkingTokens,
-            String envFile,
-            String runtimeSignature,
             boolean ultracode,
             boolean projectTrusted,
             MessageCallback callback
@@ -1068,9 +913,6 @@ Integer maxThinkingTokens,
                 streaming,
                 disableThinking,
                 reasoningEffort,
-                maxThinkingTokens,
-                envFile,
-                runtimeSignature,
                 ultracode,
                 projectTrusted,
                 callback

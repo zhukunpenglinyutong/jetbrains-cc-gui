@@ -78,14 +78,13 @@ class ClaudeDaemonRequestExecutor {
                         streaming,
                         disableThinking,
                         reasoningEffort,
-                        false,
+                        ultracode,
                         projectTrusted
                 );
 
                 boolean hasAttachments = attachments != null && !attachments.isEmpty() && params.has("attachments");
-                log.debug("[ClaudeDaemonRequestExecutor] envFile before buildDaemonEnv=" + envFile);
-                params.add("env", ClaudeBridgeUtils.buildDaemonEnv(cwd, envFile));
                 params.addProperty("executionScope", callback.executionScope());
+                params.add("env", ClaudeBridgeUtils.buildDaemonEnv(cwd));
 
                 String method = hasAttachments ? "claude.sendWithAttachments" : "claude.send";
                 log.info("[DaemonExecutor] Sending via daemon: " + method);
