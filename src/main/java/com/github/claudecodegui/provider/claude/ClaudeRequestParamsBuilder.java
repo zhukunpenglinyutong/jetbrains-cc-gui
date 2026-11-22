@@ -85,7 +85,7 @@ private static final Logger LOG = Logger.getInstance(ClaudeRequestParamsBuilder.
             boolean projectTrusted
     ) {
         return buildSendParams(message, sessionId, runtimeSessionEpoch, cwd, permissionMode, model,
-                attachments, openedFiles, agentPrompt, streaming, disableThinking, reasoningEffort, null, null, null, projectTrusted);
+                attachments, openedFiles, agentPrompt, streaming, disableThinking, reasoningEffort, null, null, null, ultracode, projectTrusted);
     }
 
     JsonObject buildSendParams(
@@ -106,7 +106,7 @@ private static final Logger LOG = Logger.getInstance(ClaudeRequestParamsBuilder.
             boolean projectTrusted
     ) {
         return buildSendParams(message, sessionId, runtimeSessionEpoch, cwd, permissionMode, model,
-                attachments, openedFiles, agentPrompt, streaming, disableThinking, reasoningEffort, null, envFile, runtimeSignature, projectTrusted);
+                attachments, openedFiles, agentPrompt, streaming, disableThinking, reasoningEffort, null, envFile, runtimeSignature, false, projectTrusted);
     }
 
     JsonObject buildSendParams(
@@ -125,6 +125,7 @@ private static final Logger LOG = Logger.getInstance(ClaudeRequestParamsBuilder.
             Integer maxThinkingTokens,
             String envFile,
             String runtimeSignature,
+            boolean ultracode,
             boolean projectTrusted
     ) {
         JsonObject params = new JsonObject();

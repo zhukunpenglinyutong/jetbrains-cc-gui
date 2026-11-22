@@ -56,6 +56,28 @@ class ClaudeMcpQueryService {
         this.outputExtractor = outputExtractor;
     }
 
+    /**
+     * Repo-local env only expands into the user's MCP servers when the IDE trusts the project.
+     * The caller decides {@code projectTrusted} on the IDE's form of {@code cwd}, which is
+     * already in the form Node runs in.
+     */
+    static JsonObject buildStatusInput(String cwd, boolean projectTrusted) {
+        JsonObject stdinInput = new JsonObject();
+        stdinInput.addProperty("cwd", cwd != null ? cwd : "");
+        stdinInput.addProperty("projectTrusted", projectTrusted);
+        return stdinInput;
+    }
+
+    static JsonObject buildToolsInput(String serverId, String cwd, boolean projectTrusted) {
+        JsonObject stdinInput = new JsonObject();
+        stdinInput.addProperty("serverId", serverId != null ? serverId : "");
+        if (cwd != null && !cwd.isEmpty()) {
+            stdinInput.addProperty("cwd", cwd);
+        }
+        stdinInput.addProperty("projectTrusted", projectTrusted);
+        return stdinInput;
+    }
+
 CompletableFuture<List<JsonObject>> getMcpServerStatus(String cwd) {
         return getMcpServerStatus(cwd, null, false);
     }
@@ -78,7 +100,6 @@ CompletableFuture<List<JsonObject>> getMcpServerStatus(String cwd) {
             log.info("[McpStatus] Starting getMcpServerStatus, cwd=" + cwd
                     + (filtered ? ", serverNames=" + serverNames : ""));
 
-boolean filtered = serverNames != null && !serverNames.isEmpty();
             JsonObject stdinInput = buildStatusInput(cwd, projectTrusted);
             if (filtered) {
                 stdinInput.add("serverNames", gson.toJsonTree(serverNames));

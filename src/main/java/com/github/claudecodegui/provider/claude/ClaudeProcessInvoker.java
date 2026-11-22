@@ -79,7 +79,7 @@ class ClaudeProcessInvoker {
 Integer maxThinkingTokens,
             String envFile,
             String runtimeSignature,
-            boolean projectTrusted
+            boolean projectTrusted,
             MessageCallback callback
     ) {
         AtomicBoolean errorAlreadyReported = new AtomicBoolean(false);

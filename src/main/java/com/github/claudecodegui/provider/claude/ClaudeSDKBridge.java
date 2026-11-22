@@ -582,13 +582,14 @@ String normalizedCwd = normalizeCwdForNode(cwd);
             boolean projectTrusted,
             MessageCallback callback
     ) {
+        String normalizedCwd = normalizeCwdForNode(cwd);
 
         // Try daemon mode first (avoids per-request Node.js process spawning)
         DaemonBridge db = daemonCoordinator.getDaemonBridge();
         if (db != null) {
             return sendMessageViaDaemon(db, channelId, message, sessionId, runtimeSessionEpoch, normalizedCwd,
                     attachments, permissionMode, model, openedFiles, agentPrompt,
-streaming, disableThinking, reasoningEffort, maxThinkingTokens, envFile, runtimeSignature, ultracode, projectTrusted, callback);
+                    streaming, disableThinking, reasoningEffort, maxThinkingTokens, envFile, runtimeSignature, ultracode, projectTrusted, callback);
         }
 
         // Fallback: per-process mode (spawns a new Node.js process per request)
