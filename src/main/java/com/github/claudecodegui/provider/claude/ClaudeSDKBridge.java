@@ -409,7 +409,9 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             Boolean disableThinking,
             MessageCallback callback
     ) {
-        return sendMessage(channelId, message, sessionId, runtimeSessionEpoch, cwd, attachments, permissionMode, model, openedFiles, agentPrompt, streaming, disableThinking, null, null, null, callback);
+        return sendMessage(channelId, message, sessionId, runtimeSessionEpoch, cwd, attachments,
+            permissionMode, model, openedFiles, agentPrompt, streaming, disableThinking,
+            null, null, null, callback);
     }
 
     /**
@@ -432,7 +434,9 @@ public class ClaudeSDKBridge extends BaseSDKBridge {
             String runtimeSignature,
             MessageCallback callback
     ) {
-        return sendMessage(channelId, message, sessionId, runtimeSessionEpoch, cwd, attachments, permissionMode, model, openedFiles, agentPrompt, streaming, disableThinking, reasoningEffort, null, runtimeSignature, callback);
+        return sendMessage(channelId, message, sessionId, runtimeSessionEpoch, cwd,
+                attachments, permissionMode, model, openedFiles, agentPrompt,
+                streaming, disableThinking, reasoningEffort, null, runtimeSignature, callback);
     }
 
     /**

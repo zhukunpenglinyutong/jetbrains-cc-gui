@@ -55,9 +55,24 @@ public class GrokDaemonRequestExecutorTest {
     private static SDKResult send(DaemonBridge daemon, MessageCallback callback) throws Exception {
         GrokDaemonRequestExecutor executor = new GrokDaemonRequestExecutor(
                 Logger.getInstance(GrokDaemonRequestExecutor.class), new GrokSDKBridge());
-        return executor.sendMessageViaDaemon(daemon, "channel-1", "hello", null, "epoch-1", "/tmp",
-                Collections.emptyList(), "default", null, null, "", true, false, null, callback)
-                .get(5, TimeUnit.SECONDS);
+        return executor.sendMessageViaDaemon(
+                daemon,
+                "channel-1",
+                "hello",
+                null,           // sessionId
+                "epoch-1",      // runtimeSessionEpoch
+                "/tmp",         // cwd
+                Collections.emptyList(), // attachments
+                "default",      // permissionMode
+                null,           // model
+                null,           // openedFiles
+                null,           // agentPrompt
+                Boolean.TRUE,   // streaming
+                false,          // disableThinking
+                null,           // reasoningEffort
+                null,           // envFile
+                callback
+        ).get(5, TimeUnit.SECONDS);
     }
 
     private static final class RecordingCallback implements MessageCallback {
