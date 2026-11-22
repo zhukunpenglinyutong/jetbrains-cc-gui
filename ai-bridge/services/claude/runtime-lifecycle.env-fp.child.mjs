@@ -4,6 +4,9 @@
  */
 
 import assert from 'node:assert/strict';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { __testing } from './persistent-query-service.js';
 
 /**
@@ -44,10 +47,15 @@ __testing.setQueryFn((args) => {
 // The fingerprintEnv reads from options.env which comes from buildCliEnv() (process.env)
 // setupApiKey() reads from settings.env, so we pass the API key via overrides.settings.env
 
+// Use a temp directory as cwd to avoid loading the project's .mcp.json which requires approval
+// Also clear IDEA_PROJECT_PATH/PROJECT_PATH to prevent selectWorkingDirectory from overriding our cwd
+const tempCwd = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-env-fp-cwd-'));
+process.env.IDEA_PROJECT_PATH = tempCwd;
+process.env.PROJECT_PATH = tempCwd;
 const baseParams = {
   sessionId: 'test-session-env-fp',
   runtimeSessionEpoch: 'epoch-env-fp',
-  cwd: process.cwd(),
+  cwd: tempCwd,
   message: 'hello',
 };
 
@@ -110,4 +118,5 @@ assert.notEqual(parsed1.envFingerprint, parsed2.envFingerprint, 'envFingerprint 
 
 console.log('SCENARIO_OK');
 await __testing.resetState();
+fs.rmSync(tempCwd, { recursive: true, force: true });
 process.exit(0);

@@ -189,19 +189,15 @@ interface StepRendererProps {
 }
 
 function StepRenderer({ step, description, t, errorTimestamp, onNavigateToDependencySettings }: StepRendererProps) {
-  if (step.kind === 'command') {
-    return (
-      <div className="error-diagnostic-step">
-        <p className="error-diagnostic-step-text">{description}</p>
+  // Every step kind shares the same description paragraph; only the affordance
+  // below it varies. An instruction step intentionally has none.
+  return (
+    <div className="error-diagnostic-step">
+      <p className="error-diagnostic-step-text">{description}</p>
+      {step.kind === 'command' && (
         <CommandBlock command={step.command} t={t} />
-      </div>
-    );
-  }
-
-  if (step.kind === 'link') {
-    return (
-      <div className="error-diagnostic-step">
-        <p className="error-diagnostic-step-text">{description}</p>
+      )}
+      {step.kind === 'link' && (
         <a
           className="error-diagnostic-nav-btn"
           href={step.url}
@@ -216,44 +212,26 @@ function StepRenderer({ step, description, t, errorTimestamp, onNavigateToDepend
           {t('settings.cli.installDialog.openDocs')}
           <ArrowRightIcon />
         </a>
-      </div>
-    );
-  }
-
-  if (step.kind === 'navigation') {
-    return (
-      <div className="error-diagnostic-step">
-        <p className="error-diagnostic-step-text">{description}</p>
-        {onNavigateToDependencySettings && step.action === 'openDependencySettings' && (
-          <button
-            type="button"
-            className="error-diagnostic-nav-btn"
-            onClick={onNavigateToDependencySettings}
-          >
-            {t('errorDiagnostic.openDependencySettings')}
-            <ArrowRightIcon />
-          </button>
-        )}
-      </div>
-    );
-  }
-
-  if (step.kind === 'action') {
-    return (
-      <div className="error-diagnostic-step">
-        <p className="error-diagnostic-step-text">{description}</p>
-        {step.action === 'updateClaudeSdk' && (
-          <UpdateClaudeSdkAction
-            t={t}
-            errorTimestamp={errorTimestamp}
-            onNavigateToDependencySettings={onNavigateToDependencySettings}
-          />
-        )}
-      </div>
-    );
-  }
-
-  return null;
+      )}
+      {step.kind === 'navigation' && onNavigateToDependencySettings && step.action === 'openDependencySettings' && (
+        <button
+          type="button"
+          className="error-diagnostic-nav-btn"
+          onClick={onNavigateToDependencySettings}
+        >
+          {t('errorDiagnostic.openDependencySettings')}
+          <ArrowRightIcon />
+        </button>
+      )}
+      {step.kind === 'action' && step.action === 'updateClaudeSdk' && (
+        <UpdateClaudeSdkAction
+          t={t}
+          errorTimestamp={errorTimestamp}
+          onNavigateToDependencySettings={onNavigateToDependencySettings}
+        />
+      )}
+    </div>
+  );
 }
 
 export const ErrorDiagnosticCard = memo(function ErrorDiagnosticCard({

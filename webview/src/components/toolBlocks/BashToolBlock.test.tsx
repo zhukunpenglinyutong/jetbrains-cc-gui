@@ -19,10 +19,12 @@ describe('BashToolBlock', () => {
       { toolId: 'one', input: { cmd: 'pwd', summary: 'Inspect workspace', justification: 'Read protected directory' } },
       { toolId: 'two', input: { command: 'git status', title: 'Check pending changes' } },
     ]} />);
-    expect(container.querySelectorAll('.bash-timeline-content')).toHaveLength(2);
-    fireEvent.click(container.querySelector('.bash-timeline-content')!);
-    expect(container.querySelector('.bash-command-summary')?.textContent).toBe('Inspect workspace');
-    expect(container.querySelector('.bash-command-reason')?.textContent).toContain('Read protected directory');
+    const rows = container.querySelectorAll('.bash-group-row');
+    expect(rows).toHaveLength(2);
+    expect(rows[0].querySelector('.bash-group-row-desc')?.textContent).toBe('Inspect workspace');
+    expect(rows[1].querySelector('.bash-group-row-desc')?.textContent).toBe('Check pending changes');
+    fireEvent.click(rows[0].querySelector('.bash-group-row-toggle')!);
+    expect(container.querySelector('.bash-group-detail-reason')?.textContent).toContain('Read protected directory');
   });
   it('hides empty placeholders until command details arrive', () => {
     const { container, rerender } = render(<BashToolBlock input={{}} />);

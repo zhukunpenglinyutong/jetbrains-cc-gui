@@ -1,5 +1,6 @@
 package com.github.claudecodegui.handler.file;
 
+import com.github.claudecodegui.util.ProjectPathUtils;
 import com.github.claudecodegui.util.WslPathUtil;
 import com.github.claudecodegui.util.FileChangeUndoPlan;
 import com.github.claudecodegui.handler.core.BaseMessageHandler;
@@ -14,6 +15,7 @@ import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
+import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Computable;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -66,15 +68,16 @@ public class UndoFileHandler extends BaseMessageHandler {
         return false;
     }
 
+    /** Validates the undo target against project content roots. */
     private boolean isValidFilePath(String filePath) {
-        String projectBasePath = this.context.getProject() != null ? this.context.getProject().getBasePath() : null;
-        if (projectBasePath == null) {
-            LOG.warn("[UndoFileHandler] Cannot validate path: project base path is null");
+        Project project = this.context.getProject();
+        if (project == null) {
+            LOG.warn("[UndoFileHandler] Cannot validate path: project is null");
             return false;
         }
         String resolved = this.resolveFilePath(filePath);
-        boolean isValid = WslPathUtil.isPathWithinDirectory(resolved, projectBasePath) && !Files.isDirectory(Path.of(resolved))
-                && !Path.of(resolved).normalize().equals(Path.of(WslPathUtil.toVfsPath(projectBasePath)).normalize());
+        boolean isValid = ProjectPathUtils.isPathWithinProject(project, resolved)
+                && !Files.isDirectory(Path.of(resolved));
         if (!isValid) {
             LOG.warn("[UndoFileHandler] File path outside project directory: " + filePath);
         }
@@ -137,7 +140,7 @@ public class UndoFileHandler extends BaseMessageHandler {
                     this.sendSuccess(resultFilePath, reviewOrigin);
 
                 } catch (Exception e) {
-                    LOG.error("[UndoFileHandler] Failed to undo file changes: " + e.getMessage(), e);
+                    this.logUndoFailure("[UndoFileHandler] Failed to undo file changes: " + e.getMessage(), e);
                     this.sendError(resultFilePath, e.getMessage(), reviewOrigin);
                 }
             });
@@ -204,7 +207,7 @@ public class UndoFileHandler extends BaseMessageHandler {
                     } catch (Exception e) {
                         failCount++;
                         errors.append(filePath).append(": ").append(e.getMessage()).append("; ");
-                        LOG.error("[UndoFileHandler] Failed to undo " + filePath + ": " + e.getMessage(), e);
+                        this.logUndoFailure("[UndoFileHandler] Failed to undo " + filePath + ": " + e.getMessage(), e);
                     }
                 }
 
@@ -254,7 +257,7 @@ public class UndoFileHandler extends BaseMessageHandler {
             throw new Exception("File not found: " + filePath);
         }
 
-        Document document = FileDocumentManager.getInstance().getDocument(file);
+        Document document = this.readDocument(file);
         if (document == null) {
             throw new Exception("Cannot get document for: " + filePath);
         }
@@ -271,6 +274,21 @@ public class UndoFileHandler extends BaseMessageHandler {
         file.refresh(false, false);
 
         LOG.info("[UndoFileHandler] Successfully reversed edits for file: " + filePath);
+    }
+
+    /** A refused plan is an expected answer, so it must not raise the IDE's internal error report. */
+    private void logUndoFailure(String message, Exception failure) {
+        if (failure instanceof IllegalArgumentException) {
+            LOG.warn(message);
+        } else {
+            LOG.error(message, failure);
+        }
+    }
+
+    /** Undo runs on a pooled thread, and the platform asserts a read lock around this lookup. */
+    Document readDocument(VirtualFile file) {
+        return ApplicationManager.getApplication().runReadAction(
+                (Computable<Document>) () -> FileDocumentManager.getInstance().getDocument(file));
     }
 
     private String resolveFilePath(String filePath) {
@@ -334,7 +352,7 @@ public class UndoFileHandler extends BaseMessageHandler {
         Path currentPath = Path.of(this.resolveFilePath(filePath));
         VirtualFile file = LocalFileSystem.getInstance().refreshAndFindFileByPath(WslPathUtil.toVfsPath(currentPath.toString()));
         Charset charset = file == null || file.getCharset() == null ? StandardCharsets.UTF_8 : file.getCharset();
-        Document document = file == null ? null : FileDocumentManager.getInstance().getDocument(file);
+        Document document = file == null ? null : this.readDocument(file);
         // Disk reads stay off the EDT; document reads take a read lock.
         String currentContent = document != null
                 ? ApplicationManager.getApplication().runReadAction((Computable<String>) document::getText)

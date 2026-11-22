@@ -3,15 +3,19 @@ package com.github.claudecodegui.handler.file;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.i18n.ClaudeCodeGuiBundle;
+import com.github.claudecodegui.ui.toolwindow.ToolWindowLifecycleDisposableService;
 
 import com.github.claudecodegui.util.EditorFileUtils;
 import com.github.claudecodegui.util.PathUtils;
 import com.github.claudecodegui.util.PlatformUtils;
+import com.github.claudecodegui.util.ProjectPathResolver;
 import com.intellij.ide.BrowserUtil;
+import com.intellij.ide.FileSelectInContext;
+import com.intellij.ide.SelectInTarget;
 import com.intellij.ide.projectView.ProjectView;
-import com.intellij.ide.projectView.impl.ProjectViewPane;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
+import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.editor.ScrollType;
@@ -29,9 +33,8 @@ import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.util.concurrency.AppExecutorUtil;
 
 import java.io.File;
-import java.io.IOException;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -515,8 +518,8 @@ class OpenFileHandler {
                 workingDirectory = new File(projectBasePath, customWorkingDir);
             }
 
-            File canonicalDirectory = normalizeExistingDirectory(workingDirectory.getPath());
-            return canonicalDirectory != null ? canonicalDirectory.getAbsolutePath() : null;
+            File directory = normalizeExistingDirectory(workingDirectory.getPath());
+            return directory != null ? directory.getAbsolutePath() : null;
         } catch (Exception e) {
             LOG.warn("Failed to resolve custom working directory: " + e.getMessage());
             return null;
@@ -528,22 +531,27 @@ class OpenFileHandler {
             return null;
         }
 
-        try {
-            File directory = new File(path).getCanonicalFile();
-            return directory.exists() && directory.isDirectory() ? directory : null;
-        } catch (IOException e) {
-            File directory = new File(path).getAbsoluteFile();
-            return directory.exists() && directory.isDirectory() ? directory : null;
+        File directory = toNormalizedFile(path);
+        if (directory == null || !directory.isDirectory()) {
+            return null;
         }
+        return ProjectPathResolver.preferProjectPath(context.getProject(), directory);
     }
 
     private File normalizeExistingFile(File candidate) {
+        File absoluteFile = toNormalizedFile(candidate.getPath());
+        if (absoluteFile == null || !absoluteFile.isFile()) {
+            return null;
+        }
+        return ProjectPathResolver.preferProjectPath(context.getProject(), absoluteFile);
+    }
+
+    private static File toNormalizedFile(String path) {
         try {
-            File canonicalFile = candidate.getCanonicalFile();
-            return canonicalFile.exists() && canonicalFile.isFile() ? canonicalFile : null;
-        } catch (IOException e) {
-            File absoluteFile = candidate.getAbsoluteFile();
-            return absoluteFile.exists() && absoluteFile.isFile() ? absoluteFile : null;
+            return ProjectPathResolver.normalizeDotSegments(new File(NodeDetector.toVfsPath(path)).toPath()).toFile();
+        } catch (InvalidPathException e) {
+            LOG.debug("Invalid file path: " + path);
+            return null;
         }
     }
 
@@ -557,14 +565,8 @@ class OpenFileHandler {
             if (project == null || project.isDisposed()) {
                 return;
             }
-            String basePath = project.getBasePath();
-            if (basePath == null || basePath.isBlank()) {
-                return;
-            }
-            Path projectRoot = Paths.get(basePath).toAbsolutePath().normalize();
-            Path resolvedPath = resolvedFile.toPath().toAbsolutePath().normalize();
-            if (!resolvedPath.startsWith(projectRoot)) {
-                LOG.warn("Opening file outside project root: " + resolvedPath);
+            if (!ProjectPathResolver.isProjectNavigationPath(project, resolvedFile.getPath())) {
+                LOG.warn("Opening file outside project root: " + resolvedFile.getAbsolutePath());
             }
         } catch (Exception e) {
             // Best-effort audit logging; never block file open on warning failures.
@@ -601,33 +603,56 @@ class OpenFileHandler {
                     return;
                 }
                 ProjectView view = ProjectView.getInstance(project);
-                if (view == null || view.getProjectViewPaneById(ProjectViewPane.ID) == null) {
+                if (view == null) {
                     selected.complete(false);
                     return;
                 }
-                Runnable select = () -> {
-                    try {
-                        view.selectCB(null, virtualFile, true)
-                                .doWhenDone(() -> selected.complete(true))
-                                .doWhenRejected(() -> selected.complete(false));
-                    } catch (RuntimeException error) {
-                        selected.completeExceptionally(error);
-                        OpenFileNavigation.letCancellationEscape(error);
-                    }
-                };
-                // The Packages pane cannot reveal archives; switch to the physical project tree.
-                if (ProjectViewPane.ID.equals(view.getCurrentViewId())) {
-                    select.run();
-                } else {
-                    view.changeViewCB(ProjectViewPane.ID, null).doWhenDone(select)
-                            .doWhenRejected(() -> selected.complete(false));
-                }
+                Collection<SelectInTarget> targets = view.getSelectInTargets();
+                String currentViewId = view.getCurrentViewId();
+                FileSelectInContext selectInContext = new FileSelectInContext(project, virtualFile, null);
+                // Target checks can load PSI; keep them off the EDT and use the IDE's registered panes for Rider compatibility.
+                // A plugin-owned parent also cancels pending checks on dynamic unload.
+                ReadAction.nonBlocking(() -> OpenFileNavigation.findProjectViewId(targets, currentViewId, selectInContext))
+                        .expireWith(ToolWindowLifecycleDisposableService.getInstance(project))
+                        .expireWhen(this.context::isDisposed)
+                        .finishOnUiThread(ModalityState.nonModal(), viewId -> this.selectInProjectTree(view, virtualFile, viewId, selected))
+                        .submit(AppExecutorUtil.getAppExecutorService())
+                        .onError(selected::completeExceptionally);
             } catch (RuntimeException error) {
                 selected.completeExceptionally(error);
                 OpenFileNavigation.letCancellationEscape(error);
             }
         });
         return selected;
+    }
+
+    /** SelectInTarget.selectIn is fire-and-forget; these callbacks preserve the actual navigation outcome. */
+    private void selectInProjectTree(ProjectView view, VirtualFile virtualFile, String viewId, CompletableFuture<Boolean> selected) {
+        try {
+            if (viewId == null || !virtualFile.isValid()) {
+                selected.complete(false);
+                return;
+            }
+            Runnable select = () -> {
+                try {
+                    view.selectCB(null, virtualFile, true)
+                            .doWhenDone(() -> selected.complete(true))
+                            .doWhenRejected(() -> selected.complete(false));
+                } catch (RuntimeException error) {
+                    selected.completeExceptionally(error);
+                    OpenFileNavigation.letCancellationEscape(error);
+                }
+            };
+            if (viewId.equals(view.getCurrentViewId())) {
+                select.run();
+            } else {
+                view.changeViewCB(viewId, null).doWhenDone(select)
+                        .doWhenRejected(() -> selected.complete(false));
+            }
+        } catch (RuntimeException error) {
+            selected.completeExceptionally(error);
+            OpenFileNavigation.letCancellationEscape(error);
+        }
     }
 
     private void reportNavigationFailure(String path) {
@@ -821,8 +846,8 @@ class OpenFileHandler {
      *       {@code null}.</li>
      * </ul>
      *
-     * <p>Note: {@link File#getCanonicalFile()} resolves symbolic links, so the
-     * returned path may point to a different physical location than the input.
+     * <p>ProjectPathResolver maps linked physical paths back to the IDE-visible
+     * project path when possible.
      */
     private String relativizeFallbackRelativePath(String relativePath) {
         try {
@@ -836,24 +861,24 @@ class OpenFileHandler {
                 return null;
             }
 
-            Path projectRoot = new File(NodeDetector.toVfsPath(basePath)).getCanonicalFile().toPath();
+            Path projectRoot = new File(NodeDetector.toVfsPath(basePath)).toPath().toAbsolutePath().normalize();
             Path baseDirectory = projectRoot;
             if (context.getSession() != null) {
                 String sessionCwd = context.getSession().getCwd();
                 if (sessionCwd != null && !sessionCwd.isBlank()) {
-                    Path sessionPath = new File(NodeDetector.toVfsPath(sessionCwd)).getCanonicalFile().toPath();
+                    Path sessionPath = new File(NodeDetector.toVfsPath(sessionCwd)).toPath().toAbsolutePath().normalize();
+                    Path projectSessionPath = ProjectPathResolver.mapToProjectPath(project, sessionPath);
+                    if (projectSessionPath != null) {
+                        sessionPath = projectSessionPath;
+                    }
                     if (sessionPath.startsWith(projectRoot)) {
                         baseDirectory = sessionPath;
                     }
                 }
             }
 
-            Path displayPath = baseDirectory.resolve(relativePath).normalize();
-            if (displayPath.startsWith(projectRoot)) {
-                return projectRoot.relativize(displayPath).toString().replace('\\', '/');
-            }
-            // Outside project root — surface the absolute path. See Javadoc.
-            return displayPath.toString().replace('\\', '/');
+            // Not normalized here: ".." after a link has to be folded against the filesystem.
+            return ProjectPathResolver.toProjectRelativeOrAbsolute(project, baseDirectory.resolve(relativePath).toString());
         } catch (Exception e) {
             LOG.debug("Failed to build fallback tooltip path: " + e.getMessage());
             return null;
@@ -877,34 +902,18 @@ class OpenFileHandler {
      *       {@code null}.</li>
      * </ul>
      *
-     * <p>Note: {@link File#getCanonicalFile()} resolves symbolic links, so the
-     * returned path may point to a different physical location than the input.
+     * <p>ProjectPathResolver maps linked physical paths back to the IDE-visible
+     * project path when possible.
      */
     private String relativizeToProjectRoot(String absolutePath) {
         if (absolutePath == null || absolutePath.isBlank()) {
             return null;
         }
 
-        Project project = context.getProject();
-        String basePath = project != null ? project.getBasePath() : null;
-
-        try {
-            String vfsAbsolute = NodeDetector.toVfsPath(absolutePath);
-            Path resolvedPath = new File(vfsAbsolute).getCanonicalFile().toPath();
-            if (basePath != null && !basePath.isBlank()) {
-                String vfsBase = NodeDetector.toVfsPath(basePath);
-                Path projectRoot = new File(vfsBase).getCanonicalFile().toPath();
-                if (resolvedPath.startsWith(projectRoot)) {
-                    Path relativePath = projectRoot.relativize(resolvedPath);
-                    String displayPath = relativePath.toString().replace('\\', '/');
-                    return displayPath.isBlank() ? "." : displayPath;
-                }
-            }
-            return resolvedPath.toString().replace('\\', '/');
-        } catch (Exception e) {
-            LOG.debug("Failed to relativize tooltip path: " + e.getMessage());
-            return null;
-        }
+        return ProjectPathResolver.toProjectRelativeOrAbsolute(
+                context.getProject(),
+                NodeDetector.toVfsPath(absolutePath)
+        );
     }
 
     /**

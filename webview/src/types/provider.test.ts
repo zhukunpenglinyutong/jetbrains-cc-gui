@@ -4,8 +4,24 @@ import {
   isValidCodexCustomModel,
   isValidModelPricing,
   PROVIDER_PRESETS,
+  normalizeEnvVarEntries,
+  validateEnvVarEntries,
   validateCodexCustomModels,
 } from './provider';
+
+describe('environment variable normalization', () => {
+  it('uses validated names without trimming values or mutating the input', () => {
+    const entries = [{ key: ' HTTPS_PROXY ', value: '  unchanged value  ' }, { key: '  ', value: '' }];
+    expect(validateEnvVarEntries(entries)).toEqual([]);
+    expect(normalizeEnvVarEntries(entries)).toEqual([{ key: 'HTTPS_PROXY', value: '  unchanged value  ' }]);
+    expect(entries[0].key).toBe(' HTTPS_PROXY ');
+  });
+
+  it('continues to reject duplicate and protected names after trimming', () => {
+    expect(validateEnvVarEntries([{ key: ' A ', value: '1' }, { key: 'a', value: '2' }])[0].reason).toBe('duplicate');
+    expect(validateEnvVarEntries([{ key: ' PATH ', value: 'value' }])[0].reason).toBe('protected');
+  });
+});
 
 const getModelSlots = (model: string) => ({
   ANTHROPIC_DEFAULT_FABLE_MODEL: model,

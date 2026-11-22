@@ -1,9 +1,11 @@
 package com.github.claudecodegui.handler.diff;
 
+import com.github.claudecodegui.util.ProjectPathUtils;
 import com.github.claudecodegui.util.WslPathUtil;
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 
@@ -26,14 +28,14 @@ public class DiffFileOperations {
         this.context = context;
     }
 
-    /** Check if a file path is within the project directory. Uses canonical paths to prevent path traversal. */
+    /** Checks whether the path is inside any project content root. */
     public boolean isPathWithinProject(String filePath) {
-        String projectBasePath = context.getProject().getBasePath();
-        if (projectBasePath == null) {
-            LOG.warn("Security: Cannot validate path - project base path is null");
+        Project project = context.getProject();
+        if (project == null) {
+            LOG.warn("Security: Cannot validate path - project is null");
             return false;
         }
-        return WslPathUtil.isPathWithinDirectory(filePath, projectBasePath);
+        return ProjectPathUtils.isPathWithinProject(project, filePath);
     }
 
     /**

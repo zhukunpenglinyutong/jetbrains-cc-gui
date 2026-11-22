@@ -80,7 +80,7 @@ public class HtmlLoader {
      *
      * @param html the static HTML document.
      * @param theme the IDE theme name.
-     * @param bgColor the background color to apply.
+     * @param bgColor the startup background color, used as the CSS variable fallback.
      * @return the HTML with the initial theme bootstrap.
      */
     static String injectIdeTheme(String html, String theme, String bgColor) {
@@ -90,7 +90,11 @@ public class HtmlLoader {
         int bodyTagEnd = findLastOpeningTagEnd(
                 html, "<body", htmlClosingTagStart >= 0 ? htmlClosingTagStart : html.length());
 
-        String styleAttribute = " style=\"background-color:" + bgColor + ";\"";
+        // Reference the chat background variable with the startup color as its fallback. An
+        // inline background-color outranks the stylesheet, so a plain color would pin the page
+        // root (and the area around the status panel) to the startup theme after the user picks
+        // a custom chat background.
+        String styleAttribute = " style=\"background-color:var(--bg-chat," + bgColor + ");\"";
         String scriptInjection = "\n    <script>window.__INITIAL_IDE_THEME__ = '"
                 + theme + "';</script>";
         StringBuilder result = new StringBuilder(html.length() + styleAttribute.length() * 2
@@ -171,6 +175,24 @@ public class HtmlLoader {
             String model,
             List<String> presetIds
     ) {
+        return injectInitialPageState(html, provider, model, presetIds, null);
+    }
+
+    /**
+     * Same as {@link #injectInitialPageState(String, String, String, List)}, plus the chat
+     * window's draft cache key. The key survives renderer/browser recreation and keeps each
+     * tab's unsent draft isolated; {@code null} leaves draft persistence disabled.
+     *
+     * @param draftCacheKey the stable chat-window draft key, or {@code null}.
+     * @return the HTML with all page-start state injected.
+     */
+    public String injectInitialPageState(
+            String html,
+            String provider,
+            String model,
+            List<String> presetIds,
+            String draftCacheKey
+    ) {
         try {
             String safeProvider = escapeForSingleQuotedJs(provider == null ? "" : provider);
             String safeModel = escapeForSingleQuotedJs(model == null ? "" : model);
@@ -205,6 +227,10 @@ public class HtmlLoader {
                     + "window.__INITIAL_TAB_PROVIDER__ = '" + safeProvider + "';"
                     + "window.__INITIAL_TAB_MODEL__ = '" + safeModel + "';"
                     + "</script>";
+            if (draftCacheKey != null && !draftCacheKey.isBlank()) {
+                scriptInjection += "\n    <script>window.__CCGUI_DRAFT_CACHE_KEY__ = '"
+                        + escapeForSingleQuotedJs(draftCacheKey) + "';</script>";
+            }
             int headIndex = html.indexOf("<head>");
             if (headIndex != -1) {
                 int insertPos = headIndex + "<head>".length();

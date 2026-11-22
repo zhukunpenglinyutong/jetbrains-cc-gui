@@ -59,10 +59,8 @@ export function useCodexCompactionStatus({
       }
       const reason = typeof response.error === 'string' ? response.error : '';
       const label = t('chat.compactSummary.nativeFailed');
-      const explanation = reason.includes('already has an active writer') || reason.includes('already has a live local writer')
-        || reason.includes('already owned by another')
-        ? t('chat.compactSummary.writerOccupied') : reason;
-      finish(response.errorReported === true ? undefined : explanation ? `${label}: ${explanation}` : label);
+      // The message renderer needs the original error to offer recovery instructions.
+      finish(response.errorReported === true ? undefined : reason ? `${label}: ${reason}` : label);
     };
     window.addEventListener('codex-interaction-response', onResponse);
     return () => window.removeEventListener('codex-interaction-response', onResponse);

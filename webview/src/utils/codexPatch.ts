@@ -48,7 +48,18 @@ function readDiff(lines: string[], unified: boolean): DiffResult {
   return diff;
 }
 
-/** Display supplied hunks directly: they cannot reconstruct a complete file. */
+/** Native add/delete bodies are literal text, including prefixes and lone carriage returns. */
+function readFileContent(content: string, kind: 'add' | 'delete'): DiffResult {
+  const lines = content.replace(/\r\n/g, '\n').split('\n');
+  if (lines.at(-1) === '') lines.pop();
+  return {
+    lines: lines.map(line => ({ type: kind === 'add' ? 'added' : 'deleted', content: line })),
+    additions: kind === 'add' ? lines.length : 0,
+    deletions: kind === 'delete' ? lines.length : 0,
+  };
+}
+
+/** Only add/delete bodies provide whole files; update hunks remain previews. */
 export function readPatchFiles(input: ToolInput | undefined): PatchFile[] {
   if (!input) return [];
   if (Array.isArray(input.changes)) {
@@ -66,18 +77,23 @@ export function readPatchFiles(input: ToolInput | undefined): PatchFile[] {
       if (typeof change.path !== 'string' || !change.path.trim()) return [];
       const kind = typeof change.kind === 'object' && change.kind
         ? change.kind as Record<string, unknown> : { type: change.kind ?? change.type };
+      const fileKind = kind.type === 'add' ? 'add' : kind.type === 'delete' ? 'delete' : 'update';
       const movePath = kind.movePath ?? kind.move_path ?? change.movePath ?? change.move_path ?? change.newPath;
       const suppliedDiff = change.diff ?? change.unified_diff;
-      const diff = typeof suppliedDiff === 'string' ? suppliedDiff.replace(/\r\n?/g, '\n') : '';
-      return [{ path: change.path, kind: kind.type === 'add' ? 'add' as const : kind.type === 'delete' ? 'delete' as const : 'update' as const,
+      const diff = typeof suppliedDiff === 'string' ? suppliedDiff.replace(/\r\n/g, '\n') : '';
+      // Legacy records supply explicit content; native add/delete puts that same body in diff.
+      const content = typeof change.content === 'string' ? change.content
+        : fileKind !== 'update' && typeof change.diff === 'string' ? change.diff : undefined;
+      return [{ path: change.path, kind: fileKind,
         ...(typeof movePath === 'string' ? { movePath } : {}),
-        ...(typeof change.content === 'string' ? { content: change.content } : {}),
-        fullContentKnown: typeof change.content === 'string' || typeof suppliedDiff === 'string',
-        diffText: diff, diff: readDiff(diff ? diff.split('\n') : [], true) }];
+        ...(content !== undefined ? { content } : {}),
+        fullContentKnown: content !== undefined || typeof suppliedDiff === 'string',
+        diffText: diff, diff: fileKind !== 'update' && content !== undefined
+          ? readFileContent(content, fileKind) : readDiff(diff ? diff.split('\n') : [], true) }];
     });
   }
   const source = typeof input.patch === 'string' ? input.patch : typeof input.input === 'string' ? input.input : '';
-  const patch = source.replace(/\r\n?/g, '\n').trim();
+  const patch = source.replace(/\r\n/g, '\n').trim();
   if (!patch.startsWith('*** Begin Patch\n') || !patch.endsWith('*** End Patch')) return [];
   const files: PatchFile[] = [];
   let current: PatchFile | undefined;

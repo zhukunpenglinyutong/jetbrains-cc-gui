@@ -1,5 +1,8 @@
 package com.github.claudecodegui.permission;
 
+import com.github.claudecodegui.session.SessionExecutionOwnership;
+import com.github.claudecodegui.session.SessionExecutionState;
+import com.github.claudecodegui.session.SessionInteractionScope;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.application.ApplicationManager;
@@ -10,6 +13,7 @@ import javax.swing.*;
 import java.nio.file.*;
 import java.util.Set;
 import java.util.concurrent.*;
+import java.util.function.Supplier;
 
 /**
  * Permission service - handles permission requests from the Node.js process
@@ -24,6 +28,41 @@ public class PermissionService {
     private final Gson gson = new Gson();
     private volatile long lastActivityTime = System.currentTimeMillis();
     private volatile PermissionDecisionListener decisionListener;
+    private volatile Supplier<SessionExecutionOwnership> executionOwner;
+
+    public void setExecutionOwnerSupplier(Supplier<SessionExecutionOwnership> supplier) {
+        this.executionOwner = supplier;
+    }
+
+    private <T> CompletableFuture<T> observeFileDialog(JsonObject request, Supplier<CompletableFuture<T>> create,
+                                                       SessionExecutionState.WaitReason reason) {
+        SessionExecutionOwnership owner = null;
+        try {
+            Supplier<SessionExecutionOwnership> supplier = executionOwner;
+            if (supplier != null) {
+                owner = supplier.get();
+            }
+        } catch (RuntimeException error) {
+            LOG.warn("[SessionExecution] Native review observation unavailable", error);
+        }
+        String correlation = request.has("executionScope") && request.get("executionScope").isJsonPrimitive()
+                && request.getAsJsonPrimitive("executionScope").isString() ? request.get("executionScope").getAsString() : "";
+        SessionExecutionOwnership captured = owner;
+        return SessionInteractionScope.forFileRequest(correlation, captured, () -> {
+            CompletableFuture<T> future = create.get();
+            SessionExecutionOwnership matched =
+                    SessionInteractionScope.resolve(captured);
+            if (matched != null && future != null) {
+                try {
+                    matched.bindInteraction(reason, future);
+                } catch (RuntimeException error) {
+                    LOG.warn("[SessionExecution] File dialog observation unavailable", error);
+                }
+            }
+            return future;
+        });
+    }
+
 
     private static final int DIALOG_SHOWER_POLL_INTERVAL_MS = 100;
     private static final int DIALOG_SHOWER_POLL_MAX_ATTEMPTS = 20;
@@ -111,17 +150,13 @@ public class PermissionService {
     // ── Constructor & Factory Methods ──────────────────────────────────
 
     private PermissionService(Project project, String sessionId) {
+        this(project, sessionId, resolvePermissionDir());
+    }
+
+    private PermissionService(Project project, String sessionId, Path permissionDir) {
         this.project = project;
         this.sessionId = sessionId;
-
-        String envDir = System.getenv("CLAUDE_PERMISSION_DIR");
-        if (envDir != null && !envDir.trim().isEmpty()) {
-            this.permissionDir = Paths.get(envDir);
-            debugLog("INIT", "Using permission dir from env CLAUDE_PERMISSION_DIR: " + envDir);
-        } else {
-            this.permissionDir = Paths.get(System.getProperty("java.io.tmpdir"), "claude-permission");
-            debugLog("INIT", "Env CLAUDE_PERMISSION_DIR not set, using tmp dir: " + this.permissionDir);
-        }
+        this.permissionDir = permissionDir;
         debugLog("INIT", "Session ID: " + this.sessionId);
         try {
             Files.createDirectories(permissionDir);
@@ -136,6 +171,22 @@ public class PermissionService {
         this.fileProtocol = new PermissionFileProtocol(permissionDir, sessionId, gson, (tag, message) -> debugLog(tag, message));
         this.requestWatcher = new PermissionRequestWatcher(
                 permissionDir, sessionId, fileProtocol, (tag, message) -> debugLog(tag, message));
+    }
+
+    private static Path resolvePermissionDir() {
+        String envDir = System.getenv("CLAUDE_PERMISSION_DIR");
+        if (envDir != null && !envDir.trim().isEmpty()) {
+            return Paths.get(envDir);
+        }
+        return Paths.get(System.getProperty("java.io.tmpdir"), "claude-permission");
+    }
+
+    static PermissionService createForTest(Project project, String sessionId, Path permissionDir) {
+        return new PermissionService(project, sessionId, permissionDir);
+    }
+
+    void setLastActivityTimeForTest(long epochMs) {
+        this.lastActivityTime = epochMs;
     }
 
     public String getSessionId() { return this.sessionId; }
@@ -233,6 +284,15 @@ public class PermissionService {
 
     long getLastActivityTime() {
         return lastActivityTime;
+    }
+
+    /**
+     * True while a chat window still owns this session's dialogs.
+     * Idle cleanup must not stop that watcher: a day without a permission
+     * prompt is a quiet chat, not an abandoned session.
+     */
+    boolean hasRegisteredDialogShowers() {
+        return dialogRouter.hasRegisteredDialogShowers();
     }
 
     // ── Common Helpers ─────────────────────────────────────────────────
@@ -349,9 +409,9 @@ public class PermissionService {
             PermissionDialogShower shower = dialogRouter.findPermissionDialogShower(request, "MATCH_PROJECT");
             if (shower != null) {
                 safeDeleteFile(requestFile, "PERM");
-                dispatchPermissionDialog(shower, requestId, toolName, inputs, fileName);
+                dispatchPermissionDialog(shower, requestId, toolName, inputs, fileName, request);
             } else {
-                dispatchPermissionFallback(requestId, toolName, inputs, requestFile, fileName);
+                dispatchPermissionFallback(requestId, toolName, inputs, requestFile, fileName, request);
             }
         } catch (Exception e) {
             debugLog("HANDLE_ERROR", "Error handling request: " + e.getMessage());
@@ -362,11 +422,12 @@ public class PermissionService {
     }
 
     private void dispatchPermissionDialog(PermissionDialogShower shower, String requestId,
-                                          String toolName, JsonObject inputs, String fileName) {
+                                          String toolName, JsonObject inputs, String fileName, JsonObject request) {
         processingRequests.add(fileName); // re-add: caller's finally will remove, but async needs it
         final long dialogStart = System.currentTimeMillis();
 
-        CompletableFuture<Integer> future = shower.showPermissionDialog(toolName, inputs);
+        CompletableFuture<Integer> future = observeFileDialog(request, () -> shower.showPermissionDialog(toolName, inputs),
+                SessionExecutionState.WaitReason.PERMISSION);
         future.thenAccept(response -> {
             LOG.info("[PERM_FUTURE] response=" + response + ", elapsed="
                     + (System.currentTimeMillis() - dialogStart) + "ms, tool=" + toolName);
@@ -393,10 +454,11 @@ public class PermissionService {
     }
 
     private void dispatchPermissionFallback(String requestId, String toolName,
-                                            JsonObject inputs, Path requestFile, String fileName) {
+                                            JsonObject inputs, Path requestFile, String fileName, JsonObject request) {
         debugLog("FALLBACK_DIALOG", "Using JOptionPane for: " + toolName);
         try {
-            CompletableFuture<Integer> future = new CompletableFuture<>();
+            CompletableFuture<Integer> future = observeFileDialog(request, CompletableFuture::new,
+                    SessionExecutionState.WaitReason.PERMISSION);
             ApplicationManager.getApplication().invokeLater(
                     () -> future.complete(showSystemPermissionDialog(toolName, inputs)));
 
@@ -438,6 +500,7 @@ public class PermissionService {
 
     private void handleAskUserQuestionRequest(Path requestFile) {
         String fileName = requestFile.getFileName().toString();
+        this.lastActivityTime = System.currentTimeMillis();
 
         String content = acquireRequestContent(requestFile, "ASK");
         if (content == null) { return; }
@@ -491,7 +554,8 @@ public class PermissionService {
     private void dispatchAskQuestionDialog(AskUserQuestionDialogShower shower,
                                            String requestId, JsonObject questionsData, String fileName) {
         final long dialogStart = System.currentTimeMillis();
-        CompletableFuture<JsonObject> future = shower.showAskUserQuestionDialog(requestId, questionsData);
+        CompletableFuture<JsonObject> future = observeFileDialog(questionsData, () -> shower.showAskUserQuestionDialog(requestId, questionsData),
+                SessionExecutionState.WaitReason.QUESTION);
 
         future.thenAccept(answers -> {
             debugLog("ASK_RESPONSE", "Got answers after " + (System.currentTimeMillis() - dialogStart) + "ms");
@@ -514,6 +578,7 @@ public class PermissionService {
 
     private void handlePlanApprovalRequest(Path requestFile) {
         String fileName = requestFile.getFileName().toString();
+        this.lastActivityTime = System.currentTimeMillis();
 
         String content = acquireRequestContent(requestFile, "PLAN");
         if (content == null) { return; }
@@ -551,7 +616,8 @@ public class PermissionService {
     private void dispatchPlanApprovalDialog(PlanApprovalDialogShower shower,
                                             String requestId, JsonObject request, String fileName) {
         final long dialogStart = System.currentTimeMillis();
-        CompletableFuture<JsonObject> future = shower.showPlanApprovalDialog(requestId, request);
+        CompletableFuture<JsonObject> future = observeFileDialog(request, () -> shower.showPlanApprovalDialog(requestId, request),
+                SessionExecutionState.WaitReason.PLAN);
 
         future.thenAccept(response -> {
             debugLog("PLAN_RESPONSE", "Got response after " + (System.currentTimeMillis() - dialogStart) + "ms");
@@ -586,7 +652,8 @@ public class PermissionService {
         }
 
         CompletableFuture<DiffReviewResult> reviewFuture =
-                DiffReviewService.reviewFileChange(matched, toolName, inputs);
+                observeFileDialog(request, () -> DiffReviewService.reviewFileChange(matched, toolName, inputs),
+                        SessionExecutionState.WaitReason.PERMISSION);
         if (reviewFuture == null) {
             LOG.info("[DIFF_REVIEW] Not available for " + toolName + ", falling back");
             return false;

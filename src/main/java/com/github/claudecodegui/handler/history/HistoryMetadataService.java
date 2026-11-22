@@ -120,4 +120,64 @@ class HistoryMetadataService {
             }
         });
     }
+
+    /**
+     * Push the user-set title of a restored session to the webview.
+     * <p>
+     * A restored transcript only carries the CLI-derived title (AI title /
+     * first prompt), while a title set through the header lives in
+     * session-titles.json. Without this push the header shows the stale
+     * transcript title until the session is reopened from the history list
+     * (which merges custom titles in {@link HistoryLoadService}).
+     *
+     * @param sessionId the session whose saved title should be applied
+     */
+    void pushCustomTitle(String sessionId) {
+        if (sessionId == null || sessionId.isBlank()) {
+            return;
+        }
+        CompletableFuture.runAsync(() -> {
+            try {
+                String titlesJson = nodeJsServiceCaller.callNodeJsTitlesService("loadTitles");
+                String customTitle = extractCustomTitle(titlesJson, sessionId);
+                if (customTitle == null) {
+                    return;
+                }
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    if (context.isDisposed()) {
+                        return;
+                    }
+                    context.callJavaScript("restoreSessionTitle",
+                            context.escapeJs(sessionId), context.escapeJs(customTitle));
+                });
+            } catch (Exception e) {
+                LOG.warn("[HistoryHandler] 恢复会话标题失败: " + e.getMessage());
+            }
+        });
+    }
+
+    /**
+     * Extract one session's custom title from the raw session-titles.json payload.
+     *
+     * @param titlesJson raw JSON returned by the titles service
+     * @param sessionId session to look up
+     * @return the custom title, or null when absent, blank or unparsable
+     */
+    static String extractCustomTitle(String titlesJson, String sessionId) {
+        try {
+            JsonObject titles = new Gson().fromJson(titlesJson, JsonObject.class);
+            if (titles == null || !titles.has(sessionId) || !titles.get(sessionId).isJsonObject()) {
+                return null;
+            }
+            JsonObject titleInfo = titles.getAsJsonObject(sessionId);
+            if (!titleInfo.has("customTitle") || titleInfo.get("customTitle").isJsonNull()) {
+                return null;
+            }
+            String customTitle = titleInfo.get("customTitle").getAsString();
+            return customTitle.isBlank() ? null : customTitle;
+        } catch (Exception e) {
+            LOG.warn("[HistoryHandler] 解析会话标题失败: " + e.getMessage());
+            return null;
+        }
+    }
 }

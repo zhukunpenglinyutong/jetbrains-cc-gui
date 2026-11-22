@@ -28,7 +28,7 @@ public class ClaudePlanUsageServiceTest {
 
     @After
     public void tearDown() {
-        ClaudePlanUsageService.resetRateLimitCacheForTests();
+        ClaudePlanUsageService.clearRateLimitCache();
     }
 
     @Test
@@ -127,6 +127,31 @@ public class ClaudePlanUsageServiceTest {
         assertTrue(payload.get("present").getAsBoolean());
         assertEquals("sdk-rate-limit", payload.get("source").getAsString());
         assertEquals(42.0, payload.get("capacity_pct").getAsDouble(), 0.01);
+    }
+
+    @Test
+    public void resolvePlanUsagePayload_windowAlreadyReset_reportsUnavailableInsteadOfOldFigure() {
+        long resetsAtSec = nowSec() + 60L * 60;
+        ClaudePlanUsageService.cacheRateLimitInfo(info(0.99, resetsAtSec, "allowed_warning"));
+
+        JsonObject beforeReset = ClaudePlanUsageService.resolvePlanUsagePayload(null, resetsAtSec * 1000L - 1);
+        assertTrue(beforeReset.get("present").getAsBoolean());
+        assertEquals(99.0, beforeReset.get("capacity_pct").getAsDouble(), 0.01);
+
+        JsonObject afterReset = ClaudePlanUsageService.resolvePlanUsagePayload(null, resetsAtSec * 1000L);
+        assertFalse(afterReset.get("present").getAsBoolean());
+        assertTrue(afterReset.get("unavailable").getAsBoolean());
+
+        // The next rate_limit_event brings the bar back.
+        ClaudePlanUsageService.cacheRateLimitInfo(info(0.05, nowSec() + 5L * 60 * 60, null));
+        assertEquals(5.0, ClaudePlanUsageService.resolvePlanUsagePayload(null).get("capacity_pct").getAsDouble(), 0.01);
+    }
+
+    @Test
+    public void clearRateLimitCache_dropsTheSnapshotOfThePreviousAccount() {
+        ClaudePlanUsageService.cacheRateLimitInfo(info(0.42, nowSec() + 3L * 60 * 60, null));
+        ClaudePlanUsageService.clearRateLimitCache();
+        assertFalse(ClaudePlanUsageService.resolvePlanUsagePayload(null).get("present").getAsBoolean());
     }
 
     @Test

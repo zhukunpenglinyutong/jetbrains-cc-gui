@@ -2,6 +2,7 @@ package com.github.claudecodegui.provider.minimax;
 
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.provider.common.HistoryPathMatcher;
+import com.github.claudecodegui.provider.common.HistoryCancellation;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -22,6 +23,8 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CancellationException;
+import java.util.function.BooleanSupplier;
 
 /**
  * Reads MiniMax Code (mcode) session history from its on-disk v2 layout.
@@ -254,23 +257,52 @@ public class MiniMaxHistoryReader {
      * Loads one session's messages as Claude-shaped JSON objects.
      */
     public List<JsonObject> getSessionMessages(String sessionId, String cwd) throws IOException {
-        Path sessionDir = resolveSessionDir(sessionId, cwd);
+        return getSessionMessagesInternal(sessionId, cwd, () -> false, false);
+    }
+
+    public List<JsonObject> getSessionMessages(String sessionId, String cwd,
+                                               BooleanSupplier cancellation) throws IOException {
+        return getSessionMessagesInternal(sessionId, cwd, cancellation, true);
+    }
+
+    private List<JsonObject> getSessionMessagesInternal(String sessionId, String cwd,
+                                                         BooleanSupplier cancellation, boolean failMissing) throws IOException {
+        HistoryCancellation.check(cancellation);
+        SessionLookup lookup = lookupSessionDir(sessionId, cwd, cancellation);
+        Path sessionDir = lookup.dir();
         if (sessionDir == null) {
+            if (failMissing) {
+                if (lookup.inconclusive()) {
+                    // A snapshot being rewritten can hide its own session id; retry instead of retiring.
+                    throw new IOException("MiniMax session snapshots are not readable yet: " + sessionId);
+                }
+                throw new com.github.claudecodegui.provider.common.SessionHistoryNotFoundException(sessionId, cwd);
+            }
+
             return new ArrayList<>();
         }
+        return readSessionDirectory(sessionDir, sessionId, cancellation, failMissing);
+    }
 
+    /** Reads one resolved session directory; strict reads never report an existing directory as missing. */
+    List<JsonObject> readSessionDirectory(Path sessionDir, String sessionId, BooleanSupplier cancellation,
+                                          boolean failMissing) throws IOException {
         // Preferred source: snapshot.json displayMessages.
         Path snapshotPath = sessionDir.resolve("snapshot.json");
+        boolean snapshotReadable = false;
         if (Files.isRegularFile(snapshotPath)) {
             try {
                 JsonObject snapshot = JsonParser
                         .parseString(Files.readString(snapshotPath, StandardCharsets.UTF_8))
                         .getAsJsonObject();
+                snapshotReadable = true;
                 if (snapshot.has("displayMessages")
                         && snapshot.get("displayMessages").isJsonArray()
-                        && snapshot.getAsJsonArray("displayMessages").size() > 0) {
-                    return buildMessages(snapshot.getAsJsonArray("displayMessages"));
+                        && !snapshot.getAsJsonArray("displayMessages").isEmpty()) {
+                    return buildMessages(snapshot.getAsJsonArray("displayMessages"), cancellation);
                 }
+            } catch (CancellationException e) {
+                throw e;
             } catch (Exception e) {
                 LOG.warn("[MiniMaxHistoryReader] Failed to parse snapshot.json, falling back to display.jsonl: "
                         + e.getMessage());
@@ -280,53 +312,82 @@ public class MiniMaxHistoryReader {
         // Fallback: replay display.jsonl events, deduplicating upserts by msg_id.
         Path displayPath = sessionDir.resolve("display.jsonl");
         if (Files.isRegularFile(displayPath)) {
-            return parseDisplayJsonl(displayPath);
+            return parseDisplayJsonl(displayPath, cancellation);
         }
+        if (failMissing && !snapshotReadable) {
+            // The session directory exists, so an unreadable transcript is retryable, never a retirement signal.
+            throw new IOException("MiniMax session history is not readable yet: " + sessionId);
+        }
+        // A readable snapshot without display messages is a valid empty session.
         return new ArrayList<>();
     }
 
     private Path resolveSessionDir(String sessionId, String cwd) throws IOException {
+        return resolveSessionDir(sessionId, cwd, () -> false);
+    }
+
+    private Path resolveSessionDir(String sessionId, String cwd,
+                                   BooleanSupplier cancellation) throws IOException {
+        return lookupSessionDir(sessionId, cwd, cancellation).dir();
+    }
+
+    /** A session directory lookup that also reports whether an unreadable snapshot could hide the session. */
+    private record SessionLookup(Path dir, boolean inconclusive) {
+    }
+
+    private SessionLookup lookupSessionDir(String sessionId, String cwd,
+                                           BooleanSupplier cancellation) throws IOException {
+        HistoryCancellation.check(cancellation);
         if (!isSafeSessionId(sessionId)) {
-            return null;
+            return new SessionLookup(null, false);
         }
         String wanted = sessionId.trim();
         Path best = null;
+        boolean inconclusive = false;
         if (!Files.isDirectory(sessionsRoot)) {
-            return null;
+            return new SessionLookup(null, false);
         }
         // Session dirs are dated mcode-internal names; match by the sessionId
         // inside snapshot.json instead of guessing the dir naming scheme.
         try (DirectoryStream<Path> years = Files.newDirectoryStream(sessionsRoot)) {
             for (Path year : years) {
+                HistoryCancellation.check(cancellation);
                 if (!Files.isDirectory(year)) {
                     continue;
                 }
                 try (DirectoryStream<Path> months = Files.newDirectoryStream(year)) {
                     for (Path month : months) {
+                        HistoryCancellation.check(cancellation);
                         if (!Files.isDirectory(month)) {
                             continue;
                         }
                         try (DirectoryStream<Path> days = Files.newDirectoryStream(month)) {
                             for (Path day : days) {
+                                HistoryCancellation.check(cancellation);
                                 if (!Files.isDirectory(day)) {
                                     continue;
                                 }
                                 try (DirectoryStream<Path> sessionDirs = Files.newDirectoryStream(day)) {
                                     for (Path sessionDir : sessionDirs) {
+                                        HistoryCancellation.check(cancellation);
                                         if (!Files.isDirectory(sessionDir)) {
                                             continue;
                                         }
                                         // Read snapshot.json once per dir — the record
                                         // carries both the id and the workspace.
-                                        JsonObject record = readSessionRecord(sessionDir);
-                                        if (record == null || !wanted.equals(text(record, "sessionId"))) {
+                                        JsonObject record = readSessionRecord(sessionDir, cancellation);
+                                        if (record == null) {
+                                            inconclusive |= mayHideSession(sessionDir, wanted);
+                                            continue;
+                                        }
+                                        if (!wanted.equals(text(record, "sessionId"))) {
                                             continue;
                                         }
                                         // Prefer a session whose workspace matches cwd.
                                         if (cwd != null && !cwd.isBlank()) {
                                             String ws = text(record, "workspaceDir");
                                             if (ws != null && pathsMatch(ws, cwd)) {
-                                                return sessionDir;
+                                                return new SessionLookup(sessionDir, false);
                                             }
                                         }
                                         if (best == null) {
@@ -340,7 +401,29 @@ public class MiniMaxHistoryReader {
                 }
             }
         }
-        return best;
+        return new SessionLookup(best, best == null && inconclusive);
+    }
+
+    /**
+     * True when a directory that could not be identified might still be the wanted session: its
+     * snapshot is mid-rewrite but names the session, or a transcript exists before any snapshot.
+     */
+    private static boolean mayHideSession(Path sessionDir, String wantedSessionId) {
+        Path snapshotPath = sessionDir.resolve("snapshot.json");
+        if (!Files.isRegularFile(snapshotPath)) {
+            return Files.isRegularFile(sessionDir.resolve("display.jsonl"));
+        }
+        try {
+            String text = Files.readString(snapshotPath, StandardCharsets.UTF_8);
+            try {
+                JsonParser.parseString(text).getAsJsonObject();
+                return false;
+            } catch (Exception unparseable) {
+                return text.contains(wantedSessionId);
+            }
+        } catch (IOException unreadable) {
+            return true;
+        }
     }
 
     /**
@@ -348,7 +431,15 @@ public class MiniMaxHistoryReader {
      * when the snapshot is missing or malformed.
      */
     private static JsonObject readSessionRecord(Path sessionDir) {
+        return readSessionRecord(sessionDir, () -> false);
+    }
+
+    private static JsonObject readSessionRecord(
+            Path sessionDir,
+            BooleanSupplier cancellation
+    ) {
         try {
+            HistoryCancellation.check(cancellation);
             Path snapshotPath = sessionDir.resolve("snapshot.json");
             if (!Files.isRegularFile(snapshotPath)) {
                 return null;
@@ -358,6 +449,8 @@ public class MiniMaxHistoryReader {
                     .getAsJsonObject();
             return snapshot.has("record") && snapshot.get("record").isJsonObject()
                     ? snapshot.getAsJsonObject("record") : null;
+        } catch (CancellationException e) {
+            throw e;
         } catch (Exception e) {
             return null;
         }
@@ -368,9 +461,17 @@ public class MiniMaxHistoryReader {
      * user text, assistant thinking / text, tool_use, and tool_result.
      */
     private static List<JsonObject> buildMessages(JsonArray displayMessages) {
+        return buildMessages(displayMessages, () -> false);
+    }
+
+    private static List<JsonObject> buildMessages(
+            JsonArray displayMessages,
+            BooleanSupplier cancellation
+    ) {
         List<JsonObject> messages = new ArrayList<>();
         int counter = 0;
         for (JsonElement el : displayMessages) {
+            HistoryCancellation.check(cancellation);
             if (!el.isJsonObject()) {
                 continue;
             }
@@ -432,37 +533,47 @@ public class MiniMaxHistoryReader {
      * event per msg_id (upserts may re-emit updated tool results).
      */
     private List<JsonObject> parseDisplayJsonl(Path displayPath) throws IOException {
+        return parseDisplayJsonl(displayPath, () -> false);
+    }
+
+    private List<JsonObject> parseDisplayJsonl(
+            Path displayPath,
+            BooleanSupplier cancellation
+    ) throws IOException {
         // LinkedHashMap: the stable timestamp sort below keeps first-seen
         // (file) order for messages sharing a timestamp.
         Map<String, JsonObject> latestById = new LinkedHashMap<>();
         Map<String, Long> seqById = new HashMap<>();
-        List<String> lines = Files.readAllLines(displayPath, StandardCharsets.UTF_8);
-        for (String line : lines) {
-            line = line.trim();
-            if (line.isEmpty()) {
-                continue;
-            }
-            JsonObject obj;
-            try {
-                obj = JsonParser.parseString(line).getAsJsonObject();
-            } catch (Exception e) {
-                continue;
-            }
-            if (!"message.display_upserted".equals(text(obj, "kind"))) {
-                continue;
-            }
-            String msgId = text(obj, "msgId");
-            if (msgId == null || msgId.isBlank()) {
-                continue;
-            }
-            long seq = longVal(obj, "seq", -1L);
-            Long prev = seqById.get(msgId);
-            if (prev == null || seq >= prev) {
-                seqById.put(msgId, seq);
-                JsonObject message = obj.has("message") && obj.get("message").isJsonObject()
-                        ? obj.getAsJsonObject("message") : null;
-                if (message != null) {
-                    latestById.put(msgId, message);
+        try (java.io.BufferedReader reader = Files.newBufferedReader(displayPath, StandardCharsets.UTF_8)) {
+            String rawLine;
+            while ((rawLine = reader.readLine()) != null) {
+                HistoryCancellation.check(cancellation);
+                String line = rawLine.trim();
+                if (line.isEmpty()) {
+                    continue;
+                }
+                JsonObject obj;
+                try {
+                    obj = JsonParser.parseString(line).getAsJsonObject();
+                } catch (Exception e) {
+                    continue;
+                }
+                if (!"message.display_upserted".equals(text(obj, "kind"))) {
+                    continue;
+                }
+                String msgId = text(obj, "msgId");
+                if (msgId == null || msgId.isBlank()) {
+                    continue;
+                }
+                long seq = longVal(obj, "seq", -1L);
+                Long prev = seqById.get(msgId);
+                if (prev == null || seq >= prev) {
+                    seqById.put(msgId, seq);
+                    JsonObject message = obj.has("message") && obj.get("message").isJsonObject()
+                            ? obj.getAsJsonObject("message") : null;
+                    if (message != null) {
+                        latestById.put(msgId, message);
+                    }
                 }
             }
         }
@@ -471,7 +582,7 @@ public class MiniMaxHistoryReader {
                 .sorted(Map.Entry.comparingByValue(
                         Comparator.comparingLong((JsonObject m) -> longVal(m, "timestamp", 0L))))
                 .forEach(entry -> ordered.add(entry.getValue()));
-        return buildMessages(ordered);
+        return buildMessages(ordered, cancellation);
     }
 
     public boolean deleteSession(String sessionId, String projectPath) throws IOException {

@@ -79,8 +79,8 @@ describe('ModelSelect', () => {
 
   it('Claude 内置模型列表应按目标顺序展示最新模型，并移除旧可见项', () => {
     expect(CLAUDE_MODELS.map((model) => model.id)).toEqual([
+      'claude-fable-5-2',
       'claude-fable-5-1',
-      'claude-fable-5',
       'claude-opus-5-5',
       'claude-opus-5',
       'claude-sonnet-5-5',
@@ -88,6 +88,7 @@ describe('ModelSelect', () => {
       'claude-haiku-4-5',
     ]);
     const ids = CLAUDE_MODELS.map((model) => model.id);
+    expect(ids).not.toContain('claude-fable-5');
     expect(ids).not.toContain('claude-opus-4-8');
     expect(ids).not.toContain('claude-opus-4-7');
     expect(ids).not.toContain('claude-opus-4-6');

@@ -103,7 +103,7 @@ public class NodeProcessRunnerTest {
                 "const { spawn } = require('child_process');"
                         + "const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000)'],"
                         + " { detached: true, stdio: ['ignore', 'inherit', 'ignore'] });"
-                        + "require('fs').writeFileSync(process.argv[1], String(child.pid));"
+                        + "require('fs').writeFileSync(process.argv[2], String(child.pid));"
                         + "child.unref();"
                         + "console.log('partial');"
                         // Exit only once the reader is parked in read(): if it is between
@@ -128,8 +128,11 @@ public class NodeProcessRunnerTest {
         }
     }
 
-    private static ProcessBuilder node(String script, String... args) {
-        List<String> command = new ArrayList<>(List.of("node", "-e", script));
+    private ProcessBuilder node(String script, String... args) throws IOException {
+        // A file avoids Windows command-line quoting changing embedded JSON strings.
+        Path fixture = Files.createTempFile(temporaryFolder.getRoot().toPath(), "runner-", ".cjs");
+        Files.writeString(fixture, script, StandardCharsets.UTF_8);
+        List<String> command = new ArrayList<>(List.of("node", fixture.toString()));
         command.addAll(List.of(args));
         ProcessBuilder pb = new ProcessBuilder(command);
         pb.redirectErrorStream(true);

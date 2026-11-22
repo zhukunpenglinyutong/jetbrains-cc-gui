@@ -3,6 +3,7 @@ package com.github.claudecodegui.handler;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.github.claudecodegui.pet.WebpTestFixture;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -32,6 +33,35 @@ public class CodexPetHandlerTest {
 
     @Rule
     public final TemporaryFolder temporaryFolder = new TemporaryFolder();
+
+    @Test
+    public void previewsLocalWebpWithoutGlobalWebpProvider() throws Exception {
+        Path root = temporaryFolder.newFolder("webp-preview").toPath();
+        try (WebpTestFixture fixture = new WebpTestFixture()) {
+            Files.write(root.resolve("sheet.webp"), fixture.sheet());
+            JsonObject preview = CodexPetHandler.loadPetPreview(root, "sheet.webp");
+            assertTrue(preview.get("dataUrl").getAsString().startsWith("data:image/webp;base64,"));
+            assertTrue(preview.get("spriteSheet").getAsBoolean());
+            fixture.assertRegistryUnchanged();
+        }
+    }
+
+    @Test
+    public void listsLocalWebpWithoutGlobalWebpProvider() throws Exception {
+        Path root = temporaryFolder.newFolder("webp-list").toPath();
+        try (WebpTestFixture fixture = new WebpTestFixture()) {
+            Files.createDirectories(root.resolve("webp-pet"));
+            Files.write(root.resolve("webp-pet").resolve("spritesheet.webp"), fixture.sheet());
+
+            JsonArray pets = CodexPetHandler.loadPetAssets(root);
+
+            assertEquals(1, pets.size());
+            JsonObject pet = pets.get(0).getAsJsonObject();
+            assertEquals("webp-pet/spritesheet.webp", pet.get("id").getAsString());
+            assertTrue(pet.get("spriteSheet").getAsBoolean());
+            fixture.assertRegistryUnchanged();
+        }
+    }
 
     @Test
     public void loadsOnlyVerifiedImageFormatsWithinPetRoot() throws Exception {

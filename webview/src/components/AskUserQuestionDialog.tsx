@@ -82,6 +82,7 @@ const AskUserQuestionDialog = ({
 }: AskUserQuestionDialogProps) => {
   const { t } = useTranslation();
   const customInputRef = useRef<HTMLTextAreaElement>(null);
+  const timeoutEnabled = request?.isBlocking !== false;
 
   const handleTimeout = useCallback(() => {
     if (request) {
@@ -95,6 +96,7 @@ const AskUserQuestionDialog = ({
     requestKey: request?.dialogToken ?? request?.requestId,
     timeoutSeconds,
     deadlineMs: request?.deadlineMs,
+    timeoutEnabled,
     onTimeout: handleTimeout,
   });
 
@@ -197,6 +199,7 @@ const AskUserQuestionDialog = ({
             remainingSeconds={remainingSeconds}
             isTimeWarning={isTimeWarning}
             question={currentQuestion}
+            showCountdown={timeoutEnabled}
             selectedLabels={currentAnswerSet}
             customInput={currentCustomInput}
             customInputRef={customInputRef}

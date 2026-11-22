@@ -6,6 +6,7 @@ import com.google.gson.JsonObject;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BooleanSupplier;
 
 /**
  * OpenCode CLI bridge.
@@ -43,5 +44,12 @@ public class OpenCodeCliBridge extends MarkerCliBridge {
             LOG.warn("[OpenCode] Failed to load session messages: " + e.getMessage());
             return Collections.emptyList();
         }
+    }
+
+    @Override
+    public List<JsonObject> getSessionMessages(String sessionId, String cwd,
+                                               BooleanSupplier cancellation) {
+        return getSessionMessagesWithCancellation(cancellation,
+                token -> new OpenCodeHistoryReader().getSessionMessages(sessionId, cwd, token), "OpenCode");
     }
 }

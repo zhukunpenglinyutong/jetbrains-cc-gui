@@ -59,8 +59,9 @@ export const HistoryItemActions = ({
       </button>
       <button
         className="history-delete-btn"
+        disabled={session.running}
         onClick={handleDelete}
-        title={t('history.deleteSession')}
+        title={session.running ? t('history.sessionInUse') : t('history.deleteSession')}
         aria-label={t('history.deleteSession')}
       >
         <span className="codicon codicon-trash"></span>

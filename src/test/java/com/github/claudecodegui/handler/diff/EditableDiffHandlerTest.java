@@ -73,6 +73,16 @@ public class EditableDiffHandlerTest {
         this.assertNativeApplyKeepsItsOrigin("reviewed-chat", true);
     }
 
+    /** A row undo refuses still shows what the tool recorded, one edit after another. */
+    @Test
+    public void joinsTheRecordedEditsForTheReadOnlyView() {
+        JsonArray operations = JsonParser.parseString("""
+                [{"oldString":"first old","newString":"first new"},{"newString":"second new"},{"oldString":"third old"}]
+                """).getAsJsonArray();
+        assertEquals("first old\nthird old", EditableDiffHandler.joinRecordedText(operations, "oldString"));
+        assertEquals("first new\nsecond new", EditableDiffHandler.joinRecordedText(operations, "newString"));
+    }
+
     private void assertNativeApplyKeepsItsOrigin(String originalSessionId, boolean failWrite) throws Exception {
         Path root = this.temporary.newFolder().toPath();
         Path first = Files.createDirectory(root.resolve("first"));

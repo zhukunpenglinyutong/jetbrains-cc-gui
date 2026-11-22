@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import ProviderBackupDialog, { type ProviderBackupMode } from '../ProviderBackupDialog';
 import styles from './style.module.less';
 
 interface ProviderListHeaderProps {
@@ -8,6 +10,7 @@ interface ProviderListHeaderProps {
   onPreviewImport: () => void;
   onSelectFile: () => void;
   onAdd: () => void;
+  addToast: React.ComponentProps<typeof ProviderBackupDialog>['addToast'];
 }
 
 /** Section header with the title, import menu and add-provider button. */
@@ -18,11 +21,15 @@ export default function ProviderListHeader({
   onPreviewImport,
   onSelectFile,
   onAdd,
+  addToast,
 }: ProviderListHeaderProps) {
   const { t } = useTranslation();
+  const [backupMode, setBackupMode] = useState<ProviderBackupMode | null>(null);
 
   return (
     <div className={styles.header}>
+      {backupMode && <ProviderBackupDialog engine="claude" mode={backupMode}
+        onClose={() => setBackupMode(null)} addToast={addToast} />}
       <h4 className={styles.title}>{t('settings.provider.allProviders')}</h4>
 
       <div className={styles.actions}>
@@ -37,6 +44,13 @@ export default function ProviderListHeader({
 
           {importMenuOpen && (
             <div className={styles.importMenu}>
+              <button type="button" className={styles.importMenuItem} onClick={() => {
+                onToggleImportMenu();
+                setBackupMode('import');
+              }}>
+                <span className="codicon codicon-file" />
+                {t('settings.provider.backup.importFile')}
+              </button>
               <div
                 className={styles.importMenuItem}
                 onClick={onPreviewImport}
@@ -74,6 +88,11 @@ export default function ProviderListHeader({
             </div>
           )}
         </div>
+
+        <button type="button" className={styles.btnSecondary} onClick={() => setBackupMode('export')}>
+          <span className="codicon codicon-cloud-upload" />
+          {t('settings.provider.backup.export')}
+        </button>
 
         <button
           className={styles.btnPrimary}

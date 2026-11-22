@@ -49,6 +49,12 @@ describe('FILE_MODIFY_TOOL_NAMES', () => {
     expect(isToolName('Edit', FILE_MODIFY_TOOL_NAMES)).toBe(true);
     expect(isToolName('Write', FILE_MODIFY_TOOL_NAMES)).toBe(true);
   });
+
+  it('recognizes JetBrains MCP file tools with and without their server prefix', () => {
+    for (const name of ['create_new_file', 'replace_text_in_file', 'mcp__jetbrains__replace_text_in_file']) {
+      expect(isToolName(name, FILE_MODIFY_TOOL_NAMES)).toBe(true);
+    }
+  });
 });
 
 describe('EDIT_TOOL_NAMES', () => {

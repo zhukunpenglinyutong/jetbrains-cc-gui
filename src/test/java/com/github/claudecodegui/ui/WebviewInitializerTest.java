@@ -400,6 +400,31 @@ public class WebviewInitializerTest {
     }
 
     @Test
+    public void disposedProjectCannotReloadOrRecreateNativeBrowser() throws Exception {
+        com.intellij.openapi.project.Project project = (com.intellij.openapi.project.Project) Proxy.newProxyInstance(
+                getClass().getClassLoader(), new Class<?>[]{com.intellij.openapi.project.Project.class},
+                (proxy, method, args) -> "isDisposed".equals(method.getName()) ? true : null);
+        WebviewInitializer.WebviewHost host = (WebviewInitializer.WebviewHost) Proxy.newProxyInstance(
+                getClass().getClassLoader(), new Class<?>[]{WebviewInitializer.WebviewHost.class},
+                (proxy, method, args) -> {
+                    if ("getProject".equals(method.getName())) {
+                        return project;
+                    }
+                    if ("isDisposed".equals(method.getName())) {
+                        return false;
+                    }
+                    throw new AssertionError("Disposed project reached " + method.getName());
+                });
+        WebviewInitializer initializer = new WebviewInitializer(host);
+
+        javax.swing.SwingUtilities.invokeAndWait(() -> {
+            initializer.reloadWebview("disposed_project");
+            initializer.recreateWebview("disposed_project");
+            Assert.assertFalse(initializer.canRecoverWebview());
+        });
+    }
+
+    @Test
     public void stalePreparationCannotCompleteOrReleaseItsReplacement() {
         WebviewInitializer.InitializationState state = new WebviewInitializer.InitializationState();
         int obsolete = state.begin();

@@ -12,6 +12,7 @@ import java.util.regex.Pattern;
 /** A validated baseline; null content means that no file existed before the edits. */
 public record FileChangeUndoPlan(String filePath, String content) {
     private static final Pattern HUNK = Pattern.compile("^@@ -(\\d+)(?:,(\\d+))? \\+(\\d+)(?:,(\\d+))? @@.*");
+    private static final String NOT_REVERSIBLE = "This edit cannot be reversed safely from its recorded details";
 
     /** Reverses recorded operations without changing any files. */
     public static FileChangeUndoPlan rebuild(String filePath, String content, JsonArray operations) {
@@ -26,14 +27,16 @@ public record FileChangeUndoPlan(String filePath, String content) {
             String oldText = string(op, "oldString");
             String newText = string(op, "newString");
             if ("add".equals(kind)) {
+                require(isOldTextKnown(op), NOT_REVERSIBLE);
                 require(before != null && normalize(before).equals(normalize(newText)), "Added file has changed since the recorded edit");
                 before = null;
             } else if ("delete".equals(kind)) {
-                require(!op.has("oldStringKnown") || op.get("oldStringKnown").isJsonNull() || op.get("oldStringKnown").getAsBoolean(),
-                        "The transcript did not record the deleted file content");
+                require(isOldTextKnown(op), "The transcript did not record the deleted file content");
                 require(before == null, "Deleted file has been recreated since the recorded edit");
                 before = oldText;
             } else {
+                // A legacy write names no prior content, so reversing it could only blank the file.
+                require(isOldTextKnown(op) && (!kind.isEmpty() || !oldText.isEmpty() || newText.isEmpty()), NOT_REVERSIBLE);
                 require(before != null, "Modified file no longer exists");
                 String patch = string(op, "patch");
                 if (!patch.isEmpty()) {
@@ -128,6 +131,10 @@ public record FileChangeUndoPlan(String filePath, String content) {
     private static boolean matchesAt(List<String> lines, List<String> expected, int position) {
         return position >= 0 && position + expected.size() <= lines.size()
                 && lines.subList(position, position + expected.size()).equals(expected);
+    }
+
+    private static boolean isOldTextKnown(JsonObject op) {
+        return !op.has("oldStringKnown") || op.get("oldStringKnown").isJsonNull() || op.get("oldStringKnown").getAsBoolean();
     }
 
     private static String string(JsonObject object, String key) {

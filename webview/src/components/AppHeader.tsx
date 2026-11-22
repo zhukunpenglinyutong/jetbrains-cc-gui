@@ -20,7 +20,6 @@ export const AppHeader = ({ sessionTitle, onNewSession, onUpdateHistoryTitle }: 
   const {
     currentView, setCurrentView,
     setSettingsInitialTab, setSettingsProviderSubTab,
-    setSearchOpen,
   } = useUIState();
   const { currentSessionId, setCustomSessionTitle } = useSession();
 
@@ -38,7 +37,6 @@ export const AppHeader = ({ sessionTitle, onNewSession, onUpdateHistoryTitle }: 
         setSettingsProviderSubTab(undefined);
         setCurrentView('settings');
       }}
-      onOpenSearch={() => setSearchOpen(true)}
       titleEditable
       onTitleChange={(newTitle) => {
         setCustomSessionTitle(newTitle);

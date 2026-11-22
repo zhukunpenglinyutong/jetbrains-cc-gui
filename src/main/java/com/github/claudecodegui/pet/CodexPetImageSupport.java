@@ -1,17 +1,27 @@
 package com.github.claudecodegui.pet;
 
+import com.intellij.openapi.diagnostic.Logger;
+import com.twelvemonkeys.imageio.plugins.webp.WebPImageReaderSpi;
+
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
+import javax.imageio.stream.FileImageInputStream;
 import javax.imageio.stream.ImageInputStream;
+import javax.imageio.stream.MemoryCacheImageInputStream;
+import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Locale;
 
 /** Lightweight signature and dimension checks for local and Petdex pet images. */
 public final class CodexPetImageSupport {
+
+    private static final Logger LOG = Logger.getInstance(CodexPetImageSupport.class);
 
     public static final int PETDEX_FRAME_WIDTH = 192;
     public static final int PETDEX_FRAME_HEIGHT = 208;
@@ -26,6 +36,90 @@ public final class CodexPetImageSupport {
     };
 
     private CodexPetImageSupport() {
+    }
+
+    /**
+     * Decode the first frame without changing the host registry or retaining the plugin classloader there.
+     * Returns null when no decoder can read the image.
+     */
+    public static BufferedImage readImage(byte[] bytes) throws IOException {
+        if (bytes == null || bytes.length == 0) {
+            return null;
+        }
+        return readWithFallback(() -> new MemoryCacheImageInputStream(new ByteArrayInputStream(bytes)), reader -> {
+            if (!hasSafeDimensions(new ImageDimensions(reader.getWidth(0), reader.getHeight(0)))) {
+                throw new UnsafeImageDimensionsException();
+            }
+            return reader.read(0);
+        });
+    }
+
+    /** Read the first frame's size through the same decoders as {@link #readImage(byte[])}. */
+    public static ImageDimensions readDecodedDimensions(Path path) throws IOException {
+        return readWithFallback(() -> new FileImageInputStream(path.toFile()),
+                reader -> new ImageDimensions(reader.getWidth(0), reader.getHeight(0)));
+    }
+
+    /**
+     * Try the IDE's registered decoders first, so WebP keeps using the IDE's libwebp reader where it exists,
+     * then the plugin-owned WebP decoder that the IDE registry cannot discover. A decoder that fails hands over
+     * to the next one: TwelveMonkeys rejects some valid lossless Petdex sheets that libwebp decodes.
+     */
+    private static <T> T readWithFallback(ImageSource source, ReaderStep<T> step) throws IOException {
+        List<ImageReader> readers = new ArrayList<>();
+        try {
+            collectReaders(source, readers);
+            for (ImageReader reader : readers) {
+                T result = tryReader(reader, source, step);
+                if (result != null) {
+                    return result;
+                }
+            }
+            return null;
+        } finally {
+            readers.forEach(ImageReader::dispose);
+        }
+    }
+
+    /** Collects into the caller's list so readers created before a probe failure are still disposed. */
+    private static void collectReaders(ImageSource source, List<ImageReader> readers) throws IOException {
+        try (ImageInputStream probe = source.open()) {
+            ImageIO.getImageReaders(probe).forEachRemaining(reader -> {
+                // ImageIO yields null for a provider whose reader could not be created.
+                if (reader != null) {
+                    readers.add(reader);
+                }
+            });
+            boolean bundledReaderRegistered = readers.stream()
+                    .anyMatch(reader -> reader.getOriginatingProvider() instanceof WebPImageReaderSpi);
+            WebPImageReaderSpi bundledProvider = new WebPImageReaderSpi();
+            if (!bundledReaderRegistered && canDecode(bundledProvider, probe)) {
+                readers.add(bundledProvider.createReaderInstance());
+            }
+        }
+    }
+
+    private static boolean canDecode(WebPImageReaderSpi provider, ImageInputStream probe) {
+        try {
+            return provider.canDecodeInput(probe);
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    /** Returns null when this reader fails, so the caller can hand the image to the next one. */
+    private static <T> T tryReader(ImageReader reader, ImageSource source, ReaderStep<T> step) throws IOException {
+        T result = null;
+        try (ImageInputStream input = source.open()) {
+            reader.setInput(input, true, true);
+            result = step.apply(reader);
+        } catch (UnsafeImageDimensionsException e) {
+            throw e;
+        } catch (IOException | RuntimeException | LinkageError e) {
+            // LinkageError covers IDE readers whose native library or plugin classes are unavailable.
+            LOG.debug("[CodexPet] Image decoder failed: " + reader.getClass().getName(), e);
+        }
+        return result;
     }
 
     public static String detectMimeType(Path path, byte[] bytes) {
@@ -259,6 +353,23 @@ public final class CodexPetImageSupport {
             }
         }
         return true;
+    }
+
+    @FunctionalInterface
+    private interface ImageSource {
+        ImageInputStream open() throws IOException;
+    }
+
+    @FunctionalInterface
+    private interface ReaderStep<T> {
+        T apply(ImageReader reader) throws IOException;
+    }
+
+    /** Rejects an oversized image outright instead of retrying it with another decoder. */
+    private static final class UnsafeImageDimensionsException extends IOException {
+        private UnsafeImageDimensionsException() {
+            super("INVALID_PET_IMAGE_DIMENSIONS");
+        }
     }
 
     public static final class ImageDimensions {

@@ -10,6 +10,14 @@ import com.google.gson.JsonObject;
  */
 public final class GrokContextUsageBuilder {
 
+    private static final String KEY_THINKING_TOKENS = "thinking_tokens";
+    private static final String KEY_CACHED_WRITE_TOKENS = "cached_write_tokens";
+    private static final String KEY_CACHED_WRITE_TOKENS_CAMEL = "cachedWriteTokens";
+    private static final String KEY_CACHE_WRITE_TOKENS_ALIAS = "cacheWriteTokens";
+    private static final String KEY_CACHE_READ_TOKENS_ALIAS = "cacheReadTokens";
+    private static final String KEY_CACHE_CREATION_INPUT_TOKENS = "cache_creation_input_tokens";
+    private static final String KEY_CACHE_READ_INPUT_TOKENS = "cache_read_input_tokens";
+
     private GrokContextUsageBuilder() {
     }
 
@@ -86,10 +94,10 @@ public final class GrokContextUsageBuilder {
     }
 
     /**
-     * Normalize usage to OpenAI snake_case ({@code total_tokens}, {@code input_tokens}, …).
-     * Primary path for [USAGE] after the bridge; camelCase ACP is mapped here as fallback.
+     * Normalizes a Grok usage JSON object to OpenAI snake_case keys.
      *
-     * @return new object with snake_case keys, or null if no token fields found
+     * @param usage Raw Grok usage JSON object
+     * @return normalized snake_case usage object, or null if no token fields are found
      */
     public static JsonObject normalizeUsageToSnakeCase(JsonObject usage) {
         if (usage == null) {
@@ -111,14 +119,26 @@ public final class GrokContextUsageBuilder {
                 usage,
                 "thought_tokens",
                 "thoughtTokens",
+                KEY_THINKING_TOKENS,
+                "thinkingTokens",
                 "reasoning_tokens",
                 "reasoningTokens"
         );
-        int cachedWrite = firstPositiveInt(usage, "cached_write_tokens", "cachedWriteTokens");
+        int cachedWrite = firstPositiveInt(
+                usage,
+                KEY_CACHED_WRITE_TOKENS,
+                KEY_CACHED_WRITE_TOKENS_CAMEL,
+                KEY_CACHE_WRITE_TOKENS_ALIAS,
+                KEY_CACHE_CREATION_INPUT_TOKENS,
+                "cacheCreationInputTokens"
+        );
         int cachedRead = firstPositiveInt(
                 usage,
                 "cached_read_tokens",
                 "cachedReadTokens",
+                KEY_CACHE_READ_TOKENS_ALIAS,
+                KEY_CACHE_READ_INPUT_TOKENS,
+                "cacheReadInputTokens",
                 "cached_tokens",
                 "cachedTokens"
         );
@@ -127,9 +147,15 @@ public final class GrokContextUsageBuilder {
             return null;
         }
 
+        // Snapshots always carry cache-inclusive input (cached_*_tokens are a subset of it), so
+        // normalizeTurnUsage can split the cache back out without guessing from the total.
+        int inclusiveInput = inputIncludesCache(usage)
+                ? Math.max(input, cachedRead + cachedWrite)
+                : input + cachedRead + cachedWrite;
+
         JsonObject out = new JsonObject();
-        if (input > 0) {
-            out.addProperty("input_tokens", input);
+        if (inclusiveInput > 0) {
+            out.addProperty("input_tokens", inclusiveInput);
         }
         if (output > 0) {
             out.addProperty("output_tokens", output);
@@ -138,54 +164,117 @@ public final class GrokContextUsageBuilder {
             out.addProperty("thought_tokens", thought);
         }
         if (cachedWrite > 0) {
-            out.addProperty("cached_write_tokens", cachedWrite);
+            out.addProperty(KEY_CACHED_WRITE_TOKENS, cachedWrite);
         }
         if (cachedRead > 0) {
             out.addProperty("cached_read_tokens", cachedRead);
         }
+        int contextWindow = firstPositiveInt(usage, "model_context_window", "maxTokens", "limit");
+        if (contextWindow > 0) {
+            out.addProperty("model_context_window", contextWindow);
+        }
+        // Reasoning is part of output (Grok reports totalTokens = inputTokens + outputTokens).
         int resolvedTotal = total > 0
                 ? total
-                : input + output + thought + cachedWrite + cachedRead;
+                : inclusiveInput + Math.max(output, thought);
         out.addProperty("total_tokens", resolvedTotal);
         return out;
     }
 
     /**
-     * Extract used-token total from a Grok/ACP usage JSON object.
-     * Prefers snake_case after {@link #normalizeUsageToSnakeCase}; dual-reads camelCase as fallback.
+     * Whether the reported input already counts the cached prompt tokens. Grok ACP camelCase
+     * {@code inputTokens} and OpenAI-style prompt tokens include them; only the Claude layout
+     * (snake {@code input_tokens} next to {@code cache_read_input_tokens} /
+     * {@code cache_creation_input_tokens}) reports cache reads and writes on top of the input.
+     */
+    static boolean inputIncludesCache(JsonObject usage) {
+        boolean hasSnakeInput = firstPositiveInt(usage, "input_tokens") > 0;
+        boolean hasClaudeCacheField =
+                firstPositiveInt(usage, KEY_CACHE_READ_INPUT_TOKENS, KEY_CACHE_CREATION_INPUT_TOKENS) > 0;
+        return !(hasSnakeInput && hasClaudeCacheField);
+    }
+
+    /**
+     * Normalizes whole-turn Grok usage into the canonical Claude turnUsage schema.
+     * Cache-inclusive input is split into non-cached input plus cache reads and writes.
+     *
+     * @param usage Raw Grok turn usage JSON object
+     * @return canonical Claude-schema turnUsage JSON object, or null if no token fields are found
+     */
+    public static JsonObject normalizeTurnUsage(JsonObject usage) {
+        if (usage == null) {
+            return null;
+        }
+        if (usage.has("usage") && usage.get("usage").isJsonObject()
+                && firstPositiveInt(usage, "total_tokens", "totalTokens", "input_tokens", "inputTokens") <= 0) {
+            JsonObject nested = normalizeTurnUsage(usage.getAsJsonObject("usage"));
+            if (nested != null) {
+                return nested;
+            }
+        }
+
+        int total = firstPositiveInt(usage, "total_tokens", "totalTokens");
+        int rawInput = firstPositiveInt(usage, "input_tokens", "inputTokens", "prompt_tokens", "promptTokens");
+        int output = firstPositiveInt(usage, "output_tokens", "outputTokens", "completion_tokens", "completionTokens");
+        int thinking = firstPositiveInt(
+                usage,
+                KEY_THINKING_TOKENS,
+                "thinkingTokens",
+                "thought_tokens",
+                "thoughtTokens",
+                "reasoning_tokens",
+                "reasoningTokens"
+        );
+        int cacheRead = firstPositiveInt(
+                usage,
+                KEY_CACHE_READ_INPUT_TOKENS,
+                "cacheReadInputTokens",
+                "cached_read_tokens",
+                "cachedReadTokens",
+                KEY_CACHE_READ_TOKENS_ALIAS,
+                "cached_tokens",
+                "cachedTokens"
+        );
+        int cacheWrite = firstPositiveInt(
+                usage,
+                KEY_CACHE_CREATION_INPUT_TOKENS,
+                "cacheCreationInputTokens",
+                KEY_CACHED_WRITE_TOKENS,
+                KEY_CACHED_WRITE_TOKENS_CAMEL,
+                KEY_CACHE_WRITE_TOKENS_ALIAS
+        );
+
+        if (total <= 0 && rawInput <= 0 && output <= 0 && thinking <= 0 && cacheRead <= 0 && cacheWrite <= 0) {
+            return null;
+        }
+
+        int nonCacheInput = inputIncludesCache(usage)
+                ? Math.max(0, rawInput - cacheRead - cacheWrite)
+                : rawInput;
+        int resolvedTotal = total > 0
+                ? total
+                : (nonCacheInput + cacheRead + cacheWrite + Math.max(output, thinking));
+
+        JsonObject out = new JsonObject();
+        out.addProperty("input_tokens", nonCacheInput);
+        out.addProperty(KEY_CACHE_READ_INPUT_TOKENS, cacheRead);
+        out.addProperty(KEY_CACHE_CREATION_INPUT_TOKENS, cacheWrite);
+        out.addProperty("output_tokens", output);
+        out.addProperty(KEY_THINKING_TOKENS, thinking);
+        out.addProperty("total_tokens", resolvedTotal);
+        return out;
+    }
+
+    /**
+     * Extracts the used-token total from a Grok or ACP usage JSON object.
+     *
+     * @param usage Grok or ACP usage JSON object
+     * @return extracted used token count
      */
     public static int extractUsedTokens(JsonObject usage) {
-        if (usage == null) {
-            return 0;
-        }
+        // A normalized snapshot always carries a total once any token field is present.
         JsonObject normalized = normalizeUsageToSnakeCase(usage);
-        if (normalized != null) {
-            int total = firstPositiveInt(normalized, "total_tokens");
-            if (total > 0) {
-                return total;
-            }
-            int used = 0;
-            used += firstPositiveInt(normalized, "input_tokens");
-            used += firstPositiveInt(normalized, "output_tokens");
-            used += firstPositiveInt(normalized, "thought_tokens");
-            used += firstPositiveInt(normalized, "cached_write_tokens");
-            used += firstPositiveInt(normalized, "cached_read_tokens");
-            if (used > 0) {
-                return used;
-            }
-        }
-        // Last-resort dual-read without normalize
-        int total = firstPositiveInt(usage, "total_tokens", "totalTokens");
-        if (total > 0) {
-            return total;
-        }
-        int used = 0;
-        used += firstPositiveInt(usage, "input_tokens", "inputTokens", "prompt_tokens", "promptTokens");
-        used += firstPositiveInt(usage, "output_tokens", "outputTokens", "completion_tokens", "completionTokens");
-        used += firstPositiveInt(usage, "thought_tokens", "thoughtTokens");
-        used += firstPositiveInt(usage, "cached_write_tokens", "cachedWriteTokens");
-        used += firstPositiveInt(usage, "cached_read_tokens", "cachedReadTokens");
-        return Math.max(0, used);
+        return normalized != null ? firstPositiveInt(normalized, "total_tokens") : 0;
     }
 
     /** First finite non-null number &gt; 0 among keys (or 0). Snake_case keys should be listed first. */

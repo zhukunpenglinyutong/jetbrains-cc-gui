@@ -1,7 +1,7 @@
 package com.github.claudecodegui.util;
 
-import com.github.claudecodegui.handler.SettingsHandler;
 import com.github.claudecodegui.handler.core.HandlerContext;
+import com.github.claudecodegui.handler.provider.ModelProviderHandler;
 import com.github.claudecodegui.session.ClaudeSession;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -350,8 +350,9 @@ public class MessageJsonConverter {
             }
 
             int usedTokens = TokenUsageUtils.extractContextTokens(lastUsage, currentProvider);
-            int fallbackMaxTokens = SettingsHandler.getModelContextLimit(
-                    currentProvider, handlerContext.getCurrentModel());
+            int fallbackMaxTokens = ModelProviderHandler.resolveContextLimit(
+                    currentProvider, handlerContext.getCurrentModel(),
+                    ModelProviderHandler.sessionCwd(handlerContext));
             int maxTokens = TokenUsageUtils.extractMaxTokens(lastUsage, fallbackMaxTokens);
             int percentage = Math.min(100, maxTokens > 0 ? (int) ((usedTokens * 100.0) / maxTokens) : 0);
 

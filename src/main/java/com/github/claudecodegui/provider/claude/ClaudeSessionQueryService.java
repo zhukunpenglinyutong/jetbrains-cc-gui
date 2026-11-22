@@ -2,6 +2,7 @@ package com.github.claudecodegui.provider.claude;
 
 import com.github.claudecodegui.bridge.EnvironmentConfigurator;
 import com.github.claudecodegui.bridge.NodeDetector;
+import com.github.claudecodegui.bridge.NodeProcessRunner;
 import com.github.claudecodegui.bridge.ProcessManager;
 import com.github.claudecodegui.provider.common.SessionHistoryIncompleteException;
 import com.github.claudecodegui.provider.common.SessionHistoryNotFoundException;
@@ -23,10 +24,12 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.BooleanSupplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.function.Supplier;
@@ -86,8 +89,13 @@ class ClaudeSessionQueryService {
     }
 
     List<JsonObject> getSessionMessages(String sessionId, String cwd) {
+        return getSessionMessages(sessionId, cwd, () -> false);
+    }
+
+    List<JsonObject> getSessionMessages(String sessionId, String cwd, BooleanSupplier cancellation) {
         try {
-            JsonObject jsonResult = runSessionQuery("getSession", sessionId, cwd, "getSessionMessages");
+            JsonObject jsonResult = runSessionQuery(
+                    "getSession", sessionId, cwd, "getSessionMessages", cancellation);
 
             if (jsonResult.has("missing") && jsonResult.get("missing").getAsBoolean()) {
                 throw new SessionHistoryNotFoundException(sessionId, cwd);
@@ -98,6 +106,7 @@ class ClaudeSessionQueryService {
                 if (jsonResult.has("messages")) {
                     JsonArray messagesArray = jsonResult.getAsJsonArray("messages");
                     for (var msg : messagesArray) {
+                        checkCancellation(cancellation);
                         messages.add(normalizeClaudeHistoryMessage(msg.getAsJsonObject()));
                     }
                 }
@@ -138,9 +147,14 @@ class ClaudeSessionQueryService {
      * @throws SessionHistoryNotFoundException when the transcript is missing
      */
     JsonObject getSessionMessagesPage(String sessionId, String cwd, Integer beforeTurn, int limit) {
+        return getSessionMessagesPage(sessionId, cwd, beforeTurn, limit, () -> false);
+    }
+
+    JsonObject getSessionMessagesPage(String sessionId, String cwd, Integer beforeTurn, int limit,
+                                      BooleanSupplier cancellation) {
         try {
             JsonObject jsonResult = runSessionQuery("getSessionPage", sessionId, cwd, "getSessionMessagesPage",
-                    beforeTurn == null ? "" : String.valueOf(beforeTurn), String.valueOf(limit));
+                    cancellation, beforeTurn == null ? "" : String.valueOf(beforeTurn), String.valueOf(limit));
 
             // Missing history must clear the stale ID without another bridge read.
             if (jsonResult.has("missing") && jsonResult.get("missing").getAsBoolean()) {
@@ -152,6 +166,7 @@ class ClaudeSessionQueryService {
                 if (jsonResult.has("messages")) {
                     JsonArray messagesArray = jsonResult.getAsJsonArray("messages");
                     for (int i = 0; i < messagesArray.size(); i++) {
+                        checkCancellation(cancellation);
                         messagesArray.set(i, normalizeClaudeHistoryMessage(messagesArray.get(i).getAsJsonObject()));
                     }
                 }
@@ -163,7 +178,7 @@ class ClaudeSessionQueryService {
                     : "Unknown error";
             log.warn("[getSessionMessagesPage] Page query failed: " + errorMsg);
             return null;
-        } catch (SessionHistoryNotFoundException e) {
+        } catch (CancellationException | SessionHistoryNotFoundException e) {
             throw e;
         } catch (Exception e) {
             log.warn("[getSessionMessagesPage] Page query error: " + e.getMessage(), e);
@@ -194,10 +209,31 @@ class ClaudeSessionQueryService {
     }
 
     private JsonObject runSessionQuery(String commandName, String sessionId, String cwd, String logPrefix) throws Exception {
-        return runSessionQuery(commandName, sessionId, cwd, logPrefix, new String[0]);
+        return runSessionQuery(commandName, sessionId, cwd, logPrefix, () -> false, new String[0]);
     }
 
     private JsonObject runSessionQuery(String commandName, String sessionId, String cwd, String logPrefix, String... extraArgs) throws Exception {
+        return runSessionQuery(commandName, sessionId, cwd, logPrefix, () -> false, extraArgs);
+    }
+
+    private JsonObject runSessionQuery(
+            String commandName,
+            String sessionId,
+            String cwd,
+            String logPrefix,
+            BooleanSupplier cancellation
+    ) throws Exception {
+        return runSessionQuery(commandName, sessionId, cwd, logPrefix, cancellation, new String[0]);
+    }
+
+    private JsonObject runSessionQuery(
+            String commandName,
+            String sessionId,
+            String cwd,
+            String logPrefix,
+            BooleanSupplier cancellation,
+            String... extraArgs
+    ) throws Exception {
         if (sessionId == null || !VALID_SESSION_ID.matcher(sessionId).matches()) {
             throw new IllegalArgumentException("Invalid sessionId: " + sessionId);
         }
@@ -235,68 +271,16 @@ class ClaudeSessionQueryService {
         // Gson MalformedJsonException: Unterminated string.
         envConfigurator.updateProcessEnvironment(pb, node);
 
-        // Use custom process execution with separate stderr draining (like executeMarkerQuery)
-        Process process = null;
-        long startTime = System.currentTimeMillis();
-        try {
-            process = pb.start();
-            final Process finalProcess = process;
-            processManager.registerProcess("claude-session-query", finalProcess);
+        // L5 fix: register with ProcessManager so cleanupAllProcesses sees this child.
+        // Use NodeProcessRunner which handles stdin/stdout/stderr properly with timeout
+        NodeProcessRunner.Result result = NodeProcessRunner.run(
+                prepareProcessBuilder(pb), processManager, "claude-session-query", null, processTimeoutSeconds, cancellation);
 
-            CompletableFuture<String> stdoutFuture = new CompletableFuture<>();
-            StringBuilder stdoutBuilder = new StringBuilder();
-            Thread stdoutThread = new Thread(() -> {
-                try (BufferedReader reader = new BufferedReader(
-                        new InputStreamReader(finalProcess.getInputStream(), StandardCharsets.UTF_8))) {
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        stdoutBuilder.append(line).append('\n');
-                    }
-                    stdoutFuture.complete(stdoutBuilder.toString());
-                } catch (IOException e) {
-                    stdoutFuture.completeExceptionally(e);
-                }
-            });
-            stdoutThread.setDaemon(true);
-            stdoutThread.start();
-
-            // Drain stderr in a daemon thread so the pipe buffer never fills
-            Thread stderrThread = new Thread(() -> {
-                try (BufferedReader errReader = new BufferedReader(
-                        new InputStreamReader(finalProcess.getErrorStream(), StandardCharsets.UTF_8))) {
-                    String errLine;
-                    while ((errLine = errReader.readLine()) != null) {
-                        log.debug("[" + logPrefix + "] [stderr] " + errLine);
-                    }
-                } catch (Exception e) {
-                    log.debug("[" + logPrefix + "] stderr drain exception: " + e.getMessage());
-                }
-            });
-            stderrThread.setDaemon(true);
-            stderrThread.start();
-
-            if (!process.waitFor(processTimeoutSeconds, TimeUnit.SECONDS)) {
-                PlatformUtils.terminateProcess(process);
-                throw new TimeoutException("Node.js process timed out after " + processTimeoutSeconds + " seconds");
-            }
-
-            int exitCode = process.exitValue();
-            log.debug("[" + logPrefix + "] Process exited with code: " + exitCode);
-
-            String outputStr;
-            try {
-                outputStr = stdoutFuture.get(2000, TimeUnit.MILLISECONDS);
-            } catch (TimeoutException e) {
-                throw new IOException("Node.js process exited but its stdout was still open after 2000 ms; refusing to use possibly truncated output");
-            } catch (ExecutionException e) {
-                throw new IOException("Failed to read Node.js process output: " + e.getCause().getMessage(), e.getCause());
-            }
-
-            outputStr = outputStr.trim();
-            log.debug("[" + logPrefix + "] Captured stdout length: " + outputStr.length());
-            if (outputStr.isEmpty()) {
-                log.warn("[" + logPrefix + "] STDOUT IS EMPTY! Exit code: " + exitCode);
-            }
+        String outputStr = result.output().trim();
+        log.debug("[" + logPrefix + "] Captured stdout length: " + outputStr.length());
+        if (outputStr.isEmpty()) {
+            log.warn("[" + logPrefix + "] STDOUT IS EMPTY! Exit code: " + result.exitCode());
+        }
         log.debug("[" + logPrefix + "] Raw output length: " + outputStr.length());
         if (log.isDebugEnabled()) {
             log.debug("[" + logPrefix + "] Raw output (first 300 chars): "
@@ -328,18 +312,17 @@ class ClaudeSessionQueryService {
         log.debug("[" + logPrefix + "] JSON parsed successfully, success="
                 + (jsonResult.has("success") ? jsonResult.get("success").getAsBoolean() : "null"));
         return jsonResult;
-            } finally {
-                if (process != null) {
-                    try {
-                        if (process.isAlive()) {
-                            PlatformUtils.terminateProcess(process);
-                        }
-                    } finally {
-                        processManager.unregisterProcess("claude-session-query", process);
-                    }
-                }
-            }
         }
+
+    ProcessBuilder prepareProcessBuilder(ProcessBuilder configured) {
+        return configured;
+    }
+
+    private void checkCancellation(BooleanSupplier cancellation) {
+        if (cancellation != null && cancellation.getAsBoolean()) {
+            throw new CancellationException("Claude session query was cancelled");
+        }
+    }
 
     static JsonObject normalizeClaudeHistoryMessage(JsonObject originalMessage) {
         if (originalMessage == null

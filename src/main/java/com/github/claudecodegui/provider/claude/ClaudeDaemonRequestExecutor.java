@@ -86,6 +86,7 @@ class ClaudeDaemonRequestExecutor {
                 boolean hasAttachments = attachments != null && !attachments.isEmpty() && params.has("attachments");
                 log.debug("[ClaudeDaemonRequestExecutor] envFile before buildDaemonEnv=" + envFile);
                 params.add("env", ClaudeBridgeUtils.buildDaemonEnv(cwd, envFile));
+                params.addProperty("executionScope", callback.executionScope());
 
                 String method = hasAttachments ? "claude.sendWithAttachments" : "claude.send";
                 log.info("[DaemonExecutor] Sending via daemon: " + method);
@@ -174,18 +175,18 @@ class ClaudeDaemonRequestExecutor {
                 result.finalResult = assistantContent.toString();
                 result.messageCount = result.messages.size();
 
-                if (!hadSendError.get()) {
+                if (wasAborted.get()) {
+                    // sendAbort() detached this request without awaiting the daemon's acknowledgement.
+                    // That also settles an earlier deferred send error.
+                    long elapsed = System.currentTimeMillis() - startTime;
+                    log.info("[DaemonExecutor] Request was aborted by user (elapsed: " + elapsed + "ms)");
+                    result.success = false;
+                    result.error = "User interrupted";
+                    result.cancelled = true;
+                    callback.onComplete(result);
+                } else if (!hadSendError.get()) {
                     result.success = success != null && success;
                     if (result.success) {
-                        callback.onComplete(result);
-                    } else if (wasAborted.get()) {
-                        // User manually aborted — treat as graceful completion, not an error.
-                        // This matches how Codex handles interruptions (callback.onComplete with
-                        // success=false instead of callback.onError), so the UI does not show
-                        // an error message or toast notification.
-                        long elapsed = System.currentTimeMillis() - startTime;
-                        log.info("[DaemonExecutor] Request was aborted by user (elapsed: " + elapsed + "ms)");
-                        result.error = "User interrupted";
                         callback.onComplete(result);
                     } else {
                         String errorMsg = "Daemon command failed";
@@ -210,6 +211,7 @@ class ClaudeDaemonRequestExecutor {
                     log.info("[DaemonExecutor] Request was aborted by user (caught exception, elapsed: " + elapsed + "ms)");
                     result.success = false;
                     result.error = "User interrupted";
+                    result.cancelled = true;
                     callback.onComplete(result);
                 } else if (!hadSendError.get()) {
                     result.success = false;

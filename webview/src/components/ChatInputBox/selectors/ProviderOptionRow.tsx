@@ -1,4 +1,3 @@
-import { useTranslation } from 'react-i18next';
 import type { ProviderInfo } from '../types';
 import { ProviderModelIcon } from '../../shared/ProviderModelIcon';
 
@@ -29,8 +28,6 @@ export const ProviderOptionRow = ({
   onActivate,
   quotaId,
 }: ProviderOptionRowProps) => {
-  const { t } = useTranslation();
-
   return (
     <div
       className={`selector-option ${isSelected ? 'selected' : ''} ${!provider.enabled ? 'disabled' : ''}`}
@@ -60,11 +57,6 @@ export const ProviderOptionRow = ({
       <span className="provider-option-trailing">
         {isSelected && (
           <span className="provider-active-dot" aria-hidden="true" />
-        )}
-        {provider.beta && (
-          <span className="provider-beta-badge">
-            {t('providers.beta.badge', { defaultValue: 'Beta' })}
-          </span>
         )}
         {provider.id === 'codex' && (
           <span

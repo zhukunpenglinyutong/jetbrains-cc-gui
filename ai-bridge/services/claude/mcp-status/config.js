@@ -104,6 +104,7 @@ export const ALLOWED_ENV_VARS = new Set([
   'SYSTEMROOT',
   'WINDIR',
   'COMSPEC',
+  'PATHEXT',
   // XDG specification
   'XDG_CONFIG_HOME',
   'XDG_DATA_HOME',

@@ -28,7 +28,7 @@ export function useCodexSessionEdits(provider: string, sessionId: string | null,
     if (provider !== 'codex' || !sessionId || streaming) return;
     const requestId = `session-edits-${crypto.randomUUID()}`;
     pending.current = requestId;
-    sendToJava('codex_native_read_thread', { threadId: sessionId, requestId, params: { includeTurns: true, fileChangesOnly: true } });
+    sendToJava('codex_native_read_thread', { threadId: sessionId, requestId, params: { fileChangesOnly: true } });
   }, [provider, sessionId, streaming]);
 
   return useMemo(() => {

@@ -1,5 +1,6 @@
 package com.github.claudecodegui.session;
 
+import com.github.claudecodegui.util.UserMessageSanitizer;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -54,18 +55,19 @@ public class MessageParser {
         }
 
         if ("user".equals(type)) {
-            String content = extractMessageContent(msg);
+            String content = UserMessageSanitizer.sanitizeUserFacingText(extractMessageContent(msg));
+            JsonObject sanitizedRaw = sanitizeUserRawMessage(rawMessage);
             // Check if it contains a tool_result
             if (content == null || content.trim().isEmpty()) {
-                if (hasToolResult(rawMessage)) {
-                    return new ClaudeSession.Message(ClaudeSession.Message.Type.USER, "[tool_result]", rawMessage);
+                if (hasToolResult(sanitizedRaw)) {
+                    return new ClaudeSession.Message(ClaudeSession.Message.Type.USER, "[tool_result]", sanitizedRaw);
                 }
-                if (hasImageContent(rawMessage)) {
-                    return new ClaudeSession.Message(ClaudeSession.Message.Type.USER, "", rawMessage);
+                if (hasImageContent(sanitizedRaw)) {
+                    return new ClaudeSession.Message(ClaudeSession.Message.Type.USER, "", sanitizedRaw);
                 }
                 return null;
             }
-            return new ClaudeSession.Message(ClaudeSession.Message.Type.USER, content, rawMessage);
+            return new ClaudeSession.Message(ClaudeSession.Message.Type.USER, content, sanitizedRaw);
         } else if ("assistant".equals(type)) {
             String content = extractMessageContent(msg);
             return new ClaudeSession.Message(ClaudeSession.Message.Type.ASSISTANT, content, rawMessage);
@@ -85,6 +87,78 @@ public class MessageParser {
             return msg.getAsJsonObject("raw");
         }
         return msg;
+    }
+
+    /**
+     * Sanitize user-facing text blocks inside the raw message payload so
+     * frontend renderers (which inspect {@code raw.message.content}) do not
+     * display appended system/IDE/Grok rules context.
+     */
+    private static JsonObject sanitizeUserRawMessage(JsonObject rawMessage) {
+        if (rawMessage == null) {
+            return null;
+        }
+        JsonObject target = rawMessage.has("message") && rawMessage.get("message").isJsonObject()
+                ? rawMessage.getAsJsonObject("message")
+                : rawMessage;
+        if (!target.has("content") || target.get("content").isJsonNull()) {
+            return rawMessage;
+        }
+        JsonElement contentEl = target.get("content");
+        if (contentEl.isJsonPrimitive() && contentEl.getAsJsonPrimitive().isString()) {
+            String original = contentEl.getAsString();
+            String sanitized = UserMessageSanitizer.sanitizeUserFacingText(original);
+            if (sanitized != null && !sanitized.equals(original)) {
+                JsonObject copy = rawMessage.deepCopy();
+                JsonObject copyTarget = copy.has("message") && copy.get("message").isJsonObject()
+                        ? copy.getAsJsonObject("message")
+                        : copy;
+                copyTarget.addProperty("content", sanitized);
+                return copy;
+            }
+            return rawMessage;
+        }
+        if (contentEl.isJsonArray()) {
+            JsonArray arr = contentEl.getAsJsonArray();
+            boolean changed = false;
+            for (int i = 0; i < arr.size(); i++) {
+                JsonElement el = arr.get(i);
+                if (el.isJsonObject()) {
+                    JsonObject block = el.getAsJsonObject();
+                    if (block.has("type") && "text".equals(block.get("type").getAsString())
+                            && block.has("text") && !block.get("text").isJsonNull()) {
+                        String orig = block.get("text").getAsString();
+                        String san = UserMessageSanitizer.sanitizeUserFacingText(orig);
+                        if (san != null && !san.equals(orig)) {
+                            changed = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (!changed) {
+                return rawMessage;
+            }
+            JsonObject copy = rawMessage.deepCopy();
+            JsonObject copyTarget = copy.has("message") && copy.get("message").isJsonObject()
+                    ? copy.getAsJsonObject("message")
+                    : copy;
+            JsonArray copyArr = copyTarget.getAsJsonArray("content");
+            for (int i = 0; i < copyArr.size(); i++) {
+                JsonElement el = copyArr.get(i);
+                if (el.isJsonObject()) {
+                    JsonObject block = el.getAsJsonObject();
+                    if (block.has("type") && "text".equals(block.get("type").getAsString())
+                            && block.has("text") && !block.get("text").isJsonNull()) {
+                        String orig = block.get("text").getAsString();
+                        String san = UserMessageSanitizer.sanitizeUserFacingText(orig);
+                        block.addProperty("text", san != null ? san : "");
+                    }
+                }
+            }
+            return copy;
+        }
+        return rawMessage;
     }
 
     /**

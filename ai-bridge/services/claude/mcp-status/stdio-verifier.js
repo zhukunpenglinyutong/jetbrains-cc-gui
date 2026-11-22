@@ -6,8 +6,9 @@
 import { spawn } from 'child_process';
 import { MCP_STDIO_VERIFY_TIMEOUT, createSafeEnv } from './config.js';
 import { log } from './logger.js';
-import { validateCommand, hasUnsafeShellMetacharacters } from './command-validator.js';
+import { validateCommand } from './command-validator.js';
 import { safeKillProcess, createProcessHandlers, sendInitializeRequest } from './process-manager.js';
+import { prepareStdioLaunch, resolveWindowsCommand } from './process-launcher.js';
 
 /**
  * Verify the connection status of an STDIO-based MCP server
@@ -16,6 +17,8 @@ import { safeKillProcess, createProcessHandlers, sendInitializeRequest } from '.
  * @returns {Promise<Object>} Server status info { name, status, serverInfo, error? }
  */
 export async function verifyStdioServerStatus(serverName, serverConfig) {
+  const env = createSafeEnv(serverConfig.env);
+  const launch = await resolveWindowsCommand(serverConfig.command, env);
   return new Promise((resolve) => {
     let resolved = false;
     let child = null;
@@ -28,7 +31,6 @@ export async function verifyStdioServerStatus(serverName, serverConfig) {
 
     const command = serverConfig.command;
     const args = serverConfig.args || [];
-    const env = createSafeEnv(serverConfig.env);
 
     // Check if a command is specified
     if (!command) {
@@ -70,34 +72,23 @@ export async function verifyStdioServerStatus(serverName, serverConfig) {
 
     // Attempt to spawn the process
     try {
-      // Some commands on Windows require a shell
-      const useShell = process.platform === 'win32' &&
-                      (command.endsWith('.cmd') || command.endsWith('.bat') ||
-                       command === 'npx' || command === 'npm' ||
-                       command === 'pnpm' || command === 'yarn');
+      const prepared = prepareStdioLaunch(launch, args);
+      const useShell = launch.useShell;
 
       const spawnOptions = {
         env,
         stdio: ['pipe', 'pipe', 'pipe'],
+        cwd: serverConfig.cwd || undefined,
         // Hide the console window on Windows
         windowsHide: true
       };
 
       if (useShell) {
-        // Security (G): with shell:true Node concatenates command+args into one string that
-        // cmd.exe re-parses, so a metacharacter in any externally-sourced arg becomes command
-        // injection. Refuse to launch when that risk is present instead of executing it.
-        const unsafe = [command, ...args].find(hasUnsafeShellMetacharacters);
-        if (unsafe) {
-          log('warn', `[MCP Verify] Refusing shell launch for ${serverName}: command/args contain shell metacharacters`);
-          finalize('failed', null, 'Command or args contain unsafe shell metacharacters');
-          return;
-        }
         spawnOptions.shell = true;
         log('debug', '[MCP Verify] Using shell for command:', command);
       }
 
-      child = spawn(command, args, spawnOptions);
+      child = spawn(prepared.command, prepared.args, spawnOptions);
     } catch (spawnError) {
       log('debug', `Failed to spawn process for ${serverName}:`, spawnError.message);
       clearTimeout(timeoutId);

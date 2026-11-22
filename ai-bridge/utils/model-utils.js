@@ -36,11 +36,11 @@ export function mapModelIdToSdkName(modelId) {
  *
  * Prefer the exact resolved id (e.g. 'claude-opus-4-6[1m]' or a provider
  * mapping like 'MiniMax-M2.5') over the family alias from mapModelIdToSdkName.
- * The alias ('opus') only works if the CLI can read ANTHROPIC_DEFAULT_OPUS_MODEL,
- * but buildWebviewControlledSettingsOverride blanks that variable so stale
- * settings.json values cannot leak in - which also blanks the per-request value
- * and makes 'opus' silently resolve to the CLI's default Opus. Passing the
- * exact id sidesteps env precedence entirely.
+ * The alias ('opus') resolves through ANTHROPIC_DEFAULT_OPUS_MODEL in whichever
+ * layer the CLI honors (the child env when CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST
+ * is set, the inline settings override otherwise), and falls back to the CLI's
+ * default Opus wherever that tier is blank. Passing the exact id sidesteps env
+ * precedence entirely.
  *
  * @param {string|null} modelId - Original model ID from the webview
  * @param {string|null} resolvedModelId - Output of resolveModelFromSettings
@@ -127,8 +127,9 @@ export function resolveModelFromSettings(modelId, userEnv) {
  * model name through these keys. This lists every key that takes part in resolution.
  *
  * ANTHROPIC_MODEL is deliberately excluded: it means "global default model" and belongs
- * to the current request rather than settings.json, so setModelEnvironmentVariables()
- * owns it exclusively on every turn (keeping stale values from issue #1509 at bay).
+ * to the current request rather than settings.json, so it is only ever set from the
+ * request-resolved model (setModelEnvironmentVariables() and the inline settings override),
+ * never from a settings.json copy (keeping stale values from issue #1509 at bay).
  */
 export const MODEL_TIER_ENV_KEYS = Object.freeze([
   'ANTHROPIC_DEFAULT_FABLE_MODEL',
@@ -163,6 +164,35 @@ export function readConfiguredModelTiers(settingsEnv) {
 }
 
 /**
+ * Pick the tier env var a request model owns, i.e. the one the CLI consults to resolve
+ * the matching SDK alias. Shared by setModelEnvironmentVariables() and the inline settings
+ * override so both layers always agree on which tier carries the request.
+ *
+ * @param {string} baseModelId - internal model ID from the webview (e.g. 'claude-opus-4-7[1m]')
+ * @returns {string|null} the tier env var name, or null for a missing model ID
+ */
+export function resolveModelTierEnvKey(baseModelId) {
+  if (!baseModelId || typeof baseModelId !== 'string') {
+    return null;
+  }
+
+  const lowerBase = baseModelId.toLowerCase();
+  if (lowerBase.includes('fable')) {
+    return 'ANTHROPIC_DEFAULT_FABLE_MODEL';
+  }
+  if (lowerBase.includes('opus')) {
+    return 'ANTHROPIC_DEFAULT_OPUS_MODEL';
+  }
+  if (lowerBase.includes('haiku')) {
+    return 'ANTHROPIC_DEFAULT_HAIKU_MODEL';
+  }
+  // Covers 'sonnet' and any non-Anthropic model names (e.g. 'qwen3.5-plus', 'deepseek-v3'):
+  // mapModelIdToSdkName() defaults to 'sonnet' for unknown models, so the CLI looks up
+  // ANTHROPIC_DEFAULT_SONNET_MODEL for the actual model name.
+  return 'ANTHROPIC_DEFAULT_SONNET_MODEL';
+}
+
+/**
  * Set SDK environment variables based on the model name.
  * The Claude SDK uses short names (opus/sonnet/haiku) as model selectors,
  * while the specific version is determined by ANTHROPIC_DEFAULT_*_MODEL environment variables.
@@ -192,9 +222,10 @@ export function setModelEnvironmentVariables(modelId, baseModelId, settingsEnv) 
   // means a subagent declaring `model: opus` cannot find ANTHROPIC_DEFAULT_OPUS_MODEL and
   // falls back to the CLI's built-in Anthropic model name. Third-party endpoints do not
   // recognize that name and tend to silently route to some default model without erroring.
-  // This is the only path that actually takes effect: measurements show the inline
-  // `--settings` env block is not adopted by the CLI (see buildWebviewControlledSettingsOverride),
-  // so tiers have to travel through process env.
+  // process.env becomes the CLI child env (buildCliEnv), which is the layer the CLI honors
+  // when CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST is set; without that flag the inline settings
+  // override (buildWebviewControlledSettingsOverride) is honored instead. It carries the same
+  // request model and settings.json tiers, but blanks anything else left in process.env.
   //
   // Why clearing matters just as much: the daemon is long-lived, and daemon.js's savedEnv
   // restore skips these webview-controlled vars (isWebviewControlledEnvVar), so stale values
@@ -216,31 +247,15 @@ export function setModelEnvironmentVariables(modelId, baseModelId, settingsEnv) 
     }
   }
 
-  // Use baseModelId to determine model category (which env var to set).
-  // This is necessary when modelId is a custom name like 'MiniMax-M2.5'
-  // that doesn't contain 'opus'/'haiku'/'sonnet'.
-  const lowerBase = (baseModelId || modelId).toLowerCase();
-
   process.env.ANTHROPIC_MODEL = modelId;
 
-  // Set the corresponding environment variable based on model type
-  // so the SDK knows which specific version to use
-  if (lowerBase.includes('fable')) {
-    process.env.ANTHROPIC_DEFAULT_FABLE_MODEL = modelId;
-    console.log('[MODEL_ENV] Set ANTHROPIC_DEFAULT_FABLE_MODEL =', modelId);
-  } else if (lowerBase.includes('opus')) {
-    process.env.ANTHROPIC_DEFAULT_OPUS_MODEL = modelId;
-    console.log('[MODEL_ENV] Set ANTHROPIC_DEFAULT_OPUS_MODEL =', modelId);
-  } else if (lowerBase.includes('haiku')) {
-    process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL = modelId;
-    console.log('[MODEL_ENV] Set ANTHROPIC_DEFAULT_HAIKU_MODEL =', modelId);
-  } else {
-    // Covers 'sonnet' and any non-Anthropic model names (e.g. 'qwen3.5-plus', 'deepseek-v3')
-    // Since mapModelIdToSdkName() defaults to 'sonnet' for unknown models,
-    // the SDK will look up ANTHROPIC_DEFAULT_SONNET_MODEL for the actual model name
-    process.env.ANTHROPIC_DEFAULT_SONNET_MODEL = modelId;
-    console.log('[MODEL_ENV] Set ANTHROPIC_DEFAULT_SONNET_MODEL =', modelId);
-  }
+  // Use baseModelId to determine which tier the request owns. This is necessary when
+  // modelId is a custom name like 'MiniMax-M2.5' that doesn't contain 'opus'/'haiku'/'sonnet'.
+  const tierKey = resolveModelTierEnvKey(
+    typeof baseModelId === 'string' && baseModelId ? baseModelId : modelId
+  );
+  process.env[tierKey] = modelId;
+  console.log(`[MODEL_ENV] Set ${tierKey} =`, modelId);
 }
 
 // Note: getClaudeCliPath() has been removed.

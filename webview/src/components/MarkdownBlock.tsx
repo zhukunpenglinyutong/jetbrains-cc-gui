@@ -12,6 +12,7 @@ import { useMarkdownFileLinkTooltip } from '../hooks/useMarkdownFileLinkTooltip'
 import {
   decorateExistingAnchors,
   linkifyHtml,
+  normalizeFileLinkHref,
 } from '../utils/linkify';
 import {
   getLinkifyCapabilities,
@@ -24,6 +25,7 @@ import { ImagePreviewOverlay } from './MarkdownBlock/ImagePreviewOverlay';
 import hljs from 'highlight.js/lib/core';
 import bash from 'highlight.js/lib/languages/bash';
 import css from 'highlight.js/lib/languages/css';
+import dart from 'highlight.js/lib/languages/dart';
 import diff from 'highlight.js/lib/languages/diff';
 import dockerfile from 'highlight.js/lib/languages/dockerfile';
 import go from 'highlight.js/lib/languages/go';
@@ -40,7 +42,6 @@ import sql from 'highlight.js/lib/languages/sql';
 import typescript from 'highlight.js/lib/languages/typescript';
 import xml from 'highlight.js/lib/languages/xml';
 import yaml from 'highlight.js/lib/languages/yaml';
-import 'highlight.js/styles/github-dark.css';
 import 'katex/dist/katex.css';
 import { markedHighlight } from 'marked-highlight';
 import { copyToClipboard } from '../utils/copyUtils';
@@ -83,6 +84,10 @@ function isAllowedHrefValue(value: string): boolean {
     return true;
   }
 
+  if (normalizeFileLinkHref(trimmed)) {
+    return true;
+  }
+
   if (!URI_SCHEME_REGEX.test(trimmed)) {
     return true;
   }
@@ -120,6 +125,7 @@ const MARKDOWN_LINK_SANITIZE_OPTIONS = {
 const highlightLanguages: Array<[string, Parameters<typeof hljs.registerLanguage>[1]]> = [
   ['bash', bash],
   ['css', css],
+  ['dart', dart],
   ['diff', diff],
   ['dockerfile', dockerfile],
   ['go', go],
@@ -147,6 +153,7 @@ hljs.registerAliases(['ts', 'tsx'], { languageName: 'typescript' });
 hljs.registerAliases(['sh', 'zsh'], { languageName: 'bash' });
 hljs.registerAliases(['html', 'xhtml', 'svg'], { languageName: 'xml' });
 hljs.registerAliases(['yml'], { languageName: 'yaml' });
+hljs.registerAliases(['flutter'], { languageName: 'dart' });
 
 // Configure marked to use syntax highlighting
 marked.use(
@@ -697,6 +704,7 @@ const BlockSection = memo(function BlockSection({
   containerRef,
 }: BlockSectionProps) {
   const renderedSource = useStreamingHighlightSource(source, isStreamingTail);
+  const sectionRef = useRef<HTMLDivElement>(null);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => {
     if (copiedTimer.current !== null) clearTimeout(copiedTimer.current);
@@ -736,13 +744,27 @@ const BlockSection = memo(function BlockSection({
     committedHtmlRef.current !== html && containerRef.current
       ? captureRangeOffsets(containerRef.current)
       : null;
+  // Keyboard focus gets the same rescue: the rewrite also removes a focused
+  // copy button, so note its index while the old button is still in place.
+  // Reading focus here instead of tracking blur keeps this independent of
+  // whether the browser fires blur for removed nodes (Chromium does, jsdom
+  // does not) and of React dropping events during commit.
+  const focusedCopyIndex =
+    committedHtmlRef.current !== html && sectionRef.current
+      ? Array.from(sectionRef.current.querySelectorAll('.copy-code-btn')).indexOf(document.activeElement as Element)
+      : -1;
 
   useLayoutEffect(() => {
     committedHtmlRef.current = html;
     if (rescued && containerRef.current) {
       restoreRangeOffsets(containerRef.current, rescued);
     }
-  }, [html, containerRef, rescued]);
+    // Only restore focus the rewrite dropped; a move to another control wins.
+    if (focusedCopyIndex >= 0 && document.activeElement === document.body) {
+      sectionRef.current?.querySelectorAll<HTMLButtonElement>('.copy-code-btn')[focusedCopyIndex]
+        ?.focus({ preventScroll: true });
+    }
+  }, [html, containerRef, rescued, focusedCopyIndex]);
 
   const copyLatestCode = async (event: React.MouseEvent<HTMLDivElement> | React.KeyboardEvent<HTMLDivElement>) => {
     if (source === renderedSource) return;
@@ -763,7 +785,15 @@ const BlockSection = memo(function BlockSection({
     }
   };
 
-  return <div className="md-block" onClick={copyLatestCode} onKeyDown={copyLatestCode} dangerouslySetInnerHTML={{ __html: html }} />;
+  return (
+    <div
+      ref={sectionRef}
+      className="md-block"
+      onClick={copyLatestCode}
+      onKeyDown={copyLatestCode}
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
 });
 
 // Copy icon SVG (hoisted to module scope to avoid recreation on each render)

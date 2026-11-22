@@ -42,6 +42,15 @@ describe('buildResetTransientUiState', () => {
     expect(clearQueuedMessages).toHaveBeenCalledTimes(1);
   });
 
+  it('drops the restored-history banner because a session reset retires that restore', () => {
+    const setStartupHistoryLoadState = vi.fn();
+    const reset = buildResetTransientUiState(buildOptions({ setStartupHistoryLoadState }));
+
+    reset();
+
+    expect(setStartupHistoryLoadState).toHaveBeenCalledWith(null);
+  });
+
   it('resets without a queue clearer when the option is absent', () => {
     const reset = buildResetTransientUiState(buildOptions());
 

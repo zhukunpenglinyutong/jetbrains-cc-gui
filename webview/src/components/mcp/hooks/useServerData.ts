@@ -15,6 +15,7 @@ import {
   resolvePersistedCardKey,
   type ServerCardIndex,
 } from '../serverCardKey';
+import { isServerEnabled } from '../utils/serverUtils';
 
 const TERMINAL_DISCONNECT_STATUSES = new Set<McpServerStatusInfo['status']>([
   'failed',
@@ -115,7 +116,7 @@ export interface UseServerDataReturn {
   setExpandedServers: React.Dispatch<React.SetStateAction<Set<string>>>;
 
   // Data loading functions
-  loadServers: () => void;
+  loadServers: (refreshExpandedTools?: boolean) => void;
   loadServerStatus: (serverNames?: string[]) => void;
   loadServerTools: (server: McpServer, forceRefresh?: boolean) => void;
 }
@@ -136,11 +137,18 @@ export function useServerData({
   const [loading, setLoading] = useState(true);
   const [statusLoading, setStatusLoading] = useState(false);
   const [serverTools, setServerToolsState] = useState<ServerToolsState>({});
-  const [expandedServers, setExpandedServers] = useState<Set<string>>(new Set());
+  const [expandedServers, setExpandedServersState] = useState<Set<string>>(new Set());
 
   // Refs
   const refreshTimersRef = useRef<number[]>([]);
   const serversRef = useRef<McpServer[]>([]);
+  const expandedServersRef = useRef<Set<string>>(new Set());
+  const refreshExpandedToolsRef = useRef(false);
+  const setExpandedServers = useCallback((value: React.SetStateAction<Set<string>>) => {
+    const next = typeof value === 'function' ? value(expandedServersRef.current) : value;
+    expandedServersRef.current = next;
+    setExpandedServersState(next);
+  }, []);
   const terminalStatusNamesRef = useRef<Set<string>>(new Set());
   // Card keys of the current list, and the cards waiting for a tools response, keyed by
   // the server id the bridge will report that response under. See ../serverCardKey.
@@ -237,7 +245,9 @@ export function useServerData({
   }, [cacheKeys, setServerTools]);
 
   // Load server list
-  const loadServers = useCallback(() => {
+  const loadServers = useCallback((refreshExpandedTools = false) => {
+    // A plain reload must not cancel a refresh that is still waiting for its catalog.
+    refreshExpandedToolsRef.current = refreshExpandedToolsRef.current || refreshExpandedTools;
     setLoading(true);
     onLog(
       t('mcp.logs.loadingServers'),
@@ -415,6 +425,8 @@ export function useServerData({
       return hasValidCache;
     };
 
+    // A refresh from a previous provider cannot request tools in this catalog.
+    refreshExpandedToolsRef.current = false;
     // Try loading data from cache first
     const hasCache = loadFromCache();
 
@@ -435,7 +447,7 @@ export function useServerData({
     return () => {
       clearRefreshTimers();
     };
-  }, [cacheKeys, isCodexMode, loadServers, loadServerStatus, t, onLog, clearToolsForTerminalStatuses, setServerTools]);
+  }, [cacheKeys, isCodexMode, loadServers, loadServerStatus, t, onLog, clearToolsForTerminalStatuses, setServerTools, setExpandedServers]);
 
   // Register server list update callback
   useEffect(() => {
@@ -449,7 +461,13 @@ export function useServerData({
         // Secrets (env/headers) are stripped — the live state still holds them.
         writeCache(cacheKeys.SERVERS, toCacheableServers(serverList));
         onLog(t('mcp.logs.loadedServersSuccess', { count: serverList.length }), 'success');
+        if (refreshExpandedToolsRef.current) {
+          refreshExpandedToolsRef.current = false;
+          const expanded = serverList.find(server => expandedServersRef.current.has(server.id));
+          if (expanded && isServerEnabled(expanded, isCodexMode)) loadServerTools(expanded, true);
+        }
       } catch (error) {
+        refreshExpandedToolsRef.current = false;
         console.error('[McpSettings] Failed to parse servers:', error);
         setLoading(false);
         onLog(t('mcp.logs.loadedServersFailed', { error: String(error) }), 'error');
@@ -605,7 +623,7 @@ export function useServerData({
       }
       window.refreshMcpServers = undefined;
     };
-  }, [isCodexMode, t, onLog, cacheKeys, clearToolsForTerminalStatuses, setServers, loadServers, loadServerStatus]);
+  }, [isCodexMode, t, onLog, cacheKeys, clearToolsForTerminalStatuses, setServers, loadServers, loadServerStatus, loadServerTools]);
 
   return {
     // State

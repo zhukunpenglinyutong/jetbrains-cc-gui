@@ -3,12 +3,14 @@ package com.github.claudecodegui.handler.diff;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.util.EditorFileUtils;
+import com.github.claudecodegui.util.WslPathUtil;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.vfs.VirtualFile;
 
 import java.io.File;
+import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -40,13 +42,18 @@ public class RefreshFileHandler implements DiffActionHandler {
     public void handle(String type, String content) {
         try {
             JsonObject json = gson.fromJson(content, JsonObject.class);
-            String filePath = json.has("filePath") ? json.get("filePath").getAsString() : null;
+            String requestedPath = json.has("filePath") ? json.get("filePath").getAsString() : null;
 
-            if (filePath == null || filePath.isEmpty()) {
+            if (requestedPath == null || requestedPath.isEmpty()) {
                 LOG.warn("refresh_file: filePath is empty");
                 return;
             }
 
+            String filePath = this.resolveFilePath(requestedPath, this.resolveWorkingDirectory());
+            if (filePath == null) {
+                LOG.warn("refresh_file: Cannot resolve a relative path without a working directory");
+                return;
+            }
             if (!fileOperations.isPathWithinProject(filePath)) {
                 LOG.warn("Security: file path outside project directory: " + filePath);
                 return;
@@ -60,7 +67,27 @@ public class RefreshFileHandler implements DiffActionHandler {
         }
     }
 
-    private void refreshFile(String filePath) {
+    private String resolveWorkingDirectory() {
+        var session = this.context.getSession();
+        String cwd = session == null ? null : session.getCwd();
+        if (cwd != null && !cwd.isBlank()) {
+            return cwd;
+        }
+        return this.context.getProject() == null ? null : this.context.getProject().getBasePath();
+    }
+
+    private String resolveFilePath(String filePath, String workingDirectory) {
+        Path path = Path.of(WslPathUtil.toVfsPath(filePath));
+        if (!path.isAbsolute()) {
+            if (workingDirectory == null || workingDirectory.isBlank()) {
+                return null;
+            }
+            path = Path.of(WslPathUtil.toVfsPath(workingDirectory)).resolve(path);
+        }
+        return path.normalize().toString();
+    }
+
+    void refreshFile(String filePath) {
         try {
             File file = new File(NodeDetector.toVfsPath(filePath));
 
@@ -70,21 +97,13 @@ public class RefreshFileHandler implements DiffActionHandler {
                 Thread.currentThread().interrupt();
             }
 
-            if (!file.exists() && !file.isAbsolute() && context.getProject().getBasePath() != null) {
-                File projectFile = new File(context.getProject().getBasePath(), filePath);
-                if (projectFile.exists()) {
-                    file = projectFile;
-                }
-            }
-
             if (!file.exists()) {
                 LOG.warn("File does not exist: " + filePath);
                 return;
             }
 
-            File finalFile = file;
             EditorFileUtils.refreshAndFindFileAsync(
-                    finalFile,
+                    file,
                     virtualFile -> performFileRefresh(virtualFile, filePath),
                     () -> LOG.error("Failed to refresh file: " + filePath)
             );

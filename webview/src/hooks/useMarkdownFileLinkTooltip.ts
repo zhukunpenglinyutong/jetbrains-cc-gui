@@ -60,7 +60,7 @@ export function useMarkdownFileLinkTooltip() {
       return;
     }
 
-    const href = anchor.getAttribute('href');
+    const href = anchor.getAttribute('data-file-path') || anchor.getAttribute('href');
     if (!href) {
       floatingTooltip.hideTooltip();
       currentTooltipTextRef.current = null;

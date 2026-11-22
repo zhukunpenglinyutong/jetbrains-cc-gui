@@ -1,5 +1,6 @@
 package com.github.claudecodegui.handler.history;
 
+import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.provider.codex.CodexHistoryReader;
 import com.github.claudecodegui.session.ClaudeSession;
@@ -7,6 +8,7 @@ import com.github.claudecodegui.session.MessageParser;
 import com.github.claudecodegui.session.SessionCallbackFacade;
 import com.github.claudecodegui.session.SessionMessageOrchestrator;
 import com.github.claudecodegui.session.SessionState;
+import com.github.claudecodegui.util.PlatformUtils;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -27,12 +29,42 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assume.assumeTrue;
 
 /**
  * Unit tests for provider-aware history loading, pagination, and frontend conversion.
  */
 public class HistoryMessageInjectorTest {
+    @Test
+    public void restoresAsyncQuestionOnceAndPreservesAnswerCorrelationAcrossDifferentModelTurnIds() {
+        JsonArray records = com.google.gson.JsonParser.parseString("""
+                [
+                {"type":"session_meta","payload":{"id":"root"}},
+                {"type":"turn_context","payload":{"turn_id":"native-turn"}},
+                {"type":"response_item","payload":{"type":"function_call","name":"request_user_input_async",
+                "call_id":"question-call","arguments":"{\\"questions\\":[{\\"title\\":\\"Pick one.\\",\\"options\\":[\\"A\\",\\"B\\"]}]}",
+                "internal_chat_message_metadata_passthrough":{"turn_id":"model-turn"}}},
+                {"type":"event_msg","payload":{"type":"item_completed","thread_id":"root","turn_id":"native-turn",
+                "item":{"type":"AgentMessage","id":"question-call","delivery":"async",
+                "questions":[{"title":"Pick one.","options":["A","B"]}]}}},
+                {"type":"response_item","payload":{"type":"function_call_output","call_id":"question-call","output":"{\\"accepted\\":true}"}},
+                {"type":"event_msg","payload":{"type":"user_message","message":"Answers to your questions (request: question-call):\\n\\nPick one.\\nB"}}
+                ]
+                """).getAsJsonArray();
+        List<JsonObject> messages = HistoryMessageInjector.convertCodexMessagesToFrontendBatch(records);
+        assertEquals(2, messages.size());
+        JsonObject raw = messages.get(0).getAsJsonObject().getAsJsonObject("raw");
+        JsonObject question = raw.getAsJsonArray("content").get(0).getAsJsonObject();
+        assertEquals("codex_user_input", question.get("name").getAsString());
+        assertEquals("question-call", question.get("id").getAsString());
+        assertEquals("native-turn", raw.get("codexTurnId").getAsString());
+        assertEquals(2, question.getAsJsonObject("input").getAsJsonArray("questions").get(0)
+                .getAsJsonObject().getAsJsonArray("options").size());
+        assertEquals("userMessage", messages.get(1).getAsJsonObject().getAsJsonObject("raw").get("codexItemType").getAsString());
+        assertFalse(messages.toString().contains("Request User Input Async"));
+    }
     /** Earlier pages must follow the selected session's directory rather than the IDE project root. */
     @Test
     public void delegatesEarlierClaudePagesWithTheSessionsCustomDirectory() throws Exception {
@@ -1328,6 +1360,24 @@ public class HistoryMessageInjectorTest {
         payload.add("content", content);
         line.add("payload", payload);
         return line;
+    }
+
+    /** A Codex running in WSL records Linux image paths; only the Windows CI job gets past the assumptions. */
+    @Test
+    public void restoresLocalImageRecordedByCodexInWsl() throws Exception {
+        assumeTrue("Skipped: not running on Windows", PlatformUtils.isWindows());
+        assumeTrue("Skipped: WSL not available", NodeDetector.resolveWslHomeUncPath() != null);
+        String imagePath = "/tmp/ccgui-history-image-test.png";
+        Process write = new ProcessBuilder("wsl", "-e", "sh", "-c", "echo image > " + imagePath).start();
+        assertTrue(write.waitFor(60, TimeUnit.SECONDS));
+        try {
+            JsonObject block = HistoryMessageInjector.createLocalImageBlock(imagePath);
+
+            assertNotNull("the image recorded in WSL must be restored", block);
+            assertEquals("image", block.get("type").getAsString());
+        } finally {
+            new ProcessBuilder("wsl", "-e", "rm", "-f", imagePath).start().waitFor(60, TimeUnit.SECONDS);
+        }
     }
 
     private static JsonObject eventUserMessage(String timestamp, String text) {

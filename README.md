@@ -49,12 +49,12 @@ Then restart the IDE.
 ### Multi AI Engine Support
 - **Claude Code** - Anthropic's official AI programming assistant, supporting Opus 4.5 and other models
 - **OpenAI Codex** - OpenAI's powerful code generation engine
-- **Grok CLI** (Beta) - xAI's command-line coding assistant
-- **Kimi CLI** (Beta) - Moonshot AI's command-line coding assistant
-- **OpenCode** (Beta) - open-source AI coding agent for the terminal
-- **PI CLI** (Beta) - PI command-line coding assistant
-- **OMP CLI** (Beta) - OMP command-line coding assistant
-- **DeepSeek Harness** (Beta) - DeepSeek's command-line coding harness
+- **Grok CLI** - xAI's command-line coding assistant
+- **Kimi CLI** - Moonshot AI's command-line coding assistant
+- **OpenCode** - open-source AI coding agent for the terminal
+- **PI CLI** - PI command-line coding assistant
+- **OMP CLI** - OMP command-line coding assistant
+- **DeepSeek Harness** - DeepSeek's command-line coding harness
 
 ### Intelligent Conversation
 - Context-aware AI coding assistant

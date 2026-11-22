@@ -46,6 +46,7 @@ import YiColor from '@lobehub/icons/es/Yi/components/Color';
 import YiMono from '@lobehub/icons/es/Yi/components/Mono';
 import XiaomiMiMoMono from '@lobehub/icons/es/XiaomiMiMo/components/Mono';
 import type { ReactElement } from 'react';
+import { useId } from 'react';
 import { resolveIconVendor, type ModelVendor } from '../../utils/modelIconMapping';
 
 export interface ProviderModelIconProps {
@@ -119,21 +120,57 @@ const PiIcon = (size: number): ReactElement => (
   </svg>
 );
 
-/** Official OMP mark (https://omp.sh/favicon.svg), mono via currentColor. */
-const OmpIcon = (size: number): ReactElement => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    viewBox="0 0 64 64"
-    width={size}
-    height={size}
-    aria-label="OMP"
-    role="img"
-    style={{ flex: 'none', display: 'block' }}
-  >
-    <title>OMP</title>
-    <path fill="currentColor" d="M14 16h36v8H40v32h-8V24h-6v22h-8V24h-4z" />
-  </svg>
-);
+/** Official OMP mark (https://omp.sh/favicon.svg). */
+const OMP_MARK_PATH = 'M14 16h36v8H40v32h-8V24h-6v22h-8V24h-4z';
+/** Brand gradient stops, verbatim from the favicon: pink → violet → cyan. */
+const OMP_GRADIENT_STOPS = ['#ed4abf', '#9b4dff', '#5ad8e6'] as const;
+
+interface OmpIconProps {
+  size: number;
+  colored: boolean;
+}
+
+/**
+ * The OMP π carries the site's brand gradient rather than a single brand
+ * color, so it ships its own colors like the Xiaomi badge does; the mono
+ * variant keeps currentColor for contexts that tint icons to the theme.
+ * The gradient id is per instance (useId) — duplicate `defs` ids would
+ * collide when a list renders several OMP rows.
+ */
+const OmpIcon = ({ size, colored }: OmpIconProps): ReactElement => {
+  // useId emits ":rN:"; colons break url(#…) fragment refs in WebKit.
+  const gradientId = `omp-${useId().replace(/:/g, '')}`;
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 64 64"
+      width={size}
+      height={size}
+      aria-label="OMP"
+      role="img"
+      style={{ flex: 'none', display: 'block' }}
+    >
+      <title>OMP</title>
+      {colored && (
+        <defs>
+          <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="1">
+            {OMP_GRADIENT_STOPS.map((stop, index) => (
+              <stop
+                key={stop}
+                offset={index / (OMP_GRADIENT_STOPS.length - 1)}
+                stopColor={stop}
+              />
+            ))}
+          </linearGradient>
+        </defs>
+      )}
+      <path
+        fill={colored ? `url(#${gradientId})` : 'currentColor'}
+        d={OMP_MARK_PATH}
+      />
+    </svg>
+  );
+};
 
 /**
  * ZCode badge — original "Z" letterform drawn for this project (the desktop
@@ -188,7 +225,7 @@ const VENDOR_ICON_MAP: Record<
   // Official geometric mark from pi.dev; mono via currentColor (no lobehub icon).
   pi: (size, _colored) =>
     PiIcon(size),
-  omp: (size, _colored) => OmpIcon(size),
+  omp: (size, colored) => <OmpIcon size={size} colored={colored} />,
   moonshot: (size, _colored) =>
     <MoonshotMono size={size} />,
   zhipu: (size, colored) =>

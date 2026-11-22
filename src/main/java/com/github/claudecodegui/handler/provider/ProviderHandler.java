@@ -11,6 +11,7 @@ import com.github.claudecodegui.handler.core.HandlerContext;
 public class ProviderHandler extends BaseMessageHandler {
 
     private static final String[] SUPPORTED_TYPES = {
+            "provider_backup",
             // Claude provider operations
             "get_providers",
             "get_current_claude_config",
@@ -44,6 +45,7 @@ public class ProviderHandler extends BaseMessageHandler {
     private final CodexProviderOperations codexOps;
     private final ProviderImportExportSupport importExportSupport;
     private final ProviderOrderingService orderingService;
+    private final ProviderBackupSupport backupSupport;
 
     public ProviderHandler(HandlerContext context) {
         super(context);
@@ -51,6 +53,7 @@ public class ProviderHandler extends BaseMessageHandler {
         this.codexOps = new CodexProviderOperations(context);
         this.importExportSupport = new ProviderImportExportSupport(context, claudeOps, codexOps);
         this.orderingService = new ProviderOrderingService(context, claudeOps, codexOps);
+        this.backupSupport = new ProviderBackupSupport(context);
     }
 
     @Override
@@ -61,6 +64,9 @@ public class ProviderHandler extends BaseMessageHandler {
     @Override
     public boolean handle(String type, String content) {
         switch (type) {
+            case "provider_backup":
+                backupSupport.handle(content);
+                return true;
             // Claude provider operations
             case "get_providers":
                 claudeOps.handleGetProviders();

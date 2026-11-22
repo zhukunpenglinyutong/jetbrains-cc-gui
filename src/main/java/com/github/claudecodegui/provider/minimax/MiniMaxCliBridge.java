@@ -6,6 +6,7 @@ import com.google.gson.JsonObject;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BooleanSupplier;
 
 /**
  * MiniMax Code CLI bridge.
@@ -42,5 +43,12 @@ public class MiniMaxCliBridge extends MarkerCliBridge {
             LOG.warn("[MiniMax] Failed to load session messages: " + e.getMessage());
             return Collections.emptyList();
         }
+    }
+
+    @Override
+    public List<JsonObject> getSessionMessages(String sessionId, String cwd,
+                                               BooleanSupplier cancellation) {
+        return getSessionMessagesWithCancellation(cancellation,
+                token -> new MiniMaxHistoryReader().getSessionMessages(sessionId, cwd, token), "MiniMax");
     }
 }

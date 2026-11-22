@@ -36,6 +36,7 @@
 .bash-tool-header {
     border-bottom: none;
     background: var(--bg-primary);
+    gap: 8px;
 }
 
 .bash-tool-header.expanded {
@@ -53,13 +54,20 @@
     font-size: 13px;
     color: var(--text-secondary);
     white-space: nowrap;
+    flex-shrink: 0;
 }
 
+/* Long commands truncate with an ellipsis instead of being clipped mid-glyph
+   and running under the status dot, matching the bash group timeline rows. */
 .bash-tool-description {
     color: var(--text-tertiary);
     font-style: normal;
     margin-left: 12px;
     white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .bash-tool-status {
@@ -141,22 +149,23 @@
    computed from the item count, so animating max-height turns a hard height
    jump (which shoves everything below) into a gentle expand. */
 .task-details.file-list-container,
-.bash-group-timeline {
+.bash-group-list {
     transition: max-height 0.2s ease;
 }
 
 .task-details.file-list-container .file-list-item,
-.bash-group-timeline .bash-timeline-item {
+.bash-group-list .bash-group-item {
     animation: toolItemEnter 0.18s ease;
 }
 
 @media (prefers-reduced-motion: reduce) {
     .task-details.file-list-container,
-    .bash-group-timeline {
+    .bash-group-list {
         transition: none;
     }
     .task-details.file-list-container .file-list-item,
-    .bash-group-timeline .bash-timeline-item {
+    .bash-group-list .bash-group-item,
+    .bash-group-detail {
         animation: none;
     }
 }
@@ -279,43 +288,63 @@
     border: 1px solid #d0d0d0;
 }
 
-/* ==================== Bash Group 时间线样式 ==================== */
+/* ==================== Bash Group 批量命令样式 ==================== */
 .bash-group-container {
     margin: 8px 0;
 }
 
-.bash-group-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    cursor: pointer;
-    padding: 8px 12px;
-    border-bottom: none;
+.bash-group-header.expanded {
+    border-bottom: 1px solid var(--border-primary);
 }
 
 .bash-group-count {
+    margin-left: 8px;
+    min-width: 18px;
+    padding: 0 6px;
+    border: 1px solid var(--border-primary);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--text-tertiary) 12%, transparent);
     color: var(--text-tertiary);
-    font-size: 12px;
+    font-size: 11px;
+    line-height: 16px;
+    text-align: center;
+    flex-shrink: 0;
 }
 
+.bash-group-peek {
+    margin-left: 12px;
+    min-width: 0;
+    font-size: 12px;
+    color: var(--text-tertiary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* 右侧汇总状态，和单条「运行命令」卡片的状态点对齐 */
 .bash-group-summary {
     display: flex;
     align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+    margin: 0 8px 0 12px;
 }
 
 .bash-group-progress {
-    font-size: 12px;
-    color: var(--text-tertiary);
     display: flex;
     align-items: center;
-}
-
-.bash-group-progress.completed {
-    color: var(--color-success);
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-tertiary);
+    white-space: nowrap;
 }
 
 .bash-group-progress.error {
     color: var(--color-error);
+}
+
+.bash-group-progress .tool-status-indicator {
+    margin: 0;
 }
 
 .bash-group-header:focus-visible,
@@ -357,116 +386,115 @@
     color: var(--color-error);
 }
 
-/* 时间线列表容器 */
-.bash-group-timeline {
-    padding: 8px 12px 8px 16px;
+/* 命令列表容器 */
+.bash-group-list {
+    padding: 4px;
     overflow-x: hidden;
 }
 
 /* 自定义滚动条 */
-.bash-group-timeline::-webkit-scrollbar {
+.bash-group-list::-webkit-scrollbar,
+.bash-group-detail-body::-webkit-scrollbar {
     width: 6px;
+    height: 6px;
 }
 
-.bash-group-timeline::-webkit-scrollbar-track {
+.bash-group-list::-webkit-scrollbar-track,
+.bash-group-detail-body::-webkit-scrollbar-track {
     background: transparent;
 }
 
-.bash-group-timeline::-webkit-scrollbar-thumb {
+.bash-group-list::-webkit-scrollbar-thumb,
+.bash-group-detail-body::-webkit-scrollbar-thumb {
     background-color: rgba(128, 128, 128, 0.4);
     border-radius: 3px;
 }
 
-.bash-group-timeline::-webkit-scrollbar-thumb:hover {
+.bash-group-list::-webkit-scrollbar-thumb:hover,
+.bash-group-detail-body::-webkit-scrollbar-thumb:hover {
     background-color: rgba(128, 128, 128, 0.6);
 }
 
-/* 时间线单项 */
-.bash-timeline-item {
+/* 命令行：左侧状态图标 + 描述/命令 + 悬停复制 */
+.bash-group-row {
     display: flex;
-    position: relative;
-    min-height: 32px;
-}
-
-/* 时间线连接器 */
-.bash-timeline-connector {
-    display: flex;
-    flex-direction: column;
     align-items: center;
-    width: 20px;
-    flex-shrink: 0;
-    position: relative;
-}
-
-/* 时间线垂直线 */
-.bash-timeline-line {
-    position: absolute;
-    left: 50%;
-    top: 0;
-    bottom: 0;
-    width: 1px;
-    background-color: var(--border-primary);
-    transform: translateX(-50%);
-}
-
-.bash-timeline-line.last {
-    height: 10px;
-}
-
-/* 时间线节点 */
-.bash-timeline-node {
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background-color: var(--text-tertiary);
-    flex-shrink: 0;
-    position: relative;
-    z-index: 1;
-    margin-top: 12px;
-}
-
-.bash-timeline-node.pending {
-    background-color: var(--color-warning);
-    animation: breathing 1.5s ease-in-out infinite;
-}
-
-.bash-timeline-node.completed {
-    background-color: var(--color-success);
-}
-
-.bash-timeline-node.error {
-    background-color: var(--color-error);
-}
-
-/* 时间线内容 */
-.bash-timeline-content {
-    flex: 1;
-    min-width: 0;
-    padding: 4px 8px;
-    margin-left: 4px;
-    border-radius: 4px;
-    cursor: pointer;
+    gap: 4px;
+    height: 30px;
+    padding-right: 4px;
+    border-radius: 5px;
     transition: background-color 0.15s ease;
 }
 
-.bash-timeline-content:hover {
+.bash-group-row:hover,
+.bash-group-item.expanded .bash-group-row {
     background-color: var(--bg-secondary);
 }
 
-.bash-timeline-content.expanded {
-    background-color: var(--bg-secondary);
-}
-
-/* 时间线行 */
-.bash-timeline-row {
+.bash-group-row-toggle {
     display: flex;
     align-items: center;
-    gap: 8px;
-}
-
-.bash-timeline-description {
+    gap: 10px;
     flex: 1;
     min-width: 0;
+    height: 100%;
+    padding: 0 0 0 8px;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.bash-group-row-toggle:focus-visible {
+    outline: 1px solid var(--color-link);
+    outline-offset: -1px;
+}
+
+.bash-group-row-status {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    flex-shrink: 0;
+}
+
+.bash-group-row-status .codicon {
+    font-size: 13px;
+}
+
+.bash-group-row-status.completed {
+    color: var(--color-success);
+    opacity: 0.8;
+}
+
+.bash-group-row-status.error {
+    color: var(--color-error);
+}
+
+.bash-group-spinner {
+    width: 10px;
+    height: 10px;
+    border: 1.5px solid var(--color-warning);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: tool-status-spin 0.85s linear infinite;
+}
+
+.bash-group-row-main {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.bash-group-row-desc {
+    max-width: 60%;
+    flex-shrink: 0;
     font-size: 12px;
     color: var(--text-primary);
     white-space: nowrap;
@@ -474,40 +502,143 @@
     text-overflow: ellipsis;
 }
 
-.bash-timeline-description-command {
-    font-family: var(--cc-gui-code-font-family, var(--idea-editor-font-family, 'JetBrains Mono', 'Consolas', monospace));
+.bash-group-row-desc.solo {
+    max-width: none;
+    flex-shrink: 1;
 }
 
-/* 展开的详情 */
-.bash-timeline-detail {
-    margin-top: 8px;
-    padding-top: 8px;
-    border-top: 1px solid var(--border-primary);
-}
-
-.bash-timeline-detail .bash-command-block {
+.bash-group-row-command {
+    flex: 1;
+    min-width: 0;
     font-size: 12px;
-    padding: 8px 10px;
+    color: var(--text-tertiary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-.bash-timeline-detail .bash-output-block {
-    margin-top: 6px;
+.bash-group-row-command.solo {
+    color: var(--text-primary);
+}
+
+.bash-group-item.error .bash-group-row-desc,
+.bash-group-item.error .bash-group-row-command.solo {
+    color: var(--color-error);
+}
+
+.bash-group-prompt {
+    margin-right: 6px;
+    color: var(--text-tertiary);
+    opacity: 0.7;
+    user-select: none;
+}
+
+/* 复制按钮：行悬停或聚焦时出现 */
+.bash-group-copy {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+
+.bash-group-row:hover .bash-group-copy,
+.bash-group-row:focus-within .bash-group-copy,
+.bash-group-detail-bar .bash-group-copy,
+.bash-group-copy.copied {
+    opacity: 1;
+}
+
+.bash-group-copy:hover {
+    background-color: var(--bg-hover);
+    color: var(--text-secondary);
+}
+
+.bash-group-copy:focus-visible {
+    opacity: 1;
+    outline: 1px solid var(--color-link);
+    outline-offset: -1px;
+}
+
+.bash-group-copy.copied {
+    color: var(--color-success);
+}
+
+.bash-group-copy .codicon {
+    font-size: 14px;
+}
+
+/* 展开的输出面板 */
+.bash-group-detail {
+    margin: 2px 4px 6px 32px;
+    border: 1px solid var(--border-primary);
+    border-radius: 6px;
+    background: var(--bg-secondary);
+    overflow: hidden;
+    animation: toolItemEnter 0.15s ease;
+}
+
+.bash-group-detail-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 26px;
+    padding: 2px 4px 2px 10px;
+    border-bottom: 1px solid var(--border-primary);
     font-size: 11px;
-    max-height: 150px;
-    overflow-y: auto;
+    color: var(--text-tertiary);
 }
 
-.bash-timeline-detail .bash-output-text {
+.bash-group-detail-reason {
+    padding: 6px 10px 0;
+    font-size: 11px;
+    color: var(--text-tertiary);
+}
+
+.bash-group-detail-body {
+    max-height: 220px;
+    padding: 8px 10px;
+    overflow: auto;
+    font-size: 12px;
+    line-height: 1.55;
+}
+
+.bash-group-detail-command {
+    color: var(--text-tertiary);
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.bash-group-detail-output {
+    margin-top: 4px;
+    color: var(--text-primary);
     white-space: pre-wrap;
     word-break: break-word;
 }
 
-/* 亮色模式适配 */
-[data-theme="light"] .bash-timeline-content:hover {
-    background-color: rgba(0, 0, 0, 0.04);
+.bash-group-detail.error {
+    border-color: color-mix(in srgb, var(--color-error) 40%, var(--border-primary));
+    background: color-mix(in srgb, var(--color-error) 6%, var(--bg-secondary));
 }
 
-[data-theme="light"] .bash-timeline-content.expanded {
+.bash-group-detail.error .bash-group-detail-label,
+.bash-group-detail.error .bash-group-detail-output {
+    color: var(--color-error);
+}
+
+/* 亮色模式适配 */
+[data-theme="light"] .bash-group-row:hover,
+[data-theme="light"] .bash-group-item.expanded .bash-group-row {
     background-color: rgba(0, 0, 0, 0.04);
 }
 

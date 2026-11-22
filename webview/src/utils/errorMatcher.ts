@@ -17,6 +17,10 @@ interface DiagnosticLinkStep {
   url: string;
 }
 
+interface DiagnosticInstructionStep {
+  kind: 'instruction';
+}
+
 /** Actions the card performs in place, without leaving the chat. */
 export type DiagnosticInlineAction = 'updateClaudeSdk';
 
@@ -29,6 +33,7 @@ export type DiagnosticStep =
   | DiagnosticCommandStep
   | DiagnosticNavigationStep
   | DiagnosticLinkStep
+  | DiagnosticInstructionStep
   | DiagnosticActionStep;
 
 export interface DiagnosticSolution {

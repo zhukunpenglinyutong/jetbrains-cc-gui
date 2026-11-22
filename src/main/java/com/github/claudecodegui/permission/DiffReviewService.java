@@ -1,5 +1,6 @@
 package com.github.claudecodegui.permission;
 
+import com.github.claudecodegui.util.ProjectPathUtils;
 import com.github.claudecodegui.util.WslPathUtil;
 import com.github.claudecodegui.handler.diff.DiffResult;
 import com.github.claudecodegui.handler.diff.InteractiveDiffManager;
@@ -66,9 +67,8 @@ public class DiffReviewService {
             return null;
         }
 
-        // Security: validate file path is within project directory
-        String projectBasePath = project.getBasePath();
-        if (projectBasePath != null && !WslPathUtil.isPathWithinDirectory(filePath, projectBasePath)) {
+        // Security: validate the path against the project content roots.
+        if (!ProjectPathUtils.isPathWithinProject(project, filePath)) {
             LOG.warn("DiffReview: Security - file path outside project: " + filePath);
             return null;
         }

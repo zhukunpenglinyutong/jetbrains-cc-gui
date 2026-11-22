@@ -1,0 +1,43 @@
+/* Code highlighting palettes */
+/*
+ * highlight.js ships one palette per file, and each file styles the bare .hljs-* classes.
+ * The theme switches at runtime through data-theme on <html>, so both palettes are scoped
+ * to it here. A missing attribute means dark, the same as variables.less.
+ */
+:root:not([data-theme='light']) {
+    @import (less) 'highlight.js/styles/github-dark.css';
+}
+
+[data-theme='light'] {
+    @import (less) 'highlight.js/styles/github.css';
+
+    /* github.css colors below 4.5:1 on --color-code-block-bg (#f5f5f5), darkened to pass */
+    .hljs-doctag,
+    .hljs-keyword,
+    .hljs-meta .hljs-keyword,
+    .hljs-template-tag,
+    .hljs-template-variable,
+    .hljs-type,
+    .hljs-variable.language_ {
+        color: #cf222e;
+    }
+
+    .hljs-built_in,
+    .hljs-symbol {
+        color: #953800;
+    }
+
+    .hljs-comment,
+    .hljs-code,
+    .hljs-formula {
+        color: #59636e;
+    }
+
+    .hljs-name,
+    .hljs-quote,
+    .hljs-selector-tag,
+    .hljs-selector-pseudo,
+    .hljs-addition {
+        color: #116329;
+    }
+}

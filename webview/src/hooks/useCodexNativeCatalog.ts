@@ -61,30 +61,43 @@ export function useCodexNativeCatalog(
   const [mcpServers, setMcpServers] = useState<Record<string, unknown>[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const pendingRef = useRef(new Map<string, { requestId: string; rows: Record<string, unknown>[]; cursors: Set<unknown> }>());
-  const requestCatalog = useCallback((type: string) => {
+  const pendingRef = useRef(new Map<string, { requestId: string; rows: Record<string, unknown>[];
+    cursors: Set<unknown>; timeout: ReturnType<typeof setTimeout> }>());
+  const clearPending = useCallback(() => {
+    pendingRef.current.forEach(request => clearTimeout(request.timeout));
+    pendingRef.current.clear();
+  }, []);
+  const requestCatalog = useCallback((type: string, forceReload = true) => {
     const requestId = `catalog-${crypto.randomUUID()}`;
-    pendingRef.current.set(type, { requestId, rows: [], cursors: new Set() });
+    const previous = pendingRef.current.get(type);
+    if (previous) clearTimeout(previous.timeout);
+    const timeout = setTimeout(() => {
+      if (pendingRef.current.get(type)?.requestId !== requestId) return;
+      pendingRef.current.delete(type);
+      setLoading(pendingRef.current.size > 0);
+      setError('Native Codex catalog request timed out; refresh to retry');
+    }, 45_000);
+    pendingRef.current.set(type, { requestId, rows: [], cursors: new Set(), timeout });
     if (!sendNativeBridge(type, JSON.stringify({ ...(cwd ? { cwd } : {}), requestId,
-      ...(type === 'codex_native_list_skills' ? { params: { forceReload: true } } : {}) }))) {
+      ...(type === 'codex_native_list_skills' ? { params: { forceReload } } : {}) }))) {
+      clearTimeout(timeout);
       pendingRef.current.delete(type);
       setLoading(pendingRef.current.size > 0);
       setError('Native Codex bridge is unavailable');
     }
   }, [cwd]);
 
-  const refresh = useCallback(() => {
+  const refreshCatalog = useCallback((forceReload = true) => {
     if (provider !== 'codex' || !enabled) return;
     setLoading(true);
     setError(null);
-    setModels((previous) => previous.length ? [] : previous);
-    setSkills((previous) => previous.length ? [] : previous);
-    setMcpServers((previous) => previous.length ? [] : previous);
-    pendingRef.current.clear();
+    clearPending();
     if (catalog === 'all') requestCatalog('codex_native_list_models');
-    if (catalog !== 'mcp') requestCatalog('codex_native_list_skills');
+    if (catalog !== 'mcp') requestCatalog('codex_native_list_skills', forceReload);
     if (catalog !== 'skills') requestCatalog('codex_native_mcp_status');
-  }, [catalog, enabled, provider, requestCatalog]);
+  }, [catalog, clearPending, enabled, provider, requestCatalog]);
+
+  const refresh = useCallback(() => refreshCatalog(), [refreshCatalog]);
 
   const reloadMcp = useCallback(() => {
     if (provider !== 'codex' || !enabled) return;
@@ -126,6 +139,7 @@ export function useCodexNativeCatalog(
         }
       }
       pendingRef.current.delete(envelope.requestType);
+      clearTimeout(pending.timeout);
       if (envelope.requestType === 'codex_native_list_models') setModels(pending.rows);
       if (envelope.requestType === 'codex_native_list_skills') setSkills(pending.rows);
       if (envelope.requestType === 'codex_native_mcp_status') setMcpServers(pending.rows);
@@ -133,16 +147,26 @@ export function useCodexNativeCatalog(
       if (envelope.requestType === 'codex_native_mcp_reload' && !envelope.error) refresh();
     };
     let refreshScheduled = false;
+    let forceScheduled = false;
     let effectiveCwd: string | undefined;
-    const scheduleRefresh = () => {
+    const scheduleRefresh = (forceReload = true) => {
+      forceScheduled ||= forceReload;
       if (refreshScheduled) return;
       refreshScheduled = true;
-      queueMicrotask(() => { refreshScheduled = false; if (live) refresh(); });
+      queueMicrotask(() => {
+        refreshScheduled = false;
+        const force = forceScheduled;
+        forceScheduled = false;
+        if (live) refreshCatalog(force);
+      });
     };
+    const onWorkingDirectoryChanged = () => scheduleRefresh();
     const onRuntime = (event: Event) => {
       const detail = (event as CustomEvent<{ kind?: string; threadId?: string; rootThreadId?: string;
         payload?: { method?: string; cwd?: string; settings?: { cwd?: string } } }>).detail;
-      if (detail?.payload?.method === 'skills/changed' && catalog !== 'mcp') scheduleRefresh();
+      // A forced list itself emits skills/changed. Do not replace its request or force another scan.
+      if (detail?.payload?.method === 'skills/changed' && catalog !== 'mcp'
+          && !pendingRef.current.has('codex_native_list_skills')) scheduleRefresh(false);
       if (detail?.threadId && detail.threadId === detail.rootThreadId) {
         const nextCwd = detail.payload?.settings?.cwd ?? detail.payload?.cwd;
         if (nextCwd && nextCwd !== effectiveCwd) {
@@ -153,18 +177,18 @@ export function useCodexNativeCatalog(
     };
     window.addEventListener('codex-native-data', onData);
     window.addEventListener('codex-runtime-event', onRuntime);
-    window.addEventListener('codex-working-directory-changed', scheduleRefresh);
+    window.addEventListener('codex-working-directory-changed', onWorkingDirectoryChanged);
     const unsubscribeProvider = subscribeActiveCodexProvider(refresh);
     refresh();
     return () => {
       live = false;
-      pendingRef.current.clear();
+      clearPending();
       unsubscribeProvider();
       window.removeEventListener('codex-native-data', onData);
       window.removeEventListener('codex-runtime-event', onRuntime);
-      window.removeEventListener('codex-working-directory-changed', scheduleRefresh);
+      window.removeEventListener('codex-working-directory-changed', onWorkingDirectoryChanged);
     };
-  }, [cwd, enabled, provider, refresh]);
+  }, [catalog, clearPending, cwd, enabled, provider, refresh, refreshCatalog]);
 
   const hasPendingRequests = useCallback(() => pendingRef.current.size > 0, []);
 

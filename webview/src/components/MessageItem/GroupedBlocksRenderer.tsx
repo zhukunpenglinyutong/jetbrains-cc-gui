@@ -287,13 +287,10 @@ export const GroupedBlocksRenderer = memo(function GroupedBlocksRenderer({
       );
     }
     const errorText = getMessageText(message);
-    const writerConflict = errorText.includes('already has an active writer')
-      || errorText.includes('already has a live local writer')
-      || errorText.includes('already owned by another window');
     return (
       <>
-        <MarkdownBlock content={writerConflict ? `${t('chat.compactSummary.writerOccupied')}\n\n${errorText}` : errorText} />
-        {errorDiagnosticPattern && !writerConflict && (
+        <MarkdownBlock content={errorText} />
+        {errorDiagnosticPattern && (
           <ErrorDiagnosticCard
             t={t}
             pattern={errorDiagnosticPattern}

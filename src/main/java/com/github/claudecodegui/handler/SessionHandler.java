@@ -22,6 +22,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Session management message handler.
@@ -35,9 +36,17 @@ public class SessionHandler extends BaseMessageHandler {
             "send_message",
             "send_message_with_attachments",
             "interrupt_session",
-            "restart_session"
+            "restart_session",
+            "sync_loading_state"
             // Note: create_new_session should not be handled here; it should be handled by ClaudeSDKToolWindow.createNewSession()
     };
+
+    /**
+     * Sends accepted from the webview whose turn has not begun yet. The Node
+     * check runs first and may take seconds; the session still reports the
+     * previous turn's idle state until send() begins the new turn.
+     */
+    private final AtomicInteger sendsBeforeTurnStart = new AtomicInteger();
 
     public SessionHandler(HandlerContext context) {
         super(context);
@@ -66,6 +75,9 @@ public class SessionHandler extends BaseMessageHandler {
             case "restart_session":
                 LOG.debug("[SessionHandler] 处理: restart_session");
                 handleRestartSession();
+                return true;
+            case "sync_loading_state":
+                handleSyncLoadingState();
                 return true;
             default:
                 return false;
@@ -208,7 +220,7 @@ public class SessionHandler extends BaseMessageHandler {
         final String finalClientMessageId = clientMessageId;
         final JsonObject finalNativeCodexSettings = nativeCodexSettings;
 
-        CompletableFuture.runAsync(() -> {
+        runSendTask(() -> {
             if (!ensureNodeVersionReady()) {
                 return;
             }
@@ -378,7 +390,7 @@ public class SessionHandler extends BaseMessageHandler {
         final String finalClientMessageId = clientMessageId;
         final JsonObject finalNativeCodexSettings = nativeCodexSettings;
 
-        CompletableFuture.runAsync(() -> {
+        runSendTask(() -> {
             if (!ensureNodeVersionReady()) {
                 return;
             }
@@ -424,6 +436,35 @@ public class SessionHandler extends BaseMessageHandler {
                     return null;
                     });
         });
+    }
+
+    /**
+     * Run a send off the UI thread, counting it as pending until send() has
+     * begun its turn (send() does that synchronously) or the send gave up.
+     */
+    private void runSendTask(Runnable task) {
+        sendsBeforeTurnStart.incrementAndGet();
+        CompletableFuture.runAsync(() -> {
+            try {
+                task.run();
+            } finally {
+                sendsBeforeTurnStart.decrementAndGet();
+            }
+        });
+    }
+
+    /**
+     * Re-send the real loading state. The webview asks when a send it
+     * dispatched has not started streaming within its immunity window: the
+     * loading reset it swallowed meanwhile may have been that turn's only one.
+     */
+    private void handleSyncLoadingState() {
+        ClaudeSession session = context.getSession();
+        if (session == null) {
+            return;
+        }
+        boolean loading = session.isLoading() || sendsBeforeTurnStart.get() > 0;
+        callJavaScript("showLoading", String.valueOf(loading));
     }
 
     /**

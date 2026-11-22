@@ -4,6 +4,9 @@
  */
 
 import assert from 'node:assert/strict';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { __testing } from './persistent-query-service.js';
 
 function createHangingQuery({ prompt, options }) {
@@ -34,17 +37,27 @@ __testing.setQueryFn((args) => {
   return createHangingQuery(args);
 });
 
+// Use a temp directory as cwd to avoid loading the project's .mcp.json which requires approval
+// Also clear IDEA_PROJECT_PATH/PROJECT_PATH to prevent selectWorkingDirectory from overriding our cwd
+const tempCwd = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-mcp-fp-cwd-'));
+process.env.IDEA_PROJECT_PATH = tempCwd;
+process.env.PROJECT_PATH = tempCwd;
 // Test: MCP server config change should rebuild runtime
 const baseParams = {
   sessionId: '',
   runtimeSessionEpoch: 'epoch-mcp-fp',
-  cwd: process.cwd(),
+  cwd: tempCwd,
   message: 'hello',
 };
 
-// First request with one MCP server
+// First request with one MCP server via override (bypassing approval gate)
+const mcpServers1 = {
+  'server-one': { command: 'mcp-one', args: ['--arg'] }
+};
+
 const overrides1 = {
-  settings: { env: { ANTHROPIC_API_KEY: 'sk-test' } }
+  settings: { env: { ANTHROPIC_API_KEY: 'sk-test' } },
+  mcpServers: mcpServers1
 };
 
 const ctx1 = await __testing.buildRequestContext(
@@ -59,12 +72,15 @@ const runtime1Again = await __testing.acquireRuntime(ctx1);
 assert.equal(runtime1Again, runtime1, 'same MCP config must reuse the runtime');
 assert.equal(created, 1);
 
-// Second request with ADDITIONAL MCP server
+// Second request with ADDITIONAL MCP server via override
+const mcpServers2 = {
+  'server-one': { command: 'mcp-one', args: ['--arg'] },
+  'new-server': { command: 'new-mcp', args: ['--arg'] }
+};
+
 const overrides2 = {
   settings: { env: { ANTHROPIC_API_KEY: 'sk-test' } },
-  mcpServers: {
-    'new-server': { command: 'new-mcp', args: ['--arg'] }
-  }
+  mcpServers: mcpServers2
 };
 
 const ctx2 = await __testing.buildRequestContext(
@@ -86,4 +102,5 @@ assert.notEqual(parsed1.mcpFingerprint, parsed2.mcpFingerprint, 'mcpFingerprint 
 
 console.log('SCENARIO_OK');
 await __testing.resetState();
+fs.rmSync(tempCwd, { recursive: true, force: true });
 process.exit(0);

@@ -688,7 +688,7 @@ async function parseMcpConfig(cwd = null) {
 
   // Find a matching project configuration
   let projectConfig = null;
-  if (normalizedCwd && config.projects) {
+  if (normalizedCwd && config && config.projects) {
     if (config.projects[normalizedCwd]) {
       projectConfig = config.projects[normalizedCwd];
     } else {
@@ -720,16 +720,16 @@ async function parseMcpConfig(cwd = null) {
       disabledServers = new Set(projectConfig.disabledMcpServers || []);
     } else {
       log('info', '[MCP Config] Project has no MCP servers, using global config');
-      mcpServers = config.mcpServers || {};
+      mcpServers = (config && config.mcpServers) || {};
 
-      const globalDisabled = config.disabledMcpServers || [];
+      const globalDisabled = (config && config.disabledMcpServers) || [];
       const projectDisabled = projectConfig.disabledMcpServers || [];
       disabledServers = new Set([...globalDisabled, ...projectDisabled]);
     }
   } else {
     log('info', '[MCP Config] Using global MCP configuration');
-    mcpServers = config.mcpServers || {};
-    disabledServers = new Set(config.disabledMcpServers || []);
+    mcpServers = (config && config.mcpServers) || {};
+    disabledServers = new Set((config && config.disabledMcpServers) || []);
   }
 
   // SECURITY: project-root .mcp.json can ship arbitrary command/args and is

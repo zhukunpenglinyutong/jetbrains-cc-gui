@@ -41,8 +41,20 @@ final class TabSessionRestorePolicy {
         return selectedTab && shouldLoadHistory(savedState);
     }
 
+    static boolean shouldLoadImmediately(TabStateService.TabSessionState savedState,
+                                         boolean selectedTab,
+                                         boolean loadHistoryOnStartup) {
+        return loadHistoryOnStartup && shouldLoadImmediately(savedState, selectedTab);
+    }
+
     static boolean shouldStartHistoryLoad(TabStateService.TabSessionState savedState, boolean frontendReady) {
         return frontendReady && shouldLoadHistory(savedState);
+    }
+
+    static boolean shouldStartHistoryLoad(TabStateService.TabSessionState savedState,
+                                          boolean frontendReady,
+                                          boolean loadHistoryOnStartup) {
+        return loadHistoryOnStartup && shouldStartHistoryLoad(savedState, frontendReady);
     }
 
     private static boolean samePath(String left, String right) {

@@ -5,6 +5,11 @@ package com.github.claudecodegui.provider.common;
  * Used for streaming responses from AI providers (Claude/Codex).
  */
 public interface MessageCallback {
+    /** Opaque backend turn correlation; unrelated callbacks/providers can leave it unavailable. */
+    default String executionScope() {
+        return "";
+    }
+
     /**
      * Called when a message is received.
      *

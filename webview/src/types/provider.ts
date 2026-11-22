@@ -303,6 +303,13 @@ export interface EnvVarValidationIssue {
   key?: string;
 }
 
+/** Persist the same variable names that validation checks; values may contain significant spaces. */
+export function normalizeEnvVarEntries(entries: EnvVarEntry[]): EnvVarEntry[] {
+  return entries
+    .map(entry => ({ ...entry, key: entry.key.trim() }))
+    .filter(entry => entry.key !== '');
+}
+
 /**
  * Validate a list of EnvVarEntry. Returns the first issue per row, if any.
  * Empty keys are skipped (will be filtered before saving).
@@ -383,8 +390,7 @@ export function buildCodexProviderConfigToml(
   wireApi: 'responses' | 'chat' = 'responses',
   providerId = 'custom',
 ): string {
-  return `disable_response_storage = true
-model = ${tomlString(model)}
+  return `model = ${tomlString(model)}
 model_reasoning_effort = "high"
 model_provider = ${tomlString(providerId)}
 

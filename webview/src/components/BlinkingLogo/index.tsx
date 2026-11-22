@@ -3,8 +3,6 @@ import { useTranslation } from 'react-i18next';
 import styles from './style.module.less';
 import { AVAILABLE_PROVIDERS } from '../ChatInputBox/types';
 import { ProviderModelIcon } from '../shared/ProviderModelIcon';
-import AlertDialog from '../AlertDialog';
-import { useBetaProviderNotice } from '../../hooks/useBetaProviderNotice';
 import { useHiddenCliProviders } from '../../hooks/useCliProviderVisibility';
 
 const ROOT_STYLE: React.CSSProperties = {
@@ -50,7 +48,6 @@ export const BlinkingLogo = ({ provider, onProviderChange }: BlinkingLogoProps) 
   const [toastMessage, setToastMessage] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const betaNotice = useBetaProviderNotice();
   const hiddenProviders = useHiddenCliProviders();
   const visibleProviders = AVAILABLE_PROVIDERS.filter((p) => !hiddenProviders.has(p.id));
 
@@ -122,19 +119,12 @@ export const BlinkingLogo = ({ provider, onProviderChange }: BlinkingLogoProps) 
     const selected = AVAILABLE_PROVIDERS.find(p => p.id === providerId);
     if (!selected) return;
 
-    const proceed = () => {
-      if (!selected.enabled) {
-        showToastMessage(t('settings.provider.featureComingSoon'));
-        return;
-      }
-      onProviderChange?.(providerId);
-    };
-
-    // Close the menu immediately so the beta dialog is not hidden behind it.
     setIsOpen(false);
-    // First click on a Beta provider shows an informational notice once.
-    // Disabled providers skip the notice — they only show the coming-soon toast.
-    betaNotice.requestSelect(!!selected.beta && selected.enabled, proceed);
+    if (!selected.enabled) {
+      showToastMessage(t('settings.provider.featureComingSoon'));
+      return;
+    }
+    onProviderChange?.(providerId);
   };
 
   const getProviderLabel = (providerId: string) => {
@@ -199,11 +189,6 @@ export const BlinkingLogo = ({ provider, onProviderChange }: BlinkingLogoProps) 
                 {p.id === provider && (
                   <span className="provider-active-dot" aria-hidden="true" />
                 )}
-                {p.beta && (
-                  <span className="provider-beta-badge">
-                    {t('providers.beta.badge', { defaultValue: 'Beta' })}
-                  </span>
-                )}
               </span>
             </div>
           ))}
@@ -216,18 +201,6 @@ export const BlinkingLogo = ({ provider, onProviderChange }: BlinkingLogoProps) 
           {toastMessage}
         </div>
       )}
-
-      <AlertDialog
-        isOpen={betaNotice.isOpen}
-        type="warning"
-        title={t('providers.beta.title', { defaultValue: 'Beta Feature' })}
-        message={t('providers.beta.message', {
-          defaultValue:
-            'This feature is still in Beta. If you encounter any bugs, please report them to the author promptly.',
-        })}
-        confirmText={t('common.gotIt', { defaultValue: 'Got it' })}
-        onClose={betaNotice.close}
-      />
     </div>
   );
 };

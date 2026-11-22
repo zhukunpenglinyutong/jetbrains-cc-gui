@@ -114,6 +114,7 @@ export class CodexAppServerClient extends EventEmitter {
     this.pendingRequests = new Map();   // our numeric ids -> entry
     this.serverRequests = new Map();    // server request ids -> {method, params}
     this.initializePromise = null;
+    this.userAgent = null;
     this.exitError = null;
     this.processExited = false;
     this.exitSettled = false;
@@ -285,6 +286,7 @@ export class CodexAppServerClient extends EventEmitter {
         writeState: 'notWritten',
         resolve: (result) => {
           clearTimeout(timer);
+          this.userAgent = result?.userAgent ?? null;
           // Send the initialized notification only after the response arrived.
           try {
             this.#writeLine({ method: 'initialized', params: {} });

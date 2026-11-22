@@ -1,13 +1,20 @@
 package com.github.claudecodegui.handler.file;
 
 import com.github.claudecodegui.handler.core.HandlerContext;
+import com.github.claudecodegui.handler.diff.DiffFileOperations;
+import com.github.claudecodegui.util.PlatformUtils;
+import com.github.claudecodegui.util.ProjectPathResolver;
 import com.intellij.openapi.project.Project;
+import org.junit.Assume;
 import org.junit.Test;
 
+import java.io.IOException;
 import java.lang.reflect.Proxy;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -325,6 +332,245 @@ public class OpenFileHandlerTest {
         assertEquals(expected, handler.resolveDisplayPath("../outside.txt"));
     }
 
+    @Test
+    public void resolveDisplayPath_mapsPhysicalPathThroughProjectSymlink() throws Exception {
+        SymlinkProject symlinkProject = createProjectWithLinkedAssets();
+        OpenFileHandler handler = new OpenFileHandler(createContext(symlinkProject.projectRoot()));
+
+        assertTrue(Files.exists(symlinkProject.projectFile()));
+        assertEquals("Assets/GameScripts/abc.cs", handler.resolveDisplayPath(symlinkProject.physicalFile().toString()));
+    }
+
+    @Test
+    public void resolveFile_passesLinkedProjectPathToEditorForPhysicalAndRelativeLinks() throws Exception {
+        SymlinkProject linked = createProjectWithLinkedAssets();
+        OpenFileHandler handler = new OpenFileHandler(createContext(linked.projectRoot()));
+        var resolver = OpenFileHandler.class.getDeclaredMethod("resolveFile", String.class);
+        resolver.setAccessible(true);
+
+        for (String href : List.of(linked.physicalFile().toString(), linked.projectFile().toString(),
+                "Assets/GameScripts/abc.cs")) {
+            OpenFileHandler.FileResolutionResult result =
+                    (OpenFileHandler.FileResolutionResult) resolver.invoke(handler, href);
+            assertNotNull(result);
+            assertEquals(linked.projectFile(), result.file().toPath());
+            assertTrue(Files.isSameFile(linked.physicalFile(), result.file().toPath()));
+        }
+    }
+
+    @Test
+    public void resolveFile_keepsUnlinkedExternalFilesOutsideProject() throws Exception {
+        SymlinkProject linked = createProjectWithLinkedAssets();
+        Path external = Files.writeString(linked.projectRoot().getParent().resolve("outside.cs"), "class Outside {}\n");
+        OpenFileHandler handler = new OpenFileHandler(createContext(linked.projectRoot()));
+        var resolver = OpenFileHandler.class.getDeclaredMethod("resolveFile", String.class);
+        resolver.setAccessible(true);
+
+        OpenFileHandler.FileResolutionResult result =
+                (OpenFileHandler.FileResolutionResult) resolver.invoke(handler, external.toString());
+        assertNotNull(result);
+        assertEquals(external, result.file().toPath());
+    }
+
+    @Test
+    public void diffPathValidation_rejectsPhysicalAndLinkedPathsOutsideCanonicalProject() throws Exception {
+        SymlinkProject symlinkProject = createProjectWithLinkedAssets();
+        DiffFileOperations fileOperations = new DiffFileOperations(createContext(symlinkProject.projectRoot()));
+
+        assertFalse(fileOperations.isPathWithinProject(symlinkProject.physicalFile().toString()));
+        assertFalse(fileOperations.isPathWithinProject(symlinkProject.projectFile().toString()));
+        String before = Files.readString(symlinkProject.physicalFile());
+        for (String path : List.of(symlinkProject.physicalFile().toString(), symlinkProject.projectFile().toString())) {
+            fileOperations.writeContentToFile(path, "must not write");
+            fileOperations.deleteFile(path);
+        }
+        assertEquals(before, Files.readString(symlinkProject.physicalFile()));
+    }
+
+    @Test
+    public void resolveDisplayPath_mapsMissingFileThroughLinkedParent() throws Exception {
+        SymlinkProject linked = createProjectWithLinkedAssets();
+        Path missingPhysicalFile = linked.physicalFile().resolveSibling("new.cs");
+        OpenFileHandler handler = new OpenFileHandler(createContext(linked.projectRoot()));
+
+        assertEquals("Assets/GameScripts/new.cs", handler.resolveDisplayPath(missingPhysicalFile.toString()));
+    }
+
+    @Test
+    public void diffPathValidation_rejectsNewFilesUnderExternalLinkedDirectories() throws Exception {
+        SymlinkProject linked = createProjectWithLinkedAssets();
+        DiffFileOperations operations = new DiffFileOperations(createContext(linked.projectRoot()));
+        Path newPhysicalFile = linked.physicalFile().resolveSibling("new.cs");
+        Path expectedProjectFile = linked.projectFile().resolveSibling("new.cs");
+
+        assertFalse(operations.isPathWithinProject(expectedProjectFile.toString()));
+        assertFalse(operations.isPathWithinProject(newPhysicalFile.toString()));
+        assertFalse(operations.isPathWithinProject(linked.projectRoot().getParent().resolve("private.txt").toString()));
+    }
+
+    @Test
+    public void linkedParentDoesNotTurnOrdinaryDirectoriesIntoLinkedRoots() throws Exception {
+        Path root = Files.createTempDirectory("ccgui-linked-parent-").toRealPath();
+        Path physical = Files.createDirectory(root.resolve("physical"));
+        Path project = Files.createDirectory(physical.resolve("project"));
+        Files.createDirectory(project.resolve("ordinary"));
+        Path parentLink = root.resolve("alias");
+        createDirectorySymlinkOrSkip(parentLink, physical);
+        var scan = ProjectPathResolver.class.getDeclaredMethod("scanLinkedRoots", Path.class);
+        scan.setAccessible(true);
+        assertTrue(((List<?>) scan.invoke(null, parentLink.resolve("project"))).isEmpty());
+    }
+
+    @Test
+    public void resolveFile_followsTheFilesystemForDotDotAfterALink() throws Exception {
+        Assume.assumeFalse("Win32 folds .. before reaching the filesystem", PlatformUtils.isWindows());
+        SymlinkProject linked = createProjectWithLinkedAssets();
+        // <project>/Assets/.. is the link target's parent on disk, not <project>.
+        Path physicalParent = linked.projectRoot().getParent();
+        Path expected = Files.writeString(physicalParent.resolve("shared.cs"), "class Physical {}\n");
+        Files.writeString(linked.projectRoot().resolve("shared.cs"), "class WrongFile {}\n");
+        Files.writeString(linked.projectRoot().resolve("lexical-only.cs"), "class LexicalOnly {}\n");
+        OpenFileHandler handler = new OpenFileHandler(createContext(linked.projectRoot()));
+
+        OpenFileHandler.FileResolutionResult result = resolveFile(handler, linked.projectRoot() + "/Assets/../shared.cs");
+        assertNotNull(result);
+        assertTrue(Files.isSameFile(expected, result.file().toPath()));
+
+        assertNull(resolveFile(handler, linked.projectRoot() + "/Assets/../lexical-only.cs"));
+    }
+
+    @Test
+    public void normalizeDotSegments_foldsAgainstTheLinkTargetPastAMissingDirectory() throws Exception {
+        Assume.assumeFalse("Win32 folds .. before reaching the filesystem", PlatformUtils.isWindows());
+        SymlinkProject linked = createProjectWithLinkedAssets();
+        Path physical = Files.writeString(linked.projectRoot().getParent().resolve("shared.cs"), "class Physical {}\n");
+        Files.writeString(linked.projectRoot().resolve("shared.cs"), "class WrongFile {}\n");
+
+        for (String relative : List.of("Assets/missing/../../shared.cs", "Assets/GameScripts/../missing/../../shared.cs")) {
+            Path normalized = ProjectPathResolver.normalizeDotSegments(linked.projectRoot().resolve(relative));
+            assertTrue(relative, Files.isSameFile(physical, normalized));
+        }
+    }
+
+    @Test
+    public void normalizeDotSegments_walksUpFromALinkToTheFilesystemRoot() throws Exception {
+        Assume.assumeFalse("Win32 folds .. before reaching the filesystem", PlatformUtils.isWindows());
+        Path root = Files.createTempDirectory("ccg-root-link-");
+        Path rootLink = root.resolve("rootlink");
+        createDirectorySymlinkOrSkip(rootLink, Path.of("/"));
+
+        assertEquals(Path.of("/tmp"), ProjectPathResolver.normalizeDotSegments(rootLink.resolve("../tmp")));
+        assertEquals(Path.of("/tmp"), ProjectPathResolver.normalizeDotSegments(Path.of("/../tmp")));
+    }
+
+    @Test(timeout = 5000)
+    public void normalizeDotSegments_foldsVeryLongPathsLexically() throws Exception {
+        Path root = Files.createTempDirectory("ccg-long-path-").toRealPath();
+        String link = "m/../".repeat(15_000) + "x.ts";
+
+        Path normalized = ProjectPathResolver.normalizeDotSegments(root.resolve(link));
+
+        assertEquals(root.resolve("x.ts"), normalized);
+    }
+
+    @Test
+    public void resolveFile_keepsTheLinkedPathWhenDotDotStaysInsideTheLink() throws Exception {
+        SymlinkProject linked = createProjectWithLinkedAssets();
+        OpenFileHandler handler = new OpenFileHandler(createContext(linked.projectRoot()));
+
+        OpenFileHandler.FileResolutionResult result = resolveFile(
+                handler, linked.projectRoot() + "/Assets/GameScripts/../GameScripts/abc.cs");
+
+        assertNotNull(result);
+        assertEquals(linked.projectFile(), result.file().toPath());
+    }
+
+    @Test
+    public void resolveDisplayPath_followsTheFilesystemForDotDotAfterALink() throws Exception {
+        Assume.assumeFalse("Win32 folds .. before reaching the filesystem", PlatformUtils.isWindows());
+        SymlinkProject linked = createProjectWithLinkedAssets();
+        Path physical = Files.writeString(linked.projectRoot().getParent().resolve("shared.cs"), "class Physical {}\n");
+        OpenFileHandler handler = new OpenFileHandler(createContext(linked.projectRoot()));
+        String expected = physical.toRealPath().toString().replace('\\', '/');
+
+        assertEquals(expected, handler.resolveDisplayPath(linked.projectRoot() + "/Assets/../shared.cs"));
+        assertEquals(expected, handler.resolveDisplayPath(linked.projectRoot() + "/Assets/../shared.cs:3"));
+    }
+
+    @Test
+    public void resolveFile_returnsNullForInvalidAbsolutePath() throws Exception {
+        Path projectRoot = Files.createTempDirectory("ccg-invalid-path");
+        OpenFileHandler handler = new OpenFileHandler(createContext(projectRoot));
+
+        assertNull(resolveFile(handler, projectRoot + "/a\u0000.cs"));
+    }
+
+    @Test
+    public void linkScan_findsShallowLinksBeforeALargeTreeUsesUpTheBudget() throws Exception {
+        Path root = Files.createTempDirectory("ccg-link-budget-").toRealPath();
+        try {
+            Path project = Files.createDirectory(root.resolve("project"));
+            Path outside = Files.createDirectory(root.resolve("outside"));
+            Path big = Files.createDirectory(project.resolve("big"));
+            for (int i = 0; i < 5100; i++) {
+                Files.createFile(big.resolve("file-" + i + ".txt"));
+            }
+            for (int i = 0; i < 8; i++) {
+                createDirectorySymlinkOrSkip(project.resolve("link-" + i), outside);
+            }
+
+            assertEquals(8, scanLinkedRoots(project).size());
+        } finally {
+            deleteRecursively(root);
+        }
+    }
+
+    @Test
+    public void linkScan_respectsDepthLimitAndSkippedDirectories() throws Exception {
+        Path root = Files.createTempDirectory("ccg-link-depth-").toRealPath();
+        try {
+            Path project = Files.createDirectory(root.resolve("project"));
+            Path outside = Files.createDirectory(root.resolve("outside"));
+            Path atLimit = Files.createDirectories(project.resolve("a/b/c")).resolve("at-limit");
+            Path tooDeep = Files.createDirectories(project.resolve("a/b/c/d")).resolve("too-deep");
+            Path insideSkipped = Files.createDirectories(project.resolve("node_modules")).resolve("skipped");
+            Path namedLikeSkipped = project.resolve("Library");
+            for (Path link : List.of(atLimit, tooDeep, insideSkipped, namedLikeSkipped)) {
+                createDirectorySymlinkOrSkip(link, outside);
+            }
+
+            String found = scanLinkedRoots(project).toString();
+
+            assertTrue(found, found.contains("at-limit"));
+            assertTrue(found, found.contains("Library"));
+            assertFalse(found, found.contains("too-deep"));
+            assertFalse(found, found.contains("skipped"));
+        } finally {
+            deleteRecursively(root);
+        }
+    }
+
+    private static OpenFileHandler.FileResolutionResult resolveFile(OpenFileHandler handler, String path) throws Exception {
+        var resolver = OpenFileHandler.class.getDeclaredMethod("resolveFile", String.class);
+        resolver.setAccessible(true);
+        return (OpenFileHandler.FileResolutionResult) resolver.invoke(handler, path);
+    }
+
+    private static List<?> scanLinkedRoots(Path project) throws Exception {
+        var scan = ProjectPathResolver.class.getDeclaredMethod("scanLinkedRoots", Path.class);
+        scan.setAccessible(true);
+        return (List<?>) scan.invoke(null, project);
+    }
+
+    private static void deleteRecursively(Path root) throws IOException {
+        // Files.walk does not follow symlinks, so links are removed as links.
+        try (var paths = Files.walk(root)) {
+            for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) {
+                Files.deleteIfExists(path);
+            }
+        }
+    }
+
     private static HandlerContext createContext(Path projectRoot) {
         Project project = (Project) Proxy.newProxyInstance(
                 Project.class.getClassLoader(),
@@ -347,5 +593,52 @@ public class OpenFileHandlerTest {
                 return str;
             }
         });
+    }
+
+    private static SymlinkProject createProjectWithLinkedAssets() throws IOException {
+        Path tempDirectory = Files.createTempDirectory("ccg-symlink-project");
+        Path physicalRoot = Files.createDirectory(tempDirectory.resolve("Project"));
+        Path physicalAssets = Files.createDirectories(physicalRoot.resolve("Assets").resolve("GameScripts"))
+                .getParent();
+        Path physicalFile = Files.writeString(
+                physicalAssets.resolve("GameScripts").resolve("abc.cs"),
+                "class Abc {}\n"
+        );
+
+        Path projectRoot = Files.createDirectory(physicalRoot.resolve("project_tuanjie"));
+        Path projectAssets = projectRoot.resolve("Assets");
+        createDirectorySymlinkOrSkip(projectAssets, physicalAssets);
+
+        return new SymlinkProject(projectRoot, physicalFile, projectAssets.resolve("GameScripts").resolve("abc.cs"));
+    }
+
+    private static void createDirectorySymlinkOrSkip(Path link, Path target) {
+        try {
+            Files.createSymbolicLink(link, target);
+        } catch (UnsupportedOperationException | IOException | SecurityException e) {
+            if (!PlatformUtils.isWindows()) {
+                Assume.assumeNoException(e);
+                return;
+            }
+            // Directory junctions exercise the Windows path without requiring
+            // administrator privileges or Developer Mode for symbolic links.
+            try {
+                Process process = new ProcessBuilder("cmd.exe", "/c", "mklink", "/J",
+                        link.toString(), target.toString()).redirectErrorStream(true).start();
+                if (!process.waitFor(5, TimeUnit.SECONDS)) {
+                    process.destroyForcibly();
+                    throw new IOException("Timed out creating test junction");
+                }
+                Assume.assumeTrue("filesystem refuses directory junction creation", process.exitValue() == 0);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError("Interrupted while creating test junction", interrupted);
+            } catch (IOException junctionError) {
+                Assume.assumeNoException(junctionError);
+            }
+        }
+    }
+
+    private record SymlinkProject(Path projectRoot, Path physicalFile, Path projectFile) {
     }
 }

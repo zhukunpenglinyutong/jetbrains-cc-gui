@@ -1,4 +1,5 @@
 import { memo, useMemo } from 'react';
+import { CodexQuestionBlock } from '../../toolBlocks/CodexQuestionBlock';
 import {
   BashToolBlock,
   EditToolBlock,
@@ -40,6 +41,10 @@ export function ToolUseBlock({ block, messageIndex, isStreaming, findToolResult 
   // Parse once per input snapshot: rebuilding the findings array on every
   // streaming re-render would defeat the memo on the specialized block.
   const report = useMemo(() => parseReportFindingsInput(block.input), [block.input]);
+
+  if (toolName === 'codex_user_input') {
+    return <CodexQuestionBlock input={block.input} />;
+  }
 
   if (toolName === 'todowrite' || toolName === 'update_plan' || TASK_MANAGE_TOOL_NAMES.has(toolName)) {
     return null;

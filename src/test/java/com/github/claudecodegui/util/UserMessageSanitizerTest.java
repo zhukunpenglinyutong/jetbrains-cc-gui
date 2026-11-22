@@ -113,4 +113,20 @@ public class UserMessageSanitizerTest {
         assertEquals(null, UserMessageSanitizer.sanitizeUserFacingText(null));
         assertEquals("", UserMessageSanitizer.sanitizeUserFacingText(""));
     }
+
+    @Test
+    public void stripsGlobalGrokRulesAndIdeContextFromUserPrompt() {
+        String raw = "hi\n\n## Global Grok Rules (~/.grok/grok-rules.md)\n\n"
+                + "## Code Exploration Rules (IMPORTANT for large codebases)\n"
+                + "- NEVER read an entire large file\n\n"
+                + "## IDE Context (opened files)\n```json\n{\"active\":\"src/Main.java\"}\n```\n\n"
+                + "## Attachments\nUser attached: notes.txt";
+        assertEquals("hi", UserMessageSanitizer.sanitizeUserFacingText(raw));
+    }
+
+    @Test
+    public void stripsGlobalGrokRulesOnlyMessageToEmpty() {
+        String raw = "## Global Grok Rules (~/.grok/grok-rules.md)\n\n- Rule 1";
+        assertEquals("", UserMessageSanitizer.sanitizeUserFacingText(raw));
+    }
 }

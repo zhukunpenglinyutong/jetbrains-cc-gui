@@ -31,12 +31,16 @@ export const TokenIndicator = ({
 
   const formatTokens = (value?: number) => {
     if (typeof value !== 'number' || !isFinite(value)) return undefined;
-    // Always display capacity in k (thousands) units
-    // e.g.: 1,000,000 -> 1000k, 500,000 -> 500k
+    // Use the largest readable unit, matching the context usage dialog
+    // e.g.: 1,000,000 -> 1M, 1,050,000 -> 1.05M, 500,000 -> 500k, 262,144 -> 262.1k
+    // Round once per unit: k keeps one decimal, M keeps two. A value that would
+    // round to 1000k (999,950 and up) is shown as 1M instead.
+    const kValue = Math.round(value / 100) / 10;
+    if (kValue >= 1_000) {
+      return `${Math.round(value / 10_000) / 100}M`;
+    }
     if (value >= 1_000) {
-      const kValue = value / 1_000;
-      // If it's a whole number, don't show decimal point
-      return Number.isInteger(kValue) ? `${kValue}k` : `${kValue.toFixed(1)}k`;
+      return `${kValue}k`;
     }
     return `${value}`;
   };

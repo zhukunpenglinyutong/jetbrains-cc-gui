@@ -11,6 +11,23 @@ vi.mock('../../utils/bridge', () => ({ openFile: vi.fn(), refreshFile: vi.fn(), 
 
 describe('file change cards', () => {
   beforeEach(() => { vi.clearAllMocks(); localStorage.clear(); });
+  it('keeps added lines and literal Markdown identical while streaming and after history reload', () => {
+    const lines = ['# Plan', '', '- list item', '+literal'];
+    const changes = [{ path: 'plan.md', kind: { type: 'add' }, diff: `${lines.join('\n')}\n` }];
+    localStorage.setItem('diffExpandedByDefault', 'true');
+    const { container, rerender } = render(<FileChangesToolBlock name="file_change" input={{ changes, status: 'inProgress' }} />);
+    expect(screen.getByText('+4')).toBeTruthy();
+    expect(screen.queryByText('-1')).toBeNull();
+    expect(container.querySelector('.tool-status-indicator.pending')).toBeTruthy();
+    expect(screen.getByText('- list item', { selector: 'pre' })).toBeTruthy();
+    expect(screen.getByText('+literal', { selector: 'pre' })).toBeTruthy();
+    rerender(<FileChangesToolBlock name="file_change" input={{ changes, status: 'completed' }} />);
+    const nativeCard = container.querySelector('.edit-file-card')?.innerHTML;
+    rerender(<FileChangesToolBlock name="apply_patch" input={{ patch: ['*** Begin Patch', '*** Add File: plan.md',
+      ...lines.map(line => `+${line}`), '*** End Patch'].join('\n') }} result={{ type: 'tool_result', content: 'Success' }} />);
+    expect(container.querySelector('.edit-file-card')?.innerHTML).toBe(nativeCard);
+  });
+
   it('shows all patch files, opens the move destination, and expands the supplied diff', () => {
     const { container } = render(<FileChangesToolBlock name="apply_patch" input={{ patch:
       '*** Begin Patch\n*** Update File: old.ts\n*** Move to: new.ts\n@@\n-old line\n+new line\n*** Delete File: gone.ts\n*** End Patch' }}
@@ -30,7 +47,7 @@ describe('file change cards', () => {
     expect(showDiff).not.toHaveBeenCalled();
   });
   it('does not mark proposed or declined native patches as successful', () => {
-    const input = { changes: [{ path: 'a.ts', kind: 'add', diff: '+content' }], status: 'inProgress' };
+    const input = { changes: [{ path: 'a.ts', kind: 'add', diff: 'content\n' }], status: 'inProgress' };
     const { container, rerender } = render(<FileChangesToolBlock name="file_change" input={input} />);
     expect(container.querySelector('.tool-status-indicator.pending')).toBeTruthy();
     rerender(<FileChangesToolBlock name="file_change" input={{ ...input, status: 'declined' }} />);

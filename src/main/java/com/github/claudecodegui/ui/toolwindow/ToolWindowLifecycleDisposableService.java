@@ -9,7 +9,7 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Project-scoped disposable holder for tool window listeners.
+ * Project-scoped disposable holder for plugin tool window listeners and background tasks.
  */
 @Service(Service.Level.PROJECT)
 public final class ToolWindowLifecycleDisposableService implements Disposable {
@@ -38,6 +38,6 @@ public final class ToolWindowLifecycleDisposableService implements Disposable {
 
     @Override
     public void dispose() {
-        // No-op. This service provides a project-scoped disposable parent.
+        // The platform disposes child registrations on project close and plugin unload.
     }
 }

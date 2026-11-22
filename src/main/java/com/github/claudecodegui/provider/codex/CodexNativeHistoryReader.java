@@ -8,7 +8,11 @@ import com.google.gson.JsonObject;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.function.BooleanSupplier;
 
 /** Loads native display pages without resuming a thread or claiming a writer. */
 public final class CodexNativeHistoryReader {
@@ -33,20 +37,40 @@ public final class CodexNativeHistoryReader {
 
     /** Loads a page and retains the storage capability selected on the first read. */
     public Page readPage(JsonElement cursor, int limit) throws Exception {
+        return this.readPage(cursor, limit, () -> false);
+    }
+
+    /** Cancels this display read without interrupting the shared chat runtime. */
+    public Page readPage(JsonElement cursor, int limit, BooleanSupplier cancellation) throws Exception {
+        checkCancellation(cancellation);
         JsonObject params = new JsonObject();
         params.add("cursor", cursor == null ? JsonNull.INSTANCE : cursor.deepCopy());
         params.addProperty("limit", limit);
         params.addProperty("readMode", this.readMode);
+        CompletableFuture<JsonObject> readFuture = this.bridge.readCodexNative("codex.readHistoryPage", this.channelId,
+                this.cwd, this.threadId, params);
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(125);
         JsonObject response;
         try {
-            response = this.bridge.readCodexNative("codex.readHistoryPage", this.channelId,
-                    this.cwd, this.threadId, params).get(125, TimeUnit.SECONDS);
-        } catch (java.util.concurrent.TimeoutException timeout) {
-            // TimeoutException carries a null message; give the failure text the
-            // offline-fallback classifier can match so a wedged app-server
-            // degrades to the legacy read-only rollout instead of an error.
-            throw new IllegalStateException("Native Codex history read timed out", timeout);
+            while (true) {
+                checkCancellation(cancellation);
+                long remainingNanos = deadline - System.nanoTime();
+                if (remainingNanos <= 0) {
+                    throw new TimeoutException("Native Codex history loading timed out");
+                }
+                try {
+                    response = readFuture.get(Math.min(remainingNanos, TimeUnit.MILLISECONDS.toNanos(100)), TimeUnit.NANOSECONDS);
+                    break;
+                } catch (TimeoutException waiting) {
+                    // Recheck request ownership while the shared runtime is still reading.
+                }
+            }
+        } finally {
+            if (!readFuture.isDone()) {
+                readFuture.cancel(false);
+            }
         }
+        checkCancellation(cancellation);
         if (response == null || response.has("error")) {
             throw new IllegalStateException(response == null ? "Native Codex history returned no response"
                     : response.get("error").getAsString());
@@ -60,6 +84,12 @@ public final class CodexNativeHistoryReader {
         JsonElement next = response.get("cursor");
         boolean partial = response.has("partial") && response.get("partial").getAsBoolean();
         return new Page(messages, thread.deepCopy(), next == null ? JsonNull.INSTANCE : next.deepCopy(), this.readMode, partial);
+    }
+
+    private static void checkCancellation(BooleanSupplier cancellation) {
+        if (cancellation.getAsBoolean()) {
+            throw new CancellationException("History loading was cancelled");
+        }
     }
 
     /** Limits offline fallback to unavailable transport; policy and writer errors remain errors. */

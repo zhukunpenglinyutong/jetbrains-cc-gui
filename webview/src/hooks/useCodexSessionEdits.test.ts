@@ -23,7 +23,7 @@ describe('whole-session Codex edits', () => {
       initialProps: ['codex', 'session-a', [recent], false] as [string, string, ClaudeMessage[], boolean],
     });
     expect(sendToJava).toHaveBeenCalledWith('codex_native_read_thread', expect.objectContaining({
-      threadId: 'session-a', params: { includeTurns: true, fileChangesOnly: true },
+      threadId: 'session-a', params: { fileChangesOnly: true },
     }));
     deliver(request().requestId, 'session-a', [edit('old', '/old.ts'), recent]);
     expect(result.current).toHaveLength(2);

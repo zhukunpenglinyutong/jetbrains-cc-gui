@@ -302,6 +302,7 @@
   color: var(--text-secondary);
 }
 
+.message-queue-edit,
 .message-queue-remove {
   flex-shrink: 0;
   display: flex;
@@ -318,11 +319,23 @@
   transition: all 0.15s;
 }
 
+.message-queue-edit:hover {
+  background: var(--button-primary);
+  color: white;
+}
+
 .message-queue-remove:hover {
   background: var(--error-color);
   color: white;
 }
 
+.message-queue-edit:focus-visible,
+.message-queue-remove:focus-visible {
+  outline: 2px solid var(--button-primary);
+  outline-offset: 1px;
+}
+
+.message-queue-edit .codicon,
 .message-queue-remove .codicon {
   font-size: 12px;
 }

@@ -2,6 +2,8 @@ package com.github.claudecodegui.provider.grok;
 
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.provider.common.HistoryPathMatcher;
+import com.github.claudecodegui.provider.common.HistoryCancellation;
+import com.github.claudecodegui.util.UserMessageSanitizer;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -24,6 +26,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BooleanSupplier;
 
 /**
  * Reads Grok CLI session history from
@@ -35,6 +38,12 @@ public class GrokHistoryReader {
     private static final Logger LOG = Logger.getInstance(GrokHistoryReader.class);
     private static final int MAX_TITLE_CHARS = 80;
     private static final int MAX_TOOL_RESULT_CHARS = 20_000;
+
+    private static final String KEY_TOOL_RESULT = "tool_result";
+    private static final String KEY_TOOL_USE_ID = "tool_use_id";
+    private static final String KEY_GROK_TOOL_PREFIX = "grok-tool-";
+    private static final String KEY_CONTENT = "content";
+    private static final String KEY_MESSAGE = "message";
 
     private final Gson gson;
     /** Ordered session roots (primary GROK_HOME first, then fallbacks). */
@@ -231,6 +240,14 @@ public class GrokHistoryReader {
             }
         }
 
+        if (info.model == null || info.model.isBlank()) {
+            GrokSessionCompanionFiles.SessionUsageTotals usageTotals =
+                    GrokSessionCompanionFiles.readUsageTotals(sessionDir);
+            if (usageTotals != null && usageTotals.model != null && !usageTotals.model.isBlank()) {
+                info.model = usageTotals.model;
+            }
+        }
+
         String firstUserPrompt = null;
         if (Files.isRegularFile(chatPath)) {
             try {
@@ -266,16 +283,37 @@ public class GrokHistoryReader {
      * {@link com.github.claudecodegui.session.MessageParser}.
      */
     public List<JsonObject> getSessionMessages(String sessionId, String cwd) throws IOException {
-        Path sessionDir = resolveSessionDir(sessionId, cwd);
+        return getSessionMessagesInternal(sessionId, cwd, () -> false, false);
+    }
+
+    public List<JsonObject> getSessionMessages(String sessionId, String cwd,
+                                               BooleanSupplier cancellation) throws IOException {
+        return getSessionMessagesInternal(sessionId, cwd, cancellation, true);
+    }
+
+    private List<JsonObject> getSessionMessagesInternal(String sessionId, String cwd,
+                                                         BooleanSupplier cancellation, boolean failMissing) throws IOException {
+        HistoryCancellation.check(cancellation);
+        Path sessionDir = resolveSessionDir(sessionId, cwd, cancellation);
         if (sessionDir == null) {
+            if (failMissing) {
+                requireScannableSessionRoots();
+                throw new com.github.claudecodegui.provider.common.SessionHistoryNotFoundException(sessionId, cwd);
+            }
+
             LOG.warn("[GrokHistoryReader] Session dir not found for id=" + sessionId + " cwd=" + cwd);
             return List.of();
         }
         Path chatPath = sessionDir.resolve("chat_history.jsonl");
         if (!Files.isRegularFile(chatPath)) {
+            if (failMissing) {
+                // The session directory exists, so a transcript not written yet is retryable, never a retirement signal.
+                throw new IOException("Grok session history is not readable yet: " + sessionId);
+            }
+
             return List.of();
         }
-        return parseChatHistoryToMessages(chatPath);
+        return parseChatHistoryToMessages(chatPath, cancellation);
     }
 
     public boolean deleteSession(String sessionId, String projectPath) throws IOException {
@@ -307,6 +345,12 @@ public class GrokHistoryReader {
     }
 
     private Path resolveSessionDir(String sessionId, String cwd) {
+        return resolveSessionDir(sessionId, cwd, () -> false);
+    }
+
+    private Path resolveSessionDir(String sessionId, String cwd,
+                                   BooleanSupplier cancellation) {
+        HistoryCancellation.check(cancellation);
         if (sessionId == null || sessionId.trim().isEmpty()) {
             return null;
         }
@@ -318,6 +362,7 @@ public class GrokHistoryReader {
             String encoded = encodeCwd(cwd);
             String encodedCanon = encodeCwd(canonicalizePath(cwd));
             for (Path sessionsRoot : sessionsRoots) {
+                HistoryCancellation.check(cancellation);
                 Path direct = sessionsRoot.resolve(encoded).resolve(id);
                 if (Files.isDirectory(direct)) {
                     return direct;
@@ -329,16 +374,23 @@ public class GrokHistoryReader {
                 }
             }
         }
-        return findSessionDirById(id);
+        return findSessionDirById(id, cancellation);
     }
 
     private Path findSessionDirById(String sessionId) {
+        return findSessionDirById(sessionId, () -> false);
+    }
+
+    private Path findSessionDirById(String sessionId,
+                                    BooleanSupplier cancellation) {
         for (Path sessionsRoot : sessionsRoots) {
+            HistoryCancellation.check(cancellation);
             if (!Files.isDirectory(sessionsRoot)) {
                 continue;
             }
             try (DirectoryStream<Path> cwdDirs = Files.newDirectoryStream(sessionsRoot)) {
                 for (Path cwdDir : cwdDirs) {
+                    HistoryCancellation.check(cancellation);
                     if (!Files.isDirectory(cwdDir)) {
                         continue;
                     }
@@ -355,12 +407,31 @@ public class GrokHistoryReader {
         return null;
     }
 
+    /** A root the id scan could not list proves nothing about the session, so restore retries instead. */
+    private void requireScannableSessionRoots() throws IOException {
+        for (Path sessionsRoot : sessionsRoots) {
+            if (Files.isDirectory(sessionsRoot)) {
+                try (DirectoryStream<Path> ignored = Files.newDirectoryStream(sessionsRoot)) {
+                    // Opening the stream is the readability check.
+                }
+            }
+        }
+    }
+
     List<JsonObject> parseChatHistoryToMessages(Path chatPath) throws IOException {
+        return parseChatHistoryToMessages(chatPath, () -> false);
+    }
+
+    private List<JsonObject> parseChatHistoryToMessages(
+            Path chatPath,
+            BooleanSupplier cancellation
+    ) throws IOException {
         List<JsonObject> messages = new ArrayList<>();
         try (BufferedReader reader = Files.newBufferedReader(chatPath, StandardCharsets.UTF_8)) {
             String line;
             int counter = 0;
             while ((line = reader.readLine()) != null) {
+                HistoryCancellation.check(cancellation);
                 line = line.trim();
                 if (line.isEmpty() || !line.contains("\"type\"")) {
                     continue;
@@ -371,15 +442,31 @@ public class GrokHistoryReader {
                 } catch (Exception e) {
                     continue;
                 }
-                String type = value.has("type") && !value.get("type").isJsonNull()
-                        ? value.get("type").getAsString()
-                        : "";
+                String type = primitiveString(value, "type", "");
                 switch (type) {
                     case "user" -> {
                         if (value.has("synthetic_reason")) {
                             continue;
                         }
-                        String rawText = extractContentText(value.get("content"));
+                        JsonElement contentEl = resolveMessageContent(value);
+                        if (containsToolResultBlock(contentEl)) {
+                            for (JsonElement el : contentEl.getAsJsonArray()) {
+                                if (!isToolResultBlock(el)) {
+                                    continue;
+                                }
+                                JsonObject block = el.getAsJsonObject();
+                                String callId = primitiveString(block, KEY_TOOL_USE_ID, null);
+                                if (callId == null) {
+                                    callId = KEY_GROK_TOOL_PREFIX + (++counter);
+                                }
+                                String content = truncate(stringifyContent(block.get(KEY_CONTENT)), MAX_TOOL_RESULT_CHARS);
+                                if (!content.isBlank()) {
+                                    messages.add(buildToolResultMessage(callId, content));
+                                }
+                            }
+                            continue;
+                        }
+                        String rawText = extractContentText(contentEl);
                         if (isRuntimeContextUserText(rawText)) {
                             continue;
                         }
@@ -399,7 +486,7 @@ public class GrokHistoryReader {
                         messages.add(buildAssistantThinkingMessage(text, "grok-reasoning-" + counter));
                     }
                     case "assistant" -> {
-                        String text = extractContentText(value.get("content"));
+                        String text = extractContentText(resolveMessageContent(value));
                         if (!text.isBlank()) {
                             counter++;
                             messages.add(buildAssistantTextMessage(text, "grok-assistant-" + counter));
@@ -412,19 +499,21 @@ public class GrokHistoryReader {
                                 }
                                 JsonObject call = el.getAsJsonObject();
                                 String toolName = resolveToolName(call);
-                                String callId = call.has("id") && !call.get("id").isJsonNull()
-                                        ? call.get("id").getAsString()
-                                        : ("grok-tool-" + (++counter));
+                                String callId = primitiveString(call, "id", null);
+                                if (callId == null) {
+                                    callId = KEY_GROK_TOOL_PREFIX + (++counter);
+                                }
                                 JsonObject input = resolveToolArguments(call);
                                 messages.add(buildToolUseMessage(callId, toolName, input));
                             }
                         }
                     }
-                    case "tool_result" -> {
-                        String callId = value.has("tool_call_id") && !value.get("tool_call_id").isJsonNull()
-                                ? value.get("tool_call_id").getAsString()
-                                : ("grok-tool-" + (++counter));
-                        String content = truncate(stringifyContent(value.get("content")), MAX_TOOL_RESULT_CHARS);
+                    case KEY_TOOL_RESULT -> {
+                        String callId = primitiveString(value, "tool_call_id", null);
+                        if (callId == null) {
+                            callId = KEY_GROK_TOOL_PREFIX + (++counter);
+                        }
+                        String content = truncate(stringifyContent(resolveMessageContent(value)), MAX_TOOL_RESULT_CHARS);
                         if (content.isBlank()) {
                             continue;
                         }
@@ -436,7 +525,54 @@ public class GrokHistoryReader {
                 }
             }
         }
+        GrokSessionCompanionFiles.restoreSessionContext(chatPath.getParent(), messages, cancellation);
         return messages;
+    }
+
+    GrokSessionCompanionFiles.SessionUsageTotals readSessionUsageTotals(String sessionId, String cwd) {
+        return GrokSessionCompanionFiles.readUsageTotals(resolveSessionDir(sessionId, cwd));
+    }
+
+    private static JsonElement resolveMessageContent(JsonObject value) {
+        if (value == null) {
+            return null;
+        }
+        if (value.has(KEY_CONTENT) && !value.get(KEY_CONTENT).isJsonNull()) {
+            return value.get(KEY_CONTENT);
+        }
+        if (value.has(KEY_MESSAGE) && value.get(KEY_MESSAGE).isJsonObject()) {
+            JsonObject message = value.getAsJsonObject(KEY_MESSAGE);
+            if (message.has(KEY_CONTENT) && !message.get(KEY_CONTENT).isJsonNull()) {
+                return message.get(KEY_CONTENT);
+            }
+        }
+        return null;
+    }
+
+    private static boolean containsToolResultBlock(JsonElement content) {
+        if (content == null || !content.isJsonArray()) {
+            return false;
+        }
+        for (JsonElement el : content.getAsJsonArray()) {
+            if (isToolResultBlock(el)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isToolResultBlock(JsonElement el) {
+        return el != null && el.isJsonObject()
+                && KEY_TOOL_RESULT.equals(primitiveString(el.getAsJsonObject(), "type", null));
+    }
+
+    /**
+     * Reads a string-like field. A value that is null, an array or an object yields the
+     * fallback, so one malformed transcript line cannot abort the whole history load.
+     */
+    private static String primitiveString(JsonObject obj, String key, String fallback) {
+        JsonElement value = obj.get(key);
+        return value != null && value.isJsonPrimitive() ? value.getAsString() : fallback;
     }
 
     private static JsonObject buildUserTextMessage(String text, String uuid) {
@@ -450,8 +586,8 @@ public class GrokHistoryReader {
         block.addProperty("type", "text");
         block.addProperty("text", text);
         content.add(block);
-        message.add("content", content);
-        root.add("message", message);
+        message.add(KEY_CONTENT, content);
+        root.add(KEY_MESSAGE, message);
         return root;
     }
 
@@ -466,8 +602,8 @@ public class GrokHistoryReader {
         block.addProperty("type", "text");
         block.addProperty("text", text);
         content.add(block);
-        message.add("content", content);
-        root.add("message", message);
+        message.add(KEY_CONTENT, content);
+        root.add(KEY_MESSAGE, message);
         return root;
     }
 
@@ -482,8 +618,8 @@ public class GrokHistoryReader {
         block.addProperty("type", "thinking");
         block.addProperty("thinking", text);
         content.add(block);
-        message.add("content", content);
-        root.add("message", message);
+        message.add(KEY_CONTENT, content);
+        root.add(KEY_MESSAGE, message);
         return root;
     }
 
@@ -499,8 +635,8 @@ public class GrokHistoryReader {
         block.addProperty("name", name);
         block.add("input", input != null ? input : new JsonObject());
         content.add(block);
-        message.add("content", content);
-        root.add("message", message);
+        message.add(KEY_CONTENT, content);
+        root.add(KEY_MESSAGE, message);
         return root;
     }
 
@@ -511,13 +647,13 @@ public class GrokHistoryReader {
         message.addProperty("role", "user");
         JsonArray content = new JsonArray();
         JsonObject block = new JsonObject();
-        block.addProperty("type", "tool_result");
-        block.addProperty("tool_use_id", toolUseId);
+        block.addProperty("type", KEY_TOOL_RESULT);
+        block.addProperty(KEY_TOOL_USE_ID, toolUseId);
         block.addProperty("is_error", false);
-        block.addProperty("content", contentText);
+        block.addProperty(KEY_CONTENT, contentText);
         content.add(block);
-        message.add("content", content);
-        root.add("message", message);
+        message.add(KEY_CONTENT, content);
+        root.add(KEY_MESSAGE, message);
         return root;
     }
 
@@ -684,10 +820,11 @@ public class GrokHistoryReader {
         // Prefer <user_query> body when present
         int start = text.indexOf("<user_query>");
         int end = text.indexOf("</user_query>");
-        if (start >= 0 && end > start) {
-            return text.substring(start + "<user_query>".length(), end).trim();
-        }
-        return text;
+        String body = (start >= 0 && end > start)
+                ? text.substring(start + "<user_query>".length(), end).trim()
+                : text;
+        String sanitized = UserMessageSanitizer.sanitizeUserFacingText(body);
+        return sanitized != null ? sanitized : "";
     }
 
     private static boolean isRuntimeContextUserText(String raw) {
@@ -728,7 +865,7 @@ public class GrokHistoryReader {
                     if (value.has("synthetic_reason")) {
                         continue;
                     }
-                    String raw = extractContentText(value.get("content"));
+                    String raw = extractContentText(resolveMessageContent(value));
                     if (isRuntimeContextUserText(raw)) {
                         continue;
                     }

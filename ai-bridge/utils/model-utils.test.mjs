@@ -5,6 +5,7 @@ import {
   mapModelIdToSdkName,
   readConfiguredModelTiers,
   resolveModelFromSettings,
+  resolveModelTierEnvKey,
   resolveSdkModelName,
   setModelEnvironmentVariables,
 } from './model-utils.js';
@@ -378,4 +379,15 @@ test('setModelEnvironmentVariables routes haiku base to haiku env', () => {
       else process.env[key] = value;
     }
   }
+});
+
+test('resolveModelTierEnvKey picks the tier env var a request model owns', () => {
+  assert.equal(resolveModelTierEnvKey('claude-fable-5-1'), 'ANTHROPIC_DEFAULT_FABLE_MODEL');
+  assert.equal(resolveModelTierEnvKey('claude-opus-4-7[1m]'), 'ANTHROPIC_DEFAULT_OPUS_MODEL');
+  assert.equal(resolveModelTierEnvKey('Claude-Haiku-4-5'), 'ANTHROPIC_DEFAULT_HAIKU_MODEL');
+  assert.equal(resolveModelTierEnvKey('claude-sonnet-4-6'), 'ANTHROPIC_DEFAULT_SONNET_MODEL');
+  // Non-Anthropic names fall back to the sonnet tier, matching mapModelIdToSdkName().
+  assert.equal(resolveModelTierEnvKey('qwen3.5-plus'), 'ANTHROPIC_DEFAULT_SONNET_MODEL');
+  assert.equal(resolveModelTierEnvKey(''), null);
+  assert.equal(resolveModelTierEnvKey(null), null);
 });

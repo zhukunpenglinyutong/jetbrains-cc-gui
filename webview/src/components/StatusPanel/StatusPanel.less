@@ -2,6 +2,43 @@
 .status-panel {
   position: relative;
   margin: 0 20px 8px 20px;
+  /* Collapsing the panel also drops the gap above the input area. */
+  transition: margin-bottom 0.2s ease;
+}
+
+/* Accordion wrapper: grid rows track the tab header height, so expand /
+   collapse eases instead of snapping. The popover is absolutely positioned
+   and therefore outside the clipped wrapper. */
+.status-panel-collapse {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.2s ease;
+}
+
+.status-panel-collapse-inner {
+  min-height: 0;
+  overflow: hidden;
+  transition: opacity 0.16s ease;
+}
+
+.status-panel.collapsed {
+  margin-bottom: 0;
+
+  .status-panel-collapse {
+    grid-template-rows: 0fr;
+  }
+
+  .status-panel-collapse-inner {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-panel,
+  .status-panel-collapse,
+  .status-panel-collapse-inner {
+    transition: none;
+  }
 }
 
 /* Tab Header - Always visible */

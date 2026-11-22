@@ -7,6 +7,7 @@ interface UseDialogCountdownTimeoutOptions {
   requestKey?: string | null;
   timeoutSeconds: number;
   deadlineMs?: number;
+  timeoutEnabled?: boolean;
   /** Return `false` when the timeout decision could not be sent (refused bridge
    * write); the dialog then re-arms instead of deadlocking on the next click. */
   onTimeout: () => void | boolean;
@@ -25,6 +26,7 @@ export function useDialogCountdownTimeout({
   requestKey,
   timeoutSeconds,
   deadlineMs,
+  timeoutEnabled = true,
   onTimeout,
 }: UseDialogCountdownTimeoutOptions): UseDialogCountdownTimeoutReturn {
   const [remainingSeconds, setRemainingSeconds] = useState(timeoutSeconds);
@@ -64,6 +66,12 @@ export function useDialogCountdownTimeout({
   useEffect(() => {
     if (!isOpen || !requestKey) return;
 
+    if (!timeoutEnabled) {
+      deadlineMsRef.current = Number.POSITIVE_INFINITY;
+      submittedRef.current = false;
+      setRemainingSeconds(0);
+      return;
+    }
     deadlineMsRef.current = typeof deadlineMs === 'number' && Number.isFinite(deadlineMs) && deadlineMs > 0
       ? deadlineMs
       : Date.now() + timeoutOptionsRef.current.timeoutSeconds * 1000;
@@ -86,12 +94,12 @@ export function useDialogCountdownTimeout({
     }, 1000);
     return () => clearInterval(timer);
     // Channels may reuse IDs; a new deadline must also start an independent timer lifecycle.
-  }, [isOpen, requestKey, deadlineMs, triggerTimeout]);
+  }, [isOpen, requestKey, deadlineMs, timeoutEnabled, triggerTimeout]);
 
   return {
     remainingSeconds,
-    isTimeWarning: remainingSeconds <= WARNING_THRESHOLD_SECONDS && remainingSeconds > 0,
-    isTimedOut: remainingSeconds <= 0,
+    isTimeWarning: timeoutEnabled && remainingSeconds <= WARNING_THRESHOLD_SECONDS && remainingSeconds > 0,
+    isTimedOut: timeoutEnabled && remainingSeconds <= 0,
     markSubmitted,
     restoreSubmission,
   };

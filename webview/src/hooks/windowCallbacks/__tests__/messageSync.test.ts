@@ -8,6 +8,8 @@ import {
   getStreamEndHandlingMode,
   getRawUuid,
   getMessageTimestampMs,
+  chooseEndedStreamingContent,
+  ensureRawTextCovers,
   mergeRawBlocksForFinalization,
   STRUCTURAL_BLOCK_TYPES,
   preserveLastAssistantIdentity,
@@ -1482,5 +1484,82 @@ describe('mergeRawBlocksForFinalization', () => {
     const merged = mergeRawBlocksForFinalization(previous, backend);
 
     expect(typesOf(merged)).toEqual(['thinking', 'thinking']);
+  });
+});
+
+describe('chooseEndedStreamingContent', () => {
+  it('keeps a snapshot that continues the streamed prefix', () => {
+    expect(chooseEndedStreamingContent('лайфхак св', 'лайфхак связки с Home Assistant.'))
+      .toBe('лайфхак связки с Home Assistant.');
+  });
+
+  it('keeps the streamed buffer when the snapshot is shorter or unrelated', () => {
+    expect(chooseEndedStreamingContent('полный ответ', 'полный')).toBe('полный ответ');
+    expect(chooseEndedStreamingContent('alpha', 'beta and more')).toBe('alpha');
+    expect(chooseEndedStreamingContent('', 'only snapshot')).toBe('only snapshot');
+  });
+});
+
+describe('ensureRawTextCovers', () => {
+  it('appends the missing tail onto the last text block', () => {
+    const raw = { message: { content: [{ type: 'tool_use', id: 't' }, { type: 'text', text: 'лайфхак св' }] } };
+    const covered = ensureRawTextCovers(raw, 'beforeлайфхак связки');
+    // joined text is only the text block; a full content that does not start with it is left alone
+    expect(covered).toBe(raw);
+    const extended = ensureRawTextCovers(raw, 'лайфхак связки с Home Assistant.');
+    expect((extended as { message: { content: Array<{ text?: string }> } }).message.content[1].text)
+      .toBe('лайфхак связки с Home Assistant.');
+  });
+
+  it('pushes a text block after a trailing non-text block or wraps unparseable raw', () => {
+    const toolOnlyRaw = { message: { content: [{ type: 'tool_use', id: 't' }] } };
+    const withPushedText = ensureRawTextCovers(toolOnlyRaw, 'Hello world') as {
+      message: { content: Array<{ type: string; text?: string }> };
+    };
+    expect(withPushedText.message.content).toEqual([
+      { type: 'tool_use', id: 't' },
+      { type: 'text', text: 'Hello world' },
+    ]);
+
+    const wrapped = ensureRawTextCovers(undefined, 'Hello world');
+    expect(wrapped).toEqual({
+      message: { content: [{ type: 'text', text: 'Hello world' }] },
+    });
+
+    const multiSegmentRaw = {
+      message: {
+        content: [
+          { type: 'text', text: 'Step 1. ' },
+          { type: 'tool_use', id: 't' },
+          { type: 'text', text: 'Step 2' },
+        ],
+      },
+    };
+    const extendedMulti = ensureRawTextCovers(multiSegmentRaw, 'Step 1. Step 2 done.') as {
+      message: { content: Array<{ type: string; id?: string; text?: string }> };
+    };
+    expect(extendedMulti.message.content).toEqual([
+      { type: 'text', text: 'Step 1. ' },
+      { type: 'tool_use', id: 't' },
+      { type: 'text', text: 'Step 2 done.' },
+    ]);
+
+    const preToolTextRaw = {
+      message: {
+        content: [
+          { type: 'text', text: 'Step 1. ' },
+          { type: 'tool_use', id: 't' },
+        ],
+      },
+    };
+    const pushedPostToolSuffix = ensureRawTextCovers(preToolTextRaw, 'Step 1. Step 2 done.') as {
+      message: { content: Array<{ type: string; id?: string; text?: string }> };
+    };
+    expect(pushedPostToolSuffix.message.content).toEqual([
+      { type: 'text', text: 'Step 1. ' },
+      { type: 'tool_use', id: 't' },
+      { type: 'text', text: 'Step 2 done.' },
+    ]);
+    expect(ensureRawTextCovers(preToolTextRaw, 'Step 1. ')).toBe(preToolTextRaw);
   });
 });

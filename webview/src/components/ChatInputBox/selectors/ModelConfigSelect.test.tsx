@@ -134,7 +134,7 @@ describe('ModelConfigSelect', () => {
     expect(screen.queryByTestId('model-config-option-speed')).toBeNull();
   });
 
-  it('selects a model from the inline list without closing the popover', () => {
+  it('closes the popover after switching to a different model', () => {
     const onModelSelect = vi.fn();
     render(
       <ModelConfigSelect
@@ -151,6 +151,25 @@ describe('ModelConfigSelect', () => {
     fireEvent.click(screen.getByTestId('model-option-claude-haiku-4-5'));
 
     expect(onModelSelect).toHaveBeenCalledWith('claude-haiku-4-5');
+    expect(screen.queryByTestId('model-config-dropdown')).toBeNull();
+  });
+
+  it('keeps the popover open when clicking the already-selected model', () => {
+    const onModelSelect = vi.fn();
+    render(
+      <ModelConfigSelect
+        selectedModel="claude-sonnet-5"
+        onModelSelect={onModelSelect}
+        models={claudeModels}
+        currentProvider="claude"
+        reasoningEffort="high"
+        onReasoningChange={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('model-config-trigger'));
+    fireEvent.click(screen.getByTestId('model-option-claude-sonnet-5'));
+
     expect(screen.getByTestId('model-config-dropdown')).toBeTruthy();
   });
 

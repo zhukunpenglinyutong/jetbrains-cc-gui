@@ -1,5 +1,7 @@
 package com.github.claudecodegui.handler;
 
+import com.github.claudecodegui.session.ClaudeSession;
+
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.permission.PermissionService;
 import com.github.claudecodegui.settings.CodemossSettingsService;
@@ -39,6 +41,52 @@ public class PermissionHandlerTest {
     public void setUp() {
         recordingJsCallback = new RecordingJsCallback();
         handler = new PermissionHandler(contextStub());
+    }
+
+    @Test
+    public void officeWaitUsesActualQuestionPlanAndPermissionFuturesAcrossRebinding() {
+        HandlerContext context = contextStub();
+        ClaudeSession session = new ClaudeSession(null, null, null, null);
+        session.getState().beginTurn();
+        context.setSession(session);
+        PermissionHandler configured = new PermissionHandler(context, new FakeSafetyNetScheduler(), new FakeEdtDispatcher(),
+                new FakeAskUserQuestionVisualNotifier(), new FakeAskUserQuestionSoundNotifier());
+        com.github.claudecodegui.session.SessionExecutionOwnership old = session.getState().currentExecutionOwnership();
+        CompletableFuture<JsonObject> question = configured.showAskUserQuestionDialog("office-question", new JsonObject());
+        assertEquals(com.github.claudecodegui.session.SessionExecutionState.WaitReason.QUESTION, old.state().snapshot().waitReason());
+        session.setProvider("codex");
+        session.getState().beginTurn();
+        CompletableFuture<JsonObject> plan = configured.showPlanApprovalDialog("office-plan", new JsonObject());
+        assertEquals(com.github.claudecodegui.session.SessionExecutionState.WaitReason.PLAN, session.getState().getExecutionSnapshot().waitReason());
+        question.complete(new JsonObject());
+        assertEquals(0, old.state().snapshot().pendingInteractionCount());
+        assertFalse(plan.isDone());
+        CompletableFuture<Integer> permission = configured.showFrontendPermissionDialog("Bash", new JsonObject());
+        assertEquals(2, session.getState().getExecutionSnapshot().pendingInteractionCount());
+        configured.clearPendingRequests();
+        assertTrue(plan.isDone());
+        assertTrue(permission.isDone());
+        assertEquals(0, session.getState().getExecutionSnapshot().pendingInteractionCount());
+        assertEquals(com.github.claudecodegui.session.SessionExecutionState.Outcome.NONE, session.getState().getExecutionSnapshot().outcome());
+    }
+
+    @Test
+    public void obsoleteFileRequestCannotAddOfficeWaitToTheNextTurn() {
+        HandlerContext context = contextStub();
+        ClaudeSession session = new ClaudeSession(null, null, null, null);
+        session.getState().beginTurn();
+        context.setSession(session);
+        com.github.claudecodegui.session.SessionExecutionOwnership old = session.getState().currentExecutionOwnership();
+        session.getState().beginTurn();
+        PermissionHandler configured = new PermissionHandler(context, new FakeSafetyNetScheduler(), new FakeEdtDispatcher(),
+                new FakeAskUserQuestionVisualNotifier(), new FakeAskUserQuestionSoundNotifier());
+        CompletableFuture<JsonObject> question = com.github.claudecodegui.session.SessionInteractionScope.forFileRequest(
+                old.turn().bindingEpoch() + "/" + old.turn().turnId(), session.getState().currentExecutionOwnership(),
+                () -> configured.showAskUserQuestionDialog("stale-office-question", new JsonObject()));
+        assertEquals(0, session.getState().getExecutionSnapshot().pendingInteractionCount());
+        configured.clearPendingRequests();
+        assertTrue(question.isDone());
+        assertEquals(com.github.claudecodegui.session.SessionExecutionState.Phase.RUNNING, session.getState().getExecutionSnapshot().phase());
     }
 
     @Test

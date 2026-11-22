@@ -265,7 +265,15 @@ public class DependencyManager {
 
     static VersionQueryResult parseVersionInfo(String output) throws IOException {
         try {
-            JsonObject metadata = JsonParser.parseString(output).getAsJsonObject();
+            // npm 12 wraps the multi-field object in an array
+            // (`[{"versions": [...], "dist-tags.latest": "..."}]`), while older npm
+            // prints the object itself. Unwrap single-element arrays so both shapes
+            // reach the same object; any other array still fails as invalid.
+            com.google.gson.JsonElement element = JsonParser.parseString(output);
+            while (element.isJsonArray() && element.getAsJsonArray().size() == 1) {
+                element = element.getAsJsonArray().get(0);
+            }
+            JsonObject metadata = element.getAsJsonObject();
             List<String> versions = parseVersionList(metadata.get("versions").toString());
             if (versions.isEmpty()) {
                 throw new IOException("NPM_QUERY_INVALID_RESPONSE");

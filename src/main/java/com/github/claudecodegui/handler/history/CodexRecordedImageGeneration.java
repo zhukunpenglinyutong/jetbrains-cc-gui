@@ -96,6 +96,13 @@ final class CodexRecordedImageGeneration {
         private final Map<ImageIdentity, JsonObject> runningImages = new LinkedHashMap<>();
         private String currentTurnId;
 
+        void copyFrom(Lifecycle source) {
+            this.currentTurnId = source.currentTurnId;
+            this.runningImages.clear();
+            // Receipts stay immutable; only the speculative lifecycle's membership can change.
+            this.runningImages.putAll(source.runningImages);
+        }
+
         List<JsonObject> accept(JsonObject record, String rootThreadId) {
             JsonObject payload = object(record, "payload");
             String stage = HistoryMessageInjector.getStringProperty(payload, "type");

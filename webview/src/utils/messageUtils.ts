@@ -812,11 +812,13 @@ export function mergeConsecutiveAssistantMessages(
 
     const mergedContent = contentParts.join('\n');
     let turnId = first.__turnId;
+    let durationMs = first.durationMs;
     if (typeof rawBase.codexTurnId === 'string') {
       // Completion metadata lives on the last native item, while the first
       // item's identity keeps the combined message stable as more items arrive.
       for (const message of group) {
         turnId = message.__turnId ?? turnId;
+        durationMs = message.durationMs ?? durationMs;
         const raw = typeof message.raw === 'object' ? message.raw : null;
         for (const field of ['turnUsage', 'turnCostUsd']) {
           if (raw?.[field] !== undefined) nextRaw[field] = raw[field];
@@ -830,6 +832,7 @@ export function mergeConsecutiveAssistantMessages(
       raw: nextRaw,
       isStreaming: group.some(message => message.isStreaming),
       __turnId: turnId,
+      ...(durationMs != null ? { durationMs } : {}),
     };
   };
 

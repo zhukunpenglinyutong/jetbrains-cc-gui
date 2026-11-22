@@ -3,9 +3,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { AVAILABLE_PROVIDERS } from '../types';
 import { ProviderModelIcon } from '../../shared/ProviderModelIcon';
-import AlertDialog from '../../AlertDialog';
 import { useDropdownPosition } from '../../../hooks/useDropdownPosition';
-import { useBetaProviderNotice } from '../../../hooks/useBetaProviderNotice';
 import { useHiddenCliProviders } from '../../../hooks/useCliProviderVisibility';
 import { CodexQuotaSubmenu } from './CodexQuotaSubmenu';
 import { ProviderOptionRow } from './ProviderOptionRow';
@@ -49,7 +47,6 @@ export const ProviderSelect = ({ value, onChange, compact = false, onOpenCliSett
   const menuRef = useRef<HTMLDivElement>(null);
   const openingFocusRef = useRef<'selected' | 'first' | 'last' | null>(null);
   const { positionedStyle, maxHeight, recalculate } = useDropdownPosition({ buttonRef, dropdownRef });
-  const betaNotice = useBetaProviderNotice();
 
   const currentProvider = AVAILABLE_PROVIDERS.find(p => p.id === value) || AVAILABLE_PROVIDERS[0];
   // Hidden CLI providers stay usable when already active; they are only
@@ -154,21 +151,15 @@ export const ProviderSelect = ({ value, onChange, compact = false, onOpenCliSett
 
     if (!provider) return;
 
-    const proceed = () => {
-      if (!provider.enabled) {
-        showToastMessage(t('settings.provider.featureComingSoon'));
-        return;
-      }
-      onChange?.(providerId);
-    };
-
-    // Close the menu immediately so the beta dialog is not hidden behind it.
+    // Close the menu and return focus to the trigger before applying the switch.
     closeMenu();
     buttonRef.current?.focus();
-    // First click on a Beta provider shows an informational notice once.
-    // Disabled providers skip the notice — they only show the coming-soon toast.
-    betaNotice.requestSelect(!!provider.beta && provider.enabled, proceed);
-  }, [onChange, showToastMessage, t, betaNotice, closeMenu]);
+    if (!provider.enabled) {
+      showToastMessage(t('settings.provider.featureComingSoon'));
+      return;
+    }
+    onChange?.(providerId);
+  }, [onChange, showToastMessage, t, closeMenu]);
 
   /**
    * Close on outside click
@@ -289,21 +280,6 @@ export const ProviderSelect = ({ value, onChange, compact = false, onOpenCliSett
         </div>,
         document.body
       )}
-
-      <AlertDialog
-        isOpen={betaNotice.isOpen}
-        type="warning"
-        title={t('providers.beta.title', { defaultValue: 'Beta Feature' })}
-        message={t('providers.beta.message', {
-          defaultValue:
-            'This feature is still in Beta. If you encounter any bugs, please report them to the author promptly.',
-        })}
-        confirmText={t('common.gotIt', { defaultValue: 'Got it' })}
-        onClose={() => {
-          betaNotice.close();
-          buttonRef.current?.focus();
-        }}
-      />
     </>
   );
 };

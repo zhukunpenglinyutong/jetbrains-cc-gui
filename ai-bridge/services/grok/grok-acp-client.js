@@ -83,7 +83,8 @@ export async function applyReasoningEffortToSession(client, sessionId, reasoning
  * These allow init+auth+session to be done once, then prompt() reused.
  */
 
-export async function initializeAndAuthenticate(client, { apiKey = '', baseUrl = '', hasApiKeyFromEnv = false, authMethod = '' } = {}) {
+export async function initializeAndAuthenticate(client, { apiKey = '', baseUrl = '', hasApiKeyFromEnv = false, authMethod = '', timeoutMs = DEFAULT_TIMEOUT_MS, quiet = false } = {}) {
+  const effectiveTimeout = typeof timeoutMs === 'number' && timeoutMs > 0 ? timeoutMs : DEFAULT_TIMEOUT_MS;
   const init = await client.request('initialize', {
     protocolVersion: 1,
     clientCapabilities: {
@@ -95,7 +96,7 @@ export async function initializeAndAuthenticate(client, { apiKey = '', baseUrl =
       name: 'codemoss-jetbrains',
       version: '0.4.6',
     },
-  });
+  }, effectiveTimeout);
 
   const authMethodList = init.authMethods ?? [];
   const authMethods = new Set(authMethodList.map((m) => m.id));
@@ -130,21 +131,28 @@ export async function initializeAndAuthenticate(client, { apiKey = '', baseUrl =
     );
   }
 
-  console.error(
-    '[GROK-ACP] authenticate methodId=' +
+  if (!quiet) {
+    const logLine =
+      '[GROK-ACP] authenticate methodId=' +
       methodId +
       ' preferred=' +
       preferred +
       ' hasApiKey=' +
       hasApiKey +
       ' authReason=' +
-      resolved.reason
-  );
+      resolved.reason +
+      '\n';
+    if (process.stderr && typeof process.stderr._originalStderrWrite === 'function') {
+      process.stderr._originalStderrWrite(logLine, 'utf8');
+    } else {
+      console.error(logLine.trimEnd());
+    }
+  }
 
   await client.request('authenticate', {
     methodId,
     _meta: { headless: true },
-  });
+  }, effectiveTimeout);
 
   client.initResult = init;
   return { init, methodId, resolvedAuth: resolved };
@@ -154,6 +162,7 @@ export async function ensureSession(client, { sessionId = '', cwd = '', model = 
   const workCwd = cwd && cwd.trim() ? cwd.trim() : process.cwd();
   let activeSessionId = sessionId && String(sessionId).trim() ? String(sessionId).trim() : '';
   let sessionMeta = null;
+  let resumed = false;
 
   const canLoad = !!activeSessionId && client && true; // assume capability check if exposed
 
@@ -164,6 +173,7 @@ export async function ensureSession(client, { sessionId = '', cwd = '', model = 
         cwd: workCwd,
         mcpServers: [],
       });
+      resumed = true;
     } catch (e) {
       // fall through to new
       activeSessionId = '';
@@ -202,7 +212,7 @@ export async function ensureSession(client, { sessionId = '', cwd = '', model = 
     }
   }
 
-  return { sessionId: activeSessionId, sessionMeta };
+  return { sessionId: activeSessionId, sessionMeta, resumed };
 }
 
 /**
@@ -806,6 +816,7 @@ export async function runAcpTurn({
       agentPrompt,
       openedFiles,
       attachments,
+      includeGlobalRules: !sessionInfo.resumed,
     });
 
     // Signal the normalizer to open [STREAM_START] only for the user turn.
@@ -1114,41 +1125,15 @@ export function isAutoApproveMode(permissionMode) {
  * When the user only attaches images with empty text, inject
  * GROK_IMAGE_ONLY_FALLBACK_TEXT so the payload stays valid.
  */
-export function buildPromptBlocks({ message, agentPrompt, openedFiles, attachments }) {
+export function buildPromptBlocks({
+  message,
+  agentPrompt,
+  openedFiles,
+  attachments,
+  includeGlobalRules = true,
+}) {
   const blocks = [];
   let text = message || '';
-
-  if (agentPrompt && String(agentPrompt).trim()) {
-    text =
-      `${text}\n\n## Agent Role and Instructions\n\n${String(agentPrompt).trim()}`;
-  }
-
-  // Load user-global rules for Grok from ~/.grok/grok-rules.md (if exists).
-  // This allows persistent, user-level instructions without hardcoding in the plugin.
-  try {
-    const rulesPath = path.join(homedir(), '.grok', 'grok-rules.md');
-    if (fs.existsSync(rulesPath)) {
-      const rulesContent = fs.readFileSync(rulesPath, 'utf8').trim();
-      if (rulesContent) {
-        console.log('[Grok] Loaded global rules from ~/.grok/grok-rules.md (' + rulesContent.length + ' chars)');
-        text += `\n\n## Global Grok Rules (~/.grok/grok-rules.md)\n\n${rulesContent}`;
-      }
-    }
-  } catch (err) {
-    // Non-fatal: don't break prompt building if the file is unreadable
-    console.error('[Grok] Failed to read ~/.grok/grok-rules.md:', err?.message || err);
-  }
-
-  if (openedFiles && typeof openedFiles === 'object') {
-    try {
-      const serialized = JSON.stringify(openedFiles, null, 2);
-      if (serialized && serialized !== '{}' && serialized !== 'null') {
-        text += `\n\n## IDE Context (opened files)\n\`\`\`json\n${serialized}\n\`\`\``;
-      }
-    } catch {
-      // ignore
-    }
-  }
 
   const { blocks: imageBlocks, loaded, errors } = buildGrokImageBlocks(
     Array.isArray(attachments) ? attachments : []
@@ -1160,6 +1145,47 @@ export function buildPromptBlocks({ message, agentPrompt, openedFiles, attachmen
   }
   if (loaded > 0) {
     console.error(`[Grok] embedding ${loaded} image block(s) into ACP prompt`);
+  }
+  // Decide the image-only fallback before agent instructions, rules, and IDE
+  // context are appended so injected sections do not hide the request to look
+  // at the attached images.
+  if (!String(text).trim() && loaded > 0) {
+    text = GROK_IMAGE_ONLY_FALLBACK_TEXT;
+  }
+
+  if (agentPrompt && String(agentPrompt).trim()) {
+    text =
+      `${text}\n\n## Agent Role and Instructions\n\n${String(agentPrompt).trim()}`;
+  }
+
+  // Load user-global rules for Grok from ~/.grok/grok-rules.md (if exists).
+  // Inject once on the first turn of a new session so multi-turn transcripts
+  // do not repeat the global rules block in every subsequent prompt.
+  if (includeGlobalRules !== false) {
+    try {
+      const rulesPath = path.join(homedir(), '.grok', 'grok-rules.md');
+      if (fs.existsSync(rulesPath)) {
+        const rulesContent = fs.readFileSync(rulesPath, 'utf8').trim();
+        if (rulesContent) {
+          console.log('[Grok] Loaded global rules from ~/.grok/grok-rules.md (' + rulesContent.length + ' chars)');
+          text += `\n\n## Global Grok Rules (~/.grok/grok-rules.md)\n\n${rulesContent}`;
+        }
+      }
+    } catch (err) {
+      // Non-fatal: don't break prompt building if the file is unreadable
+      console.error('[Grok] Failed to read ~/.grok/grok-rules.md:', err?.message || err);
+    }
+  }
+
+  if (openedFiles && typeof openedFiles === 'object') {
+    try {
+      const serialized = JSON.stringify(openedFiles, null, 2);
+      if (serialized && serialized !== '{}' && serialized !== 'null') {
+        text += `\n\n## IDE Context (opened files)\n\`\`\`json\n${serialized}\n\`\`\``;
+      }
+    } catch {
+      // ignore
+    }
   }
 
   // Non-image attachments (or failed images): keep a text note so the agent

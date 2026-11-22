@@ -2,6 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ClaudeMessage } from '../../../types';
+import { mergeConsecutiveAssistantMessages } from '../../../utils/messageUtils';
 import type { UseWindowCallbacksOptions } from '../../useWindowCallbacks';
 import { registerMessageCallbacks } from './messageCallbacks';
 import { registerStreamingCallbacks } from './streamingCallbacks';
@@ -52,6 +53,16 @@ describe('Codex native snapshots at stream end', () => {
     delete window.__flushPendingUpdateMessages;
     if (window.__stallWatchdogInterval != null) clearInterval(window.__stallWatchdogInterval);
     vi.useRealTimers();
+  });
+  it('keeps the turn duration on the rendered message when a turn has several native items', () => {
+    const state = harness();
+    window.updateMessages!(JSON.stringify([user, snapshot('先检查代码', 'commentary'), snapshot('完成', 'final')]));
+    vi.advanceTimersByTime(3000);
+    window.onStreamEnd!();
+    const rendered = mergeConsecutiveAssistantMessages(state.getMessages(),
+      raw => (typeof raw === 'object' ? raw?.message?.content ?? [] : []) as never);
+    expect(rendered.filter(message => message.type === 'assistant')).toHaveLength(1);
+    expect(rendered.at(-1)?.durationMs).toBeGreaterThanOrEqual(3000);
   });
   it('accepts text-only snapshots after the first character and retains the complete final text', () => {
     const state = harness();

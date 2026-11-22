@@ -1,21 +1,11 @@
-import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ToolInput, ToolResultBlock } from '../../types';
 import { stripAnsi } from '../../utils/stripAnsi';
 import { presentCommand } from '../../utils/commandPresentation';
 import { bashGroupCollapsePreference } from '../../utils/bashGroupCollapsePreference';
 import { usePreferredExpanded } from '../../hooks/usePreferredExpanded';
-
-interface BashItem {
-  command: string;
-  rawCommand: string;
-  description: string;
-  justification: string;
-  output: string;
-  isCompleted: boolean;
-  isError: boolean;
-  toolId?: string;
-}
+import BashGroupItemRow, { type BashItem } from './BashGroupItemRow';
 
 interface BashToolGroupBlockProps {
   items: Array<{
@@ -31,12 +21,13 @@ interface BashToolGroupBlockProps {
 /** Max visible items before scroll (3.5 items) */
 const MAX_VISIBLE_ITEMS = 3.5;
 /** Height per item in pixels */
-const ITEM_HEIGHT = 32;
+const ITEM_HEIGHT = 30;
+/** Vertical padding of the list container */
+const LIST_PADDING = 8;
 /** Max height when an item is expanded */
 const EXPANDED_MAX_HEIGHT = 400;
-
-const PROGRESS_ICON_STYLE: React.CSSProperties = { fontSize: '12px', marginRight: '4px' };
-const ERROR_ICON_STYLE: React.CSSProperties = { fontSize: '14px', marginTop: '1px' };
+/** Words of each command shown in the collapsed header */
+const PEEK_WORDS = 2;
 
 /**
  * Parse item to BashItem
@@ -85,11 +76,12 @@ function parseBashItem(
 }
 
 /**
- * Truncate command for display
+ * First words of every command, e.g. "git status · npm run"
  */
-function truncateCommand(command: string, maxLength = 60): string {
-  if (command.length <= maxLength) return command;
-  return command.slice(0, maxLength) + '...';
+function buildPeek(items: BashItem[]): string {
+  return items
+    .map((item) => (item.command || item.description).split(/\s+/).slice(0, PEEK_WORDS).join(' '))
+    .join(' · ');
 }
 
 const BashToolGroupBlock = ({ items, deniedToolIds }: BashToolGroupBlockProps) => {
@@ -115,155 +107,91 @@ const BashToolGroupBlock = ({ items, deniedToolIds }: BashToolGroupBlockProps) =
     prevItemCountRef.current = bashItems.length;
   }, [bashItems.length]);
 
+  if (bashItems.length === 0) {
+    return null;
+  }
+
   // Calculate progress
   const completedCount = bashItems.filter((item) => item.isCompleted).length;
   const errorCount = bashItems.filter((item) => item.isError).length;
   const totalCount = bashItems.length;
 
-  // Handle item click to toggle detail
-  const handleItemClick = useCallback((index: number, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setExpandedItemIndex((prev) => (prev === index ? null : index));
-  }, []);
+  // Show 3.5 rows before scrolling; an open detail gets more room
+  const needsScroll = totalCount > MAX_VISIBLE_ITEMS;
+  const baseHeight = (needsScroll ? MAX_VISIBLE_ITEMS : totalCount) * ITEM_HEIGHT;
+  const listHeight = expandedItemIndex !== null ? EXPANDED_MAX_HEIGHT : baseHeight;
+  const listStyle: React.CSSProperties = {
+    maxHeight: `${listHeight + LIST_PADDING}px`,
+    overflowY: needsScroll || expandedItemIndex !== null ? 'auto' : 'hidden',
+  };
 
-  if (bashItems.length === 0) {
-    return null;
-  }
+  const isRunning = completedCount < totalCount;
+  const runningProgress = (
+    <span className="bash-group-progress">
+      <span className="tool-status-indicator pending" />
+      {completedCount}/{totalCount}
+    </span>
+  );
 
-  // Calculate list height for 3.5 visible items
-  const needsScroll = bashItems.length > MAX_VISIBLE_ITEMS;
-  
-  // Base height for collapsed state
-  const baseHeight = needsScroll
-    ? MAX_VISIBLE_ITEMS * ITEM_HEIGHT
-    : bashItems.length * ITEM_HEIGHT;
-
-  // When an item is expanded, increase max-height to allow viewing details
-  // otherwise use the compact base height
-  const listHeight = expandedItemIndex !== null
-    ? EXPANDED_MAX_HEIGHT
-    : baseHeight;
-
-  // Enable scrolling if there are many items OR if an item is expanded (content might overflow)
-  const overflowY = (needsScroll || expandedItemIndex !== null) ? 'auto' : 'hidden';
-
-  // Progress summary text
-  const getProgressSummary = () => {
+  // Failures stay visible while the rest of the batch keeps running
+  const renderProgress = () => {
     if (errorCount > 0) {
       return (
-        <span className="bash-group-progress error">
-          <span className="codicon codicon-warning" style={PROGRESS_ICON_STYLE} />
-          {errorCount} {t('tools.bashGroupFailed')}
-        </span>
+        <>
+          <span className="bash-group-progress error">
+            <span className="tool-status-indicator error" />
+            {errorCount} {t('tools.bashGroupFailed')}
+          </span>
+          {isRunning && runningProgress}
+        </>
       );
     }
-    if (completedCount === totalCount) {
-      return (
-        <span className="bash-group-progress completed">
-          <span className="codicon codicon-check" style={PROGRESS_ICON_STYLE} />
-          {t('tools.bashGroupAllCompleted')}
-        </span>
-      );
-    }
+    if (isRunning) return runningProgress;
+    const label = t('tools.bashGroupAllCompleted');
     return (
-      <span className="bash-group-progress">
-        {completedCount}/{totalCount} {t('tools.bashGroupCompleted')}
+      <span className="bash-group-progress completed" role="img" aria-label={label} title={label}>
+        <span className="tool-status-indicator completed" />
       </span>
     );
-  };
-
-  const timelineStyle: React.CSSProperties = {
-    maxHeight: `${listHeight + 16}px`,
-    overflowY: overflowY,
-  };
-
-  const headerStyle: React.CSSProperties = {
-    ...(expanded && { borderBottom: '1px solid var(--border-primary)' }),
   };
 
   return (
     <div className="task-container bash-group-container">
       {/* Header - always visible */}
       <div
-        className="task-header bash-group-header"
+        className={`task-header bash-group-header ${expanded ? 'expanded' : ''}`}
         role="button"
         tabIndex={0}
         onClick={toggleExpanded}
         onKeyDown={event => {
           if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault();
+            event.stopPropagation();
             toggleExpanded();
           }
         }}
         aria-expanded={expanded}
-        style={headerStyle}
       >
-        <div className="task-title-section">
-          <span className="tool-title-text">
-            {t('tools.bashGroupBatchRun')} ({totalCount})
-          </span>
+        <div className="task-title-section bash-group-title">
+          <span className="codicon codicon-terminal bash-tool-icon" />
+          <span className="tool-title-text">{t('tools.bashGroupBatchRun')}</span>
+          <span className="bash-group-count">{totalCount}</span>
+          {!expanded && <span className="bash-group-peek code-font-surface">{buildPeek(bashItems)}</span>}
         </div>
-        <div className="bash-group-summary">{getProgressSummary()}</div>
+        <div className="bash-group-summary">{renderProgress()}</div>
       </div>
 
-      {/* Timeline list - visible when expanded */}
+      {/* Command list - visible when expanded */}
       {expanded && (
-        <div
-          ref={listRef}
-          className="bash-group-timeline"
-          style={timelineStyle}
-        >
-          {bashItems.map((item, index) => {
-            const isLast = index === bashItems.length - 1;
-            const isItemExpanded = expandedItemIndex === index;
-
-            return (
-              <div key={item.toolId || `bash-item-${index}`} className="bash-timeline-item">
-                {/* Timeline connector - fixed gray */}
-                <div className="bash-timeline-connector">
-                  <div className={`bash-timeline-line ${isLast ? 'last' : ''}`} />
-                  <div className="bash-timeline-node" />
-                </div>
-
-                {/* Item content */}
-                <div
-                  className={`bash-timeline-content ${isItemExpanded ? 'expanded' : ''}`}
-                  onClick={(e) => handleItemClick(index, e)}
-                >
-                  <div className="bash-timeline-row">
-                    <span className={`bash-timeline-description ${item.description ? '' : 'bash-timeline-description-command'}`}>
-                      {item.description || truncateCommand(item.command)}
-                    </span>
-                    <div
-                      className={`tool-status-indicator ${
-                        item.isError ? 'error' : item.isCompleted ? 'completed' : 'pending'
-                      }`}
-                    />
-                  </div>
-
-                  {/* Expanded detail */}
-                  {isItemExpanded && (
-                    <div className="bash-timeline-detail">
-                      {item.description && item.description !== item.command && <div className="bash-command-summary">{item.description}</div>}
-                      {item.justification && <div className="bash-command-reason">{t('tools.commandApprovalReason')}: {item.justification}</div>}
-                      <div className="bash-command-block">{item.rawCommand}</div>
-                      {item.output && (
-                        <div className={`bash-output-block ${item.isError ? 'error' : 'normal'}`}>
-                          {item.isError && (
-                            <span
-                              className="codicon codicon-error"
-                              style={ERROR_ICON_STYLE}
-                            />
-                          )}
-                          <span className="bash-output-text">{item.output}</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+        <div ref={listRef} className="bash-group-list" style={listStyle}>
+          {bashItems.map((item, index) => (
+            <BashGroupItemRow
+              key={item.toolId || `bash-item-${index}`}
+              item={item}
+              expanded={expandedItemIndex === index}
+              onToggle={() => setExpandedItemIndex((prev) => (prev === index ? null : index))}
+            />
+          ))}
         </div>
       )}
     </div>

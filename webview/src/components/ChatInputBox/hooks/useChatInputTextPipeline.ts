@@ -296,6 +296,17 @@ export function useChatInputTextPipeline({
     notifyInput(isVisuallyEmpty(text) ? '' : text);
   }, [getTextContent, notifyInput]);
 
+  useEffect(() => {
+    // Navigation does not unmount React. Flush unpublished keystrokes before the client's draft snapshot.
+    const flush = () => {
+      if (!pendingInputRef.current) return;
+      const text = getTextContent();
+      notifyInput(isVisuallyEmpty(text) ? '' : text);
+    };
+    window.addEventListener('pagehide', flush);
+    return () => window.removeEventListener('pagehide', flush);
+  }, [getTextContent, notifyInput]);
+
   const clearInput = useCallback(() => {
     if (editableRef.current) {
       editableRef.current.innerHTML = '';
