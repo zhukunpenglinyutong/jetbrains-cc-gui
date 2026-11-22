@@ -4,6 +4,7 @@ import {
   DEFAULT_STALL_TIMEOUT_MS,
   STALL_TIMEOUT_ENV,
   resolveStallTimeoutMs,
+  takeWithStallTimeout,
   trackToolActivity,
 } from './turn-stall-watchdog.js';
 
@@ -37,4 +38,11 @@ test('tool calls are tracked from the assistant request until their result arriv
   trackToolActivity(pending, { type: 'system', subtype: 'status' });
   trackToolActivity(pending, null);
   assert.deepEqual([...pending], ['b']);
+});
+
+test('a take against a sink cleared by Stop fails without arming a timer', t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  assert.throws(() => takeWithStallTimeout(null, { timeoutMs: 1000, hasToolInFlight: () => false }), TypeError);
+  // An armed timer would fire here and call fail() on the missing sink.
+  assert.doesNotThrow(() => t.mock.timers.tick(2000));
 });

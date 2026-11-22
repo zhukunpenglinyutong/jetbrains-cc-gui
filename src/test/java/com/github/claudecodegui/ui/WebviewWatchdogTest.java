@@ -102,6 +102,62 @@ public class WebviewWatchdogTest {
         assertEquals(1, reloads.get());
     }
 
+    @Test
+    public void doesNotReloadWhenReturningToAWebviewThatWasHiddenForLong() {
+        AtomicLong now = new AtomicLong(1_000_000L);
+        AtomicInteger reloads = new AtomicInteger();
+        AtomicInteger recreates = new AtomicInteger();
+        WebviewWatchdog watchdog = createWatchdog(
+                new ShowingPanel(true), now, reloads, recreates, Runnable::run);
+        watchdog.handleHeartbeat(heartbeat(now.get(), 900_000L, "hidden"));
+        now.addAndGet(180_000L);
+        watchdog.handleHeartbeat(heartbeat(now.get(), 900_000L, "hidden"));
+        now.addAndGet(5_000L);
+        watchdog.handleHeartbeat(heartbeat(now.get(), 900_000L, "visible"));
+        now.addAndGet(5_000L);
+
+        watchdog.checkHealth();
+
+        assertEquals(0, reloads.get());
+        assertEquals(0, recreates.get());
+    }
+
+    @Test
+    public void doesNotReloadWhenReturningToAHiddenWebviewAfterTabActivation() {
+        AtomicLong now = new AtomicLong(1_000_000L);
+        AtomicInteger reloads = new AtomicInteger();
+        WebviewWatchdog watchdog = createWatchdog(
+                new ShowingPanel(true), now, reloads, new AtomicInteger(), Runnable::run);
+        watchdog.handleHeartbeat(heartbeat(now.get(), 900_000L, "hidden"));
+        now.addAndGet(180_000L);
+        watchdog.markTabActivated();
+        now.addAndGet(1_000L);
+        watchdog.handleHeartbeat(heartbeat(now.get(), 900_000L, "visible"));
+        now.addAndGet(5_000L);
+
+        watchdog.checkHealth();
+
+        assertEquals(0, reloads.get());
+    }
+
+    @Test
+    public void stillReloadsWhenRenderStaysFrozenAfterTheWebviewBecameVisible() {
+        AtomicLong now = new AtomicLong(1_000_000L);
+        AtomicInteger reloads = new AtomicInteger();
+        WebviewWatchdog watchdog = createWatchdog(
+                new ShowingPanel(true), now, reloads, new AtomicInteger(), Runnable::run);
+        watchdog.handleHeartbeat(heartbeat(now.get(), 900_000L, "hidden"));
+        now.addAndGet(180_000L);
+        for (int beat = 0; beat <= 4; beat++) {
+            watchdog.handleHeartbeat(heartbeat(now.get(), 900_000L, "visible"));
+            now.addAndGet(5_000L);
+        }
+
+        watchdog.checkHealth();
+
+        assertEquals(1, reloads.get());
+    }
+
     /** Verifies that an unready frontend uses the bounded startup timeout. */
     @Test
     public void usesShortTimeoutBeforeFrontendReady() {
@@ -317,6 +373,10 @@ public class WebviewWatchdogTest {
         watchdog.checkHealth();
         queued.getAndSet(null).run();
         assertEquals(2, recoveries.get());
+    }
+
+    private static String heartbeat(long ts, long raf, String visibility) {
+        return "{\"ts\":" + ts + ",\"raf\":" + raf + ",\"visibility\":\"" + visibility + "\"}";
     }
 
     private static WebviewWatchdog createWatchdog() {

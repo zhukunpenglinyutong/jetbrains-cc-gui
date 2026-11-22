@@ -440,12 +440,12 @@ public class WebviewInitializer {
             host.setBrowser(createdBrowser);
             host.getHandlerContext().setBrowser(createdBrowser);
 
+            // One registration: JBCefClient 2024.1 keeps only the last handler's answer (see CombinedRequestHandler).
             createdBrowser.getJBCefClient().addRequestHandler(
-                    new UiFontResourceRequestHandler(),
-                    createdBrowser.getCefBrowser()
-            );
-            createdBrowser.getJBCefClient().addRequestHandler(
-                    new WebviewAssetRequestHandler(),
+                    new CombinedRequestHandler(
+                            new UiFontResourceRequestHandler(),
+                            new WebviewAssetRequestHandler(),
+                            ExternalNavigationGuard.install(createdBrowser)),
                     createdBrowser.getCefBrowser()
             );
 
@@ -1606,6 +1606,8 @@ public class WebviewInitializer {
                 tabProvider,
                 tabModel,
                 SessionState.discoverUserDshPresetIds(),
+                session != null ? session.getReasoningEffort() : null,
+                session != null ? session.isClaudeUltracode() : null,
                 host.getDraftCacheKey());
     }
 

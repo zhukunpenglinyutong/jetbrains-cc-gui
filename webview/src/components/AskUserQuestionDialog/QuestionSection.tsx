@@ -71,7 +71,7 @@ const QuestionSection = ({
 
         {/* "Other" option - marks the answer as a custom one. A question without
             options needs no marker row: the input below is the only answer. */}
-        {hasOptions && (
+        {hasOptions && !question.choiceOnly && (
           <QuestionOptionRow
             label={t('askUserQuestion.otherOption', '其他')}
             description={t('askUserQuestion.otherOptionDesc', '输入自定义答案')}
@@ -86,18 +86,20 @@ const QuestionSection = ({
       {/* Custom answer. Always available: typing selects "Other" automatically,
           so a manual answer can be combined with the options (multi-select) or
           replace the choice (single-select) without an extra click. */}
-      <div className="custom-input-container">
-        <textarea
-          ref={customInputRef}
-          className={`custom-input${question.isSecret ? ' secret-input' : ''}`}
-          value={customInput}
-          onChange={(e) => onCustomInputChange(e.target.value)}
-          placeholder={t('askUserQuestion.customInputPlaceholder', '请输入您的答案...')}
-          aria-label={t('askUserQuestion.customInputPlaceholder', '请输入您的答案...')}
-          rows={3}
-          maxLength={MAX_CUSTOM_INPUT_LENGTH}
-        />
-      </div>
+      {!question.choiceOnly && (
+        <div className="custom-input-container">
+          <textarea
+            ref={customInputRef}
+            className={`custom-input${question.isSecret ? ' secret-input' : ''}`}
+            value={customInput}
+            onChange={(e) => onCustomInputChange(e.target.value)}
+            placeholder={t('askUserQuestion.customInputPlaceholder', '请输入您的答案...')}
+            aria-label={t('askUserQuestion.customInputPlaceholder', '请输入您的答案...')}
+            rows={3}
+            maxLength={MAX_CUSTOM_INPUT_LENGTH}
+          />
+        </div>
+      )}
 
       {/* Hint text */}
       {question.multiSelect && (

@@ -1,3 +1,4 @@
+import ConfirmDialog from '../ConfirmDialog';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { HistoryData, HistorySessionSummary } from '../../types';
@@ -20,6 +21,8 @@ const ROOT_STYLE: React.CSSProperties = {
   flexDirection: 'column',
 };
 
+const LOAD_MORE_STYLE: React.CSSProperties = { margin: '8px auto' };
+
 interface HistoryViewProps {
   historyData: HistoryData | null;
   currentProvider?: string; // Current provider (claude or codex)
@@ -36,6 +39,7 @@ interface HistoryViewProps {
 
 const HistoryView = ({ historyData, currentProvider, currentSessionId, currentSessionBusy, onLoadSession, onDeleteSession, onDeleteSessions, onExportSession, onToggleFavorite, onUpdateTitle, onConvertToCliSession }: HistoryViewProps) => {
   const { t } = useTranslation();
+  const [pendingDirectorySession, setPendingDirectorySession] = useState<HistorySessionSummary | null>(null);
   const [viewportHeight, setViewportHeight] = useState(() => window.innerHeight || 600);
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null); // Session ID pending deletion
   const [convertingSessionId, setConvertingSessionId] = useState<string | null>(null); // Session ID pending conversion
@@ -192,6 +196,10 @@ const HistoryView = ({ historyData, currentProvider, currentSessionId, currentSe
       return;
     }
     if (!isEditing) {
+      if (session.requiresCwdConfirmation && session.cwd) {
+        setPendingDirectorySession(session);
+        return;
+      }
       onLoadSession(session.sessionId, session.provider, session.model, session.agent);
     }
   }, [isSelectionMode, toggleSessionSelection, onLoadSession]);
@@ -292,15 +300,34 @@ const HistoryView = ({ historyData, currentProvider, currentSessionId, currentSe
         searchQuery={searchQuery}
         t={t}
       />
-      {historyData.source === 'native' && historyData.partial && historyData.cursor !== null
-        && historyData.cursor !== undefined && window.loadCodexHistoryPage && (
+      {currentProvider === 'codex' && historyData.source === 'native' && historyData.partial
+        && historyData.cursor !== null && historyData.cursor !== undefined && window.loadCodexHistoryPage && (
         <button
           type="button"
+          className="history-toolbar-btn"
+          style={LOAD_MORE_STYLE}
           onClick={() => window.loadCodexHistoryPage?.(historyData.cursor)}
         >
           {t('history.loadMore', { defaultValue: 'Load more' })}
         </button>
       )}
+      <ConfirmDialog
+        isOpen={pendingDirectorySession !== null}
+        title={t('history.confirmDirectoryTitle', 'Open session in another directory?')}
+        message={t('history.confirmDirectoryMessage', 'Commands and file changes will run in the directory shown below.')}
+        confirmText={t('common.confirm')}
+        cancelText={t('common.cancel')}
+        onCancel={() => setPendingDirectorySession(null)}
+        onConfirm={() => {
+          if (pendingDirectorySession) {
+            onLoadSession(pendingDirectorySession.sessionId, pendingDirectorySession.provider,
+              pendingDirectorySession.model, pendingDirectorySession.agent);
+          }
+          setPendingDirectorySession(null);
+        }}
+      >
+        <code style={{ overflowWrap: 'anywhere' }}>{pendingDirectorySession?.cwd}</code>
+      </ConfirmDialog>
       <HistoryConfirmDialogs
         deletingSessionId={deletingSessionId}
         convertingSessionId={convertingSessionId}

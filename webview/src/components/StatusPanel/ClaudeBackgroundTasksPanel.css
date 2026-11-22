@@ -1,0 +1,274 @@
+/* Zero-height anchor sitting on the status tabs' top edge; same side margins as .status-panel. */
+.claude-background-tasks {
+  position: relative;
+  height: 0;
+  margin: 0 20px;
+  /* Below .status-panel-popover (100) so the tabs' own popover covers the pill. */
+  z-index: 50;
+  font-size: 12px;
+}
+
+.claude-bg-pill {
+  position: absolute;
+  right: 12px;
+  /* Fully above the tabs so it never covers the last tab. */
+  top: -32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 10px;
+  border: 1px solid var(--border-primary);
+  border-radius: 11px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.claude-bg-pill:hover,
+.claude-bg-pill.open {
+  background: var(--bg-hover);
+}
+
+.claude-bg-pill .codicon {
+  font-size: 12px;
+  transition: transform 0.15s;
+}
+
+.claude-bg-pill.open .codicon {
+  transform: rotate(180deg);
+}
+
+.claude-bg-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  animation: claude-bg-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes claude-bg-pulse {
+  50% { opacity: 0.3; }
+}
+
+.claude-bg-popover {
+  position: absolute;
+  right: 0;
+  top: var(--claude-bg-popover-top, auto);
+  bottom: var(--claude-bg-popover-bottom, 38px);
+  display: flex;
+  flex-direction: column;
+  width: min(420px, 100%);
+  max-height: min(340px, var(--claude-bg-available-height, 340px));
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.claude-bg-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.claude-bg-title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 500;
+}
+
+.claude-bg-sub {
+  margin-left: 6px;
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+.claude-bg-hint {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.claude-bg-stop {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--color-error) 15%, transparent);
+  color: var(--color-error);
+  font: inherit;
+  cursor: pointer;
+}
+
+.claude-bg-stop:hover {
+  background: color-mix(in srgb, var(--color-error) 28%, transparent);
+}
+
+.claude-bg-icon-btn {
+  display: inline-flex;
+  flex-shrink: 0;
+  padding: 2px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.claude-bg-icon-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.claude-bg-list {
+  margin: 0;
+  padding: 4px;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.claude-bg-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.claude-bg-list::-webkit-scrollbar-thumb {
+  border-radius: 4px;
+  background: var(--scrollbar-thumb);
+}
+
+.claude-bg-list::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+.claude-bg-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.claude-bg-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px 6px calc(8px + var(--claude-bg-depth, 0) * 22px);
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.claude-bg-row:hover {
+  background: var(--bg-hover);
+}
+
+.claude-bg-chevron {
+  color: var(--text-secondary);
+  font-size: 12px;
+  transition: transform 0.15s;
+}
+
+.claude-bg-task.expanded .claude-bg-chevron {
+  transform: rotate(90deg);
+}
+
+.claude-bg-type-icon {
+  color: var(--accent-primary);
+}
+
+.claude-bg-desc {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.claude-bg-tag {
+  padding: 0 5px;
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.claude-bg-elapsed {
+  min-width: 40px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.claude-bg-detail {
+  margin: 0 8px 6px calc(30px + var(--claude-bg-depth, 0) * 22px);
+  padding: 8px 10px;
+  border-left: 2px solid var(--border-primary);
+}
+
+.claude-bg-full {
+  margin-bottom: 6px;
+  overflow-wrap: anywhere;
+}
+
+.claude-bg-detail dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 12px;
+  margin: 0;
+}
+
+.claude-bg-detail dt {
+  color: var(--text-secondary);
+}
+
+.claude-bg-detail dd {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  margin: 0;
+}
+
+.claude-bg-detail code {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-family: var(--idea-editor-font-family, monospace);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.claude-bg-link {
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: none;
+  color: var(--color-link);
+  font: inherit;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.claude-bg-link:hover {
+  text-decoration: underline;
+}
+
+.claude-bg-copied {
+  color: var(--color-todo-status-completed, var(--text-secondary));
+  font-size: 11px;
+}

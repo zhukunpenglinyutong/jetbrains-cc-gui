@@ -15,6 +15,7 @@ import javax.swing.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -32,7 +33,7 @@ public class McpServerHandler extends BaseMessageHandler {
         "add_mcp_server",
         "update_mcp_server",
         "delete_mcp_server",
-        "toggle_mcp_server",
+"toggle_mcp_server",
         "validate_mcp_server",
         "approve_mcp_json_server",
         "reject_mcp_json_server"
@@ -71,7 +72,7 @@ public class McpServerHandler extends BaseMessageHandler {
             case "toggle_mcp_server":
                 handleToggleMcpServer(content);
                 return true;
-            case "validate_mcp_server":
+case "validate_mcp_server":
                 handleValidateMcpServer(content);
                 return true;
             case "approve_mcp_json_server":
@@ -321,7 +322,6 @@ public class McpServerHandler extends BaseMessageHandler {
             context.getSettingsService().upsertMcpServer(server);
 
             ApplicationManager.getApplication().invokeLater(() -> {
-                callJavaScript("window.mcpServerAdded", escapeJs(content));
                 handleGetMcpServers();
             });
         } catch (Exception e) {
@@ -348,7 +348,6 @@ public class McpServerHandler extends BaseMessageHandler {
             context.getSettingsService().upsertMcpServer(server, projectPath, scope);
 
             ApplicationManager.getApplication().invokeLater(() -> {
-                callJavaScript("window.mcpServerUpdated", escapeJs(content));
                 handleGetMcpServers();
             });
         } catch (Exception e) {
@@ -377,7 +376,6 @@ public class McpServerHandler extends BaseMessageHandler {
 
             if (success) {
                 ApplicationManager.getApplication().invokeLater(() -> {
-                    callJavaScript("window.mcpServerDeleted", escapeJs(serverId));
                     handleGetMcpServers();
                 });
             } else {
@@ -418,7 +416,6 @@ public class McpServerHandler extends BaseMessageHandler {
             LOG.info("[McpServerHandler] Toggled MCP server: " + serverName + " (enabled: " + isEnabled + ")");
 
             ApplicationManager.getApplication().invokeLater(() -> {
-                callJavaScript("window.mcpServerToggled", escapeJs(content));
                 handleGetMcpServers();
                 // Also refresh status so the UI shows the latest connection state.
                 // Full check on purpose: toggling changes the effective config, and this
@@ -432,8 +429,7 @@ public class McpServerHandler extends BaseMessageHandler {
             });
         }
     }
-
-    /**
+/**
      * Validate MCP server configuration.
      */
     private void handleValidateMcpServer(String content) {

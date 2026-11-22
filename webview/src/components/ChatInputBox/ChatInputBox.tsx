@@ -50,10 +50,14 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       onProviderSelect,
       reasoningEffort = 'high',
       onReasoningChange,
+      claudeUltracode = false,
+      onClaudeUltracodeChange,
       codexFastMode = 'normal',
       onCodexFastModeChange,
       dshPreset,
       onDshPresetChange,
+      ompApprovalMode,
+      onOmpApprovalModeChange,
       activeFile,
       selectedLines,
       onClearContext,
@@ -138,6 +142,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
     } = useChatInputController({
       selectedModel,
       currentProvider,
+      reasoningEffort,
       attachments: externalAttachments,
       value,
       onSubmit,
@@ -188,6 +193,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
           sdkStatusError={sdkStatusError}
           sdkInstalled={sdkInstalled}
           currentProvider={currentProvider}
+          selectedModel={selectedModel}
           onRetrySdkStatus={onRetrySdkStatus}
           onInstallSdk={onInstallSdk}
           t={t}
@@ -248,8 +254,11 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
           currentProvider={currentProvider}
           codexNativeAutoReviewAvailable={codexNativeAutoReviewAvailable}
           reasoningEffort={reasoningEffort}
+          claudeUltracode={claudeUltracode}
+          onClaudeUltracodeChange={onClaudeUltracodeChange}
           codexFastMode={codexFastMode}
           dshPreset={dshPreset}
+          ompApprovalMode={ompApprovalMode}
           onSubmit={handleSubmit}
           onStop={onStop}
           onModeSelect={handleModeSelect}
@@ -258,6 +267,7 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
           onReasoningChange={onReasoningChange}
           onCodexFastModeChange={onCodexFastModeChange}
           onDshPresetChange={onDshPresetChange}
+          onOmpApprovalModeChange={onOmpApprovalModeChange}
           onEnhancePrompt={handleEnhancePrompt}
           alwaysThinkingEnabled={alwaysThinkingEnabled}
           onToggleThinking={onToggleThinking}

@@ -39,6 +39,9 @@ export interface TaskEvent {
 export type TaskEventMap = Record<string, TaskEvent>;
 
 export interface SubagentHistoryResponse {
+  /** Bounded history keeps the initial task and newest records, with an explicit gap. */
+  truncated?: boolean;
+  omittedRecords?: number;
   success: boolean;
   /** True only when the sidechain transcript ends with an assistant end_turn. */
   completed?: boolean;

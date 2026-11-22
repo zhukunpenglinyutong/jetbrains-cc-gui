@@ -329,46 +329,6 @@ public class CodexMcpServerManager {
         return deleted.get();
     }
 
-    /**
-     * Validate MCP server configuration
-     */
-    public Map<String, Object> validateMcpServer(JsonObject server) {
-        List<String> errors = new ArrayList<>();
-
-        if (!server.has("id") || server.get("id").getAsString().isEmpty()) {
-            errors.add("Server ID cannot be empty");
-        }
-
-        if (server.has("server")) {
-            JsonObject serverSpec = server.getAsJsonObject("server");
-            String type = serverSpec.has("type") ? serverSpec.get("type").getAsString() : "stdio";
-
-            if ("stdio".equals(type)) {
-                if (!serverSpec.has("command") || serverSpec.get("command").getAsString().isEmpty()) {
-                    errors.add("Command cannot be empty for STDIO type");
-                }
-            } else if ("http".equals(type) || "sse".equals(type)) {
-                if (!serverSpec.has("url") || serverSpec.get("url").getAsString().isEmpty()) {
-                    errors.add("URL cannot be empty for HTTP/SSE type");
-                } else {
-                    String url = serverSpec.get("url").getAsString();
-                    try {
-                        new URI(url).toURL();
-                    } catch (Exception e) {
-                        errors.add("Invalid URL format");
-                    }
-                }
-            }
-        } else {
-            errors.add("Missing server configuration");
-        }
-
-        Map<String, Object> result = new HashMap<>();
-        result.put("valid", errors.isEmpty());
-        result.put("errors", errors);
-        return result;
-    }
-
     // ==================== Helper Methods ====================
 
     private JsonArray toJsonArray(Object obj) {

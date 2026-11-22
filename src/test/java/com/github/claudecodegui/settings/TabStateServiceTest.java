@@ -7,6 +7,20 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 public class TabStateServiceTest {
+    @Test
+    public void supplierBindingsSurviveTabCopyAndProjectXmlRestore() {
+        TabStateService service = new TabStateService();
+        TabStateService.TabSessionState snapshot = new TabStateService.TabSessionState();
+        snapshot.claudeSupplierId = "claude-a";
+        snapshot.codexSupplierId = "codex-b";
+        service.saveTabSessionState(0, snapshot);
+        snapshot.claudeSupplierId = "unrelated";
+        TabStateService restored = new TabStateService();
+        restored.loadState(XmlSerializer.deserialize(XmlSerializer.serialize(service.getState()), TabStateService.State.class));
+        assertEquals("claude-a", restored.getTabSessionState(0).claudeSupplierId);
+        assertEquals("codex-b", restored.getTabSessionState(0).codexSupplierId);
+    }
+
     /** Unread belongs to a session snapshot and survives copying and project XML reload. */
     @Test
     public void preservesUnreadAcrossSnapshotCopiesAndProjectRestart() {
@@ -21,6 +35,22 @@ public class TabStateServiceTest {
         restored.loadState(XmlSerializer.deserialize(
                 XmlSerializer.serialize(service.getState()), TabStateService.State.class));
         assertTrue(restored.getTabSessionState(0).unread);
+    }
+
+    /** A tab on "Ask" that came back on OMP's own setting would run tools without approval. */
+    @Test
+    public void preservesOmpApprovalModeAcrossSnapshotCopiesAndProjectRestart() {
+        TabStateService service = new TabStateService();
+        TabStateService.TabSessionState session = new TabStateService.TabSessionState();
+        session.sessionId = "omp-session";
+        session.ompApprovalMode = "always-ask";
+        service.saveTabSessionState(0, session);
+        session.ompApprovalMode = "yolo";
+        assertEquals("always-ask", service.getTabSessionState(0).ompApprovalMode);
+        TabStateService restored = new TabStateService();
+        restored.loadState(XmlSerializer.deserialize(
+                XmlSerializer.serialize(service.getState()), TabStateService.State.class));
+        assertEquals("always-ask", restored.getTabSessionState(0).ompApprovalMode);
     }
 
     /** Existing installations have no selected index and keep the first-tab fallback. */

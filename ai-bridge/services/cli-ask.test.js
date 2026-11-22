@@ -7,6 +7,7 @@ import {
   mergeAssistantTextSnapshot,
   askCliProvider,
   extractCliEventErrorMessage,
+  buildMiniMaxAskInvocation,
 } from './cli-ask.js';
 
 test('CLI_ASK_PROVIDERS lists headless CLI providers', () => {
@@ -78,4 +79,15 @@ test('extractCliEventErrorMessage returns null for empty events', () => {
   assert.equal(extractCliEventErrorMessage(null), null);
   assert.equal(extractCliEventErrorMessage({}), null);
   assert.equal(extractCliEventErrorMessage({ type: 'error', error: {} }), null);
+});
+
+test('MiniMax ask pipes the prompt on stdin on Windows, where cmd.exe cuts argv at a newline', () => {
+  const prompt = 'Write a commit message\n\ndiff --git a/x b/x';
+  const windows = buildMiniMaxAskInvocation(prompt, { workCwd: '/w' }, 'win32');
+  assert.equal(windows.stdinData, prompt);
+  assert.deepEqual(windows.args.slice(-4), ['--input', '-', '--input-format', 'text']);
+  assert.equal(windows.args.includes(prompt), false);
+  const posix = buildMiniMaxAskInvocation(prompt, { workCwd: '/w' }, 'darwin');
+  assert.equal(posix.stdinData, undefined);
+  assert.equal(posix.args.at(-1), prompt);
 });

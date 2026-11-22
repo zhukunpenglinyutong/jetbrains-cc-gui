@@ -9,6 +9,7 @@ import {
   canUseAnthropicAskPath,
   computeMaxTokens,
   buildEnhanceAskRequest,
+  runEnhanceAsk,
 } from './prompt-enhancer.js';
 
 test('resolvePromptEnhancerRuntimeConfig prefers Codex when auto mode has both providers available', () => {
@@ -403,4 +404,68 @@ test('buildEnhanceAskRequest trims and attaches a non-empty system prompt', () =
   assert.equal(request.system, 'be concise');
   // Blank / non-string system prompts must not produce an empty system field.
   assert.equal('system' in buildEnhanceAskRequest('m', 'p', '   ', 512), false);
+});
+
+// ---------- thinking setting per model (#1949) ----------
+
+test('buildEnhanceAskRequest uses between_tools for Claude Sonnet 5.5', () => {
+  const request = buildEnhanceAskRequest('claude-sonnet-5-5', 'Improve this prompt', null, 1024);
+  assert.deepEqual(request.thinking, { type: 'between_tools' });
+  assert.equal(request.max_tokens, 1024);
+});
+
+test('buildEnhanceAskRequest omits thinking and lowers effort for Claude Opus 5.5', () => {
+  const request = buildEnhanceAskRequest('claude-opus-5-5', 'Improve this prompt', null, 1024);
+  assert.equal('thinking' in request, false);
+  assert.deepEqual(request.output_config, { effort: 'low' });
+  assert.ok(request.max_tokens >= 4096);
+});
+
+// ---------- empty stream fallback (same relay quirk as #1805) ----------
+
+function fakeAskClient(streamEvents, jsonResponse) {
+  const calls = [];
+  const client = {
+    messages: {
+      create: async (request) => {
+        calls.push(request);
+        if (request.stream) {
+          return (async function* () {
+            yield* streamEvents;
+          })();
+        }
+        return jsonResponse;
+      },
+    },
+  };
+  return { client, calls };
+}
+
+test('runEnhanceAsk falls back to a non-streaming create when the stream has no text', async () => {
+  const { client, calls } = fakeAskClient(
+    [{ type: 'message_start' }, { type: 'message_stop' }],
+    { content: [{ type: 'thinking', thinking: 'hmm' }, { type: 'text', text: 'Better prompt' }] },
+  );
+  const request = buildEnhanceAskRequest('deepseek-reasoner', 'fix it', 'be concise', 512);
+
+  const text = await runEnhanceAsk(client, request);
+
+  assert.equal(text, 'Better prompt');
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].stream, true);
+  assert.equal('stream' in calls[1], false);
+  assert.equal(calls[1].system, 'be concise');
+  assert.deepEqual(calls[1].messages, request.messages);
+});
+
+test('runEnhanceAsk returns streamed text without a second request', async () => {
+  const { client, calls } = fakeAskClient(
+    [{ type: 'content_block_delta', delta: { type: 'text_delta', text: 'Streamed' } }],
+    { content: [{ type: 'text', text: 'unused' }] },
+  );
+
+  const text = await runEnhanceAsk(client, buildEnhanceAskRequest('m', 'p', null, 512));
+
+  assert.equal(text, 'Streamed');
+  assert.equal(calls.length, 1);
 });

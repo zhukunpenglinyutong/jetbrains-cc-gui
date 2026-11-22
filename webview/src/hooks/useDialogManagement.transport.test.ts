@@ -1,5 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { TFunction } from 'i18next';
 import { useDialogManagement } from './useDialogManagement';
 import { sendBridgeEvent } from '../utils/bridge';
 
@@ -61,5 +62,33 @@ describe('Codex decision transport failure', () => {
     act(() => result.current.handleAskUserQuestionSubmit('question', { answer: 'retained' }));
     expect(result.current.permissionDialogOpen).toBe(false);
     expect(result.current.askUserQuestionDialogOpen).toBe(false);
+  });
+});
+
+describe('question answers over the file IPC', () => {
+  // The hook only calls `t(key)`; i18next's overloaded TFunction is not assignable from a plain function.
+  const t = ((key: string) => key) as unknown as TFunction;
+  const request = { requestId: 'ask-1', toolName: 'AskUserQuestion', provider: 'omp' as const, dialogToken: 'page',
+    questions: [
+      { id: 'extras', question: 'Extras?', header: '', options: [{ label: 'A', description: '' }], multiSelect: true, required: false },
+      { id: 'needed', question: 'Which?', header: '', options: [{ label: 'B', description: '' }], multiSelect: false },
+    ] };
+
+  beforeEach(() => vi.mocked(sendBridgeEvent).mockReset().mockReturnValue(true));
+
+  // The bridge reads an empty answer map as "dismissed", so a submit must not look like one.
+  it.each([
+    ['a submit names the optional question that was left blank', 'submit', { extras: [], needed: 'B' }],
+    ['a dismissal still sends no answers', 'cancel', {}],
+  ] as const)('%s', (_name, action, expected) => {
+    const { result } = renderHook(() => useDialogManagement({ t }));
+    act(() => result.current.openAskUserQuestionDialog(request));
+    act(() => {
+      if (action === 'submit') result.current.handleAskUserQuestionSubmit('ask-1', { needed: 'B' });
+      else result.current.handleAskUserQuestionCancel('ask-1');
+    });
+    const [event, payload] = vi.mocked(sendBridgeEvent).mock.calls.at(-1)!;
+    expect(event).toBe('ask_user_question_response');
+    expect(JSON.parse(String(payload)).answers).toEqual(expected);
   });
 });

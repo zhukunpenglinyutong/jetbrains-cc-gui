@@ -1,3 +1,10 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="./docs/img/illustrations/01-hero-en-dark.webp" />
+  <img alt="CC GUI chat panel in the IDE with the CLI menu open: Claude Code, Codex, Grok CLI, Kimi CLI, OpenCode, PI CLI, OMP CLI, DeepSeek Harness, MiniMax Code and ZCode" src="./docs/img/illustrations/01-hero-en-light.webp" />
+</picture>
+
+---
+
 <div align="center">
 
 # CC GUI（Claude, Codex and More）
@@ -69,6 +76,17 @@ Then restart the IDE.
 - MCP server support to extend AI capabilities
 
 ### Developer Experience
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="./docs/img/illustrations/03-permission-en-dark.webp" />
+  <img alt="Permission mode menu (Default, Plan, Agent, Auto, Full Auto) and an Execute Command approval dialog with Allow Once, Always Allow and Deny" src="./docs/img/illustrations/03-permission-en-light.webp" />
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="./docs/img/illustrations/02-changes-en-dark.webp" />
+  <img alt="Batch Edit Files and Run Command cards from a finished turn, and the Edits panel listing three changed files with Discard All and Keep All" src="./docs/img/illustrations/02-changes-en-light.webp" />
+</picture>
+
 - Comprehensive permission management and security controls
 - Code DIFF comparison feature
 - File navigation and code jumping
@@ -77,6 +95,12 @@ Then restart the IDE.
 - Internationalization support (auto-switch between Chinese/English)
 
 ### Session Management
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="./docs/img/illustrations/04-history-en-dark.webp" />
+  <img alt="Session history lists for Claude Code and Codex, with starred sessions on top and a title search box" src="./docs/img/illustrations/04-history-en-light.webp" />
+</picture>
+
 - History session records and search
 - Session favorites
 - Message export support

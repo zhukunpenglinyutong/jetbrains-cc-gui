@@ -2,6 +2,8 @@ package com.github.claudecodegui.provider.claude;
 
 import com.github.claudecodegui.util.TagExtractor;
 import com.github.claudecodegui.util.TextSanitizer;
+import com.github.claudecodegui.util.PluginIdeContext;
+import com.github.claudecodegui.util.UserMessageSanitizer;
 import com.google.gson.Gson;
 import com.intellij.openapi.diagnostic.Logger;
 
@@ -11,7 +13,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.function.BiConsumer;
 
 /**
@@ -90,6 +91,8 @@ class ClaudeHistoryParser {
 
             ClaudeHistoryReader.SessionInfo session = new ClaudeHistoryReader.SessionInfo();
             session.sessionId = sessionId;
+            session.cwd = messages.stream().map(message -> message.cwd)
+                    .filter(cwd -> cwd != null && !cwd.isBlank()).findFirst().orElse(null);
             session.title = summary;
             session.messageCount = messages.size();
             session.lastTimestamp = lastTimestamp;
@@ -136,7 +139,7 @@ class ClaudeHistoryParser {
                         msg.message != null &&
                         msg.message.content != null) {
 
-                String text = extractTextFromContent(msg.message.content);
+                String text = UserMessageSanitizer.sanitizeClaudeUserFacingText(extractTextFromContent(msg.message.content));
                 if (text != null && !text.isEmpty()) {
                     text = TagExtractor.extractCommandMessageContent(text);
                     text = TextSanitizer.sanitizeAndTruncateSingleLine(text, 45);
@@ -176,28 +179,10 @@ class ClaudeHistoryParser {
     String extractTextFromContent(Object content) {
         if (content instanceof String) {
             return (String) content;
-        } else if (content instanceof List) {
-            @SuppressWarnings("unchecked")
-            List<Map<String, Object>> contentList = (List<Map<String, Object>>) content;
-            StringBuilder sb = new StringBuilder();
-
-            for (Map<String, Object> item : contentList) {
-                String type = (String) item.get("type");
-
-                if ("text".equals(type)) {
-                    Object text = item.get("text");
-                    if (text instanceof String) {
-                        if (sb.length() > 0) {
-                            sb.append(" ");
-                        }
-                        sb.append((String) text);
-                    }
-                }
-            }
-
-            String result = sb.toString().trim();
-            return result.isEmpty() ? null : result;
-        } else if (content instanceof com.google.gson.JsonArray contentArray) {
+        } else if (content instanceof List || content instanceof com.google.gson.JsonArray) {
+            com.google.gson.JsonArray contentArray = PluginIdeContext.visibleContent(
+                    content instanceof com.google.gson.JsonArray ? (com.google.gson.JsonArray) content : gson.toJsonTree(content))
+                    .getAsJsonArray();
             StringBuilder sb = new StringBuilder();
 
             for (int i = 0; i < contentArray.size(); i++) {

@@ -1,5 +1,11 @@
 /**
- * Discover MiniMax Code models from ~/.minimax/config.yaml.
+ * Discover MiniMax Code models from the CLI's active config.yaml.
+ *
+ * Home resolution mirrors where the mcode CLI itself looks: plugin overrides
+ * (MINIMAX_CODE_HOME / MINIMAX_HOME) first, then MINIMAX_DATA_DIR — the
+ * variable the official Windows install shims export, which relocates the
+ * whole data dir (config + v2/sessions) away from ~/.minimax — and the
+ * ~/.minimax default last.
  *
  * Structure (verified with mcode 0.2.x):
  *   provider:
@@ -23,20 +29,30 @@ import { existsSync, readFileSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
 
-function resolveMiniMaxConfigPaths() {
-  const home = process.env.MINIMAX_CODE_HOME
-    || process.env.MINIMAX_HOME
-    || join(homedir(), '.minimax');
-  return [
-    join(home, 'config.yaml'),
-    join(homedir(), '.minimax', 'config.yaml'),
-  ].filter((path) => {
+export function resolveMiniMaxConfigPaths() {
+  const candidateHomes = [
+    process.env.MINIMAX_CODE_HOME,
+    process.env.MINIMAX_HOME,
+    process.env.MINIMAX_DATA_DIR,
+    join(homedir(), '.minimax'),
+  ];
+  const seen = new Set();
+  const paths = [];
+  for (const home of candidateHomes) {
+    if (!home) continue;
+    const path = join(home, 'config.yaml');
+    // Windows paths are case-insensitive; dedupe so the same home set through
+    // both an env var and the default is not probed twice.
+    const identity = process.platform === 'win32' ? path.toLowerCase() : path;
+    if (seen.has(identity)) continue;
+    seen.add(identity);
     try {
-      return existsSync(path);
+      if (existsSync(path)) paths.push(path);
     } catch {
-      return false;
+      // unreadable candidate — skip to the next home
     }
-  });
+  }
+  return paths;
 }
 
 function parseScalar(line) {

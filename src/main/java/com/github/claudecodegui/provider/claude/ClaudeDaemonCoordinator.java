@@ -198,15 +198,19 @@ class ClaudeDaemonCoordinator {
         }
     }
 
-    void prewarmDaemonAsync(String cwd, String runtimeSessionEpoch) {
-        prewarmDaemonAsync(cwd, runtimeSessionEpoch, null, null);
+void prewarmDaemonAsync(String cwd, String runtimeSessionEpoch) {
+        prewarmDaemonAsync(cwd, runtimeSessionEpoch, null, null, false);
     }
 
     void prewarmDaemonAsync(String cwd, String runtimeSessionEpoch, String runtimeSignature) {
-        prewarmDaemonAsync(cwd, runtimeSessionEpoch, runtimeSignature, null);
+        prewarmDaemonAsync(cwd, runtimeSessionEpoch, runtimeSignature, null, false);
     }
 
     void prewarmDaemonAsync(String cwd, String runtimeSessionEpoch, String runtimeSignature, String sessionId) {
+        prewarmDaemonAsync(cwd, runtimeSessionEpoch, runtimeSignature, sessionId, false);
+    }
+
+    void prewarmDaemonAsync(String cwd, String runtimeSessionEpoch, String runtimeSignature, String sessionId, boolean projectTrusted) {
         CompletableFuture<?> previous = prewarmFuture;
         if (previous != null && !previous.isDone()) {
             previous.cancel(true);
@@ -228,7 +232,7 @@ class ClaudeDaemonCoordinator {
                     return;
                 }
 
-                // Re-check generation right before sending the command to catch
+// Re-check generation right before sending the command to catch
                 // any shutdown that raced between getDaemonBridge() and here.
                 if (generation != lifecycleGeneration) {
                     log.info("[DaemonCoordinator] Skip preconnect: generation changed during prewarm");
@@ -252,6 +256,7 @@ class ClaudeDaemonCoordinator {
                 params.addProperty("permissionMode", "");
                 params.addProperty("model", "");
                 params.addProperty("streaming", true);
+                params.addProperty("projectTrusted", projectTrusted);
                 String envFile = resolveEnvFile(cwd);
                 log.info("[DaemonCoordinator] Preconnect with envFile=" + (envFile != null ? envFile : "(null/empty)"));
                 params.add("env", ClaudeBridgeUtils.buildDaemonEnv(cwd, envFile));

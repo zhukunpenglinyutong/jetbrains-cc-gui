@@ -24,6 +24,61 @@ import static org.junit.Assert.assertTrue;
 public class WebviewEventQueueTest {
 
     @Test
+    public void newSessionNotificationBatchesParseAndExecuteInLifecycleOrder() throws Exception {
+        Object browser = new Object();
+        String script = WebviewEventQueue.buildBatchScript(List.of(
+                new WebviewEventQueue.JsCall<>(browser, 1, "notifySessionSupplierBindingChanged", new String[0], null),
+                new WebviewEventQueue.JsCall<>(browser, 1, "historyLoadComplete", new String[0], null),
+                new WebviewEventQueue.JsCall<>(browser, 1, "updateStatus", new String[]{"ready"}, null)));
+        String harness = """
+                const assert = require('node:assert/strict');
+                const script = require('node:fs').readFileSync(0, 'utf8');
+                const calls = [];
+                const window = {
+                  notifySessionSupplierBindingChanged: (...args) => { assert.equal(args.length, 0); calls.push('binding'); },
+                  historyLoadComplete: () => calls.push('history'),
+                  updateStatus: status => { assert.equal(status, 'ready'); calls.push('status'); },
+                };
+                new Function('window', script)(window);
+                assert.deepEqual(calls, ['binding', 'history', 'status']);
+                """;
+        Process process = new ProcessBuilder("node", "-e", harness).redirectErrorStream(true).start();
+        try {
+            try (java.io.OutputStream input = process.getOutputStream()) {
+                input.write(script.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+            assertTrue("JavaScript validation timed out", process.waitFor(10, TimeUnit.SECONDS));
+            String output = new String(process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            assertEquals(output, 0, process.exitValue());
+        } finally {
+            process.destroyForcibly();
+        }
+    }
+
+    @Test
+    public void supplierBindingSurvivesLifecycleQueuePressureInOrder() {
+        AtomicReference<Object> browser = new AtomicReference<>(new Object());
+        List<Runnable> scheduled = new ArrayList<>();
+        List<String> scripts = new ArrayList<>();
+        WebviewEventQueue<Object> queue = newQueue(browser, new AtomicBoolean(), scheduled, scripts);
+        try {
+            for (int i = 0; i < 256; i++) {
+                assertTrue(queue.enqueue("onTaskEvent", "task-" + i));
+            }
+            assertTrue(queue.enqueue("notifySessionSupplierBindingChanged"));
+            assertTrue(queue.enqueue("historyLoadComplete"));
+            while (!scheduled.isEmpty()) {
+                scheduled.remove(0).run();
+            }
+            String delivered = String.join("\n", scripts);
+            assertTrue(delivered.contains("window.notifySessionSupplierBindingChanged()"));
+            assertTrue(delivered.indexOf("window.notifySessionSupplierBindingChanged()") < delivered.indexOf("window.historyLoadComplete()"));
+        } finally {
+            queue.dispose();
+        }
+    }
+
+    @Test
     public void mergesAdjacentContentDeltasIntoOneOrderedCall() {
         AtomicReference<Object> browser = new AtomicReference<>(new Object());
         AtomicBoolean disposed = new AtomicBoolean();

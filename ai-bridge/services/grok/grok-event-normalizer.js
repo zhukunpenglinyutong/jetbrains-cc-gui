@@ -942,6 +942,9 @@ export function extractPermissionEditInfo(params = {}, fallbackId) {
 export function formatGrokError(error) {
   if (!error) return 'Unknown Grok error';
   const msg = error.message || String(error);
+  if (error.code === 'ACP_TIMEOUT' || /^ACP timeout waiting for\b/i.test(msg)) {
+    return msg;
+  }
   const stderr = error.stderr || '';
   const combined = `${msg}\n${stderr}`;
 

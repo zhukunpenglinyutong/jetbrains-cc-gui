@@ -15,6 +15,57 @@ import static org.junit.Assert.assertTrue;
 public class MessageJsonConverterTest {
 
     @Test
+    public void userTransportStripsPerTurnContextFromDisplayAndRawBlocksWithoutMutatingTranscript() {
+        JsonObject raw = JsonParser.parseString("""
+                {"type":"user","uuid":"user-uuid","message":{"content":[
+                  {"type":"text","text":"Explain this diff"},
+                  {"type":"image","source":{"type":"base64","data":"image-bytes"}},
+                  {"type":"tool_result","tool_use_id":"tool-1","content":"<system-reminder>tool output</system-reminder>"},
+                  {"type":"text","text":"<system-reminder>\\nThe following IDE context applies only to this user message.\\nIDE context for this turn\\n</system-reminder>"}
+                ]}}
+                """).getAsJsonObject();
+        JsonObject original = raw.deepCopy();
+        ClaudeSession.Message message = new ClaudeSession.Message(ClaudeSession.Message.Type.USER,
+                "Explain this diff\n<system-reminder>\nThe following IDE context applies only to this user message.\nIDE context for this turn\n</system-reminder>", raw);
+
+        JsonObject transport = JsonParser.parseString(MessageJsonConverter.convertMessagesToJson(List.of(message)))
+                .getAsJsonArray().get(0).getAsJsonObject();
+
+        assertEquals("Explain this diff", transport.get("content").getAsString());
+        JsonObject transportRaw = transport.getAsJsonObject("raw");
+        assertEquals("user-uuid", transportRaw.get("uuid").getAsString());
+        JsonArray blocks = transportRaw.getAsJsonObject("message").getAsJsonArray("content");
+        assertEquals(3, blocks.size());
+        assertEquals("Explain this diff", blocks.get(0).getAsJsonObject().get("text").getAsString());
+        assertEquals(original.getAsJsonObject("message").getAsJsonArray("content").get(1), blocks.get(1));
+        assertEquals(original.getAsJsonObject("message").getAsJsonArray("content").get(2), blocks.get(2));
+        assertEquals(original, raw);
+    }
+
+    @Test
+    public void userAndAssistantTransportPreserveLiteralTagsInStringContent() {
+        String text = "Request\n<system-reminder>IDE context</system-reminder>";
+        JsonObject raw = new JsonObject();
+        raw.addProperty("type", "user");
+        raw.addProperty("content", text);
+        raw.addProperty("text", text);
+        JsonObject nested = new JsonObject();
+        nested.addProperty("content", text);
+        raw.add("message", nested);
+        JsonObject sanitized = MessageJsonConverter.truncateRawForTransport(raw);
+        assertEquals(text, sanitized.get("content").getAsString());
+        assertEquals(text, sanitized.get("text").getAsString());
+        assertEquals(text, sanitized.getAsJsonObject("message").get("content").getAsString());
+
+        raw.addProperty("type", "assistant");
+        JsonObject assistant = JsonParser.parseString(MessageJsonConverter.convertMessagesToJson(List.of(
+                new ClaudeSession.Message(ClaudeSession.Message.Type.ASSISTANT, text, raw))))
+                .getAsJsonArray().get(0).getAsJsonObject();
+        assertEquals(text, assistant.get("content").getAsString());
+        assertEquals(raw, assistant.getAsJsonObject("raw"));
+    }
+
+    @Test
     public void convertMessagesToJsonKeepsOnlyFrontendRelevantRawFields() {
         JsonObject textBlock = new JsonObject();
         textBlock.addProperty("type", "text");
@@ -36,6 +87,10 @@ public class MessageJsonConverterTest {
         raw.addProperty("type", "assistant");
         raw.addProperty("sessionId", "session-1");
         raw.addProperty("parentUuid", "parent-1");
+        raw.addProperty("timestamp", "2026-11-15T10:00:05.000Z");
+        JsonObject sessionUsage = new JsonObject();
+        sessionUsage.addProperty("input_tokens", 99999);
+        raw.add("usage", sessionUsage);
         raw.add("message", message);
         JsonObject turnUsage = new JsonObject();
         turnUsage.addProperty("input_tokens", 1200);
@@ -59,6 +114,10 @@ public class MessageJsonConverterTest {
         assertEquals("assistant", transportRaw.get("type").getAsString());
         assertFalse(transportRaw.has("sessionId"));
         assertFalse(transportRaw.has("parentUuid"));
+        // Top-level usage is session-cumulative status-bar data, never per message.
+        assertFalse(transportRaw.has("usage"));
+        // The transcript timestamp lets the webview rebuild a restored turn's duration.
+        assertEquals("2026-11-15T10:00:05.000Z", transportRaw.get("timestamp").getAsString());
 
         // turnUsage (whole-turn aggregate) is transported for the per-turn token display
         assertTrue(transportRaw.has("turnUsage"));
@@ -68,10 +127,11 @@ public class MessageJsonConverterTest {
 
         JsonObject transportMessage = transportRaw.getAsJsonObject("message");
         assertTrue(transportMessage.has("content"));
-        assertFalse(transportMessage.has("id"));
         assertFalse(transportMessage.has("model"));
-        // message.usage feeds the status bar only and must NOT be transported per message
-        assertFalse(transportMessage.has("usage"));
+        // message.id + message.usage let turnMetadataReconstruction.ts rebuild turnUsage
+        // for restored turns (deduped by id); the footer itself only renders turnUsage.
+        assertEquals("msg-1", transportMessage.get("id").getAsString());
+        assertEquals(321, transportMessage.getAsJsonObject("usage").get("input_tokens").getAsInt());
     }
 
     @Test

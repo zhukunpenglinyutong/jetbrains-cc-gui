@@ -993,34 +993,6 @@ public class CodemossSettingsService {
 
     // ==================== Claude Settings Management ====================
 
-    public JsonObject getCurrentClaudeConfig() throws IOException {
-        JsonObject currentConfig = claudeSettingsManager.getCurrentClaudeConfig();
-
-        // If codemossProviderId exists, try to get provider name from codemoss config
-        if (currentConfig.has("providerId")) {
-            String providerId = currentConfig.get("providerId").getAsString();
-            try {
-                JsonObject config = readConfig();
-                if (config.has("claude")) {
-                    JsonObject claude = config.getAsJsonObject("claude");
-                    if (claude.has("providers")) {
-                        JsonObject providers = claude.getAsJsonObject("providers");
-                        if (providers.has(providerId)) {
-                            JsonObject provider = providers.getAsJsonObject(providerId);
-                            if (provider.has("name")) {
-                                currentConfig.addProperty("providerName", provider.get("name").getAsString());
-                            }
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                // Ignore error - provider name is optional
-            }
-        }
-
-        return currentConfig;
-    }
-
     public JsonObject readClaudeSettings() throws IOException {
         return claudeSettingsManager.readClaudeSettings();
     }
@@ -1035,6 +1007,10 @@ public class CodemossSettingsService {
 
     public boolean setAlwaysThinkingEnabledInActiveProvider(boolean enabled) throws IOException {
         return withConfigTransaction(() -> providerManager.setAlwaysThinkingEnabledInActiveProvider(enabled));
+    }
+
+    public boolean setAlwaysThinkingEnabledInProvider(String id, boolean enabled) throws IOException {
+        return withConfigTransaction(() -> providerManager.setAlwaysThinkingEnabledInProvider(id, enabled));
     }
 
     /**
@@ -1676,7 +1652,7 @@ public class CodemossSettingsService {
         return withConfigTransaction(() -> mcpServerManager.deleteMcpServer(serverId));
     }
 
-    public boolean deleteMcpServer(String serverId, String projectPath) throws IOException {
+public boolean deleteMcpServer(String serverId, String projectPath) throws IOException {
         return mcpServerManager.deleteMcpServer(serverId, projectPath);
     }
 
@@ -1695,7 +1671,6 @@ public class CodemossSettingsService {
     public void rejectProjectMcpJsonServer(String serverId, String projectPath) throws IOException {
         mcpServerManager.rejectProjectMcpJsonServer(serverId, projectPath);
     }
-
     // ==================== Codex MCP Server Management ====================
 
     public CodexMcpServerManager getCodexMcpServerManager() {
@@ -1712,10 +1687,6 @@ public class CodemossSettingsService {
 
     public boolean deleteCodexMcpServer(String serverId) throws IOException {
         return codexMcpServerManager.deleteMcpServer(serverId);
-    }
-
-    public Map<String, Object> validateCodexMcpServer(JsonObject server) {
-        return codexMcpServerManager.validateMcpServer(server);
     }
 
     // ==================== Skills Management ====================
@@ -2455,6 +2426,22 @@ public class CodemossSettingsService {
             config.addProperty("commitGenerationEnabled", enabled);
             writeConfig(config);
             LOG.info("[CodemossSettings] Set commit generation enabled: " + enabled);
+        });
+    }
+
+    /** Whether history also includes matching full Git remote repository identities. Defaults to false. */
+    public boolean getSessionGitRepositoryMatchingEnabled() throws IOException {
+        JsonObject config = readConfig();
+        return config.has("sessionGitRepositoryMatchingEnabled")
+                && !config.get("sessionGitRepositoryMatchingEnabled").isJsonNull()
+                && config.get("sessionGitRepositoryMatchingEnabled").getAsBoolean();
+    }
+
+    public void setSessionGitRepositoryMatchingEnabled(boolean enabled) throws IOException {
+        runConfigTransaction(() -> {
+            JsonObject config = readConfig();
+            config.addProperty("sessionGitRepositoryMatchingEnabled", enabled);
+            writeConfig(config);
         });
     }
 

@@ -59,6 +59,10 @@ const SubagentProcessDetails = memo(function SubagentProcessDetails({
     <div className="subagent-details subagent-process-card">
       <SubagentProcessHeader agentId={agentId} agentPath={agentPath} stats={stats} />
       <SubagentProcessError history={history} />
+      {history?.truncated && <p className="subagent-history-truncated" role="status">
+        {t('subagent.process.historyTruncated', { count: history.omittedRecords ?? 0,
+          defaultValue: 'History shortened: {{count}} records omitted. The initial task and recent activity are retained.' })}
+      </p>}
       {hasContent ? (
         <SubagentProcessSections
           prompt={hasPrompt ? prompt : undefined}

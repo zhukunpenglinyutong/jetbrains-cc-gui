@@ -29,6 +29,8 @@ public class WindowEventHandler extends BaseMessageHandler {
         void onTabLoadingChanged(boolean loading);
         void onTabStatusChanged(String status);
         void onCreateNewSession();
+        default void onCreateNewSession(String transitionToken) { onCreateNewSession(); }
+        default void onCreateNewSession(String transitionToken, String provider) { onCreateNewSession(transitionToken); }
         void onFrontendReady();
         void onHistoryRenderComplete(long commitEpoch);
         void onSurfaceDamageApplied(String token, String phase, boolean applied);
@@ -55,7 +57,7 @@ public class WindowEventHandler extends BaseMessageHandler {
                 handleTabStatusChanged(content);
                 return true;
             case "create_new_session":
-                callback.onCreateNewSession();
+                callback.onCreateNewSession(parseRequestField(content, "transitionToken"), parseRequestField(content, "provider"));
                 return true;
             case "frontend_ready":
                 callback.onFrontendReady();
@@ -74,6 +76,16 @@ public class WindowEventHandler extends BaseMessageHandler {
                 return true;
             default:
                 return false;
+        }
+    }
+
+    private static String parseRequestField(String content, String field) {
+        try {
+            JsonObject request = new Gson().fromJson(content, JsonObject.class);
+            return request != null && request.has(field) && request.get(field).isJsonPrimitive()
+                    ? request.get(field).getAsString() : null;
+        } catch (RuntimeException ignored) {
+            return null;
         }
     }
 

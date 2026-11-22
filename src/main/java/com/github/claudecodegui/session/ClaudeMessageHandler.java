@@ -30,9 +30,7 @@ public class ClaudeMessageHandler implements MessageCallback {
     private static final Logger LOG = Logger.getInstance(ClaudeMessageHandler.class);
     private final Project project;
     private final SessionState state;
-    private final Object turnOwner;
-    private final String runtimeSessionEpoch;
-    private final String executionBindingEpoch;
+    private final TurnGuard turnGuard;
     private final SessionExecutionState.Turn executionTurn;
     private final CallbackHandler callbackHandler;
     private final MessageParser messageParser;
@@ -105,9 +103,7 @@ public class ClaudeMessageHandler implements MessageCallback {
                          CodemossSettingsService settingsService, Object expectedTurnOwner) {
         this.project = project;
         this.state = state;
-        this.turnOwner = expectedTurnOwner;
-        this.runtimeSessionEpoch = state.getRuntimeSessionEpoch();
-        this.executionBindingEpoch = state.getExecutionSnapshot().bindingEpoch();
+        this.turnGuard = new TurnGuard(state, expectedTurnOwner);
         this.executionTurn = state.executionTurnForOwner(expectedTurnOwner);
         this.callbackHandler = callbackHandler;
         this.messageParser = messageParser;
@@ -356,8 +352,7 @@ public class ClaudeMessageHandler implements MessageCallback {
     // ===== Private methods: handle different message types =====
 
     private boolean ownsCurrentTurn() {
-        return state.isCurrentTurn(turnOwner) && runtimeSessionEpoch.equals(state.getRuntimeSessionEpoch())
-                && state.getExecutionState().isCurrentBinding(executionBindingEpoch);
+        return turnGuard.ownsCurrentTurn();
     }
 
     @Override
@@ -732,7 +727,8 @@ public class ClaudeMessageHandler implements MessageCallback {
      */
     private String resolveMappedModel(String model) {
         try {
-            JsonObject claudeSettings = settingsService.readClaudeSettings();
+            JsonObject claudeSettings = com.github.claudecodegui.settings.SessionSupplierCatalog.claudeSettings(
+                    settingsService, state.getRuntimeSupplierId("claude"));
             if (claudeSettings != null && claudeSettings.has("env") && claudeSettings.get("env").isJsonObject()) {
                 return ModelProviderHandler.resolveConfiguredClaudeModel(model, claudeSettings.getAsJsonObject("env"));
             }
@@ -865,7 +861,7 @@ public class ClaudeMessageHandler implements MessageCallback {
             // intentional defense-in-depth - see DaemonBridge.handleDaemonEvent.
             String subtype = systemObj.has("subtype") && !systemObj.get("subtype").isJsonNull()
                     ? systemObj.get("subtype").getAsString() : null;
-            if (subtype != null && subtype.startsWith("task_")) {
+            if (subtype != null && (subtype.startsWith("task_") || "background_tasks_changed".equals(subtype))) {
                 callbackHandler.notifyTaskEvent(content);
                 // task_* events carry no slash_commands; skip the rest.
                 return;

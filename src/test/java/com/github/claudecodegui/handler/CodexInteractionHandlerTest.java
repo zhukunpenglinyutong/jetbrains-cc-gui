@@ -22,6 +22,30 @@ import static org.junit.Assert.assertTrue;
 
 /** Checks that controls share the frontend's rule of waiting behind live sends. */
 public class CodexInteractionHandlerTest {
+    @Test
+    public void settingsFailuresAlwaysReachThePageForBothSettingsEntryPoints() throws Exception {
+        for (String type : new String[]{"codex_update_settings", "set_codex_approval_preset"}) {
+            CodexSDKBridge bridge = new CodexSDKBridge() {
+                @Override
+                public JsonObject updateCodexSettings(String channel, String cwd, JsonObject settings) {
+                    throw new IllegalStateException("fixture configuration failure");
+                }
+            };
+            RecordingJs callbacks = new RecordingJs();
+            HandlerContext context = new HandlerContext(null, null, bridge, null, callbacks);
+            new CodexInteractionHandler(context).handle(type, "codex_update_settings".equals(type) ? "{\"requestId\":\"settings-1\",\"settings\":{\"approvalPreset\":\"request\"}}" : "request");
+            JsonObject response = callbacks.results.poll(5, TimeUnit.SECONDS);
+            assertNotNull(type, response);
+            assertTrue(type, response.has("error"));
+            assertEquals("codex_update_settings", response.get("requestType").getAsString());
+            assertTrue(response.get("requestedSettings").isJsonObject());
+            if ("codex_update_settings".equals(type)) {
+                assertEquals("settings-1", response.get("requestId").getAsString());
+                assertFalse(response.getAsJsonObject("requestedSettings").has("requestId"));
+            }
+        }
+    }
+
     /** A request from the previous chat must not claim the restored chat's wait. */
     @Test
     public void rejectsControlsForAThreadThatIsNoLongerSelected() throws Exception {

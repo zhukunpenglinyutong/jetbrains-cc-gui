@@ -166,6 +166,12 @@ public final class SlashCommandRegistry {
      * Gets the merged slash command list for a given provider and working directory.
      */
     public static List<SlashCommand> getCommands(String provider, String cwd, String currentFilePath) {
+        if (OmpSlashCommandService.isOmp(provider)) {
+            // OMP does not understand Claude's built-ins or .claude/ scans: its own
+            // catalog (cached, never blocking) is the whole list.
+            return OmpSlashCommandService.getCached(cwd);
+        }
+
         boolean isCodex = "codex".equalsIgnoreCase(provider);
 
         List<SlashCommand> builtins = isCodex ? CODEX_BUILTIN : CLAUDE_BUILTIN;

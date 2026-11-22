@@ -1,3 +1,4 @@
+import { useSessionSupplier } from '../../../contexts/SessionSupplierContext';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
@@ -70,6 +71,9 @@ export const ConfigSelect = ({
   currentProvider = 'claude',
 }: ConfigSelectProps) => {
   const { t } = useTranslation();
+  const supplier = useSessionSupplier();
+  const thinkingUnavailable = currentProvider === 'claude' && (supplier?.provider !== 'claude'
+    || !supplier.thinkingSettings || supplier.pending || supplier.error || supplier.missing);
   const [isOpen, setIsOpen] = useState(false);
   const [activeSubmenu, setActiveSubmenu] = useState<'none' | 'agent' | 'runtimeProvider' | 'nodeProcesses'>('none');
   const [agentItems, setAgentItems] = useState<AgentItem[]>([]);
@@ -129,11 +133,12 @@ export const ConfigSelect = ({
     }
   }, [t]);
 
-  const showProviderToast = useCallback((providerName: string) => {
+  const showProviderToast = useCallback((providerName: string, appliesNextTurn: boolean) => {
     if (toastTimerRef.current !== undefined) {
       window.clearTimeout(toastTimerRef.current);
     }
-    setToastMessage(t('config.runtimeProvider.switched', { provider: providerName }));
+    const switched = t('config.runtimeProvider.switched', { provider: providerName });
+    setToastMessage(appliesNextTurn ? `${switched} · ${t('sessionSupplier.nextTurn', 'Applies to the next turn')}` : switched);
     setShowToast(true);
     toastTimerRef.current = window.setTimeout(() => {
       setShowToast(false);
@@ -307,6 +312,8 @@ export const ConfigSelect = ({
             value={alwaysThinkingEnabled}
             defaultChecked={false}
             onChange={onToggleThinking}
+            disabled={thinkingUnavailable}
+            title={thinkingUnavailable ? t('sessionSupplier.unavailable', 'Supplier unavailable. Reopen this menu to retry or select another supplier.') : undefined}
             onMouseEnter={() => setActiveSubmenu('none')}
           />
 

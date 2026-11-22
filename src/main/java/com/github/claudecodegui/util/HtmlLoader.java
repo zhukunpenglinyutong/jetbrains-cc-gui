@@ -1,17 +1,18 @@
 package com.github.claudecodegui.util;
 
+import com.intellij.openapi.application.ApplicationInfo;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.util.registry.Registry;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * HTML loader.
- * Handles HTML file loading and local library injection.
+ * Handles HTML file loading and IDE theme injection.
  */
 public class HtmlLoader {
 
@@ -52,15 +53,9 @@ public class HtmlLoader {
                 if (is != null) {
                     String html = new String(is.readAllBytes(), StandardCharsets.UTF_8);
 
-                    if (html.contains("<!-- LOCAL_LIBRARY_INJECTION_POINT -->")) {
-                        html = injectLocalLibraries(html);
-                    } else {
-                        LOG.info("Detected bundled modern frontend assets; no additional library injection needed");
-                    }
-
                     // Prepare the complete static page once per theme. Per-tab state is added
                     // later, after this shared result is returned.
-                    html = injectIdeTheme(html, theme, bgColor);
+                    html = injectIdeTheme(html, theme, bgColor, describeHost());
                     CHAT_HTML_CACHE.put(cacheKey, html);
                     return html;
                 }
@@ -81,9 +76,10 @@ public class HtmlLoader {
      * @param html the static HTML document.
      * @param theme the IDE theme name.
      * @param bgColor the startup background color, used as the CSS variable fallback.
+     * @param hostInfo plugin/IDE description shown if the frontend fails to start.
      * @return the HTML with the initial theme bootstrap.
      */
-    static String injectIdeTheme(String html, String theme, String bgColor) {
+    static String injectIdeTheme(String html, String theme, String bgColor, String hostInfo) {
         int htmlTagEnd = findOpeningTagEnd(html, "<html", 0);
         int headTagEnd = findOpeningTagEnd(html, "<head", htmlTagEnd + 1);
         int htmlClosingTagStart = html.lastIndexOf("</html>");
@@ -96,7 +92,7 @@ public class HtmlLoader {
         // a custom chat background.
         String styleAttribute = " style=\"background-color:var(--bg-chat," + bgColor + ");\"";
         String scriptInjection = "\n    <script>window.__INITIAL_IDE_THEME__ = '"
-                + theme + "';</script>";
+                + theme + "';window.__CCGUI_HOST_INFO__ = '" + escapeForSingleQuotedJs(hostInfo) + "';</script>";
         StringBuilder result = new StringBuilder(html.length() + styleAttribute.length() * 2
                 + scriptInjection.length());
         int cursor = 0;
@@ -120,6 +116,24 @@ public class HtmlLoader {
 
         LOG.info("Successfully injected IDE theme (inline styles): " + theme + ", background: " + bgColor);
         return result.toString();
+    }
+
+    /** One line for the startup failure page, so a user's screenshot identifies their setup. */
+    static String describeHost() {
+        StringBuilder info = new StringBuilder("CC GUI ").append(PluginMetadata.getPluginVersion());
+        try {
+            ApplicationInfo app = ApplicationInfo.getInstance();
+            info.append(" | ").append(app.getFullApplicationName())
+                    .append(" (").append(app.getBuild().asString()).append(')')
+                    .append(" | JCEF out-of-process=")
+                    .append(Registry.is("ide.browser.jcef.out-of-process.enabled", false));
+        } catch (Exception | LinkageError e) {
+            // No application in unit tests; the remaining fields are still useful.
+        }
+        return info.append(" | ").append(System.getProperty("os.name"))
+                .append(' ').append(System.getProperty("os.version"))
+                .append(" | JBR ").append(System.getProperty("java.runtime.version"))
+                .toString();
     }
 
     private static int findOpeningTagEnd(String html, String tagPrefix, int fromIndex) {
@@ -175,7 +189,7 @@ public class HtmlLoader {
             String model,
             List<String> presetIds
     ) {
-        return injectInitialPageState(html, provider, model, presetIds, null);
+        return injectInitialPageState(html, provider, model, presetIds, null, null, null);
     }
 
     /**
@@ -193,9 +207,38 @@ public class HtmlLoader {
             List<String> presetIds,
             String draftCacheKey
     ) {
+        return injectInitialPageState(html, provider, model, presetIds, null, null, draftCacheKey);
+    }
+
+    /** Adds per-tab native effort and workflow preferences before shared-storage hydration. */
+    public String injectInitialPageState(
+            String html,
+            String provider,
+            String model,
+            List<String> presetIds,
+            String reasoningEffort,
+            Boolean claudeUltracode
+    ) {
+        return injectInitialPageState(html, provider, model, presetIds, reasoningEffort, claudeUltracode, null);
+    }
+
+    /** Combines per-tab native preferences with the stable draft cache identity. */
+    public String injectInitialPageState(
+            String html,
+            String provider,
+            String model,
+            List<String> presetIds,
+            String reasoningEffort,
+            Boolean claudeUltracode,
+            String draftCacheKey
+    ) {
         try {
             String safeProvider = escapeForSingleQuotedJs(provider == null ? "" : provider);
             String safeModel = escapeForSingleQuotedJs(model == null ? "" : model);
+            String nativePreferences = claudeUltracode == null ? ""
+                    : "window.__INITIAL_TAB_REASONING_EFFORT__ = "
+                    + (reasoningEffort == null ? "null" : "'" + escapeForSingleQuotedJs(reasoningEffort) + "'") + ";"
+                    + "window.__INITIAL_TAB_CLAUDE_ULTRACODE__ = " + claudeUltracode + ";";
             StringBuilder presetValues = new StringBuilder("[");
             if (presetIds != null) {
                 boolean first = true;
@@ -226,6 +269,7 @@ public class HtmlLoader {
                     + "\n    <script>"
                     + "window.__INITIAL_TAB_PROVIDER__ = '" + safeProvider + "';"
                     + "window.__INITIAL_TAB_MODEL__ = '" + safeModel + "';"
+                    + nativePreferences
                     + "</script>";
             if (draftCacheKey != null && !draftCacheKey.isBlank()) {
                 scriptInjection += "\n    <script>window.__CCGUI_DRAFT_CACHE_KEY__ = '"
@@ -282,64 +326,5 @@ public class HtmlLoader {
             "</div>" +
             "</body>" +
             "</html>";
-    }
-
-    /**
-     * Inject local library file contents into the HTML.
-     */
-    private String injectLocalLibraries(String html) {
-        try {
-            String reactJs = loadResourceAsString("/libs/react.production.min.js");
-            String reactDomJs = loadResourceAsString("/libs/react-dom.production.min.js");
-            String babelJs = loadResourceAsString("/libs/babel.min.js");
-            String markedJs = loadResourceAsString("/libs/marked.min.js");
-            String codiconCss = loadResourceAsString("/libs/codicon.css");
-
-            String fontBase64 = loadResourceAsBase64("/libs/codicon.ttf");
-            codiconCss = codiconCss.replaceAll(
-                "url\\(\"\\./codicon\\.ttf\\?[^\"]*\"\\)",
-                "url(\"data:font/truetype;base64," + fontBase64 + "\")"
-            );
-
-            StringBuilder injectedLibs = new StringBuilder();
-            injectedLibs.append("\n    <!-- React and related libraries (local versions) -->\n");
-            injectedLibs.append("    <script>/* React 18 */\n").append(reactJs).append("\n    </script>\n");
-            injectedLibs.append("    <script>/* ReactDOM 18 */\n").append(reactDomJs).append("\n    </script>\n");
-            injectedLibs.append("    <script>/* Babel Standalone */\n").append(babelJs).append("\n    </script>\n");
-            injectedLibs.append("    <script>/* Marked */\n").append(markedJs).append("\n    </script>\n");
-            injectedLibs.append("    <style>/* VS Code Codicons (with embedded font) */\n").append(codiconCss).append("\n    </style>");
-
-            html = html.replace("<!-- LOCAL_LIBRARY_INJECTION_POINT -->", injectedLibs.toString());
-
-            LOG.info("Successfully injected local libraries (React + ReactDOM + Babel + Codicons)");
-        } catch (Exception e) {
-            LOG.error("Failed to inject local libraries: " + e.getMessage());
-        }
-
-        return html;
-    }
-
-    /**
-     * Load a resource file as a string.
-     */
-    private String loadResourceAsString(String resourcePath) throws Exception {
-        try (InputStream is = resourceClass.getResourceAsStream(resourcePath)) {
-            if (is == null) {
-                throw new Exception("Resource not found: " + resourcePath);
-            }
-            return new String(is.readAllBytes(), StandardCharsets.UTF_8);
-        }
-    }
-
-    /**
-     * Load a resource file as a Base64-encoded string.
-     */
-    private String loadResourceAsBase64(String resourcePath) throws Exception {
-        try (InputStream is = resourceClass.getResourceAsStream(resourcePath)) {
-            if (is == null) {
-                throw new Exception("Resource not found: " + resourcePath);
-            }
-            return Base64.getEncoder().encodeToString(is.readAllBytes());
-        }
     }
 }

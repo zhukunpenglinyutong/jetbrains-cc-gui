@@ -30,7 +30,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.LinkedHashMap;
 import java.util.concurrent.TimeUnit;
@@ -570,8 +569,7 @@ public class McpServerManager {
             throw e;
         }
     }
-
-    /**
+/**
      * Validate MCP server configuration.
      */
     public Map<String, Object> validateMcpServer(JsonObject server) {

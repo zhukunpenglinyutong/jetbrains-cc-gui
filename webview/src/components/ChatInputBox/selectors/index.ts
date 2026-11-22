@@ -8,3 +8,4 @@ export { ReasoningSelect } from './ReasoningSelect';
 export { CodexFastModeSelect } from './CodexFastModeSelect';
 export { LongContextToggle } from './LongContextToggle';
 export { default as DshPresetSelect } from './DshPresetSelect';
+export { default as OmpApprovalSelect } from './OmpApprovalSelect';

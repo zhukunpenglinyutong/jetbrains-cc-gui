@@ -59,3 +59,10 @@ export function parseCodexCommand(text: string): CodexCommand | null {
     hasArguments: argumentsText.length > 0,
   };
 }
+
+/** These commands do not submit a model turn with the selected reasoning effort. */
+export function isCodexEffortIndependentCommand(command: CodexCommand | null): boolean {
+  return !!command && (['new', 'resume', 'compact', 'review', 'diff', 'approvals'].includes(command.kind)
+    || command.kind === 'plan' && !command.body
+    || ['/context', '/plugin', '/plugins'].includes(command.command));
+}

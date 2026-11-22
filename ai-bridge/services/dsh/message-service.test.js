@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { bindWorkspaceSession, splitModelTuple } from './message-service.js';
+import { bindWorkspaceSession, splitModelTuple, cancelBeforeExit } from './message-service.js';
 import { buildPromptContent } from './session.js';
 
 test('splitModelTuple splits "<provider>/<model>" tuples', () => {
@@ -118,4 +118,30 @@ test('a new session the host refuses is loud', async () => {
     () => bindWorkspaceSession(client, 'D:/proj'),
     /dsh session\.create failed: nope/
   );
+});
+
+test('cancelBeforeExit waits for the host to acknowledge session.cancel', async () => {
+  let acked = false;
+  const client = {
+    call: async (method, params) => {
+      assert.equal(method, 'session.cancel');
+      assert.deepEqual(params, { sessionId: 's1' });
+      await new Promise((r) => setTimeout(r, 30));
+      acked = true;
+    },
+  };
+  await cancelBeforeExit(client, 's1', 1000);
+  assert.equal(acked, true);
+});
+
+test('cancelBeforeExit gives up after the timeout when the host never answers', async () => {
+  const client = { call: () => new Promise(() => {}) };
+  const start = Date.now();
+  await cancelBeforeExit(client, 's1', 50);
+  assert.ok(Date.now() - start < 1000);
+});
+
+test('cancelBeforeExit swallows cancel errors', async () => {
+  const client = { call: async () => { throw new Error('boom'); } };
+  await cancelBeforeExit(client, 's1', 50);
 });

@@ -42,6 +42,7 @@ public class SettingsHandler extends BaseMessageHandler {
         "set_model",
         "set_provider",
         "set_reasoning_effort",
+        "set_claude_ultracode",
         "set_codex_fast_mode",
         "set_dsh_preset",
         "get_node_path",
@@ -80,6 +81,8 @@ public class SettingsHandler extends BaseMessageHandler {
         "set_permission_dialog_timeout",
         "get_commit_generation_enabled",
         "set_commit_generation_enabled",
+        "get_session_git_repository_matching_enabled",
+        "set_session_git_repository_matching_enabled",
         "get_status_bar_widget_enabled",
         "set_status_bar_widget_enabled",
 
@@ -100,7 +103,6 @@ public class SettingsHandler extends BaseMessageHandler {
         "set_prompt_enhancer_config",
         "get_project_commit_prompt",
         "set_project_commit_prompt",
-        "get_input_history",
         "record_input_history",
         "delete_input_history_item",
         "clear_input_history",
@@ -114,7 +116,7 @@ public class SettingsHandler extends BaseMessageHandler {
         "browse_sound_file",
         // User language preference
         "set_user_language",
-        "get_user_language",
+"get_user_language",
         "clear_user_language",
         "get_env_file",
         "set_env_file"
@@ -186,6 +188,9 @@ public class SettingsHandler extends BaseMessageHandler {
                 return true;
             case "set_reasoning_effort":
                 modelProviderHandler.handleSetReasoningEffort(content);
+                return true;
+            case "set_claude_ultracode":
+                modelProviderHandler.handleSetClaudeUltracode(content);
                 return true;
             case "set_codex_fast_mode":
                 modelProviderHandler.handleSetCodexFastMode(content);
@@ -301,6 +306,12 @@ public class SettingsHandler extends BaseMessageHandler {
             case "set_commit_generation_enabled":
                 projectConfigHandler.handleSetCommitGenerationEnabled(content);
                 return true;
+            case "get_session_git_repository_matching_enabled":
+                projectConfigHandler.handleGetSessionGitRepositoryMatchingEnabled();
+                return true;
+            case "set_session_git_repository_matching_enabled":
+                projectConfigHandler.handleSetSessionGitRepositoryMatchingEnabled(content);
+                return true;
             case "get_status_bar_widget_enabled":
                 projectConfigHandler.handleGetStatusBarWidgetEnabled();
                 return true;
@@ -366,9 +377,6 @@ public class SettingsHandler extends BaseMessageHandler {
                 projectConfigHandler.handleSetProjectCommitPrompt(content);
                 return true;
             // Input history
-            case "get_input_history":
-                inputHistoryHandler.handleGetInputHistory();
-                return true;
             case "record_input_history":
                 inputHistoryHandler.handleRecordInputHistory(content);
                 return true;
@@ -403,9 +411,6 @@ public class SettingsHandler extends BaseMessageHandler {
             // User language preference
             case "set_user_language":
                 handleSetUserLanguage(content);
-                return true;
-            case "get_user_language":
-                handleGetUserLanguage();
                 return true;
             case "clear_user_language":
                 handleClearUserLanguage();
@@ -443,17 +448,6 @@ public class SettingsHandler extends BaseMessageHandler {
             LOG.error("[SettingsHandler] Failed to save user language: " + e.getMessage(), e);
             pushLanguageConfig();
         }
-    }
-
-    /**
-     * Handle get_user_language: return user's saved language preference.
-     */
-    private void handleGetUserLanguage() {
-        String userLanguage = LanguageConfigService.getUserLanguage(context.getSettingsService());
-        JsonObject response = new JsonObject();
-        response.addProperty("language", userLanguage != null ? userLanguage : "");
-        response.addProperty("manuallySet", userLanguage != null);
-        callJavaScript("window.onUserLanguage", escapeJs(response.toString()));
     }
 
     /**

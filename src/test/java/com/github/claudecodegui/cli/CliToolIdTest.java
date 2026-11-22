@@ -32,6 +32,7 @@ public class CliToolIdTest {
         assertEquals("grok", CliToolId.GROK.getBinaryName());
         assertEquals("kimi", CliToolId.KIMI.getBinaryName());
         assertEquals("opencode", CliToolId.OPENCODE.getBinaryName());
+        assertEquals("opencode-cli", CliToolId.OPENCODE.getAltBinaryName());
         assertEquals("pi", CliToolId.PI.getBinaryName());
         assertEquals("omp", CliToolId.OMP.getBinaryName());
         assertEquals("OMP CLI", CliToolId.OMP.getDisplayName());

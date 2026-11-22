@@ -21,6 +21,8 @@ export interface LedgerOp {
   moveFrom?: string;
   patch?: string;
   oldStringKnown?: boolean;
+  /** Keep All fingerprint, numbered for repeats (see useFileChanges editOperationKey) */
+  editKey?: string;
   sourceId?: string;
   toolUseId?: string;
   filePath: string;
@@ -319,6 +321,7 @@ export function buildSessionFileLedger(ops: LedgerOp[]): SessionFileLedgerEntry[
         ...(o.moveFrom ? { moveFrom: o.moveFrom } : {}),
         ...(o.patch ? { patch: o.patch } : {}),
         ...(o.oldStringKnown !== undefined ? { oldStringKnown: o.oldStringKnown } : {}),
+        ...(o.editKey ? { editKey: o.editKey } : {}),
       };
     });
 

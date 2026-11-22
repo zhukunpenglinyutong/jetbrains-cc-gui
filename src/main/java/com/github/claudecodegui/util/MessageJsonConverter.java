@@ -37,9 +37,12 @@ public class MessageJsonConverter {
             JsonObject msgObj = new JsonObject();
             msgObj.addProperty("type", msg.type.toString().toLowerCase());
             msgObj.addProperty("timestamp", msg.timestamp);
-            msgObj.addProperty("content", truncateErrorContent(msg.content != null ? msg.content : ""));
+            boolean userMessage = msg.type == ClaudeSession.Message.Type.USER;
+            String content = msg.content != null ? msg.content : "";
+            msgObj.addProperty("content", truncateErrorContent(userMessage
+                    ? PluginIdeContext.visibleText(content, msg.raw) : content));
             if (msg.raw != null) {
-                msgObj.add("raw", truncateRawForTransport(msg.raw));
+                msgObj.add("raw", truncateRawForTransport(msg.raw, userMessage));
             }
             messagesArray.add(msgObj);
         }
@@ -81,7 +84,12 @@ public class MessageJsonConverter {
      * Handles tool_result and error text blocks.
      */
     public static JsonObject truncateRawForTransport(JsonObject raw) {
-        JsonObject transport = buildTransportRaw(raw);
+        return truncateRawForTransport(raw, raw.has("type")
+                && new JsonPrimitive("user").equals(raw.get("type")));
+    }
+
+    private static JsonObject truncateRawForTransport(JsonObject raw, boolean userMessage) {
+        JsonObject transport = buildTransportRaw(userMessage ? PluginIdeContext.visibleMessage(raw) : raw);
         JsonElement contentEl = findContentElement(transport);
 
         if (contentEl == null) {
@@ -186,6 +194,7 @@ public class MessageJsonConverter {
         JsonObject transport = new JsonObject();
         copyFieldIfPresent(raw, transport, "uuid");
         copyFieldIfPresent(raw, transport, "type");
+        copyFieldIfPresent(raw, transport, PluginIdeContext.REMOVED_FIELD);
         copyFieldIfPresent(raw, transport, "clientMessageId");
         copyFieldIfPresent(raw, transport, "codexItemId");
         copyFieldIfPresent(raw, transport, "codexThreadId");
@@ -196,6 +205,8 @@ public class MessageJsonConverter {
         copyFieldIfPresent(raw, transport, "codexAuthoritative");
         copyFieldIfPresent(raw, transport, "isMeta");
         copyFieldIfPresent(raw, transport, "text");
+        // Transcript time; turnMetadataReconstruction.ts derives a restored turn's duration from it.
+        copyFieldIfPresent(raw, transport, "timestamp");
         // Compact-related fields for filtering compact summary messages
         copyFieldIfPresent(raw, transport, "isCompactSummary");
         copyFieldIfPresent(raw, transport, "isVisibleInTranscriptOnly");
@@ -206,9 +217,10 @@ public class MessageJsonConverter {
         // CodexMessageHandler.handleResultMessage, for the per-turn token display.
         // Whole-turn estimated cost is calculated by the backend from the same pricing
         // configuration used by Usage Statistics; the frontend only formats it.
-        // Deliberately NOT copying the top-level usage or message.usage fields:
-        // those carry per-call / session-cumulative values for the status bar and
-        // would be misleading if rendered per message.
+        // Deliberately NOT copying the top-level usage field: it carries
+        // session-cumulative values for the status bar. message.id/usage (per API
+        // call) are copied below only so the webview can rebuild turnUsage for
+        // restored turns; the footer never renders them directly.
         copyFieldIfPresent(raw, transport, "turnUsage");
         copyFieldIfPresent(raw, transport, "turnCostUsd");
         // Agent/Task tool metadata (agentId, totalDurationMs, totalTokens,
@@ -227,6 +239,8 @@ public class MessageJsonConverter {
             if (sourceMessage.has("content")) {
                 transportMessage.add("content", sourceMessage.get("content").deepCopy());
             }
+            copyFieldIfPresent(sourceMessage, transportMessage, "id");
+            copyFieldIfPresent(sourceMessage, transportMessage, "usage");
             if (transportMessage.size() > 0) {
                 transport.add("message", transportMessage);
             }
@@ -352,7 +366,8 @@ public class MessageJsonConverter {
             int usedTokens = TokenUsageUtils.extractContextTokens(lastUsage, currentProvider);
             int fallbackMaxTokens = ModelProviderHandler.resolveContextLimit(
                     currentProvider, handlerContext.getCurrentModel(),
-                    ModelProviderHandler.sessionCwd(handlerContext));
+                    ModelProviderHandler.sessionCwd(handlerContext), handlerContext.getSession() == null ? null
+                            : handlerContext.getSession().getState().getRuntimeSupplierId(currentProvider));
             int maxTokens = TokenUsageUtils.extractMaxTokens(lastUsage, fallbackMaxTokens);
             int percentage = Math.min(100, maxTokens > 0 ? (int) ((usedTokens * 100.0) / maxTokens) : 0);
 

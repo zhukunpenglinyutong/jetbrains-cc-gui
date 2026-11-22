@@ -57,6 +57,15 @@ public final class UserMessageSanitizer {
         return strippedContext.trim();
     }
 
+    /** Keeps literal user XML while normalizing known legacy Claude attachment/context envelopes. */
+    public static String sanitizeClaudeUserFacingText(String text) {
+        if (text == null || text.isEmpty()) {
+            return text;
+        }
+        String normalized = text.replace("\r\n", "\n").replace("\r", "\n");
+        return stripAppendedContext(stripDesktopAttachmentEnvelope(normalized)).trim();
+    }
+
     private static String stripDesktopAttachmentEnvelope(String text) {
         Matcher envelope = DESKTOP_ENVELOPE.matcher(text);
         if (!envelope.find()) {

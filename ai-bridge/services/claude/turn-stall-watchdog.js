@@ -57,6 +57,9 @@ export function takeWithStallTimeout(sink, { timeoutMs, hasToolInFlight }) {
   if (!(timeoutMs > 0)) {
     return sink.take();
   }
+  // Take before arming: Stop can clear the sink mid-turn, and a timer armed for
+  // a take that throws would fire later against a missing sink.
+  const taking = sink.take();
   return new Promise((resolve, reject) => {
     let timer = null;
     const arm = () => {
@@ -72,7 +75,7 @@ export function takeWithStallTimeout(sink, { timeoutMs, hasToolInFlight }) {
       reject(error);
     };
     arm();
-    sink.take().then(
+    taking.then(
       (value) => {
         clearTimeout(timer);
         resolve(value);

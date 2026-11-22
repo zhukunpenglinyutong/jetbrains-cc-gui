@@ -210,7 +210,7 @@ export function resolveModelTierEnvKey(baseModelId) {
  *                                  unconfigured ones are cleared); when absent only the current tier
  *                                  is written and other tiers are left untouched.
  */
-export function setModelEnvironmentVariables(modelId, baseModelId, settingsEnv) {
+export function setModelEnvironmentVariables(modelId, baseModelId, settingsEnv, targetEnv = process.env) {
   if (!modelId || typeof modelId !== 'string') {
     return;
   }
@@ -240,21 +240,21 @@ export function setModelEnvironmentVariables(modelId, baseModelId, settingsEnv) 
     for (const key of MODEL_TIER_ENV_KEYS) {
       const value = configuredTiers[key];
       if (value === undefined) {
-        delete process.env[key];
+        delete targetEnv[key];
       } else {
-        process.env[key] = value;
+        targetEnv[key] = value;
       }
     }
   }
 
-  process.env.ANTHROPIC_MODEL = modelId;
+  targetEnv.ANTHROPIC_MODEL = modelId;
 
   // Use baseModelId to determine which tier the request owns. This is necessary when
   // modelId is a custom name like 'MiniMax-M2.5' that doesn't contain 'opus'/'haiku'/'sonnet'.
   const tierKey = resolveModelTierEnvKey(
     typeof baseModelId === 'string' && baseModelId ? baseModelId : modelId
   );
-  process.env[tierKey] = modelId;
+  targetEnv[tierKey] = modelId;
   console.log(`[MODEL_ENV] Set ${tierKey} =`, modelId);
 }
 

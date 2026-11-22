@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  sendBridgeEvent,
   openBrowser,
   openClass,
   openFile,
@@ -11,6 +12,17 @@ import {
 describe('bridge navigation helpers', () => {
   beforeEach(() => {
     window.sendToJava = vi.fn();
+  });
+
+  it('reports refused, absent, and throwing delivery while accepting legacy void bridges', () => {
+    window.sendToJava = vi.fn(() => false);
+    expect(sendBridgeEvent('get_hooks')).toBe(false);
+    window.sendToJava = undefined;
+    expect(sendBridgeEvent('get_hooks')).toBe(false);
+    window.sendToJava = vi.fn(() => { throw new Error('page replaced'); });
+    expect(sendBridgeEvent('get_hooks')).toBe(false);
+    window.sendToJava = vi.fn();
+    expect(sendBridgeEvent('get_hooks')).toBe(true);
   });
 
   it('decodes percent-encoded navigation paths for openFile', () => {

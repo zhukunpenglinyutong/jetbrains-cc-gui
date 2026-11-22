@@ -80,12 +80,13 @@ export function filterServersByName(allServers, serverNames) {
  * Get the connection status of all MCP servers
  * Includes enabled, disabled, and invalid servers so the frontend gets a complete picture
  * @param {string} cwd - Current working directory (used to detect project config)
+ * @param {boolean} projectTrusted - Whether the IDE trusts the project
  * @param {string[]|null} serverNames - Restrict the check to these server names (optional)
  * @returns {Promise<Object[]>} List of MCP server statuses
  */
-export async function getMcpServersStatus(cwd = null, serverNames = null) {
+export async function getMcpServersStatus(cwd = null, projectTrusted = false, serverNames = null) {
   try {
-    const loaded = await loadAllMcpServersInfo(cwd);
+    const loaded = await loadAllMcpServersInfo(cwd, projectTrusted);
     const isFiltered = Array.isArray(serverNames) && serverNames.length > 0;
     const allServers = isFiltered ? filterServersByName(loaded, serverNames) : loaded;
 

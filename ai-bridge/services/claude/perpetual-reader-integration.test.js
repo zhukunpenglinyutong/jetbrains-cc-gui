@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { startPerpetualReader, createTurnSink } from './runtime-lifecycle.js';
+import { startPerpetualReader, createTurnSink, registerRuntimeSession, disposeRuntime } from './runtime-lifecycle.js';
 
 /**
  * Integration tests for the REAL perpetual reader (startPerpetualReader).
@@ -84,6 +84,125 @@ function captureInterTurnEvents() {
 
 /** Yield long enough for the reader to drain a delivered message. */
 const settle = () => new Promise((resolve) => setTimeout(resolve, 10));
+
+test('native workflow fan-out remains live after the foreground result and forwards complete snapshots', async () => {
+  const ctl = createControlledQuery();
+  const runtime = {
+    closed: false, sessionId: 'workflow-session', runtimeSessionEpoch: 'workflow-epoch',
+    turnSink: createTurnSink(), query: ctl.query, inputStream: { done() {} },
+  };
+  const capture = captureInterTurnEvents();
+  const reader = startPerpetualReader(runtime);
+  try {
+    ctl.deliver({ type: 'result', result: 'Workflow launched' });
+    assert.equal((await runtime.turnSink.take()).value.type, 'result');
+    runtime.turnSink = null;
+    const tasks = Array.from({ length: 80 }, (_, index) => ({
+      task_id: `native-${index}`, task_type: index === 0 ? 'local_workflow' : 'local_agent',
+      description: `Native task ${index}`, ...(index === 0 ? {} : { parent_task_id: 'native-0' }),
+    }));
+    ctl.deliver({ type: 'system', subtype: 'background_tasks_changed', tasks });
+    // Worker tool messages must not make the next user turn wait for a
+    // main-thread result that this worker will never emit.
+    ctl.deliver({ type: 'assistant', parent_tool_use_id: 'workflow-tool', message: { content: [] } });
+    await settle();
+    assert.equal(runtime.backgroundTaskIds.size, 80);
+    assert.equal(runtime.cliTurnInFlight, false);
+    assert.equal(capture.list[0].event, 'task_event');
+    assert.equal(capture.list[0].runtimeSessionEpoch, 'workflow-epoch');
+    assert.deepEqual(capture.list[0].taskEvent.tasks, tasks);
+    ctl.deliver({ type: 'system', subtype: 'background_tasks_changed', tasks: [] });
+    await settle();
+    assert.equal(runtime.backgroundTaskIds.size, 0);
+    assert.deepEqual(capture.list[1].taskEvent.tasks, []);
+  } finally {
+    ctl.end();
+    await reader;
+    capture.restore();
+  }
+});
+
+test('native task snapshots queued behind a foreground result are delivered once in native order', async () => {
+  const ctl = createControlledQuery();
+  const runtime = { closed: false, sessionId: 'buffered-session', runtimeSessionEpoch: 'buffered-epoch',
+    turnSink: createTurnSink(), query: ctl.query, inputStream: { done() {} } };
+  const capture = captureInterTurnEvents();
+  const reader = startPerpetualReader(runtime);
+  try {
+    ctl.deliver({ type: 'system', subtype: 'background_tasks_changed', tasks: [{ task_id: 'first' }] });
+    ctl.deliver({ type: 'result' });
+    ctl.deliver({ type: 'system', subtype: 'background_tasks_changed', tasks: [{ task_id: 'second' }] });
+    await settle();
+    assert.equal((await runtime.turnSink.take()).value.type, 'result');
+    runtime.turnSink = null;
+    assert.deepEqual(capture.list.map(event => event.taskEvent.tasks.map(task => task.task_id)), [['first'], ['second']]);
+  } finally {
+    ctl.end();
+    await reader;
+    capture.restore();
+  }
+});
+
+test('new-session task snapshots wait for session publication and clear when the native process exits', async () => {
+  const ctl = createControlledQuery();
+  const runtime = { closed: false, sessionId: null, runtimeSessionEpoch: 'new-epoch',
+    turnSink: createTurnSink(), query: ctl.query, inputStream: { done() {} } };
+  const capture = captureInterTurnEvents();
+  const reader = startPerpetualReader(runtime);
+  try {
+    ctl.deliver({ type: 'system', subtype: 'init', session_id: 'new-session' });
+    ctl.deliver({ type: 'system', subtype: 'background_tasks_changed', session_id: 'new-session', tasks: [{ task_id: 'workflow' }] });
+    await settle();
+    assert.equal(capture.list.length, 0);
+    const initialization = (await runtime.turnSink.take()).value;
+    registerRuntimeSession(runtime, initialization.session_id, {});
+    runtime.turnSink = null;
+    assert.equal(capture.list[0].sessionId, 'new-session');
+    assert.equal(capture.list[0].runtimeSessionEpoch, 'new-epoch');
+    assert.deepEqual(capture.list[0].taskEvent.tasks, [{ task_id: 'workflow' }]);
+    ctl.end();
+    await reader;
+    assert.deepEqual(capture.list[1].taskEvent.tasks, []);
+    assert.equal(capture.list[1].runtimeSessionEpoch, 'new-epoch');
+  } finally {
+    ctl.end();
+    await reader;
+    capture.restore();
+  }
+});
+
+test('disposal ignores a buffered task snapshot released while closing the native query', async () => {
+  const ctl = createControlledQuery();
+  const runtime = {
+    closed: false, sessionId: 'closing-session', runtimeSessionEpoch: 'closing-epoch',
+    backgroundTaskIds: new Set(['worker']), hasBackgroundTaskSnapshot: true,
+    inputStream: { done() {} },
+    query: {
+      next: ctl.query.next,
+      close() {
+        ctl.deliver({
+          type: 'system', subtype: 'background_tasks_changed',
+          tasks: [{ task_id: 'worker', task_type: 'local_agent' }],
+        });
+        ctl.query.close();
+      },
+    },
+  };
+  const capture = captureInterTurnEvents();
+  const reader = startPerpetualReader(runtime);
+  try {
+    await disposeRuntime(runtime);
+    await reader;
+    assert.equal(runtime.closed, true);
+    assert.equal(runtime.backgroundTaskIds.size, 0);
+    assert.deepEqual(capture.list.map(event => event.taskEvent.tasks), [[]]);
+    assert.equal(capture.list[0].runtimeSessionEpoch, 'closing-epoch');
+  } finally {
+    ctl.end();
+    await reader;
+    capture.restore();
+  }
+});
 
 test('Integration: startup resume failure expires the owning session before a turn sink exists', async () => {
   const ctl = createControlledQuery();
@@ -271,7 +390,7 @@ test('Integration: inter-turn result on anonymous runtime emits no event', async
   assert.equal(events.list.filter((e) => e.event === 'session_updated').length, 0);
 });
 
-test('Integration: non-result inter-turn messages do not emit events', async () => {
+test('Integration: non-result inter-turn messages emit no session_updated (assistant forwards as inter_turn_message)', async () => {
   const ctl = createControlledQuery();
   const runtime = { closed: false, sessionId: 'sess-x', turnSink: null, query: ctl.query };
   const events = captureInterTurnEvents();
@@ -289,6 +408,146 @@ test('Integration: non-result inter-turn messages do not emit events', async () 
   }
 
   assert.equal(events.list.filter((e) => e.event === 'session_updated').length, 0);
+  // The assistant body routes to the dedicated inter_turn_message event, never
+  // to session_updated; user noise emits nothing at all.
+  assert.equal(events.list.length, 1);
+  assert.equal(events.list[0].event, 'inter_turn_message');
+  assert.equal(events.list[0].sessionId, 'sess-x');
+  assert.equal(events.list[0].message.content, 'partial');
+});
+
+test('Integration: inter-turn assistant body emits inter_turn_message with the full message (#2069)', async () => {
+  const ctl = createControlledQuery();
+  const runtime = { closed: false, sessionId: 'sess-fu', turnSink: null, query: ctl.query };
+  const events = captureInterTurnEvents();
+
+  const reader = startPerpetualReader(runtime);
+  const body = {
+    type: 'assistant',
+    uuid: 'msg-uuid-1',
+    message: { role: 'assistant', content: [{ type: 'text', text: 'Task report' }] },
+  };
+  try {
+    ctl.deliver(body);
+    await settle();
+  } finally {
+    runtime.closed = true;
+    ctl.end();
+    await reader;
+    events.restore();
+  }
+
+  const forwards = events.list.filter((e) => e.event === 'inter_turn_message');
+  assert.equal(forwards.length, 1);
+  assert.equal(forwards[0].sessionId, 'sess-fu');
+  assert.deepEqual(forwards[0].message, body);
+});
+
+test('Integration: inter-turn sidechain assistant body is not forwarded', async () => {
+  const ctl = createControlledQuery();
+  const runtime = { closed: false, sessionId: 'sess-side', turnSink: null, query: ctl.query };
+  const events = captureInterTurnEvents();
+
+  const reader = startPerpetualReader(runtime);
+  try {
+    ctl.deliver({ type: 'assistant', parent_tool_use_id: 'agent-tool', content: 'sidechain' });
+    await settle();
+  } finally {
+    runtime.closed = true;
+    ctl.end();
+    await reader;
+    events.restore();
+  }
+
+  assert.equal(events.list.filter((e) => e.event === 'inter_turn_message').length, 0);
+});
+
+test('Integration: inter-turn tool_result user row is forwarded so the tool card can settle', async () => {
+  const ctl = createControlledQuery();
+  const runtime = { closed: false, sessionId: 'sess-tr', turnSink: null, query: ctl.query };
+  const events = captureInterTurnEvents();
+
+  const reader = startPerpetualReader(runtime);
+  const body = {
+    type: 'user',
+    uuid: 'tool-result-uuid',
+    message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tool-1', content: 'ok' }] },
+  };
+  try {
+    ctl.deliver(body);
+    await settle();
+  } finally {
+    runtime.closed = true;
+    ctl.end();
+    await reader;
+    events.restore();
+  }
+
+  const forwards = events.list.filter((e) => e.event === 'inter_turn_message');
+  assert.equal(forwards.length, 1);
+  assert.equal(forwards[0].sessionId, 'sess-tr');
+  assert.deepEqual(forwards[0].message, body);
+});
+
+test('Integration: inter-turn plain user text is not forwarded', async () => {
+  const ctl = createControlledQuery();
+  const runtime = { closed: false, sessionId: 'sess-text', turnSink: null, query: ctl.query };
+  const events = captureInterTurnEvents();
+
+  const reader = startPerpetualReader(runtime);
+  try {
+    ctl.deliver({ type: 'user', message: { role: 'user', content: [{ type: 'text', text: 'note' }] } });
+    await settle();
+  } finally {
+    runtime.closed = true;
+    ctl.end();
+    await reader;
+    events.restore();
+  }
+
+  assert.equal(events.list.filter((e) => e.event === 'inter_turn_message').length, 0);
+});
+
+test('Integration: inter-turn sidechain tool_result is not forwarded', async () => {
+  const ctl = createControlledQuery();
+  const runtime = { closed: false, sessionId: 'sess-side-tr', turnSink: null, query: ctl.query };
+  const events = captureInterTurnEvents();
+
+  const reader = startPerpetualReader(runtime);
+  try {
+    ctl.deliver({
+      type: 'user',
+      parent_tool_use_id: 'agent-tool',
+      message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tool-1', content: 'ok' }] },
+    });
+    await settle();
+  } finally {
+    runtime.closed = true;
+    ctl.end();
+    await reader;
+    events.restore();
+  }
+
+  assert.equal(events.list.filter((e) => e.event === 'inter_turn_message').length, 0);
+});
+
+test('Integration: inter-turn assistant body on anonymous runtime emits no event', async () => {
+  const ctl = createControlledQuery();
+  const runtime = { closed: false, sessionId: null, turnSink: null, query: ctl.query };
+  const events = captureInterTurnEvents();
+
+  const reader = startPerpetualReader(runtime);
+  try {
+    ctl.deliver({ type: 'assistant', content: 'anonymous' });
+    await settle();
+  } finally {
+    runtime.closed = true;
+    ctl.end();
+    await reader;
+    events.restore();
+  }
+
+  assert.equal(events.list.length, 0);
 });
 
 // ============================================================================

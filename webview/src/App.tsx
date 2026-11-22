@@ -161,8 +161,11 @@ const App = () => {
           activeProviderConfig={model.activeProviderConfig}
           claudeSettingsAlwaysThinkingEnabled={model.claudeSettingsAlwaysThinkingEnabled}
           reasoningEffort={model.reasoningEffort}
+          claudeUltracode={model.claudeUltracode}
+          onClaudeUltracodeChange={model.handleClaudeUltracodeChange}
           codexFastMode={model.codexFastMode}
           dshPreset={model.dshPreset}
+          ompApprovalMode={model.ompApprovalMode}
           streamingEnabledSetting={model.streamingEnabledSetting}
           sendShortcut={model.sendShortcut}
           autoOpenFileEnabled={model.autoOpenFileEnabled}
@@ -176,6 +179,7 @@ const App = () => {
           onReasoningChange={model.handleReasoningChange}
           onCodexFastModeChange={model.handleCodexFastModeChange}
           onDshPresetChange={model.handleDshPresetChange}
+          onOmpApprovalModeChange={model.handleOmpApprovalModeChange}
           onToggleThinking={model.handleToggleThinking}
           onStreamingEnabledChange={model.handleStreamingEnabledChange}
           onAutoOpenFileEnabledChange={model.handleAutoOpenFileEnabledChange}

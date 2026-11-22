@@ -46,7 +46,10 @@ import {
   prepareAssistantSnapshotBlock,
 } from './stream-delta-normalizer.js';
 import { generateSessionTitle } from '../session-title-service.js';
+import { projectTrustFor, settingSourcesFor } from './project-trust.js';
 import { getClaudeCliPathOverride } from '../../utils/claude-cli-path.js';
+import { buildSessionClaudeConfig, buildSessionClaudeSettingsOverride } from '../../config/session-supplier.js';
+import { createUltracodeQuery, withUltracodeSetting } from './ultracode.js';
 
 // ========== Internal helpers for deduplication ==========
 
@@ -76,7 +79,7 @@ function resolveThinkingConfig(settings) {
 /**
  * Build query options object shared by both send functions.
  */
-function buildQueryOptions({ workingDirectory, permissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines, mcpServers, modelId, settingsEnv, resolvedModelId }) {
+function buildQueryOptions({ workingDirectory, permissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines, mcpServers, modelId, settingsEnv, resolvedModelId, ultracode, childEnv, projectTrusted }) {
   const claudeCliOverride = getClaudeCliPathOverride();
   return {
     cwd: workingDirectory,
@@ -84,8 +87,8 @@ function buildQueryOptions({ workingDirectory, permissionMode, sdkModelName, max
     model: sdkModelName,
     maxTurns: 1000,
     enableFileCheckpointing: true,
-    env: buildCliEnv(),
-    settings: buildWebviewControlledSettingsOverride(modelId, settingsEnv, resolvedModelId),
+    env: childEnv ?? buildCliEnv(),
+    settings: withUltracodeSetting(buildWebviewControlledSettingsOverride(modelId, settingsEnv, resolvedModelId), ultracode),
     ...(maxThinkingTokens !== undefined && { maxThinkingTokens }),
     ...(streamingEnabled && { includePartialMessages: true }),
     additionalDirectories: Array.from(
@@ -93,7 +96,7 @@ function buildQueryOptions({ workingDirectory, permissionMode, sdkModelName, max
     ),
     canUseTool,
     hooks: { PreToolUse: [{ hooks: [preToolUseHook] }] },
-    settingSources: ['user', 'project', 'local'],
+    settingSources: settingSourcesFor(projectTrusted),
     // bypassPermissions requires this flag per SDK contract (sdk.d.ts: "Must be set to
     // true when using permissionMode: 'bypassPermissions'"). Without it a future SDK
     // version could silently drop bypass and change permission behavior.
@@ -353,7 +356,7 @@ function emitThinkingDelta(thinkingText, state, blockIndex = 0) {
 /**
  * Execute a query call with auto-retry logic for transient API errors.
  */
-async function executeWithRetry({ createQueryResult, streamingEnabled, resumeSessionId, workingDirectory, logPrefix, outerStreamState, userMessage }) {
+async function executeWithRetry({ createQueryResult, streamingEnabled, resumeSessionId, workingDirectory, logPrefix, outerStreamState, userMessage, supplier }) {
   let retryAttempt = 0;
   let lastRetryError = null;
   const lp = logPrefix ? ` ${logPrefix}` : '';
@@ -373,7 +376,7 @@ async function executeWithRetry({ createQueryResult, streamingEnabled, resumeSes
     try {
       let result;
       try {
-        result = createQueryResult();
+        result = await createQueryResult();
       } catch (queryError) {
         if (shouldRetry(queryError, retryAttempt, state.messageCount)) {
           ({ retryAttempt, lastRetryError } = await performRetry(queryError, retryAttempt, state, resumeSessionId, workingDirectory, streamingEnabled, outerStreamState, lp));
@@ -413,7 +416,7 @@ async function executeWithRetry({ createQueryResult, streamingEnabled, resumeSes
 
       // Fire-and-forget: generate AI title for new sessions (not resumes)
       if (userMessage && state.currentSessionId && !resumeSessionId) {
-        void generateSessionTitle(userMessage, state.currentSessionId, workingDirectory);
+        void generateSessionTitle(userMessage, state.currentSessionId, workingDirectory, supplier);
       }
 
       break;
@@ -480,7 +483,7 @@ function handleSendError(error, streamState, sdkStderrLines) {
   console.error('[SEND_ERROR]', JSON.stringify(payload));
 }
 
-export const __testing = { handleSendError };
+export const __testing = { handleSendError, buildQueryOptions };
 
 // ========== Exported send functions ==========
 
@@ -495,7 +498,7 @@ export const __testing = { handleSendError };
  * @param {string} agentPrompt - Agent prompt (optional)
  * @param {boolean} streaming - Whether to enable streaming (optional, defaults to config value)
  */
-export async function sendMessage(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null, openedFiles = null, agentPrompt = null, streaming = null, disableThinking = false, reasoningEffort = null, envFile = null) {
+export async function sendMessage(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null, openedFiles = null, agentPrompt = null, streaming = null, disableThinking = false, reasoningEffort = null, envFile = null, ultracode = undefined, supplierId = null, projectTrusted = false) {
   console.log('[DIAG] ========== sendMessage() START ==========');
   console.log('[DIAG] params:', { msgLen: message ? message.length : 0, resumeSessionId: resumeSessionId || '(new)', cwd, permissionMode, model });
 
@@ -503,7 +506,10 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
   let streamingEnabled = false;
   const outerStreamState = { streamStarted: false, streamEnded: false, accumulatedUsage: null };
   try {
-    const { baseUrl, apiKeySource, baseUrlSource } = setupApiKey();
+    const supplier = buildSessionClaudeConfig(supplierId);
+    const { baseUrl, apiKeySource, baseUrlSource } = supplier
+      ? { baseUrl: supplier.env.ANTHROPIC_BASE_URL, apiKeySource: 'session supplier', baseUrlSource: 'session supplier' }
+      : setupApiKey();
     if (isCustomBaseUrl(baseUrl)) {
       console.log('[DEBUG] Custom Base URL detected:', baseUrl);
     }
@@ -514,12 +520,12 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
     try { process.chdir(workingDirectory); } catch (e) { console.error('[WARNING] chdir failed:', e.message); }
     console.log('[DEBUG] Working directory:', workingDirectory);
 
-    const settings = loadClaudeSettings();
+    const settings = supplier?.settings ?? loadClaudeSettings();
     const resolvedModel = resolveModelFromSettings(model, settings?.env);
     // Exact id, not the family alias - see resolveSdkModelName.
     const sdkModelName = resolveSdkModelName(model, resolvedModel);
     console.log('[DEBUG] Model:', model, '->', sdkModelName, '(API:', resolvedModel + ')');
-    setModelEnvironmentVariables(resolvedModel, model, settings?.env);
+    setModelEnvironmentVariables(resolvedModel, model, settings?.env, supplier?.env ?? process.env);
 
     const systemPromptAppend = buildSystemPromptAppend(openedFiles, agentPrompt, message);
 
@@ -545,8 +551,10 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
     }
 
     const preToolUseHook = createPreToolUseHook(effectivePermissionMode, workingDirectory);
-    const mcpServers = await loadMcpServersConfigAsRecord(workingDirectory);
-    const options = buildQueryOptions({ workingDirectory, permissionMode: effectivePermissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines, mcpServers, modelId: model, settingsEnv: settings?.env, resolvedModelId: resolvedModel });
+    const trusted = projectTrustFor(projectTrusted, cwd, workingDirectory);
+    const mcpServers = await loadMcpServersConfigAsRecord(workingDirectory, trusted);
+    const options = buildQueryOptions({ workingDirectory, permissionMode: effectivePermissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines, mcpServers, modelId: model, settingsEnv: settings?.env, resolvedModelId: resolvedModel, ultracode, childEnv: supplier?.env, projectTrusted: trusted });
+    options.settings = buildSessionClaudeSettingsOverride(supplier, options.settings);
 
     if (normalizedReasoningEffort) {
       options.effort = normalizedReasoningEffort;
@@ -558,13 +566,19 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
     const queryFn = await loadSdkQueryFunction('');
 
     await executeWithRetry({
-      createQueryResult: () => queryFn({ prompt: message, options }),
+      createQueryResult: () => ultracode === true
+        ? createUltracodeQuery(queryFn, new AsyncStream(), {
+          type: 'user', session_id: resumeSessionId || '', parent_tool_use_id: null,
+          message: { role: 'user', content: message },
+        }, options)
+        : queryFn({ prompt: message, options }),
       streamingEnabled,
       resumeSessionId,
       workingDirectory,
       logPrefix: '',
       outerStreamState,
-      userMessage: message
+      userMessage: message,
+      supplier,
     });
 
   } catch (error) {
@@ -586,7 +600,8 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
   let streamingEnabled = false;
   const outerStreamState = { streamStarted: false, streamEnded: false, accumulatedUsage: null };
   try {
-    setupApiKey();
+    const supplier = buildSessionClaudeConfig(stdinData?.supplierId);
+    if (!supplier) setupApiKey();
     console.log('[MESSAGE_START]');
 
     const workingDirectory = selectWorkingDirectory(cwd);
@@ -599,11 +614,11 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
 
     const systemPromptAppend = buildSystemPromptAppend(openedFiles, agentPrompt, message);
 
-    const settings = loadClaudeSettings();
+    const settings = supplier?.settings ?? loadClaudeSettings();
     const resolvedAttachModel = resolveModelFromSettings(model, settings?.env);
     const sdkModelName = resolveSdkModelName(model, resolvedAttachModel);
     console.log('[DEBUG] (withAttachments) Model:', model, '->', resolvedAttachModel);
-    setModelEnvironmentVariables(resolvedAttachModel, model, settings?.env);
+    setModelEnvironmentVariables(resolvedAttachModel, model, settings?.env, supplier?.env ?? process.env);
 
     const contentBlocks = await buildContentBlocks(attachments, message);
     const userMessage = {
@@ -622,7 +637,7 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
     streamingEnabled = streamingParam != null ? streamingParam : (settings?.streamingEnabled ?? false);
     console.log('[DEBUG] (withAttachments) Config:', { normalizedPermissionMode, alwaysThinkingEnabled, maxThinkingTokens, streamingEnabled, reasoningEffort });
 
-    // Load env file BEFORE MCP config expansion so ${VAR} placeholders
+// Load env file BEFORE MCP config expansion so ${VAR} placeholders
     // in MCP server env blocks resolve correctly.
     if (envFile) {
       // Security: loadEnvFile validates the path against workingDirectory
@@ -635,8 +650,10 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
       console.error('[DEBUG] message-sender (withAttachments): envFile is null/empty/undefined — no env file loaded');
     }
 
-    const mcpServers = await loadMcpServersConfigAsRecord(workingDirectory);
-    const options = buildQueryOptions({ workingDirectory, permissionMode: normalizedPermissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines, mcpServers, modelId: model, settingsEnv: settings?.env, resolvedModelId: resolvedAttachModel });
+    const trusted = projectTrustFor(stdinData?.projectTrusted, cwd, workingDirectory);
+    const mcpServers = await loadMcpServersConfigAsRecord(workingDirectory, trusted);
+    const options = buildQueryOptions({ workingDirectory, permissionMode: normalizedPermissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines, mcpServers, modelId: model, settingsEnv: settings?.env, resolvedModelId: resolvedAttachModel, ultracode: stdinData?.ultracode, childEnv: supplier?.env, projectTrusted: trusted });
+    options.settings = buildSessionClaudeSettingsOverride(supplier, options.settings);
 
     if (reasoningEffort) {
       options.effort = reasoningEffort;
@@ -651,6 +668,9 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
       createQueryResult: () => {
         // Recreate inputStream for each retry (AsyncStream can only be consumed once)
         const inputStream = new AsyncStream();
+        if (stdinData?.ultracode === true) {
+          return createUltracodeQuery(queryFn, inputStream, userMessage, options);
+        }
         inputStream.enqueue(userMessage);
         inputStream.done();
         return queryFn({ prompt: inputStream, options });
@@ -660,7 +680,8 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
       workingDirectory,
       logPrefix: '(withAttachments)',
       outerStreamState,
-      userMessage: message
+      userMessage: message,
+      supplier,
     });
 
   } catch (error) {

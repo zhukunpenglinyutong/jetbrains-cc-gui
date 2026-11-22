@@ -12,6 +12,9 @@ import { downloadJSON } from '../../../utils/exportMarkdown';
 import { releaseSessionTransition } from '../sessionTransition';
 import { drainPendingDependencyStatus } from '../settingsBootstrap';
 import { sendBridgeEvent } from '../../../utils/bridge';
+import { resetClaudeBackgroundTasks } from '../../../utils/claudeBackgroundTasks';
+import { getSessionTransitionPending, isCurrentSessionTransitionCallback, isExpectedSessionTransitionId,
+  isSessionTransitionPreparing } from '../../../utils/sessionTransitionState';
 import {
   isDependencyStatusResponse,
   settleDependencyStatusRequest,
@@ -40,9 +43,19 @@ export function registerSessionAndSdkCallbacks(
     setCustomSessionTitle,
   } = options;
 
-  window.setSessionId = (sessionId: string) => {
+  window.setSessionId = (sessionId: string, transitionToken?: string) => {
+    if (transitionToken && !isCurrentSessionTransitionCallback(transitionToken)) return;
+    // Until clear accepts the replacement, ordinary SDK identities still
+    // belong to the live old binding (including its first real session ID).
+    const liveOldIdentity = !transitionToken && isSessionTransitionPreparing();
+    // A matched accepted restore may canonicalize a history filename/alias to
+    // its native thread ID. The token proves ownership; string equality does not.
+    const acceptedRestoreIdentity = !!transitionToken && !isSessionTransitionPreparing();
+    if (!liveOldIdentity && !acceptedRestoreIdentity && !isExpectedSessionTransitionId(sessionId)) return;
+    const wasTransitioning = getSessionTransitionPending();
     const oldId = currentSessionIdRef.current;
-    releaseSessionTransition();
+    if (!sessionId || oldId && oldId !== sessionId) resetClaudeBackgroundTasks();
+    if (!wasTransitioning) releaseSessionTransition();
     // Java sends an empty ID when a restored transcript expires. Keep the
     // canonical no-session state and wait for a real ID before migrating titles.
     currentSessionIdRef.current = sessionId || null;
@@ -54,7 +67,7 @@ export function registerSessionAndSdkCallbacks(
     // data loss when Codex creates new threads for continued conversations.
     // Orphaned title entries are harmless and cleaned up on session deletion.
     const title = customSessionTitleRef.current;
-    if (title && oldId !== sessionId) {
+    if (title && oldId !== sessionId && !wasTransitioning) {
       // AI-generated titles can exceed the backend limit. Fall back to
       // local-only update so the UI keeps the title visible without a
       // silent backend write failure.
@@ -64,6 +77,15 @@ export function registerSessionAndSdkCallbacks(
         applyHistoryTitleLocal(sessionId, title);
       }
     }
+  };
+
+  // Cleanup failed before the backend changed the session binding. Keep the
+  // existing draft/queue/identity and flush its latest authoritative snapshot.
+  window.sessionTransitionFailed = (error: string, transitionToken?: string) => {
+    if (!isCurrentSessionTransitionCallback(transitionToken)) return;
+    window.__pendingSessionTransitionToast = undefined;
+    releaseSessionTransition(false, transitionToken);
+    if (error) options.addToast(error, 'error');
   };
 
   // The ready replay can precede this effect; controls need that identity before their first dispatch.

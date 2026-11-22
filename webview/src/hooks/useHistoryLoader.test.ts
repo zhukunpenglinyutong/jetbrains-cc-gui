@@ -46,6 +46,14 @@ const mountHistory = () => {
 };
 
 describe('native history visibility', () => {
+  it('preserves favorites and the original cwd confirmation requirement in native metadata', () => {
+    const history = mountHistory();
+    deliver({ requestType: 'codex_native_list_threads', data: [{ id: 'saved', cwd: '/sibling/repo',
+      requiresCwdConfirmation: true, isFavorited: true, favoritedAt: 123 }] });
+    expect(history.data?.sessions).toMatchObject([{ sessionId: 'saved', cwd: '/sibling/repo',
+      requiresCwdConfirmation: true, isFavorited: true, favoritedAt: 123 }]);
+  });
+
   it('retains local manual titles across native list refreshes', () => {
     const history = mountHistory();
     for (const updatedAt of [1, 2]) {

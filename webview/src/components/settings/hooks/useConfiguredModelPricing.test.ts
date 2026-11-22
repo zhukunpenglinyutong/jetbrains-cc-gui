@@ -1,5 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readClaudeModelMapping, setSessionClaudeModelMapping, writeClaudeModelMapping } from '../../../utils/claudeModelMapping';
 import { STORAGE_KEYS } from '../../../types/provider';
 import { useConfiguredClaudeModelPricing } from './useConfiguredModelPricing';
 
@@ -10,6 +11,17 @@ vi.mock('../../../utils/bridge', () => ({
 }));
 
 describe('useConfiguredClaudeModelPricing', () => {
+  afterEach(() => { act(() => { setSessionClaudeModelMapping(null); }); });
+
+  it('keeps global pricing mappings independent from the active conversation and observes global changes', () => {
+    writeClaudeModelMapping({ sonnet: 'global-a' });
+    setSessionClaudeModelMapping({ sonnet: 'session-only' });
+    const { result } = renderHook(() => useConfiguredClaudeModelPricing([]));
+    expect(result.current.configuredModels.map(model => model.id)).toEqual(['global-a']);
+    act(() => { writeClaudeModelMapping({ sonnet: 'global-b' }); });
+    expect(result.current.configuredModels.map(model => model.id)).toEqual(['global-b']);
+    expect(readClaudeModelMapping().sonnet).toBe('session-only');
+  });
   beforeEach(() => {
     localStorage.clear();
     sendBridgeEventMock.mockClear();

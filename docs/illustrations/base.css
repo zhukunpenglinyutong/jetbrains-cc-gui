@@ -1,0 +1,653 @@
+/*
+ * README illustration design system.
+ * Dark = frosted navy ("雾面"), light = pastel gradient. Both are driven by prefers-color-scheme,
+ * so render.mjs can capture each scheme from the same page.
+ * Canvas is 1200 CSS px wide and rendered at 2x; GitHub shows it at ~880px, so keep text >= 14px.
+ */
+
+:root {
+  --font-sans:
+    'Inter', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans SC', 'Microsoft YaHei',
+    sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', Menlo, 'PingFang SC', monospace;
+
+  --radius-canvas: 28px;
+  --radius-window: 16px;
+  --radius-card: 14px;
+  --radius-row: 9px;
+
+  /* tint: one accent per image; set data-tint on #canvas */
+  --tint-a: #dfe9ff;
+  --tint-b: #c9d6ff;
+  --accent: #4d6bfe;
+}
+
+[data-tint='blue'] {
+  --tint-a: #e4ecff;
+  --tint-b: #bccdff;
+  --accent: #4d6bfe;
+}
+[data-tint='green'] {
+  --tint-a: #f1fadf;
+  --tint-b: #d3efc0;
+  --accent: #3f9b3a;
+}
+[data-tint='violet'] {
+  --tint-a: #ece8ff;
+  --tint-b: #c8bdff;
+  --accent: #6c4dff;
+}
+[data-tint='peach'] {
+  --tint-a: #fff3e4;
+  --tint-b: #f9d8bd;
+  --accent: #d97757;
+}
+[data-tint='sky'] {
+  --tint-a: #e6f6ff;
+  --tint-b: #bfe3f7;
+  --accent: #1f8fd1;
+}
+
+/* ---------- theme tokens ---------- */
+
+:root {
+  --ink: #111318;
+  --ink-2: #4b5160;
+  --ink-3: #8a8f9c;
+  --line: rgba(17, 19, 24, 0.08);
+  --chip-bg: rgba(17, 19, 24, 0.06);
+
+  --win-bg: #ffffff;
+  --win-side: #f6f6f8;
+  --win-line: #e8e8ec;
+  --win-ink: #1d1f24;
+  --win-ink-2: #6b7080;
+  --win-hover: #f0f1f4;
+  --win-input: #ffffff;
+  --win-shadow: 0 30px 60px -20px rgba(31, 45, 90, 0.28), 0 0 0 1px rgba(17, 19, 24, 0.06);
+
+  --pop-bg: #ffffff;
+  --pop-shadow: 0 18px 40px -12px rgba(31, 45, 90, 0.3), 0 0 0 1px rgba(17, 19, 24, 0.07);
+
+  --toast-bg: #17181c;
+  --toast-ink: #ffffff;
+  --code-bg: #17181c;
+  --code-ink: #e8e9ee;
+
+  --ok: #1f9d55;
+  --add: #1f9d55;
+  --del: #d64545;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #ffffff;
+    --ink-2: rgba(226, 232, 255, 0.66);
+    --ink-3: rgba(226, 232, 255, 0.42);
+    --line: rgba(255, 255, 255, 0.1);
+    --chip-bg: rgba(255, 255, 255, 0.09);
+
+    --win-bg: #1b1b1d;
+    --win-side: #2b2b2e;
+    --win-line: rgba(255, 255, 255, 0.08);
+    --win-ink: #ececf0;
+    --win-ink-2: #9b9ca6;
+    --win-hover: rgba(255, 255, 255, 0.07);
+    --win-input: #232326;
+    --win-shadow: 0 40px 80px -24px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08);
+
+    --pop-bg: #2a2a2d;
+    --pop-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.1);
+
+    --toast-bg: #f4f5f8;
+    --toast-ink: #111318;
+    --code-bg: #111113;
+    --code-ink: #e8e9ee;
+
+    --ok: #3ccf7a;
+    --add: #3ccf7a;
+    --del: #ff6b6b;
+  }
+}
+
+/* ---------- page + canvas ---------- */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 24px;
+  background: transparent;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+#canvas {
+  position: relative;
+  width: 1200px;
+  height: 600px;
+  overflow: hidden;
+  border-radius: var(--radius-canvas);
+  color: var(--ink);
+  isolation: isolate;
+  background:
+    radial-gradient(70% 90% at 0% 0%, rgba(255, 255, 255, 0.85), transparent 60%),
+    radial-gradient(60% 80% at 100% 100%, rgba(255, 255, 255, 0.5), transparent 60%),
+    linear-gradient(135deg, var(--tint-a), var(--tint-b));
+}
+
+#canvas.tall {
+  height: 680px;
+}
+
+/* soft light streak, like the DSH site banner */
+#canvas::before {
+  content: '';
+  position: absolute;
+  inset: -40% -10% auto 35%;
+  height: 70%;
+  z-index: -1;
+  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.7), transparent);
+  transform: rotate(-12deg);
+  filter: blur(30px);
+}
+
+/* fine grain keeps large gradients from banding in WebP */
+#canvas::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  opacity: 0.35;
+  mix-blend-mode: soft-light;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+@media (prefers-color-scheme: dark) {
+  #canvas {
+    background:
+      radial-gradient(55% 70% at 8% 18%, color-mix(in srgb, var(--accent) 42%, transparent), transparent 62%),
+      radial-gradient(45% 60% at 92% 4%, rgba(150, 185, 255, 0.28), transparent 60%),
+      radial-gradient(60% 70% at 70% 110%, rgba(40, 70, 160, 0.45), transparent 60%),
+      linear-gradient(160deg, #0e1c36 0%, #0a1428 55%, #0c1a33 100%);
+  }
+  #canvas::before {
+    background: radial-gradient(closest-side, rgba(170, 200, 255, 0.35), transparent);
+  }
+  #canvas::after {
+    opacity: 0.5;
+    mix-blend-mode: overlay;
+  }
+}
+
+/* optional dotted grid, used behind the hero */
+.dots {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: radial-gradient(rgba(17, 19, 24, 0.12) 1px, transparent 1.2px);
+  background-size: 18px 18px;
+  mask-image: radial-gradient(60% 60% at 40% 50%, #000, transparent 75%);
+}
+@media (prefers-color-scheme: dark) {
+  .dots {
+    background-image: radial-gradient(rgba(255, 255, 255, 0.14) 1px, transparent 1.2px);
+  }
+}
+
+/* ---------- copy ---------- */
+
+.copy {
+  position: absolute;
+  left: 64px;
+  top: 0;
+  bottom: 0;
+  width: 400px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 18px;
+}
+
+.eyebrow {
+  align-self: flex-start;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--chip-bg);
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink-2);
+}
+
+.headline {
+  margin: 0;
+  font-size: 40px;
+  line-height: 1.22;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.headline.xl {
+  font-size: 54px;
+  line-height: 1.14;
+}
+
+.lede {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.7;
+  color: var(--ink-2);
+}
+
+.accent {
+  color: var(--accent);
+}
+@media (prefers-color-scheme: dark) {
+  .accent {
+    color: color-mix(in srgb, var(--accent) 55%, white);
+  }
+}
+
+/* ---------- stage: where the mock UI sits ---------- */
+
+.stage {
+  position: absolute;
+  left: 500px;
+  right: 0;
+  top: 0;
+  bottom: 0;
+}
+
+/* ---------- mock window ---------- */
+
+.window {
+  position: absolute;
+  overflow: hidden;
+  border-radius: var(--radius-window);
+  background: var(--win-bg);
+  color: var(--win-ink);
+  box-shadow: var(--win-shadow);
+  font-size: 15px;
+}
+
+.titlebar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--win-line);
+  color: var(--win-ink-2);
+  font-size: 14px;
+}
+.titlebar .lights {
+  display: flex;
+  gap: 8px;
+  margin-right: 10px;
+}
+.titlebar .lights i {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #ff5f57;
+}
+.titlebar .lights i:nth-child(2) {
+  background: #febc2e;
+}
+.titlebar .lights i:nth-child(3) {
+  background: #28c840;
+}
+
+.win-body {
+  display: flex;
+  height: calc(100% - 40px);
+}
+.sidebar {
+  flex: none;
+  width: 210px;
+  padding: 14px 10px;
+  background: var(--win-side);
+  border-right: 1px solid var(--win-line);
+}
+.main {
+  position: relative;
+  flex: 1;
+  padding: 18px 22px;
+}
+
+.side-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  margin-bottom: 16px;
+  border: 1px solid var(--win-line);
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.side-caption {
+  padding: 0 8px 8px;
+  font-size: 13px;
+  color: var(--win-ink-2);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: var(--radius-row);
+  white-space: nowrap;
+}
+.row.active {
+  background: var(--win-hover);
+}
+.row .grow {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.row .muted,
+.muted {
+  color: var(--win-ink-2);
+}
+.row .check {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* ---------- composer (DSH input box) ---------- */
+
+.composer {
+  position: absolute;
+  border: 1px solid var(--win-line);
+  border-radius: 16px;
+  background: var(--win-input);
+  padding: 14px 16px 10px;
+}
+.composer .placeholder {
+  height: 46px;
+  color: var(--win-ink-2);
+  font-size: 15px;
+}
+.composer .toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--win-ink-2);
+}
+.composer .toolbar .spacer {
+  flex: 1;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 8px;
+  white-space: nowrap;
+  color: var(--win-ink-2);
+}
+.pill.on {
+  background: var(--win-hover);
+  color: var(--win-ink);
+}
+.pill.round {
+  width: 30px;
+  padding: 0;
+  justify-content: center;
+  border: 1px solid var(--win-line);
+  border-radius: 50%;
+}
+.send {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--accent);
+  color: #fff;
+}
+
+/* ---------- popovers, cards ---------- */
+
+.popover {
+  position: absolute;
+  padding: 6px;
+  border-radius: var(--radius-card);
+  background: var(--pop-bg);
+  color: var(--win-ink);
+  box-shadow: var(--pop-shadow);
+  font-size: 15px;
+}
+.popover .caption {
+  padding: 8px 10px 6px;
+  font-size: 13px;
+  color: var(--win-ink-2);
+}
+.popover .search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  margin: 2px 2px 6px;
+  padding: 0 10px;
+  border: 1px solid var(--win-line);
+  border-radius: 9px;
+  color: var(--win-ink-2);
+  font-size: 14px;
+}
+
+.card {
+  position: absolute;
+  padding: 18px 20px;
+  border-radius: var(--radius-card);
+  background: var(--pop-bg);
+  color: var(--win-ink);
+  box-shadow: var(--pop-shadow);
+  font-size: 15px;
+}
+.card h4 {
+  margin: 0 0 10px;
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.code {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--code-bg);
+  color: var(--code-ink);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 9px;
+  border: 1px solid var(--win-line);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.btn.primary {
+  border-color: transparent;
+  background: var(--accent);
+  color: #fff;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* ---------- floating pieces ---------- */
+
+.toast {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  border-radius: 14px;
+  background: var(--toast-bg);
+  color: var(--toast-ink);
+  box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.45);
+  font-size: 15px;
+}
+.toast .sub {
+  opacity: 0.6;
+  font-size: 14px;
+  margin-top: 2px;
+}
+.toast .icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: var(--accent);
+  color: #fff;
+}
+
+/* cursor with a name tag, colored per CLI via --c */
+.cursor {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  --c: var(--accent);
+}
+.cursor svg {
+  width: 24px;
+  height: 24px;
+  fill: var(--c);
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.25));
+}
+.cursor span {
+  margin: -2px 0 0 18px;
+  padding: 4px 10px;
+  border-radius: 7px;
+  background: var(--c);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 6px 14px -4px color-mix(in srgb, var(--c) 60%, transparent);
+}
+
+.badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* ---------- brand marks: <i class="mark" style="--icon: url(icons/x.svg)"> ---------- */
+
+.mark {
+  flex: none;
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  background: var(--icon) center / contain no-repeat;
+}
+/* monochrome marks follow the text color */
+.mark.mono {
+  background: currentColor;
+  -webkit-mask: var(--icon) center / contain no-repeat;
+  mask: var(--icon) center / contain no-repeat;
+}
+.mark.lg {
+  width: 28px;
+  height: 28px;
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+/* ---------- real screenshot crops ----------
+ * <div class="crop" style="--shot: url(shots/x-dark.png); --x: 420px; --y: 240px; --w: 500px; --h: 280px; --k: 1">
+ * --x/--y/--w/--h are in the screenshot's CSS px (before deviceScaleFactor), --k is the display scale.
+ * --shot-w/--shot-h are the capture viewport. Switch --shot per theme with prefers-color-scheme.
+ */
+.crop {
+  /* Fallbacks instead of declarations, so --k or --shot set on a parent still reach the crop. */
+  position: absolute;
+  width: calc(var(--w) * var(--k, 1));
+  height: calc(var(--h) * var(--k, 1));
+  overflow: hidden;
+  border-radius: 16px;
+  background: var(--shot) calc(var(--x) * var(--k, 1) * -1) calc(var(--y) * var(--k, 1) * -1) /
+    calc(var(--shot-w, 1280px) * var(--k, 1)) calc(var(--shot-h, 800px) * var(--k, 1)) no-repeat;
+  box-shadow: var(--win-shadow);
+}
+
+/* a label above a crop saying whose UI it is */
+.crop-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--pop-bg);
+  box-shadow: var(--pop-shadow);
+  color: var(--win-ink);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* ---------- a row of supported products' logos, under the copy ----------
+ * <div class="logos"><span class="logo" title="X"><i class="mark" style="--icon: url(icons/x.svg)"></i></span>…</div>
+ */
+.logos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 6px;
+}
+.logos .logo {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--pop-bg);
+  color: var(--win-ink);
+  box-shadow: var(--pop-shadow);
+}
+.logos .logo .mark {
+  width: 26px;
+  height: 26px;
+}

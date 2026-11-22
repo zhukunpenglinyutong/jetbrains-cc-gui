@@ -56,25 +56,30 @@ class ClaudeMcpQueryService {
         this.outputExtractor = outputExtractor;
     }
 
-    CompletableFuture<List<JsonObject>> getMcpServerStatus(String cwd) {
-        return getMcpServerStatus(cwd, null);
+CompletableFuture<List<JsonObject>> getMcpServerStatus(String cwd) {
+        return getMcpServerStatus(cwd, null, false);
+    }
+
+    CompletableFuture<List<JsonObject>> getMcpServerStatus(String cwd, List<String> serverNames) {
+        return getMcpServerStatus(cwd, serverNames, false);
     }
 
     /**
      * Query MCP server status, optionally restricted to specific servers.
      *
-     * @param cwd         working directory used to resolve project-scoped config
-     * @param serverNames when non-empty, the bridge only verifies these servers
-     *                    instead of spawning/fetching every configured one
+     * @param cwd          working directory used to resolve project-scoped config
+     * @param serverNames  when non-empty, the bridge only verifies these servers
+     *                     instead of spawning/fetching every configured one
+     * @param projectTrusted whether the IDE trusts the project (controls repo-local env expansion)
      */
-    CompletableFuture<List<JsonObject>> getMcpServerStatus(String cwd, List<String> serverNames) {
+    CompletableFuture<List<JsonObject>> getMcpServerStatus(String cwd, List<String> serverNames, boolean projectTrusted) {
         return CompletableFuture.supplyAsync(() -> {
             boolean filtered = serverNames != null && !serverNames.isEmpty();
             log.info("[McpStatus] Starting getMcpServerStatus, cwd=" + cwd
                     + (filtered ? ", serverNames=" + serverNames : ""));
 
-            JsonObject stdinInput = new JsonObject();
-            stdinInput.addProperty("cwd", cwd != null ? cwd : "");
+boolean filtered = serverNames != null && !serverNames.isEmpty();
+            JsonObject stdinInput = buildStatusInput(cwd, projectTrusted);
             if (filtered) {
                 stdinInput.add("serverNames", gson.toJsonTree(serverNames));
             }
@@ -139,15 +144,11 @@ class ClaudeMcpQueryService {
         });
     }
 
-    CompletableFuture<JsonObject> getMcpServerTools(String serverId, String cwd) {
+    CompletableFuture<JsonObject> getMcpServerTools(String serverId, String cwd, boolean projectTrusted) {
         return CompletableFuture.supplyAsync(() -> {
             log.info("[McpTools] Starting getMcpServerTools, serverId=" + serverId + ", cwd=" + cwd);
 
-            JsonObject stdinInput = new JsonObject();
-            stdinInput.addProperty("serverId", serverId != null ? serverId : "");
-            if (cwd != null && !cwd.isEmpty()) {
-                stdinInput.addProperty("cwd", cwd);
-            }
+            JsonObject stdinInput = buildToolsInput(serverId, cwd, projectTrusted);
 
             MarkerResult result = executeMarkerQuery(
                     MCP_TOOLS_CHANNEL_ID,

@@ -75,7 +75,7 @@ async function handleScopedClaudeCommand(command, args, stdinData) {
     case 'send': {
       if (stdinData && stdinData.message !== undefined) {
         // Include streaming and disableThinking when destructuring
-        const { message, sessionId, cwd, permissionMode, model, openedFiles, agentPrompt, streaming, disableThinking, reasoningEffort, envFile } = stdinData;
+const { message, sessionId, cwd, permissionMode, model, openedFiles, agentPrompt, streaming, disableThinking, reasoningEffort, envFile, ultracode, projectTrusted } = stdinData;
         console.error('[DEBUG] claude-channel: envFile from stdinData=' + (envFile || '(empty/null)'));
         await claudeSendMessage(
           message,
@@ -88,7 +88,10 @@ async function handleScopedClaudeCommand(command, args, stdinData) {
           streaming,  // Pass streaming parameter
           disableThinking || false,  // Pass disableThinking parameter
           reasoningEffort || null,  // Pass reasoning effort level
-          envFile || null  // Pass envFile path
+          envFile || null,  // Pass envFile path
+          ultracode,
+          stdinData.supplierId,
+          projectTrusted === true
         );
       } else {
         await claudeSendMessage(args[0], args[1], args[2], args[3], args[4]);
@@ -99,14 +102,14 @@ async function handleScopedClaudeCommand(command, args, stdinData) {
     case 'sendWithAttachments': {
       if (stdinData && stdinData.message !== undefined) {
         // Include streaming when destructuring
-        const { message, sessionId, cwd, permissionMode, model, attachments, openedFiles, agentPrompt, streaming, reasoningEffort, envFile } = stdinData;
+const { message, sessionId, cwd, permissionMode, model, attachments, openedFiles, agentPrompt, streaming, reasoningEffort, envFile, ultracode, projectTrusted } = stdinData;
         await claudeSendMessageWithAttachments(
           message,
           sessionId || '',
           cwd || '',
           permissionMode || '',
           model || '',
-          attachments ? { attachments, openedFiles, agentPrompt, streaming, reasoningEffort, envFile } : { openedFiles, agentPrompt, streaming, reasoningEffort, envFile }
+          { ...(attachments ? { attachments } : {}), openedFiles, agentPrompt, streaming, reasoningEffort, envFile, ultracode, supplierId: stdinData.supplierId, projectTrusted }
         );
       } else {
         await claudeSendMessageWithAttachments(args[0], args[1], args[2], args[3], args[4], stdinData);
@@ -153,16 +156,16 @@ async function handleScopedClaudeCommand(command, args, stdinData) {
 
     case 'getMcpServerStatus': {
       const cwd = stdinData?.cwd || args[0] || null;
-      // Optional: check only the named servers instead of the whole config.
+// Optional: check only the named servers instead of the whole config.
       const serverNames = Array.isArray(stdinData?.serverNames) ? stdinData.serverNames : null;
-      await claudeGetMcpServerStatus(cwd, serverNames);
+      await claudeGetMcpServerStatus(cwd, stdinData?.projectTrusted === true, serverNames);
       break;
     }
 
     case 'getMcpServerTools': {
       const serverId = stdinData?.serverId || args[0] || null;
       const cwd = stdinData?.cwd || args[1] || null;
-      await claudeGetMcpServerTools(serverId, cwd);
+      await claudeGetMcpServerTools(serverId, cwd, stdinData?.projectTrusted === true);
       break;
     }
 

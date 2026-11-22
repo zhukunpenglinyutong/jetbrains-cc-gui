@@ -42,6 +42,22 @@ import { CODEX_CLI_RECOMMENDED_MIN_VERSION, isCodexCliOutdated, parseCodexCliVer
 // Only an explicit closing rejection proves that retrying resume replays no work.
 const THREAD_RESUME_RETRY_DELAYS_MS = [250, 750];
 
+// Codex refuses to redefine these ids (validate_reserved_model_provider_ids), so a
+// replacement process aliasing a supplier onto them could never start.
+const RESERVED_PROVIDER_IDS = new Set(['openai', 'ollama', 'lmstudio']);
+
+const PROVIDER_MISMATCH_MESSAGE = /Cannot change this thread's model provider from `([^`]+)` to `([^`]+)` on resume/;
+
+/**
+ * Codex 0.166 attaches the resume provider mismatch as structured data. 0.169 moved the
+ * check into config loading (app-server config_manager.rs) and reports it only as text.
+ */
+function resumeProviderMismatch(error) {
+  if (error?.data?.type === 'modelProviderMismatch') return error.data;
+  const match = PROVIDER_MISMATCH_MESSAGE.exec(error?.message ?? '');
+  return match ? { type: 'modelProviderMismatch', modelProvider: match[1], currentModelProvider: match[2] } : null;
+}
+
 export const SERVICE_STATES = Object.freeze([
   'stopped',
   'starting',
@@ -235,7 +251,10 @@ export class CodexAppServerService extends EventEmitter {
         this.#setState('starting');
         try {
           if (this.privacyIndex?.load) await this.privacyIndex.load();
-          const candidate = await this.clientFactory();
+          const candidate = await this.clientFactory({
+            nativeConfig: this.launchOptions?.nativeConfig,
+            modelProvider: this.launchOptions?.modelProvider,
+          });
           if (this.runtimeGeneration !== generation || this.state !== 'starting') {
             candidate.close();
             throw new ClassifiedError('RUNTIME_RESET', 'Codex runtime was released during client preparation');
@@ -567,7 +586,7 @@ export class CodexAppServerService extends EventEmitter {
     if (this.#isThreadLoaded(threadId)) {
       return;
     }
-    const client = this.client;
+    let client = this.client;
     const pending = this.threadResumes.get(threadId);
     if (pending?.client === client) {
       pending.consumers.add(operation);
@@ -581,6 +600,8 @@ export class CodexAppServerService extends EventEmitter {
     // Preconnect and FIFO operations can arrive together while history loads.
     // Sharing the resume prevents two native requests from claiming one writer.
     const entry = { client, consumers: new Set([operation]), promise: null };
+    const launchOptions = this.launchOptions;
+    const clientFactory = this.clientFactory;
     // Launch changes belong to the idle rebuild, not to an in-flight recovery.
     const params = {
       threadId,
@@ -591,6 +612,8 @@ export class CodexAppServerService extends EventEmitter {
     };
     const promise = (async () => {
       let response;
+      let providerRecovered = false;
+      let providerChecked = false;
       for (let attempt = 0; ; attempt += 1) {
         if (this.client !== client || !client.alive) {
           throw new ClassifiedError('RUNTIME_RESET', 'Codex runtime changed while resuming the thread');
@@ -599,10 +622,37 @@ export class CodexAppServerService extends EventEmitter {
         if (![...entry.consumers].some(consumer => !consumer || (!consumer.cancelRequested && !consumer.settled))) {
           throw new ClassifiedError('CANCELLED', 'cancelled while waiting to resume the thread');
         }
+        if (!providerChecked) {
+          providerChecked = true;
+          // Start under the thread's recorded provider instead of waiting for the CLI to
+          // reject the change; the wording and shape of that rejection vary by version.
+          const recovered = await this.#aliasRecordedProvider(client, params, entry, launchOptions, clientFactory);
+          if (recovered) {
+            providerRecovered = true;
+            bootstrap = true;
+            client = recovered.client;
+            params.modelProvider = recovered.modelProvider;
+            params.config = recovered.nativeConfig;
+            continue;
+          }
+        }
         try {
           response = await client.request('thread/resume', params);
           break;
         } catch (error) {
+          // A native mismatch is a definitive rejection before any turn starts.
+          // Retain the historical provider id while routing it through this
+          // conversation's captured supplier, without rewriting its history.
+          const recovered = !providerRecovered && await this.#recoverResumeProvider(
+            error, client, params, entry, launchOptions, clientFactory);
+          if (recovered) {
+            providerRecovered = true;
+            bootstrap = true;
+            client = recovered.client;
+            params.modelProvider = recovered.modelProvider;
+            params.config = recovered.nativeConfig;
+            continue;
+          }
           const delay = THREAD_RESUME_RETRY_DELAYS_MS[attempt];
           if (delay === undefined || error?.code !== 'RPC_ERROR' || error?.rpcCode !== -32600
               || error?.method !== 'thread/resume'
@@ -644,6 +694,82 @@ export class CodexAppServerService extends EventEmitter {
       if (bootstrap && this.client === client) {
         this.bootstrapInFlight = false;
       }
+    }
+  }
+
+  /** Fallback when the recorded provider could not be read: parse the CLI's rejection instead. */
+  async #recoverResumeProvider(error, client, params, entry, launchOptions, clientFactory) {
+    const mismatch = resumeProviderMismatch(error);
+    if (error?.code !== 'RPC_ERROR' || error?.rpcCode !== -32600 || error?.method !== 'thread/resume'
+        || mismatch?.type !== 'modelProviderMismatch' || mismatch.currentModelProvider !== params.modelProvider) {
+      return null;
+    }
+    return this.#replaceProviderRuntime(mismatch.modelProvider, client, params, entry, launchOptions, clientFactory);
+  }
+
+  /** Reads the provider id the thread was recorded with, without loading it. */
+  async #aliasRecordedProvider(client, params, entry, launchOptions, clientFactory) {
+    // Only a managed supplier has a provider table to alias; CLI login resumes as before.
+    if (!params.config?.model_providers?.[params.modelProvider]) return null;
+    let recorded;
+    try {
+      const response = await client.request('thread/read',
+        { threadId: params.threadId, includeTurns: false, excludeTurns: true });
+      recorded = response?.thread?.modelProvider;
+    } catch {
+      return null; // The resume rejection path still recovers when this read is unavailable.
+    }
+    return this.#replaceProviderRuntime(recorded, client, params, entry, launchOptions, clientFactory);
+  }
+
+  /**
+   * Restarts the runtime with the historical provider id mapped to this conversation's
+   * captured supplier, so the CLI never sees a provider change and history is not rewritten.
+   */
+  async #replaceProviderRuntime(modelProvider, client, params, entry, launchOptions, clientFactory) {
+    const provider = params.config?.model_providers?.[params.modelProvider];
+    if (typeof modelProvider !== 'string' || !modelProvider.trim() || modelProvider === params.modelProvider
+        || RESERVED_PROVIDER_IDS.has(modelProvider)
+        || !provider || typeof provider !== 'object' || Array.isArray(provider)
+        || !clientFactory || this.pendingInteractions.size > 0
+        || [...this.threadResumes.keys()].some(threadId => threadId !== params.threadId)
+        || [...this.operations.values()].some(op => !op.settled && op.dispatchPhase !== 'notWritten')
+        || [...this.threads.values()].some(thread => !['unloaded', 'loading'].includes(thread.state))) {
+      return null;
+    }
+    const nativeConfig = { ...params.config, model_provider: modelProvider,
+      model_providers: { ...params.config.model_providers, [modelProvider]: structuredClone(provider) } };
+    const replacement = await clientFactory({ nativeConfig, modelProvider });
+    if (this.client !== client || !client.alive
+        || ![...entry.consumers].some(consumer => !consumer || (!consumer.cancelRequested && !consumer.settled))) {
+      replacement.close();
+      await replacement.waitForExit();
+      throw new ClassifiedError('RUNTIME_RESET', 'Codex runtime changed during provider recovery');
+    }
+    // Detach the old generation before closing it; its exit must not settle the
+    // pending send. The shared resume still owns the same native thread id.
+    this.client = replacement;
+    entry.client = replacement;
+    this.runtimeGeneration += 1;
+    this.bootstrapInFlight = true;
+    this.#attachClientHandlers(replacement);
+    if (this.launchOptions === launchOptions) {
+      this.launchOptions = { ...launchOptions, nativeConfig, modelProvider };
+    }
+    this.#setState('initializing');
+    try {
+      client.close();
+      await client.waitForExit();
+      if (this.client !== replacement) throw new ClassifiedError('RUNTIME_RESET', 'Codex runtime changed during provider recovery');
+      await replacement.ensureInitialized();
+      if (this.client !== replacement || !replacement.alive) {
+        throw new ClassifiedError('RUNTIME_RESET', 'Codex runtime changed during provider recovery');
+      }
+      this.#setState('ready');
+      return { client: replacement, nativeConfig, modelProvider };
+    } catch (failure) {
+      if (this.client === replacement) this.#failRuntime(failure);
+      throw failure;
     }
   }
 
@@ -1473,7 +1599,7 @@ export class CodexAppServerService extends EventEmitter {
     }
     if (operation && (method === 'item/completed' || method === 'item/updated'
         || method === 'item/started' && ['reasoning', 'commandExecution', 'mcpToolCall', 'fileChange', 'contextCompaction',
-          'dynamicToolCall', 'collabAgentToolCall', 'imageView', 'imageGeneration', 'webSearch'].includes(itemType))) {
+          'dynamicToolCall', 'collabAgentToolCall', 'subAgentActivity', 'imageView', 'imageGeneration', 'webSearch'].includes(itemType))) {
       this.#emitItemMarkers(operation, this.itemSnapshots.get(this.#itemSnapshotKey(threadId, itemId)) ?? safeItem, {
         authoritative: method === 'item/completed',
       });

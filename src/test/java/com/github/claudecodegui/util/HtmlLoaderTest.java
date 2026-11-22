@@ -15,6 +15,21 @@ import static org.junit.Assert.assertTrue;
  */
 public class HtmlLoaderTest {
 
+    @Test
+    public void initialNativePreferencesPreserveFalseAndDefaultEffortBeforeBundle() {
+        HtmlLoader loader = new HtmlLoader(HtmlLoaderTest.class);
+        String html = "<html><head><script src=\"main.js\"></script></head><body></body></html>";
+        String disabled = loader.injectInitialPageState(html, "claude", "claude-sonnet-5", List.of(), null, false);
+        assertTrue(disabled.contains("window.__INITIAL_TAB_CLAUDE_ULTRACODE__ = false;"));
+        assertTrue(disabled.contains("window.__INITIAL_TAB_REASONING_EFFORT__ = null;"));
+        assertTrue(disabled.indexOf("__INITIAL_TAB_CLAUDE_ULTRACODE__") < disabled.indexOf("main.js"));
+        String enabled = loader.injectInitialPageState(html, "codex", "gpt-6-sol", List.of(), "ultra", true);
+        assertTrue(enabled.contains("window.__INITIAL_TAB_REASONING_EFFORT__ = 'ultra';"));
+        assertTrue(enabled.contains("window.__INITIAL_TAB_CLAUDE_ULTRACODE__ = true;"));
+        assertFalse(loader.injectInitialPageState(html, "claude", "model", List.of())
+                .contains("__INITIAL_TAB_CLAUDE_ULTRACODE__"));
+    }
+
     /** Verifies that theme injection ignores HTML examples embedded in the JavaScript bundle. */
     @Test
     public void injectsThemeIntoDocumentRootTags() {
@@ -22,7 +37,7 @@ public class HtmlLoaderTest {
                 + "<script>const sample = '<body class=\\\"embedded\\\">';</script>"
                 + "</head><body></body></html>";
 
-        String injected = HtmlLoader.injectIdeTheme(html, "dark", "#1e1e1e");
+        String injected = HtmlLoader.injectIdeTheme(html, "dark", "#1e1e1e", "host");
 
         assertTrue(injected.contains("<html lang=\"zh-CN\" style=\"background-color:var(--bg-chat,#1e1e1e);\">"));
         assertTrue(injected.contains("<body style=\"background-color:var(--bg-chat,#1e1e1e);\"></body>"));
@@ -30,13 +45,25 @@ public class HtmlLoaderTest {
         assertTrue(injected.contains("window.__INITIAL_IDE_THEME__ = 'dark'"));
     }
 
+    /** Verifies that the failure-page host line stays inside its script string literal. */
+    @Test
+    public void injectsEscapedHostInfoForTheStartupFailurePage() {
+        String injected = HtmlLoader.injectIdeTheme("<html><head></head><body></body></html>",
+                "light", "#ffffff", "IDE 'x' </script>");
+
+        assertTrue(injected.contains("window.__CCGUI_HOST_INFO__ = 'IDE \\'x\\' \\u003c/script\\u003e';"));
+        String host = HtmlLoader.describeHost();
+        assertTrue(host.startsWith("CC GUI "));
+        assertTrue(host.contains(System.getProperty("os.name")));
+    }
+
     /** Verifies that a custom chat background can repaint the document root after startup. */
     @Test
     public void rootBackgroundFallsBackToTheStartupColor() {
         String html = "<html><head></head><body></body></html>";
 
-        String dark = HtmlLoader.injectIdeTheme(html, "dark", "#1e1e1e");
-        String light = HtmlLoader.injectIdeTheme(html, "light", "#ffffff");
+        String dark = HtmlLoader.injectIdeTheme(html, "dark", "#1e1e1e", "host");
+        String light = HtmlLoader.injectIdeTheme(html, "light", "#ffffff", "host");
 
         // The variable must stay first and the startup color must stay a fallback, otherwise the
         // inline declaration wins over the stylesheet and the status-panel gap keeps the old color.
