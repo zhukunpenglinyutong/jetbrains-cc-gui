@@ -3,7 +3,7 @@
  * Handles path rewriting (/tmp → project root) and dangerous path detection.
  */
 import { basename, resolve, sep } from 'path';
-import { getRealHomeDir } from './utils/path-utils.js';
+import { getClaudeDir, getRealHomeDir } from './utils/path-utils.js';
 
 const TEMP_PATH_PREFIXES = ['/tmp', '/var/tmp', '/private/tmp'];
 
@@ -194,8 +194,13 @@ export function isDangerousPath(filePath) {
     `${userHomeDir}/.docker/`,
     `${userHomeDir}/.config/`,
     `${userHomeDir}/.local/`,
-    `${userHomeDir}/.claude/.credentials.json`,
   ];
+
+  // The Claude login lives in the config directory, which is not ~/.claude when CLAUDE_CONFIG_DIR is set.
+  const credentialDirs = new Set([`${userHomeDir}/.claude`, String(getClaudeDir()).replace(/\\/g, '/')]);
+  for (const dir of credentialDirs) {
+    dangerousPatterns.push(`${dir}/.credentials.json`);
+  }
 
   if (isWindows) {
     dangerousPatterns.push(
@@ -211,6 +216,9 @@ export function isDangerousPath(filePath) {
       `${userHomeDir}\\.config\\`,
       `${userHomeDir}\\.local\\`,
     );
+    for (const dir of credentialDirs) {
+      dangerousPatterns.push(`${dir.replace(/\//g, '\\')}\\.credentials.json`);
+    }
   }
 
   // Security (K): expand a leading ~ to the real home dir so shell-style references such as

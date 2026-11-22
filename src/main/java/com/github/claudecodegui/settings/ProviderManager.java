@@ -690,6 +690,49 @@ public class ProviderManager {
      * touch settings.json — not even additively.
      */
     public boolean repairActiveProviderToClaudeSettings() throws IOException {
+        JsonObject activeProvider = repairableActiveProvider();
+        if (activeProvider == null) {
+            return false;
+        }
+        return claudeSettingsManager.repairMissingProviderFields(activeProvider);
+    }
+
+    /**
+     * Bring the active provider into the settings.json of the Claude config directory that was
+     * just chosen (or restored). A provider switch only writes the directory active at the time,
+     * so this file may still hold the token and base URL the plugin wrote for an earlier
+     * provider; those are replaced as on a provider switch. API settings the plugin did not
+     * write are the user's own and are kept.
+     *
+     * @return true when the provider was not applied because the file holds the user's own API settings
+     * @throws IOException if settings.json cannot be read or written
+     */
+    public boolean applyActiveProviderToConfigDirectory() throws IOException {
+        JsonObject activeProvider = repairableActiveProvider();
+        if (activeProvider == null) {
+            return false;
+        }
+        JsonObject settings = claudeSettingsManager.readClaudeSettings();
+        if (!ClaudeSettingsManager.hasForeignApiSettings(settings, activeProvider)) {
+            claudeSettingsManager.repairMissingProviderFields(activeProvider);
+            return false;
+        }
+        JsonElement writerId = settings.get("codemossProviderId");
+        JsonObject writer = writerId != null && writerId.isJsonPrimitive()
+                ? getSavedClaudeProvider(writerId.getAsString())
+                : null;
+        if (writer == null || ClaudeSettingsManager.hasForeignApiSettings(settings, writer)) {
+            return true;
+        }
+        applyProviderToClaudeSettings(activeProvider);
+        return false;
+    }
+
+    /**
+     * @return the active provider when it is one that owns settings.json and carries a payload to
+     *         repair from, otherwise null (local settings / CLI login / disabled / empty env)
+     */
+    private JsonObject repairableActiveProvider() {
         JsonObject config = configReader.apply(null);
 
         if (config.has("claude") &&
@@ -697,20 +740,20 @@ public class ProviderManager {
             String currentId = config.getAsJsonObject("claude").get("current").getAsString();
             if (isGlobalSettingsSyncExempt(currentId)) {
                 LOG.info("[ProviderManager] " + currentId + " provider active, skipping repair");
-                return false;
+                return null;
             }
         }
 
         JsonObject activeProvider = getActiveClaudeProvider();
         if (activeProvider == null) {
-            LOG.info("[ProviderManager] No active provider to repair in .claude/settings.json");
-            return false;
+            LOG.info("[ProviderManager] No active provider to repair in settings.json");
+            return null;
         }
         if (!hasEnvPayload(activeProvider)) {
             LOG.info("[ProviderManager] Active provider has empty env payload, skipping repair");
-            return false;
+            return null;
         }
-        return claudeSettingsManager.repairMissingProviderFields(activeProvider);
+        return activeProvider;
     }
 
     /**

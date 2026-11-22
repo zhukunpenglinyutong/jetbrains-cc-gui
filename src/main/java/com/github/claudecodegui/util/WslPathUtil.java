@@ -133,11 +133,20 @@ public final class WslPathUtil {
      * the UNC filesystem service can be slow to respond, causing spurious false negatives.
      */
     public static boolean wslFileExists(String wslPath) {
+        return wslTest("-f", wslPath);
+    }
+
+    /** Directory counterpart of {@link #wslFileExists}: {@code wsl -e test -d <wslPath>}. */
+    public static boolean wslDirectoryExists(String wslPath) {
+        return wslTest("-d", wslPath);
+    }
+
+    private static boolean wslTest(String flag, String wslPath) {
         if (!PlatformUtils.isWindows() || wslPath == null || wslPath.isEmpty() || wslPath.charAt(0) != '/') {
             return false;
         }
         try {
-            ProcessBuilder pb = new ProcessBuilder("wsl", "-e", "test", "-f", wslPath);
+            ProcessBuilder pb = new ProcessBuilder("wsl", "-e", "test", flag, wslPath);
             pb.redirectErrorStream(true);
             Process p = pb.start();
             boolean finished = p.waitFor(3, TimeUnit.SECONDS);
@@ -147,7 +156,7 @@ public final class WslPathUtil {
             }
             return p.exitValue() == 0;
         } catch (Exception e) {
-            LOG.debug("[WslPathUtil] wslFileExists check failed for " + wslPath + ": " + e.getMessage());
+            LOG.debug("[WslPathUtil] wsl test " + flag + " failed for " + wslPath + ": " + e.getMessage());
             return false;
         }
     }

@@ -32,30 +32,123 @@ export function spawnCliSync(bin, args = [], options = {}) {
   return spawnSync(invocation.file, invocation.args, invocation.options);
 }
 
+/**
+ * taskkill argument vector for killing a whole Windows process tree
+ * (/T = tree, /F = force) — the same call the Java manual-cancel path makes
+ * (PlatformUtils.terminateProcess). Exported pure so the argument contract
+ * is unit-testable on every platform (this codebase has no platform-faking
+ * precedent — see cli-path.test.js, which extracts win32 spawn logic into
+ * pure helpers for the same reason); the win32 branch that spawns it is
+ * inspection-verified. Returns null when the pid cannot be trusted so the
+ * caller falls back to the direct handle kill.
+ * @param {number|undefined} pid
+ * @returns {string[]|null}
+ */
+export function win32TreeKillArgs(pid) {
+  if (typeof pid !== 'number' || !Number.isInteger(pid) || pid <= 0) return null;
+  return ['/PID', String(pid), '/T', '/F'];
+}
+
+/**
+ * How long a POSIX process group gets to honor SIGTERM before the escalation
+ * to SIGKILL — long enough for a clean CLI shutdown, short enough that a
+ * tree ignoring the graceful signal does not outlive the kill.
+ */
+const POSIX_KILL_ESCALATION_MS = 5000;
+
+/**
+ * A child Node has already reaped (exit code or signal recorded on the
+ * handle) must never receive a follow-up signal.
+ */
+function isChildProcessDone(child) {
+  return child.exitCode !== null || child.signalCode !== null;
+}
+
+/**
+ * Sends SIGTERM to the POSIX process group with fallback to the child handle, escalating to SIGKILL after the grace window if the child has not exited.
+ * @param {import('child_process').ChildProcess} child Child process handle to terminate.
+ * @param {object} [options] Optional escalation configuration and test seams.
+ * @param {number} [options.escalateAfterMs] SIGTERM to SIGKILL grace window in milliseconds.
+ * @param {(pid: number, signal: NodeJS.Signals) => void} [options.killFn] Process signaling function.
+ * @param {(fn: () => void, ms: number) => unknown} [options.setTimeoutFn] Timer scheduling function.
+ * @param {(timer: unknown) => void} [options.clearTimeoutFn] Timer cancellation function.
+ * @returns {() => void} disarmer cancelling a still-pending escalation
+ */
+export function posixTreeKillEscalate(child, {
+  escalateAfterMs = POSIX_KILL_ESCALATION_MS,
+  killFn = (pid, signal) => process.kill(pid, signal),
+  setTimeoutFn = setTimeout,
+  clearTimeoutFn = clearTimeout,
+} = {}) {
+  const killGroup = (signal) => {
+    try {
+      killFn(-child.pid, signal);
+      return;
+    } catch {
+      // PGID may not exist (ESRCH) or may not be signalable (EPERM); fall back to direct child handle.
+    }
+    try {
+      child.kill(signal);
+    } catch {
+      // Child may have already exited or thrown EPERM/ESRCH; ignore safely.
+    }
+  };
+  killGroup('SIGTERM');
+  const timer = setTimeoutFn(() => {
+    if (isChildProcessDone(child)) return;
+    killGroup('SIGKILL');
+  }, escalateAfterMs);
+  // A pending escalation must not delay process exit.
+  timer?.unref?.();
+  return () => clearTimeoutFn(timer);
+}
+
+/**
+ * Kill a spawned CLI and its whole process tree. Non-Windows children run in
+ * their own process group (detached), so a negative-pid SIGTERM reaches the
+ * CLI's own grandchildren too — with a short-window escalation to SIGKILL so
+ * a tree that ignores the graceful signal still dies (see
+ * posixTreeKillEscalate). On Windows the direct handle kill would leave
+ * those grandchildren alive (story 1.10 AC4 gap — only the auto-reap goes
+ * through here; Java's manual cancel already uses taskkill /T), so this
+ * mirrors Java: `taskkill /PID <pid> /T /F`, fire-and-forget (unref'd so a
+ * reap during shutdown never delays exit), falling back to the direct kill
+ * when taskkill cannot run or reports failure. Exported for callers that own
+ * an extra termination path on the same child (e.g. the gemini
+ * silence-window reap) so every killer shares one semantics.
+ */
 export function killChildTree(child, label) {
   if (!child || child.killed) return;
   try {
     if (process.platform === 'win32') {
-      if (child.pid) {
-        // Tree-kill via taskkill so grandchild node processes (npm .cmd shims)
-        // do not outlive the cmd.exe wrapper and hold stdout open.
-        spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true })
-          .on('error', () => {
-            try {
-              child.kill();
-            } catch {
-              /* already gone */
-            }
-          });
+      const args = win32TreeKillArgs(child.pid);
+      if (!args) {
+        child.kill();
         return;
       }
-      child.kill();
-    } else {
+      const fallbackDirectKill = () => {
+        try {
+          child.kill();
+        } catch {
+          // already gone
+        }
+      };
       try {
-        process.kill(-child.pid, 'SIGTERM');
+        const killer = spawn('taskkill', args, { stdio: 'ignore', windowsHide: true });
+        // A non-zero taskkill exit is most often "already gone" — the direct
+        // fallback is harmless there (kill on a dead handle is a no-op).
+        killer.on('error', fallbackDirectKill);
+        killer.on('close', (code) => {
+          if (code !== 0) fallbackDirectKill();
+        });
+        killer.unref?.();
       } catch {
-        child.kill('SIGTERM');
+        fallbackDirectKill();
       }
+    } else {
+      // Graceful first, forced second: a tree that ignores SIGTERM (or is
+      // stuck inside it) is reaped by the escalation instead of surviving.
+      posixTreeKillEscalate(child);
     }
   } catch (error) {
     console.error(`[WARN][${label}] Failed to kill child:`, error?.message || error);
@@ -80,6 +173,12 @@ export function killChildTree(child, label) {
  * @param {(message: string) => void} [options.onError] - when set, called instead of
  *   writing `[SEND_ERROR]` (used by session-less ask paths: prompt enhance / commit)
  * @param {boolean} [options.emitEndStream=true] - when false, skip chat stream end markers
+ * @param {(child: import('child_process').ChildProcess) => void} [options.onSpawn] - called
+ *   once right after a successful spawn, with the child handle. Callers that need to act
+ *   on the live process (watchdogs) get their only access to it here.
+ * @param {(text: string) => void} [options.onStderr] - called with each stderr chunk
+ *   after it is mirrored to this process's stderr. The rolling tail used for
+ *   nonzero-exit errors is unchanged.
  * @param {string} [options.stdinData] - when set, piped to the child's stdin
  *   (and stdio[0] becomes 'pipe'). For payloads that cannot ride argv: Windows
  *   cmd.exe command lines truncate at the first newline and cap near 32k chars,
@@ -97,6 +196,8 @@ export function runCliStreaming({
   onCloseBeforeEnd,
   onError,
   emitEndStream = true,
+  onSpawn,
+  onStderr,
   stdinData,
 }) {
   return new Promise((resolve) => {
@@ -160,6 +261,14 @@ export function runCliStreaming({
       child.stdin.end();
     }
 
+    if (typeof onSpawn === 'function') {
+      try {
+        onSpawn(child);
+      } catch (error) {
+        console.error(`[WARN][${label}] onSpawn failed:`, error?.message || error);
+      }
+    }
+
     const onParentSignal = () => killChildTree(child, label);
     process.once('SIGTERM', onParentSignal);
     process.once('SIGINT', onParentSignal);
@@ -205,6 +314,13 @@ export function runCliStreaming({
       stderrTailBytes = overCap ? merged.subarray(-STDERR_TAIL_MAX_BYTES) : merged;
       stderrTailTruncated = stderrTailTruncated || overCap;
       process.stderr.write(text);
+      if (typeof onStderr === 'function') {
+        try {
+          onStderr(text);
+        } catch (error) {
+          console.error(`[WARN][${label}] onStderr failed:`, error?.message || error);
+        }
+      }
     });
 
     child.on('error', (error) => {

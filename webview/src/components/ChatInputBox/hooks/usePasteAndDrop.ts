@@ -11,6 +11,7 @@ import {
 import { perfTimer } from '../../../utils/debug.js';
 import { sendBridgeEvent } from '../../../utils/bridge.js';
 import { BRIDGE_READY_EVENT } from '../../../utils/bridgeStartup.js';
+import { scrollCaretIntoView } from '../utils/scrollCaretIntoView.js';
 
 declare global {
   interface Window {
@@ -324,9 +325,10 @@ export function usePasteAndDrop({
                   handleInput();
                   // Immediately sync parent state without waiting for debounce
                   flushInput();
-                  if (registeredPath) {
-                    requestAnimationFrame(() => renderFileTags());
-                  }
+                  requestAnimationFrame(() => {
+                    if (registeredPath) renderFileTags();
+                    scrollCaretIntoView(editableRef.current);
+                  });
                 }
               })
               .catch(() => {
@@ -368,18 +370,13 @@ export function usePasteAndDrop({
           // Immediately sync parent state without waiting for debounce
           flushInput();
 
-          // Scroll to make cursor visible after paste
+          // Scroll to make the cursor visible after paste
           // Use requestAnimationFrame to ensure DOM updates are complete
           requestAnimationFrame(() => {
             if (normalizedFileReferenceText) {
               renderFileTags();
             }
-            // Get the wrapper element that has overflow scroll
-            const wrapper = editableRef.current?.parentElement;
-            if (wrapper && editableRef.current) {
-              // Scroll wrapper to bottom to show pasted content
-              wrapper.scrollTop = wrapper.scrollHeight;
-            }
+            scrollCaretIntoView(editableRef.current);
           });
 
           timer.end();

@@ -75,6 +75,8 @@ export interface UseSettingsBasicActionsReturn {
   minNodeVersion: number;
   savingNodePath: boolean;
   claudeCliPath: string;
+  claudeConfigDir: string;
+  savingClaudeConfigDir: boolean;
   savingClaudeCliPath: boolean;
   workingDirectory: string;
   savingWorkingDirectory: boolean;
@@ -149,6 +151,7 @@ export interface UseSettingsBasicActionsReturn {
   // =========================================================================
   handleSaveNodePath: () => void;
   handleSaveClaudeCliPath: () => void;
+  handleSaveClaudeConfigDir: () => void;
   handleSaveWorkingDirectory: () => void;
   handleSaveEnvFile: () => void;
   /** Back to auto-discovery of <project>/.env — the third state, otherwise unreachable. */
@@ -203,6 +206,8 @@ export interface UseSettingsBasicActionsReturn {
   /** @internal */ setMinNodeVersion: (version: number) => void;
   /** @internal */ setSavingNodePath: (saving: boolean) => void;
   /** @internal */ setClaudeCliPath: (path: string) => void;
+  /** @internal */ setClaudeConfigDir: (path: string) => void;
+  /** @internal */ setSavingClaudeConfigDir: (saving: boolean) => void;
   /** @internal */ setSavingClaudeCliPath: (saving: boolean) => void;
   /** @internal */ setWorkingDirectory: (dir: string) => void;
   /** @internal */ setSavingWorkingDirectory: (saving: boolean) => void;
@@ -274,6 +279,8 @@ export function useSettingsBasicActions({
   // Custom Claude CLI path (overrides bundled SDK when set)
   const [claudeCliPath, setClaudeCliPath] = useState('');
   const [savingClaudeCliPath, setSavingClaudeCliPath] = useState(false);
+  const [claudeConfigDir, setClaudeConfigDir] = useState('');
+  const [savingClaudeConfigDir, setSavingClaudeConfigDir] = useState(false);
 
   // Working directory configuration
   const [workingDirectory, setWorkingDirectory] = useState('');
@@ -458,6 +465,12 @@ export function useSettingsBasicActions({
     const payload = { path: (claudeCliPath || '').trim() };
     sendToJava(`set_claude_cli_path:${JSON.stringify(payload)}`);
   }, [claudeCliPath]);
+
+  const handleSaveClaudeConfigDir = useCallback(() => {
+    setSavingClaudeConfigDir(true);
+    const payload = { path: (claudeConfigDir || '').trim() };
+    sendToJava(`set_claude_config_dir:${JSON.stringify(payload)}`);
+  }, [claudeConfigDir]);
 
   const handleSaveWorkingDirectory = useCallback(() => {
     setSavingWorkingDirectory(true);
@@ -908,6 +921,10 @@ export function useSettingsBasicActions({
     setClaudeCliPath,
     savingClaudeCliPath,
     setSavingClaudeCliPath,
+    claudeConfigDir,
+    setClaudeConfigDir,
+    savingClaudeConfigDir,
+    setSavingClaudeConfigDir,
     workingDirectory,
     setWorkingDirectory,
     savingWorkingDirectory,
@@ -969,6 +986,7 @@ export function useSettingsBasicActions({
     setSkipNewSessionConfirm,
     handleSaveNodePath,
     handleSaveClaudeCliPath,
+    handleSaveClaudeConfigDir,
     handleSaveWorkingDirectory,
     handleSaveEnvFile,
     handleResetEnvFile,

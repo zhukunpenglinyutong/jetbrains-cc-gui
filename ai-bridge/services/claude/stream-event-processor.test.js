@@ -1271,3 +1271,36 @@ test('BLOCK_RESET: later content_block_start separates streamed thinking blocks'
     ['first', 'second'],
   );
 });
+
+function runThinkingThenTextTurn({ streamText }) {
+  const state = makeTurnState(true);
+  const ev = (event) => processStreamEvent({ type: 'stream_event', event }, state);
+  const snapshot = (uuid, block) => processMessageContent(
+    { type: 'assistant', uuid, message: { id: 'msg_1', content: [block] } },
+    state,
+  );
+  const captured = captureStdout(() => {
+    state.hasStreamEvents = true;
+    ev({ type: 'message_start', message: { id: 'msg_1' } });
+    ev({ type: 'content_block_start', index: 0, content_block: { type: 'thinking', thinking: '' } });
+    ev({ type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: '想一想' } });
+    snapshot('u1', { type: 'thinking', thinking: '想一想' });
+    ev({ type: 'content_block_start', index: 1, content_block: { type: 'text', text: '' } });
+    if (streamText) {
+      ev({ type: 'content_block_delta', index: 1, delta: { type: 'text_delta', text: '结论' } });
+    }
+    snapshot('u2', { type: 'text', text: '结论' });
+  });
+  const payloads = (tag) => tagLines(captured, tag)
+    .map((line) => JSON.parse(line.slice(tag.length).trim()))
+    .join('');
+  return { text: payloads('[CONTENT_DELTA]'), thinking: payloads('[THINKING_DELTA]') };
+}
+
+test('thinking + text streamed normally: Claude Code per-block snapshots do not repeat the text', () => {
+  assert.deepEqual(runThinkingThenTextTurn({ streamText: true }), { text: '结论', thinking: '想一想' });
+});
+
+test('REGRESSION: relay streams thinking_delta but never text_delta, text comes from the snapshot', () => {
+  assert.deepEqual(runThinkingThenTextTurn({ streamText: false }), { text: '结论', thinking: '想一想' });
+});

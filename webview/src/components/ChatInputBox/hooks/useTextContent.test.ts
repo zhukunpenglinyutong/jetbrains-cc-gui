@@ -101,6 +101,48 @@ describe('useTextContent', () => {
     expect(disconnect).toHaveBeenCalled();
   });
 
+  it('scrolls the wrapper to the current caret after input', () => {
+    vi.useFakeTimers();
+    const wrapper = document.createElement('div');
+    const editable = document.createElement('div');
+    const textNode = document.createTextNode('draft');
+    editable.append(textNode);
+    wrapper.append(editable);
+    document.body.append(wrapper);
+    Object.defineProperty(wrapper, 'clientHeight', { configurable: true, value: 100 });
+    vi.spyOn(wrapper, 'getBoundingClientRect').mockReturnValue({
+      top: 0,
+      bottom: 100,
+      left: 0,
+      right: 100,
+      width: 100,
+      height: 100,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    } as DOMRect);
+    vi.spyOn(Range.prototype, 'getClientRects').mockReturnValue([
+      { top: 130, bottom: 150 } as DOMRect,
+    ] as unknown as DOMRectList);
+
+    const range = document.createRange();
+    range.setStart(textNode, textNode.length);
+    range.collapse(true);
+    window.getSelection()!.removeAllRanges();
+    window.getSelection()!.addRange(range);
+
+    const { result } = renderHook(() => useChatInputTextPipeline({
+      editableRef: { current: editable },
+      onInput: vi.fn(),
+      setHasContent: vi.fn(),
+      currentProvider: 'claude',
+    }));
+
+    act(() => result.current.handleInput('insertText'));
+
+    expect(wrapper.scrollTop).toBe(50);
+  });
+
   it('does not reconnect an observer when the input pipeline reads its draft during unmount', () => {
     const editableRef = { current: document.createElement('div') };
     const observe = vi.spyOn(MutationObserver.prototype, 'observe');

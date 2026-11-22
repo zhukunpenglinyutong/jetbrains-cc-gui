@@ -8,7 +8,7 @@ import { readFile } from 'fs/promises';
 import { spawnSync } from 'node:child_process';
 import { join } from 'path';
 import { createHash } from 'node:crypto';
-import { getRealHomeDir, getManagedSettingsPath } from '../../../utils/path-utils.js';
+import { getRealHomeDir, getManagedSettingsPath, getClaudeJsonPath, getPluginClaudeSettingsPath } from '../../../utils/path-utils.js';
 import { log } from './logger.js';
 
 /**
@@ -73,7 +73,7 @@ async function loadEnvExpansionSources(cwd, projectTrusted) {
 
   const sources = [
     { label: 'project settings.local.json', file: cwd && projectTrusted === true ? join(cwd, '.claude', 'settings.local.json') : null, into: projectEnv },
-    { label: 'user settings.json', file: join(getRealHomeDir(), '.claude', 'settings.json'), into: userEnv }
+    { label: 'user settings.json', file: getPluginClaudeSettingsPath(), into: userEnv }
   ];
 
   for (const source of sources) {
@@ -658,10 +658,15 @@ function fingerprintOfServerSpec(serverSpec) {
  * @returns {Promise<{mcpServers: Object, disabledServers: Set<string>} | null>} Parse result, or null on failure
  */
 async function parseMcpConfig(cwd = null, projectTrusted = false) {
-  const claudeJsonPath = join(getRealHomeDir(), '.claude.json');
+  const claudeJsonPath = getClaudeJsonPath();
 
-  let config = null;
+let config = null;
   let hasClaudeJson = false;
+
+  if (!existsSync(claudeJsonPath)) {
+    log('info', `${claudeJsonPath} not found`);
+    return null;
+  }
 
   if (existsSync(claudeJsonPath)) {
     hasClaudeJson = true;

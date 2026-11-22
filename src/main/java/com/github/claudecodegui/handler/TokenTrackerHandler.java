@@ -144,6 +144,7 @@ public class TokenTrackerHandler {
     public void handleEnsureServer(String content) {
         String requestId = parseRequestId(content);
         runAsync(requestId, () -> {
+            TokenTrackerScanRoots.syncFromSettings();
             // Serialize detect+spawn so concurrent ensure calls cannot race
             // into spawning multiple server instances.
             synchronized (TokenTrackerHandler.class) {

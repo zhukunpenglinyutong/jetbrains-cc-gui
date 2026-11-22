@@ -31,6 +31,8 @@ export function registerUsageModeCallbacks(options: UseWindowCallbacksOptions): 
     setCodexPermissionMode,
     setSelectedClaudeModel,
     setSelectedCodexModel,
+    setSelectedGeminiModel,
+    setGeminiPermissionMode,
     setLongContextEnabled,
     setReasoningEffort,
     setClaudeUltracode,
@@ -98,6 +100,9 @@ export function registerUsageModeCallbacks(options: UseWindowCallbacksOptions): 
       setPermissionMode((prev) => (prev === nextMode ? prev : nextMode));
       if (activeProvider === 'codex') {
         setCodexPermissionMode((prev) => (prev === nextMode ? prev : nextMode));
+      } else if (activeProvider === 'gemini') {
+        // Gemini's plan/sandbox would otherwise leak into the Claude slot.
+        setGeminiPermissionMode?.((prev) => (prev === nextMode ? prev : nextMode));
       } else {
         setClaudePermissionMode((prev) => (prev === nextMode ? prev : nextMode));
       }
@@ -121,6 +126,12 @@ export function registerUsageModeCallbacks(options: UseWindowCallbacksOptions): 
       setSelectedClaudeModel(normalizeClaudeModelId(modelId, readCustomClaudeModelIds()));
     } else if (provider === 'codex') {
       setSelectedCodexModel(modelId);
+    } else if (provider === 'gemini') {
+      // Java fires onModelConfirmed for EVERY provider (ModelProviderHandler),
+      // so a gemini confirmation previously fell through every branch and the
+      // gemini model slot never heard about it. Gemini ids are full catalog
+      // slugs (family+effort in ONE slug) — stored raw, like codex.
+      setSelectedGeminiModel?.(modelId);
     }
   };
 

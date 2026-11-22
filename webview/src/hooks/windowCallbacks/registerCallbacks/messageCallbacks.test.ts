@@ -204,6 +204,25 @@ describe('native Codex opaque history pages', () => {
     expect(harness.getMessages()).toHaveLength(3);
     expect(window.__codexHistoryPageInfo?.cursor).toBe('opaque:older');
   });
+  it('closes the earlier-page loader once a full-thread reload holds the whole transcript', () => {
+    createHarness('s1');
+    window.beginCodexHistoryPage?.(JSON.stringify({ pageId: 'first', sessionId: 's1', mode: 'replace' }));
+    window.completeCodexHistoryPage?.(JSON.stringify({ pageId: 'first', sessionId: 's1', mode: 'replace', source: 'native',
+      cursor: 'opaque:older', hasMore: true, fromTurn: 0, toTurn: 0, totalTurns: 0, loadedMessageCount: 0 }));
+    const announced: unknown[] = [];
+    const listener = (event: Event) => announced.push((event as CustomEvent).detail);
+    window.addEventListener('codex-history-page-info', listener);
+    try {
+      window.codexHistoryFullyLoaded?.('another-thread');
+      expect(window.__codexHistoryPageInfo?.hasMore).toBe(true);
+      window.codexHistoryFullyLoaded?.('s1');
+    } finally {
+      window.removeEventListener('codex-history-page-info', listener);
+    }
+    // The event also clears a spinner left by an earlier-page request.
+    expect(window.__codexHistoryPageInfo).toMatchObject({ sessionId: 's1', hasMore: false, cursor: null });
+    expect(announced).toEqual([window.__codexHistoryPageInfo]);
+  });
 });
 
 describe('onInterTurnMessage', () => {

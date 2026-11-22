@@ -50,6 +50,7 @@ export function processStreamEvent(msg, turnState) {
     // duplicate this turn's index-0 block (see resetTurnBlockState). Usage still
     // accumulates across turns.
     resetTurnBlockState(turnState);
+    turnState.streamedKindsThisMessage = new Set();
     // Emit BLOCK_RESET before subsequent deltas so the frontend can record the
     // new block's offset while retaining cumulative buffers for earlier blocks.
     // Emit it here, rather than in a delta handler, to guarantee ordering.
@@ -131,18 +132,19 @@ export function processMessageContent(msg, turnState) {
  * rewrite is absorbed rather than mis-sliced by a naive substring, and the
  * block map / mode bookkeeping stay single-sourced.
  *
- * Emit gate (unchanged from the tail-fill / new-block-suppression fix):
- *   - !hasStreamEvents: pre-stream fallback, emit the whole computed delta
- *   - hasStreamEvents && hadPrevious: genuine tail-fill / snapshot correction
- *   - hasStreamEvents && !hadPrevious: stream will deliver this block, suppress
+ * Emit gate:
+ *   - kind never streamed this message: the snapshot is the only source (no
+ *     stream events, or a relay that streams thinking_delta but no text_delta)
+ *   - hadPrevious: genuine tail-fill / snapshot correction
+ *   - otherwise the stream already delivers this kind, suppress
  */
 function emitSnapshotText(currentText, turnState, blockIndex) {
   if (!turnState.streamingEnabled) {
     console.log('[CONTENT]', truncateErrorContent(currentText));
     return;
   }
-  const { delta, hadPrevious } = resolveSnapshotDelta(turnState, 'text', blockIndex, currentText);
-  if (delta && (!turnState.hasStreamEvents || hadPrevious)) {
+  const { delta, hadPrevious, kindStreamed } = resolveSnapshotDelta(turnState, 'text', blockIndex, currentText);
+  if (delta && (!kindStreamed || hadPrevious)) {
     process.stdout.write(`[CONTENT_DELTA] ${JSON.stringify(delta)}\n`);
   }
   turnState.lastAssistantContent = currentText;
@@ -154,8 +156,8 @@ function emitSnapshotThinking(thinkingText, turnState, blockIndex) {
     console.log('[THINKING]', thinkingText);
     return;
   }
-  const { delta, hadPrevious } = resolveSnapshotDelta(turnState, 'thinking', blockIndex, thinkingText);
-  if (delta && (!turnState.hasStreamEvents || hadPrevious)) {
+  const { delta, hadPrevious, kindStreamed } = resolveSnapshotDelta(turnState, 'thinking', blockIndex, thinkingText);
+  if (delta && (!kindStreamed || hadPrevious)) {
     process.stdout.write(`[THINKING_DELTA] ${JSON.stringify(delta)}\n`);
   }
   turnState.lastThinkingContent = thinkingText;

@@ -97,6 +97,7 @@ import { injectStartupEnvVars, isWebviewControlledEnvVar, isDangerousEnvVar } fr
 import { loadEnvFile, applyEnvFileVars } from './utils/envLoader.js';
 import { cleanupStaleTempImages } from './services/claude/attachment-service.js';
 import { format } from 'node:util';
+import { regenerateSessionTitle } from './services/session-title-service.js';
 
 // =============================================================================
 // Debug logging
@@ -1154,6 +1155,26 @@ async function runDaemonMain() {
           id: controlId,
           done: true,
           success: false,
+          error: error?.message || String(error),
+        }));
+      return;
+    }
+
+    // On-demand title regeneration bypasses the long-operation FIFO: it only
+    // reads the session JSONL and appends one row, never touches a live
+    // runtime, and must not wait behind a streaming turn (the history-list
+    // refresh button would spin for minutes). Its daemon events go through
+    // the out-of-band stdout writer, so a concurrent active request is never
+    // disturbed.
+    if (request.method === 'claude.regenerateTitle') {
+      const { sessionId, cwd } = request.params || {};
+      regenerateSessionTitle(sessionId, cwd || null)
+        .then((result) => writeRawLine({ id: request.id || '0', done: true, ...result }))
+        .catch((error) => writeRawLine({
+          id: request.id || '0',
+          done: true,
+          success: false,
+          code: error?.code,
           error: error?.message || String(error),
         }));
       return;

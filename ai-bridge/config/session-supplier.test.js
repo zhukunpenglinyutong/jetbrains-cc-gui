@@ -124,6 +124,37 @@ test('a missing named Codex provider must not silently route its key to OpenAI',
   }
 });
 
+test('the active Codex supplier runs natively when its fragment relies on config.toml or its own auth (#2099)', () => {
+  const fragments = {
+    bearer: 'model_provider="relay"\n[model_providers.relay]\nbase_url="https://relay.example.invalid/v1"\nexperimental_bearer_token="fixture-token"',
+    header: 'model_provider="relay"\n[model_providers.relay]\nbase_url="https://relay.example.invalid/v1"\nhttp_headers={Authorization="Bearer fixture-token"}',
+    globalTable: 'model_provider="relay"\nmodel="fixture-model"',
+    noKey: 'model_provider="relay"\n[model_providers.relay]\nbase_url="https://relay.example.invalid/v1"',
+  };
+  for (const [name, configToml] of Object.entries(fragments)) {
+    const providers = { active: { configToml, authJson: '' }, other: { configToml, authJson: '' } };
+    const dependencies = { config: { codex: { current: 'active', providers } }, baseEnv: {},
+      codexState: () => ({ currentId: 'active', access: 'managed' }) };
+    const supplier = buildSessionCodexConfig('active', dependencies);
+    assert.deepEqual(Object.keys(supplier).sort(), ['authMode', 'providerRevision'], name);
+    assert.equal(supplier.authMode, 'managed', name);
+    const runtime = buildCodexNativeRuntime({ ...supplier, baseEnv: {} });
+    assert.equal(runtime.modelProvider, null, name);
+    assert.equal(runtime.config?.model_providers, undefined, name);
+    assert.equal(runtime.env.CODEX_API_KEY, undefined, name);
+    // Only the globally active supplier matches the native config; others still fail closed.
+    assert.throws(() => buildSessionCodexConfig('other', dependencies), { code: 'SESSION_SUPPLIER_UNAVAILABLE' }, name);
+    assert.throws(() => buildSessionCodexConfig('active', { ...dependencies,
+      codexState: () => ({ currentId: 'active', access: 'inactive' }) }), { code: 'SESSION_SUPPLIER_UNAVAILABLE' }, name);
+  }
+});
+
+test('an active Codex supplier that builds an override keeps it, so existing bound threads keep their provider', () => {
+  const supplier = buildSessionCodexConfig('a', { config, baseEnv: {}, codexState: () => ({ currentId: 'a', access: 'managed' }) });
+  assert.equal(supplier.modelProvider, 'ccgui_session');
+  assert.equal(supplier.apiKey, 'fixture-a');
+});
+
 test('cloud supplier routing wins over global settings without changing request controls', () => {
   const settingsConfig = { env: { CLAUDE_CODE_USE_BEDROCK: '1', AWS_ACCESS_KEY_ID: 'fixture-cloud-access',
     AWS_SECRET_ACCESS_KEY: 'fixture-cloud-secret', AWS_REGION: 'fixture-region', MAX_THINKING_TOKENS: '999999',

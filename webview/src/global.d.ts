@@ -2,6 +2,7 @@
  * Global window interface extensions for IDEA plugin communication
  */
 interface Window {
+  setMarkdownReviewConfig?: (raw: string) => void;
   /**
    * Send message to Java backend
    */
@@ -122,6 +123,8 @@ interface Window {
   ) => void;
   completeCodexHistoryPage?: (json: string) => void;
   codexHistoryPageError?: (json: string) => void;
+  /** A full-thread reload replaced the paged view: no earlier page is left to fetch. */
+  codexHistoryFullyLoaded?: (sessionId: string) => void;
   codexHistoryPageRenderComplete?: () => void;
   __codexHistoryPageInfo?: {
     pageId: string;
@@ -344,6 +347,9 @@ interface Window {
    * Insert an inline quote chip. Payload: JSON { text } - registered by ChatInputBox
    */
   addQuotedSnippet?: (payload: string) => void;
+  addArtifactReview?: (payload: string) => void;
+  showArtifactReviewChat?: () => void;
+    setArtifactReviewTarget?: (payload: string) => void;
 
   /**
    * Focus the chat input box - registered by ChatInputBox
@@ -543,6 +549,11 @@ interface Window {
   updatePermissionDialogTimeout?: (json: string) => void;
 
   /**
+   * Update the Gemini idle-reap window (minutes) setting
+   */
+  updateGeminiIdleReapMinutes?: (json: string) => void;
+
+  /**
    * Show error message
    */
   showError?: (message: string) => void;
@@ -561,6 +572,11 @@ interface Window {
    * Update custom Claude CLI path
    */
   updateClaudeCliPath?: (path: string) => void;
+
+  /**
+   * Update custom Claude config directory
+   */
+  updateClaudeConfigDir?: (path: string) => void;
 
   /**
    * Update working directory configuration
@@ -731,6 +747,8 @@ interface Window {
    * @param title - The generated title text
    */
   updateSessionTitle?: (sessionId: string, title: string) => void;
+  /** Regeneration result for the history-list refresh button: {sessionId, success, title?, code?, error?}. */
+  onTitleRegenerated?: (json: string) => void;
 
   /**
    * Restore the user-set title persisted in session-titles.json after a

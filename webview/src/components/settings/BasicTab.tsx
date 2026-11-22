@@ -32,6 +32,10 @@ const BasicTab = ({ themeSync, basicActions, addToast }: BasicTabProps) => {
       onClaudeCliPathChange={basicActions.setClaudeCliPath}
       onSaveClaudeCliPath={basicActions.handleSaveClaudeCliPath}
       savingClaudeCliPath={basicActions.savingClaudeCliPath}
+      claudeConfigDir={basicActions.claudeConfigDir}
+      onClaudeConfigDirChange={basicActions.setClaudeConfigDir}
+      onSaveClaudeConfigDir={basicActions.handleSaveClaudeConfigDir}
+      savingClaudeConfigDir={basicActions.savingClaudeConfigDir}
       workingDirectory={basicActions.workingDirectory}
       onWorkingDirectoryChange={basicActions.setWorkingDirectory}
       onSaveWorkingDirectory={basicActions.handleSaveWorkingDirectory}

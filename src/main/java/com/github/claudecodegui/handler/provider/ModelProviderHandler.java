@@ -564,6 +564,12 @@ public class ModelProviderHandler {
         return trimmed.isEmpty() ? null : trimmed;
     }
 
+    /**
+     * Resolves the context window limit for a model identifier using capacity suffixes and static mappings.
+     *
+     * @param model Model identifier
+     * @return context window limit in tokens
+     */
     public static int getModelContextLimit(String model) {
         if (model == null || model.isEmpty()) {
             return 200_000;
@@ -574,7 +580,11 @@ public class ModelProviderHandler {
             return suffixLimit;
         }
 
-        return MODEL_CONTEXT_LIMITS.getOrDefault(model, 200_000);
+        Integer mapped = MODEL_CONTEXT_LIMITS.get(model);
+        if (mapped != null) {
+            return mapped;
+        }
+        return 200_000;
     }
 
     /**
@@ -605,14 +615,17 @@ public class ModelProviderHandler {
         return null;
     }
 
+    /**
+     * Resolves the context window limit for a provider and model identifier without a working directory.
+     *
+     * @param provider Provider identifier
+     * @param model Model identifier
+     * @return context window limit in tokens
+     */
     public static int getModelContextLimit(String provider, String model) {
         return providerContextLimit(provider, model, null);
     }
 
-    /**
-     * Non-Claude context window: OpenCode's own {@code limit.context} (project config
-     * when {@code cwd} is known), then the custom window table, then the static table.
-     */
     private static int providerContextLimit(String provider, String model, String cwd) {
         if ("opencode".equalsIgnoreCase(provider)) {
             Integer declared = OpenCodeContextWindowResolver.resolve(model, cwd);
@@ -634,7 +647,26 @@ public class ModelProviderHandler {
         }
         return CustomModelContextWindowProvider.getInstance()
                 .getContextWindow(provider, model)
-                .orElseGet(() -> getModelContextLimit(model));
+                .orElseGet(() -> {
+                    if ("gemini".equalsIgnoreCase(provider)) {
+                        if (model == null || model.trim().isEmpty()) {
+                            return 1_000_000;
+                        }
+                        Integer suffixLimit = parseCapacitySuffix(model);
+                        if (suffixLimit != null) {
+                            return suffixLimit;
+                        }
+                        Integer mapped = MODEL_CONTEXT_LIMITS.get(model);
+                        if (mapped != null) {
+                            return mapped;
+                        }
+                        if (model.trim().toLowerCase(Locale.ROOT).startsWith("gemini-")) {
+                            return 1_000_000;
+                        }
+                        return 200_000;
+                    }
+                    return getModelContextLimit(model);
+                });
     }
 
     /**
@@ -680,12 +712,12 @@ public class ModelProviderHandler {
     }
 
     /**
-     * Provider-aware context window used by usage display fallbacks.
+     * Resolves the provider-aware context window limit used by usage display fallbacks.
      *
-     * <p>For Claude, {@code selectedModel} is the UI id; the settings family mapping is
-     * applied first so the window belongs to the model the bridge actually sends.</p>
-     *
-     * @param cwd session working directory for project-level settings, or null
+     * @param provider Provider identifier
+     * @param selectedModel Selected UI model identifier
+     * @param cwd Session working directory for project-level settings, or null
+     * @return context window limit in tokens
      */
     public static int resolveContextLimit(String provider, String selectedModel, String cwd) {
         if (!"claude".equalsIgnoreCase(provider)) {

@@ -19,6 +19,66 @@ async function sentMessages(page: Page) {
   return page.evaluate(() => (window as InputTestWindow).__sentMessages);
 }
 
+test('keeps a blank-line caret visible in a long draft after input', async ({ page }) => {
+  const position = await page.locator('.input-editable').evaluate((editable) => {
+    editable.innerHTML = '<div>draft line</div>'.repeat(30) + '<div><br></div>';
+    (editable as HTMLElement).focus();
+    const wrapper = editable.parentElement!;
+    wrapper.scrollTop = wrapper.scrollHeight;
+    const line = editable.lastElementChild!;
+    const range = document.createRange();
+    range.setStart(line, 0);
+    range.collapse(true);
+    window.getSelection()!.removeAllRanges();
+    window.getSelection()!.addRange(range);
+    // This is the Chromium case that a mocked, nonempty Range rectangle misses.
+    const collapsedRectCount = range.getClientRects().length;
+    editable.dispatchEvent(new InputEvent('input', { inputType: 'insertParagraph', bubbles: true }));
+    return {
+      collapsedRectCount,
+      caretBottom: line.getBoundingClientRect().bottom,
+      visibleTop: wrapper.getBoundingClientRect().top,
+      visibleBottom: wrapper.getBoundingClientRect().top + wrapper.clientHeight,
+    };
+  });
+
+  expect(position.collapsedRectCount).toBe(0);
+  expect(position.caretBottom).toBeGreaterThan(position.visibleTop);
+  expect(position.caretBottom).toBeLessThanOrEqual(position.visibleBottom);
+});
+
+for (const fontSizeLevel of [1, 2, 3, 6]) {
+  test(`keeps the last-line caret above the model toolbar at font level ${fontSizeLevel}`, async ({ page }) => {
+    await page.evaluate((level) => localStorage.setItem('fontSizeLevel', String(level)), fontSizeLevel);
+    await page.reload();
+    const position = await page.locator('.input-editable').evaluate((editable) => {
+      editable.innerHTML = '<div>draft line</div>'.repeat(40);
+      (editable as HTMLElement).focus();
+      const wrapper = editable.parentElement!;
+      // Leave the last caret just below the scroll boundary to exercise our own
+      // reveal logic instead of Chromium's automatic scroll on a native keypress.
+      wrapper.scrollTop = wrapper.scrollHeight - wrapper.clientHeight - 12;
+      const text = editable.lastChild!.firstChild as Text;
+      const range = document.createRange();
+      range.setStart(text, text.length);
+      range.collapse(true);
+      window.getSelection()!.removeAllRanges();
+      window.getSelection()!.addRange(range);
+      editable.dispatchEvent(new InputEvent('input', { inputType: 'insertText', bubbles: true }));
+      const toolbar = editable.closest('.chat-input-box')!.querySelector('.button-area')!;
+      return {
+        caretBottom: range.getBoundingClientRect().bottom,
+        toolbarTop: toolbar.getBoundingClientRect().top,
+        scale: wrapper.getBoundingClientRect().height / wrapper.offsetHeight,
+      };
+    });
+
+    // Keep the wrapper's 6 CSS-pixel padding between the caret and model controls;
+    // allow one logical pixel for Chromium's fractional scroll rounding.
+    expect((position.toolbarTop - position.caretBottom) / position.scale).toBeGreaterThanOrEqual(5);
+  });
+}
+
 test.beforeEach(async ({ page }) => {
   await page.addInitScript((appVersion) => {
     localStorage.setItem('lastSeenChangelogVersion', appVersion);
@@ -176,6 +236,86 @@ test('Enter sends once and a held key cannot submit the next draft', async ({ pa
   await expect(editable).toHaveText('next draft');
   await page.keyboard.up('Enter');
   await expect.poll(() => sentMessages(page)).toEqual(['first message']);
+});
+
+test('Markdown review-only drafts preserve original context through the chat send bridge', async ({ page }) => {
+  await page.evaluate(() => {
+    window.setArtifactReviewTarget?.(JSON.stringify({ targetId: 'tab', targetEpoch: 'epoch' }));
+    window.addArtifactReview?.(JSON.stringify({
+      id: 'e2e-review', kind: 'review', targetId: 'tab', targetEpoch: 'epoch', path: 'docs/中文 plan.md', documentHash: 'snapshot-hash',
+      annotations: [{ id: 'comment', revision: 1, selectedText: '/clear 原文', sourceText: '**原文**',
+        comment: '请修改这一段', startLine: 3, endLine: 4, status: 'attached', precision: 'block' }],
+    }));
+  });
+  await expect(page.locator('.artifact-review-drafts summary')).toContainText('1');
+  await page.locator('.artifact-review-drafts summary').click();
+  await expect(page.locator('.artifact-review-drafts')).toContainText('请修改这一段');
+  await expect(page.locator('.artifact-review-reference')).toContainText('中文 plan.md 3:4');
+  await expect(page.locator('.artifact-review-reference')).not.toContainText('已定位');
+  expect(await page.locator('.artifact-review-reference').evaluate(element => {
+    const article = element.closest('article')!.getBoundingClientRect();
+    const label = element.querySelector('small')!.getBoundingClientRect();
+    return label.right > article.left + article.width / 2;
+  })).toBe(true);
+  await page.locator('.input-editable').press('Enter');
+  await expect.poll(() => sentMessages(page)).toHaveLength(1);
+  const [text] = await sentMessages(page);
+  expect(text).toContain('docs/中文 plan.md');
+  // The durable envelope carries display context only; sourceText and documentHash
+  // are internal anchor/snapshot fields (see markdownReviewMessage tests).
+  expect(text).not.toContain('snapshot-hash');
+  expect(text).toContain('/clear 原文');
+  expect(text).not.toContain('**原文**');
+  expect(text).toContain('请修改这一段');
+  expect(text).not.toContain('handling instructions');
+  await expect(page.locator('.markdown-review-context')).toHaveCount(1);
+  await expect(page.locator('.markdown-review-context')).not.toHaveAttribute('open');
+  await page.locator('.markdown-review-context > summary').click();
+  await expect(page.locator('.markdown-review-context')).toContainText('请修改这一段');
+  await expect(page.locator('.artifact-review-drafts')).toHaveCount(0);
+});
+
+test('an automatically added review opens its draft details without sending a message', async ({ page }) => {
+  await page.evaluate(() => {
+    window.setArtifactReviewTarget?.(JSON.stringify({ targetId: 'tab', targetEpoch: 'epoch' }));
+    window.addArtifactReview?.(JSON.stringify({
+      id: 'automatic-review', automatic: true, kind: 'review', targetId: 'tab', targetEpoch: 'epoch',
+      path: 'docs/柜机数据WSS接口文档.md', documentHash: 'snapshot-hash',
+      annotations: [{ id: 'comment', revision: 1, selectedText: 'boardId 相同', sourceText: 'boardId 相同',
+        comment: '测试', startLine: 30, endLine: 30, status: 'attached', precision: 'source' }],
+    }));
+  });
+  await expect(page.locator('.artifact-review-drafts')).toHaveAttribute('open');
+  await expect(page.locator('.artifact-review-reference')).toContainText('柜机数据WSS接口文… 30:30');
+  expect(await sentMessages(page)).toHaveLength(0);
+  await page.locator('.artifact-review-drafts summary').click();
+  await expect(page.locator('.artifact-review-drafts')).not.toHaveAttribute('open');
+});
+
+test('reviews arriving while Settings is open switch back to chat and recover once the input mounts', async ({ page }) => {
+  await page.evaluate(() => document.querySelector('.header .codicon-settings-gear')?.closest('button')?.click());
+  await expect(page.locator('.input-editable')).toHaveCount(0);
+  await page.evaluate(() => {
+    const bridge = window as InputTestWindow;
+    const original = bridge.sendToJava!;
+    bridge.sendToJava = message => {
+      original(message);
+      if (message.startsWith('artifact_review_ready')) setTimeout(() => {
+        window.setArtifactReviewTarget?.(JSON.stringify({ targetId: 'tab', targetEpoch: 'epoch' }));
+        window.addArtifactReview?.(JSON.stringify({
+          id: 'from-settings', automatic: true, targetId: 'tab', targetEpoch: 'epoch', path: 'plan.md', documentHash: 'hash',
+          annotations: [{ id: 'comment', revision: 1, selectedText: 'source', sourceText: 'source',
+            comment: 'created while settings was open', startLine: 1, endLine: 1, status: 'attached', precision: 'source' }],
+        }));
+      }, 0);
+    };
+    window.showArtifactReviewChat?.();
+  });
+  await expect(page.locator('.input-editable')).toBeVisible();
+  await expect(page.locator('.artifact-review-drafts')).toHaveAttribute('open');
+  await expect(page.locator('.artifact-review-drafts article')).toHaveCount(1);
+  await expect(page.locator('.artifact-review-drafts')).toContainText('created while settings was open');
+  expect(await sentMessages(page)).toHaveLength(0);
 });
 
 test('Shift+Enter preserves a multiline message before Enter sends it', async ({ page }) => {

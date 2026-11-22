@@ -163,6 +163,18 @@ public class DeferredReloadTest {
         assertFalse("coordinator is drained at the end", d.hasPending());
     }
 
+    /** Codex clears busy at stream end, before its native turn settles; that turn still counts. */
+    @Test
+    public void liveTurnWithoutBusyFlagStillCountsAsInFlight() {
+        com.github.claudecodegui.session.ClaudeSession session =
+                new com.github.claudecodegui.session.ClaudeSession(null, null, null, null);
+        assertFalse(ClaudeChatWindow.hasTurnInFlight(session));
+        session.getState().beginTurn();
+        session.getState().setBusy(false);
+        assertTrue(ClaudeChatWindow.hasTurnInFlight(session));
+        assertFalse(ClaudeChatWindow.hasTurnInFlight(null));
+    }
+
     // ── Safety backstop decision (decideDeferredReloadSafety) ────────────────
     //
     // onStreamEnded is the fast, edge-triggered drain. The backstop covers the

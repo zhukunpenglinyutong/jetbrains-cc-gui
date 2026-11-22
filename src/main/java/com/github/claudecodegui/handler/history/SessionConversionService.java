@@ -1,5 +1,6 @@
 package com.github.claudecodegui.handler.history;
 
+import com.github.claudecodegui.util.ClaudeConfigDir;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.util.PathUtils;
@@ -21,7 +22,6 @@ import java.nio.channels.OverlappingFileLockException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -54,7 +54,7 @@ class SessionConversionService {
      * node. Every other history service in this package was migrated the same way.
      */
     private static Path projectsDir() {
-        return Paths.get(NodeDetector.resolveHomeForFileOps(), ".claude", "projects");
+        return ClaudeConfigDir.current().resolve("projects");
     }
 
     /**

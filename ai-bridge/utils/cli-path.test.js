@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, mkdirSync, realpathSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, join, normalize } from 'node:path';
 import {
@@ -9,11 +10,13 @@ import {
   isDeadCmdShim,
   quoteCmdArg,
   resolveCliSpawn,
+  resolveCmdShimTarget,
   selectWindowsWhereMatch,
   resolveWindowsSpawnableBin,
   resolveOmpCliPath,
   resolveOpenCodeCliPath,
   resolveCliPath,
+  resolveGeminiCliPath,
   commonCliBinDirs,
   versionManagerBinDirs,
   whichViaLoginShell,
@@ -415,6 +418,34 @@ test('buildCliSpawnEnv leads PATH with the resolved binary own dir', () => {
   assert.ok(bare.PATH.split(':').pop() === '/usr/bin');
 });
 
+test('resolveGeminiCliPath respects env override precedence', () => {
+  const originalBin = process.env.GEMINI_BIN;
+  const originalPath = process.env.GEMINI_PATH;
+  const originalCliPath = process.env.GEMINI_CLI_PATH;
+
+  try {
+    delete process.env.GEMINI_BIN;
+    delete process.env.GEMINI_PATH;
+    delete process.env.GEMINI_CLI_PATH;
+
+    process.env.GEMINI_CLI_PATH = '/custom/path/to/gemini-cli-path';
+    assert.equal(resolveGeminiCliPath(), '/custom/path/to/gemini-cli-path');
+
+    process.env.GEMINI_PATH = '/custom/path/to/gemini-path';
+    assert.equal(resolveGeminiCliPath(), '/custom/path/to/gemini-path');
+
+    process.env.GEMINI_BIN = '/custom/path/to/gemini-bin';
+    assert.equal(resolveGeminiCliPath(), '/custom/path/to/gemini-bin');
+  } finally {
+    if (originalBin !== undefined) process.env.GEMINI_BIN = originalBin;
+    else delete process.env.GEMINI_BIN;
+    if (originalPath !== undefined) process.env.GEMINI_PATH = originalPath;
+    else delete process.env.GEMINI_PATH;
+    if (originalCliPath !== undefined) process.env.GEMINI_CLI_PATH = originalCliPath;
+    else delete process.env.GEMINI_CLI_PATH;
+  }
+});
+
 test('isDeadCmdShim flags a shim whose last quoted target is missing', () => {
   const root = mkdtempSync(join(tmpdir(), 'cc-gui-dead-shim-'));
   // Mirrors the real stale-install shape: an earlier `set "VAR=path"` line,
@@ -589,4 +620,225 @@ test('resolveOpenCodeCliPath honors the OPENCODE_CLI_PATH override', () => {
   writeFileSync(file, '', { mode: 0o755 });
   const resolved = resolveOpenCodeCliPath({ ...envWithoutOpenCodeOverrides(), OPENCODE_CLI_PATH: file });
   assert.equal(realpathSync.native(resolved).toLowerCase(), realpathSync.native(file).toLowerCase());
+});
+
+// The shim path walk (%dp0% expansion, win32 separators) only exists on Windows.
+const windowsOnly = process.platform !== 'win32';
+
+/**
+ * Shim text npm writes for a package bin (npm 11 / cmd-shim 8), copied from real
+ * cmd-shim output. `flags` is what cmd-shim emits for a shebang such as
+ * `#!/usr/bin/env node --no-warnings`: it sits between the runtime and the target.
+ */
+function npmCmdShim({ target, runtime = 'node', runtimeExe = '%dp0%\\node.exe', flags = '' }) {
+  return [
+    '@ECHO off',
+    'GOTO start',
+    ':find_dp0',
+    'SET dp0=%~dp0',
+    'EXIT /b',
+    ':start',
+    'SETLOCAL',
+    'CALL :find_dp0',
+    '',
+    `IF EXIST "${runtimeExe}" (`,
+    `  SET "_prog=${runtimeExe}"`,
+    ') ELSE (',
+    `  SET "_prog=${runtime}"`,
+    '  SET PATHEXT=%PATHEXT:;.JS;=;%',
+    ')',
+    '',
+    `endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%"${flags}  "${target}" %*`,
+  ].join('\r\n');
+}
+
+/** Write a shim plus its Node entry and return both paths. */
+function writeNpmShim(name, entryRelative, { shebang = '#!/usr/bin/env node', shimOptions = {} } = {}) {
+  const dir = mkdtempSync(join(tmpdir(), `ccgui-${name}-`));
+  const entry = join(dir, ...entryRelative.split('/'));
+  mkdirSync(dirname(entry), { recursive: true });
+  writeFileSync(entry, `${shebang}\nconsole.log(JSON.stringify({ argv: process.argv.slice(2) }));\n`);
+  const shim = join(dir, `${name}.cmd`);
+  writeFileSync(shim, npmCmdShim({ target: `%dp0%\\${entryRelative.replace(/\//g, '\\')}`, ...shimOptions }));
+  return { dir, entry, shim };
+}
+
+/**
+ * Native shim cmd-shim writes for a bin with no shebang, copied from real output
+ * (opencode-ai >= 1.15.1 publishes `bin/opencode.exe` and npm emits no `_prog`).
+ */
+function writeNativeShim(name, targetRelative = 'node_modules/opencode-ai/bin/opencode.exe') {
+  const dir = mkdtempSync(join(tmpdir(), `ccgui-${name}-`));
+  const exe = join(dir, ...targetRelative.split('/'));
+  mkdirSync(dirname(exe), { recursive: true });
+  writeFileSync(exe, '');
+  const shim = join(dir, `${name}.cmd`);
+  writeFileSync(shim, [
+    '@ECHO off',
+    'GOTO start',
+    ':find_dp0',
+    'SET dp0=%~dp0',
+    'EXIT /b',
+    ':start',
+    'SETLOCAL',
+    'CALL :find_dp0',
+    `"%dp0%\\${targetRelative.replace(/\//g, '\\')}"   %*`,
+  ].join('\r\n'));
+  return { dir, exe, shim };
+}
+
+test('resolveCmdShimTarget follows npm cmd-shim %dp0% output', { skip: windowsOnly }, () => {
+  const { entry, shim } = writeNpmShim('real-node', 'node_modules/pkg/bin/cli.js');
+  assert.deepEqual(resolveCmdShimTarget(shim), { kind: 'node', entry, nodeCommand: 'node' });
+});
+
+test('resolveCmdShimTarget accepts an extensionless entry with a node shebang', { skip: windowsOnly }, () => {
+  const { entry, shim } = writeNpmShim('real-noext', 'node_modules/opencode-ai/bin/opencode');
+  assert.deepEqual(resolveCmdShimTarget(shim), { kind: 'node', entry, nodeCommand: 'node' });
+});
+
+test('resolveCmdShimTarget prefers the node.exe npm placed next to the shim', { skip: windowsOnly }, () => {
+  const { dir, entry, shim } = writeNpmShim('real-nodeexe', 'node_modules/pkg/bin/cli.js');
+  const localNode = join(dir, 'node.exe');
+  writeFileSync(localNode, '');
+  assert.deepEqual(resolveCmdShimTarget(shim), { kind: 'node', entry, nodeCommand: localNode });
+});
+
+test('resolveCmdShimTarget resolves the native opencode-ai shim', { skip: windowsOnly }, () => {
+  const { exe, shim } = writeNativeShim('real-native');
+  assert.deepEqual(resolveCmdShimTarget(shim), { kind: 'native', file: exe });
+});
+
+test('resolveCmdShimTarget rejects bun shims, shebang flags and ambiguous shapes', { skip: windowsOnly }, () => {
+  const bun = writeNpmShim('real-bun', 'node_modules/pkg/bin/cli.js', {
+    shebang: '#!/usr/bin/env bun',
+    shimOptions: { runtime: 'bun', runtimeExe: '%dp0%\\bun.exe' },
+  });
+  assert.equal(resolveCmdShimTarget(bun.shim), null);
+
+  const flagged = writeNpmShim('real-flags', 'node_modules/pkg/bin/cli.js', {
+    shebang: '#!/usr/bin/env node --no-warnings',
+    shimOptions: { flags: ' --no-warnings' },
+  });
+  assert.equal(resolveCmdShimTarget(flagged.shim), null);
+
+  const dir = mkdtempSync(join(tmpdir(), 'ccgui-shim-reject-'));
+  const nonExe = join(dir, 'non-exe.cmd');
+  writeFileSync(nonExe, ['@ECHO off', '"%~dp0tool.cmd" %*'].join('\r\n'));
+  assert.equal(resolveCmdShimTarget(nonExe), null);
+
+  writeFileSync(join(dir, 'a.js'), '');
+  writeFileSync(join(dir, 'b.js'), '');
+  const conditional = join(dir, 'conditional.cmd');
+  writeFileSync(conditional, [
+    '@echo off',
+    'SET "_prog=node"',
+    'if exist "%~dp0a.js" ( "%_prog%" "%~dp0a.js" %* ) else ( "%_prog%" "%~dp0b.js" %* )',
+  ].join('\r\n'));
+  assert.equal(resolveCmdShimTarget(conditional), null);
+});
+
+test('resolveCliSpawn passes a multi-line argument through a real npm shim intact', { skip: windowsOnly }, () => {
+  const { dir, entry, shim } = writeNpmShim('real-multiline', 'node_modules/pkg/bin/cli.js');
+
+  const args = ['run', '--format', 'json', 'first line\nsecond line'];
+  const invocation = resolveCliSpawn(shim, args, { cwd: dir }, true);
+  assert.equal(invocation.file, 'node');
+  assert.deepEqual(invocation.args, [entry, ...args]);
+  assert.equal(invocation.options.shell, false);
+  // The shim directory leads PATH, so a bare `node` resolves like cmd.exe would.
+  assert.equal(invocation.options.env.PATH.split(delimiter)[0], dir);
+
+  const result = spawnSync(invocation.file, invocation.args, { ...invocation.options, encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout).argv, args);
+});
+
+test('resolveCliSpawn spawns a native shim target with multi-line arguments', { skip: windowsOnly }, () => {
+  const { dir, exe, shim } = writeNativeShim('real-native-spawn');
+  const args = ['run', 'first line\nsecond line'];
+
+  const invocation = resolveCliSpawn(shim, args, { cwd: dir }, true);
+  assert.equal(invocation.file, exe);
+  assert.deepEqual(invocation.args, args);
+  assert.equal(invocation.options.shell, false);
+  // Same PATH the cmd path gives the shim.
+  assert.equal(invocation.options.env.PATH.split(delimiter)[0], dir);
+});
+
+test('resolveCmdShimTarget accepts the npm 6 (cmd-shim 3) layout', { skip: windowsOnly }, () => {
+  // Copied from real cmd-shim 3.0.3 output: no `GOTO start`, no `endLocal & ...`
+  // prefix, and an ENDLOCAL / :find_dp0 footer after the delegation line.
+  const dir = mkdtempSync(join(tmpdir(), 'ccgui-shim-v3-'));
+  const exe = join(dir, 'node_modules', 'tool', 'bin', 'tool.exe');
+  const entry = join(dir, 'node_modules', 'pkg', 'bin', 'cli.js');
+  mkdirSync(dirname(exe), { recursive: true });
+  mkdirSync(dirname(entry), { recursive: true });
+  writeFileSync(exe, '');
+  writeFileSync(entry, '#!/usr/bin/env node\n');
+  const head = ['@ECHO off', 'SETLOCAL', 'CALL :find_dp0'];
+  const foot = ['ENDLOCAL', 'EXIT /b %errorlevel%', ':find_dp0', 'SET dp0=%~dp0', 'EXIT /b', ''];
+
+  const nativeShim = join(dir, 'tool.cmd');
+  writeFileSync(nativeShim, [...head, '"%dp0%\\node_modules\\tool\\bin\\tool.exe"   %*', ...foot].join('\r\n'));
+  assert.deepEqual(resolveCmdShimTarget(nativeShim), { kind: 'native', file: exe });
+
+  const nodeShim = join(dir, 'pkg.cmd');
+  writeFileSync(nodeShim, [
+    ...head,
+    '',
+    'IF EXIST "%dp0%\\node.exe" (',
+    '  SET "_prog=%dp0%\\node.exe"',
+    ') ELSE (',
+    '  SET "_prog=node"',
+    '  SET PATHEXT=%PATHEXT:;.JS;=;%',
+    ')',
+    '',
+    '"%_prog%"  "%dp0%\\node_modules\\pkg\\bin\\cli.js" %*',
+    ...foot,
+  ].join('\r\n'));
+  assert.deepEqual(resolveCmdShimTarget(nodeShim), { kind: 'node', entry, nodeCommand: 'node' });
+});
+
+test('resolveCmdShimTarget leaves hand-written wrappers and relative paths to cmd.exe', { skip: windowsOnly }, () => {
+  // A user wrapper around the real exe: spawning the exe directly would drop the
+  // proxy it sets, so only multi-line prompts would run without it.
+  const { dir, shim } = writeNativeShim('wrapper');
+  const wrapper = join(dir, 'oc-proxy.cmd');
+  writeFileSync(wrapper, [
+    '@echo off',
+    'set "HTTPS_PROXY=http://127.0.0.1:7890"',
+    '"%~dp0node_modules\\opencode-ai\\bin\\opencode.exe" %*',
+  ].join('\r\n'));
+  assert.equal(resolveCmdShimTarget(wrapper), null);
+  assert.match(resolveCliSpawn(wrapper, ['run', 'a\nb'], {}, true).file, /cmd(\.exe)?$/i);
+
+  // A command chained in front of the Node runtime call.
+  const node = writeNpmShim('wrapper-node', 'node_modules/pkg/bin/cli.js');
+  writeFileSync(node.shim, readFileSync(node.shim, 'utf8')
+    .replace('endLocal & ', 'set "NODE_OPTIONS=--max-old-space-size=8192" & endLocal & '));
+  assert.equal(resolveCmdShimTarget(node.shim), null);
+
+  // A bare name is looked up from the child's cwd/PATH, not this process's cwd.
+  const previousCwd = process.cwd();
+  process.chdir(dir);
+  try {
+    assert.equal(resolveCmdShimTarget(shim.slice(dir.length + 1)), null);
+  } finally {
+    process.chdir(previousCwd);
+  }
+});
+
+test('resolveCliSpawn keeps cmd.exe for single-line, redirected and non-Node cases', { skip: windowsOnly }, () => {
+  const { dir, shim } = writeNpmShim('real-cmd', 'node_modules/pkg/bin/cli.js');
+  assert.match(resolveCliSpawn(shim, ['run', 'single line'], {}, true).file, /cmd(\.exe)?$/i);
+
+  const redirected = resolveCliSpawn(shim, ['run', 'a\nb'], { redirectTo: join(dir, 'out.txt') }, true);
+  assert.match(redirected.file, /cmd(\.exe)?$/i);
+
+  const bun = writeNpmShim('real-bun-cmd', 'node_modules/pkg/bin/cli.js', {
+    shebang: '#!/usr/bin/env bun',
+    shimOptions: { runtime: 'bun', runtimeExe: '%dp0%\\bun.exe' },
+  });
+  assert.match(resolveCliSpawn(bun.shim, ['run', 'a\nb'], {}, true).file, /cmd(\.exe)?$/i);
 });

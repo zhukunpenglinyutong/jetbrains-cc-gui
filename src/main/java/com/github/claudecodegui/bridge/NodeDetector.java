@@ -134,17 +134,17 @@ public class NodeDetector {
             } catch (TimeoutException e) {
                 LOG.warn("[NodeDetector] Detection timed out after 30 seconds, cancelling.");
                 detectionFuture.cancel(true);
-                result = NodeDetectionResult.failure("Node.js 检测超时（30秒）");
+                result = NodeDetectionResult.failure(com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("nodePath.detectTimeout"));
             } catch (CancellationException e) {
                 LOG.info("[NodeDetector] In-flight detection was cancelled, retrying once.");
                 result = this.detectNodeWithDetails();
             } catch (ExecutionException e) {
                 LOG.warn("[NodeDetector] Node detection failed: " + e.getMessage(), e);
-                result = NodeDetectionResult.failure("Node.js 检测异常: " + e.getMessage());
+                result = NodeDetectionResult.failure(com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("nodePath.detectFailed", e.getMessage()));
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 LOG.warn("[NodeDetector] Detection interrupted.");
-                result = NodeDetectionResult.failure("Node.js 检测被中断");
+                result = NodeDetectionResult.failure(com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("nodePath.detectInterrupted"));
             }
 
             synchronized (this.cacheLock) {
@@ -212,7 +212,7 @@ public class NodeDetector {
                 return fallbackResult;
             }
 
-            return NodeDetectionResult.failure("在所有已知路径中均未找到 Node.js", triedPaths);
+            return NodeDetectionResult.failure(com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("nodePath.notFoundAnywhere"), triedPaths);
         } finally {
             long elapsed = System.currentTimeMillis() - startTime;
             LOG.debug("[NodeDetector] detectNodeWithDetails completed in " + elapsed +
@@ -818,20 +818,19 @@ public class NodeDetector {
     public NodeDetectionResult verifyAndCacheNodePath(String path) {
         if (path == null || path.isEmpty()) {
             clearCache();
-            return NodeDetectionResult.failure("未指定 Node.js 路径");
+            return NodeDetectionResult.failure(com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("nodePath.notSpecified"));
         }
         // Check binary name before attempting execution
         if (!isValidNodeBinaryName(path)) {
-            String hint = PlatformUtils.isWindows()
-                    ? "Windows 下路径必须以 node 或 node.exe 结尾，例如：C:\\Program Files\\nodejs\\node.exe 或 /usr/bin/node (WSL)"
-                    : "路径必须以 node 结尾，例如：/usr/local/bin/node";
-            return NodeDetectionResult.failure("路径格式无效：" + hint);
+            return NodeDetectionResult.failure(PlatformUtils.isWindows()
+                    ? com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("nodePath.invalidName.windows")
+                    : com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("nodePath.invalidName.unix"));
         }
         // Check file existence before attempting execution
         // Skip File.exists() check for WSL paths since Java's File class on Windows
         // cannot resolve Unix-style paths; verification will be done via 'wsl' command.
         if (!"node".equals(path) && !isWslPath(path) && !new File(path).exists()) {
-            return NodeDetectionResult.failure("文件不存在，请检查路径是否正确：" + path);
+            return NodeDetectionResult.failure(com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("nodePath.fileNotFound", path));
         }
         String version = verifyNodePath(path);
         NodeDetectionResult result;
@@ -839,8 +838,8 @@ public class NodeDetector {
             result = NodeDetectionResult.success(path, version, NodeDetectionResult.DetectionMethod.KNOWN_PATH);
         } else {
             String errorMsg = isWslPath(path)
-                    ? "无法通过 WSL 验证指定的 Node.js 路径: " + path + "（请确认 WSL 已安装且路径正确）"
-                    : "无法验证指定的 Node.js 路径: " + path;
+                    ? com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("nodePath.notVerifiedWsl", path)
+                    : com.github.claudecodegui.i18n.ClaudeCodeGuiBundle.message("nodePath.notVerifiedPath", path);
             result = NodeDetectionResult.failure(errorMsg);
         }
         cacheDetection(result);

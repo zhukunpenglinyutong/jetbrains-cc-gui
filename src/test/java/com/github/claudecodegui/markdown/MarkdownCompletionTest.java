@@ -1,0 +1,43 @@
+package com.github.claudecodegui.markdown;
+
+import com.intellij.testFramework.LightVirtualFile;
+import org.junit.Test;
+import static org.junit.Assert.*;
+
+public class MarkdownCompletionTest {
+    @Test
+    public void completionPersistsAndMissingSourceRemainsVisibleButNotTransferable() {
+        var file = new LightVirtualFile("plan.md");
+        var service = new MarkdownReviewService(null);
+        var state = service.snapshotState();
+        state.config.persist = true;
+        var annotation = new Annotation();
+        annotation.id = "000a";
+        annotation.fileUrl = file.getUrl();
+        state.annotations.add(annotation);
+        service.loadState(state);
+        var config = service.getConfig();
+        config.persist = false;
+        service.configure(config);
+        service.complete(file, "000a", 1, true);
+        // Option A: completing no longer silently re-enables persistence.
+        assertFalse(service.getConfig().persist);
+        // The completed flag round-trips only when the user opts in.
+        var optedIn = service.getConfig();
+        optedIn.persist = true;
+        service.configure(optedIn);
+        var restored = new MarkdownReviewService(null);
+        restored.loadState(service.getState());
+        assertTrue(restored.list(file).get(0).completed);
+        restored.complete(file, "000a", 2, false);
+        assertFalse(restored.list(file).get(0).completed);
+        state = restored.snapshotState();
+        state.annotations.get(0).sourceMissing = true;
+        state.annotations.get(0).status = "orphaned";
+        restored.loadState(state);
+        // R5: a lost anchor stays visible as an invalid entry instead of being hidden.
+        assertEquals(1, restored.list(file).size());
+        assertFalse(MarkdownReviewService.isTransferable(restored.list(file).get(0)));
+        assertEquals(1, restored.snapshotState().annotations.size());
+    }
+}

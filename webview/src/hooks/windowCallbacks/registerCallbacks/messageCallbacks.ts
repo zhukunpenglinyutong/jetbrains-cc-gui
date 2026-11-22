@@ -1192,6 +1192,14 @@ export function registerMessageCallbacks(
     }
   };
 
+  window.codexHistoryFullyLoaded = (sessionId: string) => {
+    const info = window.__codexHistoryPageInfo;
+    if (!info || info.sessionId !== sessionId) return;
+    const complete = { ...info, hasMore: false, cursor: null };
+    window.__codexHistoryPageInfo = complete;
+    window.dispatchEvent(new CustomEvent<CodexHistoryPageInfo>('codex-history-page-info', { detail: complete }));
+  };
+
   // Claude history pagination callbacks
   window.claudeHistoryPageInfo = (json: string) => {
     try {

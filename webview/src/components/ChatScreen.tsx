@@ -186,7 +186,11 @@ export const ChatScreen = ({
   const { t } = useTranslation();
   const { messages, status, loading, isThinking, streamingActive, loadingStartTime, subagentHistories } = useMessages();
   // Native stream cleanup can precede the control reply without ending its wait.
-  const waiting = loading || codexCompactionPending;
+  // codexTurnActive mirrors the native FIFO (operationQueued → operationDone), so
+  // a turn that is really running — including plan execution, which never
+  // claims `loading` — keeps its stop button even when `loading` missed the
+  // stream lifecycle.
+  const waiting = loading || codexCompactionPending || codexTurnActive;
   const { currentSessionId } = useSession();
   const sessionSuppliers = useSessionSuppliers(currentProvider,
     loading || streamingActive || codexTurnActive || codexPlanExecutionPending || codexCompactionPending);

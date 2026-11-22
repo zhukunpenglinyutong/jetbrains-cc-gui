@@ -74,11 +74,50 @@ export function getCodemossDir() {
 }
 
 /**
+ * The directory named by CLAUDE_CONFIG_DIR, or null when the variable is unset or blank.
+ * @returns {string|null}
+ */
+function configDirOverride() {
+  const override = process.env.CLAUDE_CONFIG_DIR;
+  return typeof override === 'string' && override.trim() ? resolve(override.trim()) : null;
+}
+
+/**
  * Get the .claude configuration directory path.
  * @returns {string} The ~/.claude directory path
  */
 export function getClaudeDir() {
-  return join(getRealHomeDir(), '.claude');
+  return configDirOverride() ?? join(getRealHomeDir(), '.claude');
+}
+
+/**
+ * Path of the settings.json the plugin itself writes for managed providers: settings.json inside
+ * the Claude config directory (~/.claude by default, CLAUDE_CONFIG_DIR when set). The Java side
+ * (ClaudeSettingsManager) writes the same file, because it resolves the directory the same way and
+ * hands it to this process through CLAUDE_CONFIG_DIR.
+ * @returns {string}
+ */
+export function getPluginClaudeSettingsPath() {
+  return join(getClaudeDir(), 'settings.json');
+}
+
+/**
+ * Path of the Claude CLI's global state file (.claude.json: account, MCP servers, project trust).
+ * It sits in the home directory by default and moves into CLAUDE_CONFIG_DIR when that is set.
+ * @returns {string}
+ */
+export function getClaudeJsonPath() {
+  const override = configDirOverride();
+  return override ? join(override, '.claude.json') : join(getRealHomeDir(), '.claude.json');
+}
+
+/**
+ * Settings path as shown to the user: the familiar ~/.claude/settings.json by default, the real path
+ * when CLAUDE_CONFIG_DIR points elsewhere.
+ * @returns {string}
+ */
+export function getClaudeSettingsDisplayPath() {
+  return configDirOverride() ? getPluginClaudeSettingsPath() : '~/.claude/settings.json';
 }
 
 const CLAUDE_SESSION_ID_PATTERN = /^[A-Za-z0-9._-]+$/;
@@ -333,7 +372,7 @@ export function selectWorkingDirectory(requestedCwd) {
   candidates.push(process.cwd());
   candidates.push(getRealHomeDir());
 
-  console.log('[DEBUG] selectWorkingDirectory candidates:', JSON.stringify(candidates));
+  console.error('[DEBUG] selectWorkingDirectory candidates:', JSON.stringify(candidates));
 
   for (const candidate of candidates) {
     const normalized = sanitizePath(candidate);
@@ -345,33 +384,33 @@ export function selectWorkingDirectory(requestedCwd) {
     // here and make the SDK persist sessions under
     // ~/.claude/projects/<sanitized-bridge-dir>/, hiding every project's history.
     if (isBridgeDirectory(normalized)) {
-      console.log('[DEBUG] Skipping ai-bridge directory candidate:', normalized);
+      console.error('[DEBUG] Skipping ai-bridge directory candidate:', normalized);
       continue;
     }
 
     if (isTempDirectory(normalized) && envProjectPath) {
-      console.log('[DEBUG] Skipping temp directory candidate:', normalized);
+      console.error('[DEBUG] Skipping temp directory candidate:', normalized);
       continue;
     }
 
     try {
       const stats = fs.statSync(normalized);
       if (stats.isDirectory()) {
-        console.log('[DEBUG] selectWorkingDirectory resolved:', normalized);
+        console.error('[DEBUG] selectWorkingDirectory resolved:', normalized);
         return normalized;
       }
     } catch {
       // Ignore invalid candidates
-      console.log('[DEBUG] Candidate is invalid:', normalized);
+      console.error('[DEBUG] Candidate is invalid:', normalized);
     }
   }
 
-  console.log('[DEBUG] selectWorkingDirectory fallback triggered');
+  console.error('[DEBUG] selectWorkingDirectory fallback triggered');
   // Guard: reject the bridge dir even from IDEA_PROJECT_PATH (e.g. when the user
   // is developing the bridge itself). The home dir is always a safe fallback.
   const fallback = envProjectPath || getRealHomeDir();
   if (isBridgeDirectory(fallback)) {
-    console.log('[DEBUG] Fallback env path is bridge dir, using home dir instead');
+    console.error('[DEBUG] Fallback env path is bridge dir, using home dir instead');
     return getRealHomeDir();
   }
   return fallback;

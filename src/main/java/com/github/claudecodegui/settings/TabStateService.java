@@ -210,6 +210,7 @@ public final class TabStateService implements PersistentStateComponent<TabStateS
         public String ompApprovalMode;
         public boolean unread;
         public boolean claudeUltracode;
+        public String reviewTargetId;
 
         public TabSessionState copy() {
             TabSessionState copy = new TabSessionState();
@@ -225,6 +226,7 @@ public final class TabStateService implements PersistentStateComponent<TabStateS
             copy.ompApprovalMode = this.ompApprovalMode;
             copy.unread = this.unread;
             copy.claudeUltracode = this.claudeUltracode;
+            copy.reviewTargetId = this.reviewTargetId;
             return copy;
         }
     }
