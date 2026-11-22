@@ -1,6 +1,6 @@
 package com.github.claudecodegui.settings;
 
-import com.github.claudecodegui.util.ClaudeConfigDir;
+import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.util.SafeJsonFileOps;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -84,6 +84,126 @@ public class McpServerManager {
         String homeDir = NodeDetector.resolveHomeForFileOps();
         Path claudeJsonPath = Paths.get(homeDir, ".claude.json");
 
+        // Use SafeJsonFileOps for crash-safe reads with backup fallback
+        // readJsonOrBackup will return the backup content if the primary file is unreadable,
+        // but NEVER writes to the live file - it leaves it untouched
+        JsonObject claudeJson = SafeJsonFileOps.readJsonOrBackup(claudeJsonPath, 3, 50);
+
+        if (claudeJson != null) {
+            if (claudeJson.has("mcpServers") && claudeJson.get("mcpServers").isJsonObject()) {
+                JsonObject globalMcpServers = claudeJson.getAsJsonObject("mcpServers");
+
+                // Merge global and project mcpServers (project config overrides servers with the same name)
+                JsonObject mergedServers = new JsonObject();
+                for (String key : globalMcpServers.keySet()) {
+                    mergedServers.add(key, globalMcpServers.get(key));
+                }
+
+                if (projectPath != null && claudeJson.has("projects")) {
+                    JsonObject projects = claudeJson.getAsJsonObject("projects");
+                    if (projects.has(projectPath)) {
+                        JsonObject projectConfig = projects.getAsJsonObject(projectPath);
+                        if (projectConfig.has("mcpServers")
+                                    && projectConfig.get("mcpServers").isJsonObject()) {
+                            JsonObject projectMcpServers = projectConfig.getAsJsonObject("mcpServers");
+                            for (String key : projectMcpServers.keySet()) {
+                                mergedServers.add(key, projectMcpServers.get(key));
+                            }
+                            LOG.info("[McpServerManager] Merged project-level MCP servers from: " + projectPath);
+                        }
+                    }
+                }
+
+                // Read the globally disabled servers list
+                Set<String> disabledServers = new HashSet<>();
+                if (claudeJson.has("disabledMcpServers") && claudeJson.get("disabledMcpServers").isJsonArray()) {
+                    JsonArray disabledArray = claudeJson.getAsJsonArray("disabledMcpServers");
+                    for (JsonElement elem : disabledArray) {
+                        if (elem.isJsonPrimitive()) {
+                            disabledServers.add(elem.getAsString());
+                        }
+                    }
+                }
+
+                // Read project-level disabled servers list (if project path is provided)
+                if (projectPath != null && claudeJson.has("projects")) {
+                    JsonObject projects = claudeJson.getAsJsonObject("projects");
+                    if (projects.has(projectPath)) {
+                        JsonObject projectConfig = projects.getAsJsonObject(projectPath);
+                        if (projectConfig.has("disabledMcpServers")
+                                    && projectConfig.get("disabledMcpServers").isJsonArray()) {
+                            JsonArray projectDisabledArray = projectConfig.getAsJsonArray("disabledMcpServers");
+                            for (JsonElement elem : projectDisabledArray) {
+                                if (elem.isJsonPrimitive()) {
+                                    disabledServers.add(elem.getAsString());
+                                }
+                            }
+                            LOG.info("[McpServerManager] Merged project-level disabled servers from: " + projectPath);
+                        }
+                    }
+                }
+
+                // Convert merged servers to list format
+                for (String serverId : mergedServers.keySet()) {
+                    JsonElement serverElem = mergedServers.get(serverId);
+                    if (serverElem.isJsonObject()) {
+                        JsonObject server = serverElem.getAsJsonObject();
+
+                        // Ensure id and name fields exist
+                        if (!server.has("id")) {
+                            server.addProperty("id", serverId);
+                        }
+                        if (!server.has("name")) {
+                            server.addProperty("name", serverId);
+                        }
+
+                        // Wrap type, command, args, env, etc. into the server field
+                        if (!server.has("server")) {
+                            JsonObject serverSpec = new JsonObject();
+
+                            // Copy all fields to the server spec (except special fields)
+                            Set<String> excludedFields = new HashSet<>();
+                            excludedFields.add("id");
+                            excludedFields.add("name");
+                            excludedFields.add("enabled");
+                            excludedFields.add("apps");
+                            excludedFields.add("server");
+
+                            for (String key : server.keySet()) {
+                                if (!excludedFields.contains(key)) {
+                                    serverSpec.add(key, server.get(key));
+                                }
+                            }
+
+                            server.add("server", serverSpec);
+                        }
+
+                        // Set enabled/disabled status (merging global and project levels)
+                        boolean isEnabled = !disabledServers.contains(serverId);
+                        server.addProperty("enabled", isEnabled);
+
+                        // A user-scope server is not behind the project approval gate
+                        // at all, so there is no unverified caveat to report.
+                        server.addProperty(KEY_TRUST_VERIFIED, true);
+
+                        byId.put(serverId, server);
+                    }
+                }
+
+                // 1b. Merge project-level .mcp.json servers from project root (if projectPath provided)
+                if (projectPath != null) {
+                    List<JsonObject> projectJsonServers = loadProjectMcpJson(projectPath);
+                    if (!projectJsonServers.isEmpty()) {
+                        mergeProjectMcpJsonServers(byId, projectJsonServers);
+                        LOG.info("[McpServerManager] Merged " + projectJsonServers.size()
+                                 + " MCP servers from .mcp.json at " + projectPath);
+                    }
+                }
+
+                List<JsonObject> result = new ArrayList<>(byId.values());
+                LOG.info("[McpServerManager] Loaded " + result.size()
+                        + " MCP servers from ~/.claude.json (disabled: " + disabledServers.size() + ")");
+                return result;
             }
             // ~/.claude.json exists but has no mcpServers - don't fall back to legacy config
             // The authoritative store (~/.claude.json) says there are no servers
@@ -339,6 +459,9 @@ public class McpServerManager {
             LOG.warn("[McpServerManager] Concurrent modification of ~/.claude.json, could not upsert after retries: " + e.getMessage());
             throw new IOException("Could not upsert MCP server: ~/.claude.json was modified concurrently by another process", e);
         } catch (IOException e) {
+            LOG.warn("[McpServerManager] Error updating ~/.claude.json: " + e.getMessage());
+            // Don't fall back to legacy config on write failure - fail explicitly
+            throw e;
         }
     }
 
@@ -352,6 +475,17 @@ public class McpServerManager {
         return deleteMcpServer(serverId, null, "global");
     }
 
+    /**
+     * Delete an MCP server (with project path support).
+     * If the server has source="project", it will be removed from the project's
+     * .mcp.json file instead of ~/.claude.json.
+     *
+     * @param serverId the server ID to delete
+     * @param projectPath the project root path (for .mcp.json support)
+     */
+    public boolean deleteMcpServer(String serverId, String projectPath) throws IOException {
+        return deleteMcpServer(serverId, projectPath, "global");
+    }
 
     /**
      * Delete an MCP server with explicit scope.
@@ -1506,6 +1640,11 @@ public class McpServerManager {
         }
     }
 
+    private List<JsonObject> loadProjectMcpJson(String projectPath) {
+        List<JsonObject> servers = new ArrayList<>();
+        Set<String> disabledServers = new HashSet<>();
+        if (projectPath == null || projectPath.isEmpty()) {
+            return servers;
         }
 
         File mcpJsonFile = Paths.get(projectPath, ".mcp.json").toFile();
