@@ -4,6 +4,8 @@ import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.NodeJsServiceCaller;
 import com.github.claudecodegui.handler.core.HandlerContext;
 import com.github.claudecodegui.provider.claude.ClaudeHistoryReader;
+import com.github.claudecodegui.session.ClaudeSession;
+import com.github.claudecodegui.settings.SessionSupplierStateService;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
@@ -158,10 +160,18 @@ class HistoryMetadataService {
                 String historyCwd = new ClaudeHistoryReader()
                         .resolveRepositoryHistoryCwd(sessionKey, projectPath, projectRoot, context.getSettingsService());
 
-                LOG.info("[HistoryHandler] SessionId: " + sessionKey + ", historyCwd: " + historyCwd);
+                ClaudeSession openSession = context.getSession();
+                boolean openClaudeSession = openSession != null && "claude".equals(openSession.getProvider());
+                String supplierId = resolveSupplierId(sessionKey,
+                        openClaudeSession ? openSession.getSessionId() : null,
+                        openClaudeSession ? openSession.getState().getSupplierId("claude") : null,
+                        SessionSupplierStateService.getInstance());
+
+                LOG.info("[HistoryHandler] SessionId: " + sessionKey + ", historyCwd: " + historyCwd
+                        + ", supplierId: " + supplierId);
 
                 context.getClaudeSDKBridge()
-                        .regenerateSessionTitle(sessionKey, historyCwd)
+                        .regenerateSessionTitle(sessionKey, historyCwd, supplierId)
                         .thenAccept(result -> {
                             boolean success = result.has("success") && result.get("success").getAsBoolean();
                             String title = result.has("title") && !result.get("title").isJsonNull()
@@ -184,6 +194,21 @@ class HistoryMetadataService {
                         e.getMessage() != null ? e.getMessage() : "未知错误");
             }
         });
+    }
+
+    /**
+     * The supplier a Claude conversation is bound to, so its title is generated
+     * through the same account as the conversation. The open tab's selection
+     * wins because the saved binding is only written when the tab state is
+     * persisted; other sessions use the saved binding. Null keeps the daemon on
+     * the global profile, as for sessions that predate supplier selection.
+     */
+    static String resolveSupplierId(String sessionId, String openSessionId, String openSupplierId,
+                                    SessionSupplierStateService bindings) {
+        if (openSupplierId != null && sessionId.equals(openSessionId)) {
+            return openSupplierId;
+        }
+        return bindings == null ? null : bindings.getSupplier("claude", sessionId);
     }
 
     /**

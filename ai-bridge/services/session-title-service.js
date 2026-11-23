@@ -9,6 +9,7 @@ import { existsSync } from 'fs';
 import { createRequire } from 'node:module';
 import { join } from 'path';
 import { setupApiKey, loadClaudeSettings, getCliUserAgent } from '../config/api-config.js';
+import { buildSessionClaudeConfig } from '../config/session-supplier.js';
 import { ensureAnthropicSdk, ensureBedrockSdk } from './claude/message-utils.js';
 import { extractTextContent, isInterruptionMarker, forEachJsonlLineSync } from './claude/session-service.js';
 import { resolveModelFromSettings } from '../utils/model-utils.js';
@@ -616,18 +617,21 @@ export function buildRegenerationInput(prompts) {
  *
  * @param {string} sessionId - Session ID
  * @param {string|null} cwd - Working directory used to locate the session file
+ * @param {string|null} [supplierId] - Supplier the conversation is bound to, or
+ *   null for the global profile
  * @param {object} [dependencies] - Test seams; each defaults to the real path
- * @returns {Promise<{success: boolean, title?: string, code?: string}>}
+ * @returns {Promise<{success: boolean, title?: string, code?: string, error?: string}>}
  *   code is a stable machine-readable failure reason (custom_title,
- *   session_not_found, empty_session, disabled, generation_failed,
- *   persist_failed) the frontend maps to a friendly toast.
+ *   session_not_found, empty_session, disabled, supplier_unavailable,
+ *   generation_failed, persist_failed) the frontend maps to a friendly toast.
  */
-export async function regenerateSessionTitle(sessionId, cwd, dependencies = {}) {
+export async function regenerateSessionTitle(sessionId, cwd, supplierId = null, dependencies = {}) {
   const {
     isEnabled = isTitleGenerationEnabled,
     resolveSessionFile = () => getSessionFilePath(sessionId, cwd),
     readPrompts = (sessionFile) => collectRegenerationPrompts(sessionFile),
-    generateTitle = (input) => callHaikuApi(input, sessionId),
+    resolveSupplier = (id) => buildSessionClaudeConfig(id),
+    generateTitle = (input, supplier) => callHaikuApi(input, sessionId, supplier),
     saveTitle = (title) => saveAiTitle(sessionId, title, cwd),
     hasCustomTitle = () => loadSessionTitlesService().getTitle(sessionId) != null,
   } = dependencies;
@@ -658,6 +662,17 @@ export async function regenerateSessionTitle(sessionId, cwd, dependencies = {}) 
     return { success: false, code: 'disabled' };
   }
 
+  // Title the conversation through the supplier it is bound to, as the first-turn
+  // title does. The global profile can be another account or CLI login, which
+  // would send this conversation's prompts elsewhere or always fail.
+  let supplier;
+  try {
+    supplier = resolveSupplier(supplierId);
+  } catch (e) {
+    logTitleEvent('warn', 'Regenerate skipped: ' + e.message);
+    return { success: false, code: 'supplier_unavailable', error: e.message };
+  }
+
   let input;
   try {
     input = buildRegenerationInput(readPrompts(sessionFile));
@@ -673,7 +688,7 @@ export async function regenerateSessionTitle(sessionId, cwd, dependencies = {}) 
   try {
     // The input is already bounded by the per-prompt budgets in
     // buildRegenerationInput (they sum to MAX_CONVERSATION_TEXT).
-    const title = await generateTitle(input);
+    const title = await generateTitle(input, supplier);
     if (!title) {
       // callHaikuApi returns null for permanent skips (cli_login, missing key,
       // unparseable response) — nothing transient to retry at this layer.
