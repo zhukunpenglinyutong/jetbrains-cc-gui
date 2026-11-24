@@ -1,7 +1,8 @@
 import { spawn } from 'child_process';
 import { EventEmitter } from 'events';
+import { tmpdir } from 'os';
 import { StringDecoder } from 'string_decoder';
-import { resolveCliSpawn, stripOuterQuotes } from './cli-path.js';
+import { quoteCmdArg, resolveCliSpawn, stripOuterQuotes } from './cli-path.js';
 import { killChildTree } from './cli-spawn.js';
 
 /**
@@ -34,6 +35,57 @@ export function isWindowsBatchLauncher(
   return forceWindows
     && typeof executable === 'string'
     && /\.(cmd|bat)$/i.test(stripOuterQuotes(executable.trim()));
+}
+
+/**
+ * Two things `cmd.exe /c` does to a command line that `resolveCliSpawn` leaves
+ * as they are, both of which would change what the CLI receives:
+ * - `%` is doubled by `quoteCmdArg`, and a command line (unlike a batch file)
+ *   does not turn `%%` back into `%`, so an argument such as an MCP URL with
+ *   `%3D` reached the CLI as `%%3D`. An argument that contains `%` is handed
+ *   over through an environment variable instead; cmd expands it once and does
+ *   not look at the value again.
+ * - A UNC working directory (`\\server\share`, `\\wsl.localhost\...`) is not
+ *   supported by cmd, which prints a warning and starts the launcher in the
+ *   Windows directory. `pushd` maps the share to a temporary drive (released
+ *   when cmd exits) and the process itself starts in a local directory.
+ *
+ * Returns the invocation unchanged when it does not go through cmd.exe.
+ *
+ * @param {{ file: string, args: string[], options: object }} invocation - from resolveCliSpawn
+ * @param {{ args: string[], cwd?: string }} request - the SDK's original arguments and cwd
+ */
+export function adaptCmdInvocation(invocation, { args = [], cwd } = {}) {
+  const viaCmd = invocation.options?.windowsVerbatimArguments === true
+    && invocation.args.length === 4
+    && invocation.args[0] === '/d'
+    && invocation.args[1] === '/s'
+    && invocation.args[2] === '/c';
+  if (!viaCmd) return invocation;
+
+  let line = invocation.args[3];
+  let env = invocation.options.env;
+  const withPercent = [...new Set(args.filter((arg) => typeof arg === 'string' && arg.includes('%')))];
+  if (withPercent.length > 0) {
+    env = { ...env };
+    withPercent.forEach((arg, index) => {
+      const name = `CLAUDE_GUI_ARG_${index}`;
+      env[name] = arg.replace(/"/g, '""');
+      line = line.split(quoteCmdArg(arg)).join(`"%${name}%"`);
+    });
+  }
+
+  let spawnCwd = invocation.options.cwd;
+  if (typeof cwd === 'string' && cwd.startsWith('\\\\')) {
+    line = `"pushd ${quoteCmdArg(cwd)} && ${line.slice(1)}`;
+    spawnCwd = tmpdir();
+  }
+
+  return {
+    ...invocation,
+    args: ['/d', '/s', '/c', line],
+    options: { ...invocation.options, env, cwd: spawnCwd },
+  };
 }
 
 /**
@@ -71,11 +123,14 @@ export function createBatchLauncherSpawner({
     };
 
   return ({ command, args, cwd, env, signal }) => {
-    const invocation = resolveCliSpawn(
-      command,
-      args,
-      { cwd, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true },
-      forceWindows,
+    const invocation = adaptCmdInvocation(
+      resolveCliSpawn(
+        command,
+        args,
+        { cwd, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true },
+        forceWindows,
+      ),
+      { args, cwd },
     );
     const child = spawnFn(invocation.file, invocation.args, invocation.options);
     const events = new EventEmitter();
@@ -150,13 +205,14 @@ export function createBatchLauncherSpawner({
  * @param {object} [options]
  * @param {(text: string) => void} [options.stderr] - the query's `stderr` option, if any
  * @param {boolean} [options.forceWindows] - test hook
+ * @param {typeof spawn} [options.spawnFn] - test hook
  */
-export function claudeCliSdkOptions(override, { stderr, forceWindows } = {}) {
+export function claudeCliSdkOptions(override, { stderr, forceWindows, spawnFn } = {}) {
   if (!override) return {};
   return {
     pathToClaudeCodeExecutable: override,
     ...(isWindowsBatchLauncher(override, forceWindows)
-      ? { spawnClaudeCodeProcess: createBatchLauncherSpawner({ stderr, forceWindows }) }
+      ? { spawnClaudeCodeProcess: createBatchLauncherSpawner({ stderr, forceWindows, spawnFn }) }
       : {}),
   };
 }

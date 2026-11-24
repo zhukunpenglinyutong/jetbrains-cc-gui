@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
@@ -9,7 +9,9 @@ import {
   getClaudeCliPathOverride,
   claudeCliSdkOptions,
   createBatchLauncherSpawner,
+  adaptCmdInvocation,
 } from './claude-cli-path.js';
+import { resolveCliSpawn } from './cli-path.js';
 
 /**
  * Runs `fn` with CLAUDE_CODE_PATH set to `value` (or unset when `value === undefined`),
@@ -217,7 +219,107 @@ test('kill() takes the process tree, not just cmd.exe', () => {
   assert.equal(spawned.killed, true);
 });
 
+function cmdInvocation(args, cwd) {
+  return adaptCmdInvocation(
+    resolveCliSpawn('C:\\tools\\work.cmd', args, { cwd, env: { PATH: 'C:\\Windows' } }, true),
+    { args, cwd },
+  );
+}
+
+test('an argument with a percent sign is passed through the environment, not the command line', () => {
+  const invocation = cmdInvocation(['--mcp', 'http://x/a%3Db', 'plain']);
+  const line = invocation.args[3];
+  assert.equal(invocation.options.env.CLAUDE_GUI_ARG_0, 'http://x/a%3Db');
+  assert.ok(line.includes('"%CLAUDE_GUI_ARG_0%"'));
+  assert.ok(line.includes('"plain"'));
+  assert.ok(!line.includes('%3D'));
+});
+
+test('a double quote inside a percent argument is doubled for cmd', () => {
+  const invocation = cmdInvocation(['{"u":"100%"}']);
+  assert.equal(invocation.options.env.CLAUDE_GUI_ARG_0, '{""u"":""100%""}');
+});
+
+test('arguments without a percent sign leave the command line as it was', () => {
+  const args = ['--settings', '{"env":{"A":"1"}}'];
+  const before = resolveCliSpawn('C:\\tools\\work.cmd', args, { env: { PATH: 'C:\\Windows' } }, true);
+  const after = adaptCmdInvocation(before, { args });
+  assert.deepEqual(after.args, before.args);
+  assert.equal(after.options.cwd, before.options.cwd);
+  assert.equal('CLAUDE_GUI_ARG_0' in after.options.env, false);
+});
+
+test('a UNC working directory is entered with pushd and the process starts in a local directory', () => {
+  const invocation = cmdInvocation(['--resume=abc'], '\\\\wsl.localhost\\Ubuntu\\home\\me\\project');
+  assert.equal(invocation.args[3].startsWith('"pushd "\\\\wsl.localhost\\Ubuntu\\home\\me\\project" && "C:\\tools\\work.cmd"'), true);
+  assert.equal(invocation.args[3].endsWith('"--resume=abc""'), true);
+  assert.equal(invocation.options.cwd, tmpdir());
+});
+
+test('a local working directory stays the process directory', () => {
+  const invocation = cmdInvocation(['--resume=abc'], 'C:\\project');
+  assert.equal(invocation.options.cwd, 'C:\\project');
+  assert.equal(invocation.args[3].includes('pushd'), false);
+});
+
+test('an invocation that does not go through cmd.exe is returned as it is', () => {
+  const direct = resolveCliSpawn('C:\\tools\\claude.exe', ['a%b'], { cwd: '\\\\srv\\share' }, true);
+  assert.equal(adaptCmdInvocation(direct, { args: ['a%b'], cwd: '\\\\srv\\share' }), direct);
+});
+
 const onWindows = process.platform === 'win32';
+
+test('a real .cmd launcher receives percent signs and quotes exactly as given', { skip: !onWindows }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'claude launcher percent '));
+  try {
+    writeFileSync(join(dir, 'echo.js'), "process.stdout.write(JSON.stringify(process.argv.slice(2)));\n");
+    const launcher = join(dir, 'work.cmd');
+    writeFileSync(launcher, `@echo off\r\n"${process.execPath}" "%~dp0echo.js" %*\r\n`);
+    const args = ['--mcp', 'http://x/a%3Db', '100%', '%PATH%', 'q"uote %x', '{"u":"a%40b"}'];
+
+    const spawned = createBatchLauncherSpawner()({ command: launcher, args, cwd: dir, env: process.env });
+    let stdout = '';
+    spawned.stdout.on('data', (chunk) => { stdout += chunk; });
+    const exit = new Promise((resolve) => spawned.on('exit', resolve));
+    spawned.stdin.end();
+    await exit;
+    assert.deepEqual(JSON.parse(stdout), args);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+function adminShareOf(dir) {
+  return `\\\\localhost\\${dir.slice(0, 1)}$\\${dir.slice(3)}`;
+}
+
+test('a real .cmd launcher started with a UNC working directory runs in that directory', { skip: !onWindows }, async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'claude launcher unc '));
+  try {
+    const unc = adminShareOf(dir);
+    if (!existsSync(unc)) {
+      t.skip('no administrative share for the temp directory');
+      return;
+    }
+    writeFileSync(join(dir, 'where.js'), "process.stdout.write(require('fs').realpathSync.native(process.cwd()));\n");
+    const launcher = join(dir, 'work.cmd');
+    writeFileSync(launcher, `@echo off\r\n"${process.execPath}" "%~dp0where.js" %*\r\n`);
+
+    const stderrText = [];
+    const spawned = createBatchLauncherSpawner({ stderr: (text) => stderrText.push(text) })({
+      command: launcher, args: [], cwd: unc, env: process.env,
+    });
+    let stdout = '';
+    spawned.stdout.on('data', (chunk) => { stdout += chunk; });
+    const exit = new Promise((resolve) => spawned.on('exit', resolve));
+    spawned.stdin.end();
+    await exit;
+    assert.equal(stdout.toLowerCase(), unc.toLowerCase());
+    assert.equal(stderrText.join(''), '');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 test('a real .cmd launcher runs with the SDK arguments intact', { skip: !onWindows }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'claude launcher (test) '));

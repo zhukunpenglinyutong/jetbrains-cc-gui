@@ -6,7 +6,9 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { __testing, getContextUsagePersistent } from './persistent-query-service.js';
-import { createTurnSink } from './runtime-lifecycle.js';
+import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
+import { createTurnSink, buildRuntimeQueryOptions } from './runtime-lifecycle.js';
 
 test('context usage preserves the active supplier runtime after its configuration disappears', async () => {
   let modelChanges = 0;
@@ -550,6 +552,39 @@ test('notifyExpiredResume recognizes CLI stderr on process exit and emits once p
   } finally {
     capture.restore();
   }
+});
+
+test('a .cmd launcher failing on a pruned session still triggers the expired-resume recovery', async () => {
+  const capture = captureDaemonEvents();
+  const child = new EventEmitter();
+  Object.assign(child, { stdin: new PassThrough(), stdout: new PassThrough(), stderr: new PassThrough(), exitCode: null, signalCode: null });
+  const runtime = { stderrLines: [] };
+  const options = buildRuntimeQueryOptions(
+    runtime,
+    { pathToClaudeCodeExecutable: 'C:\\tools\\work.cmd' },
+    { forceWindows: true, spawnFn: () => child },
+  );
+  try {
+    options.spawnClaudeCodeProcess({ command: 'C:\\tools\\work.cmd', args: ['--resume=pruned-session'], env: {} });
+    child.stderr.write('No conversation found with session ID: pruned-session\n');
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(runtime.stderrLines, ['No conversation found with session ID: pruned-session']);
+    const error = Object.assign(new Error('Claude Code process exited with code 1'), { runtimeTerminated: true });
+    assert.equal(__testing.notifyExpiredResume({ requestedSessionId: 'pruned-session', runtimeSessionEpoch: 'e' }, error, runtime), true);
+    assert.equal(capture.list.length, 1);
+    assert.equal(capture.list[0].event, 'session_resume_expired');
+  } finally {
+    capture.restore();
+  }
+});
+
+test('runtime options keep stderr collection for the SDK own spawn too', () => {
+  const runtime = { stderrLines: [] };
+  const options = buildRuntimeQueryOptions(runtime, { pathToClaudeCodeExecutable: '/opt/claude' });
+  options.stderr('boom\n');
+  assert.deepEqual(runtime.stderrLines, ['boom']);
+  assert.equal(options.pathToClaudeCodeExecutable, '/opt/claude');
+  assert.equal('spawnClaudeCodeProcess' in options, false);
 });
 
 test('notifyExpiredResume ignores old stderr when the current failure is unrelated', () => {
