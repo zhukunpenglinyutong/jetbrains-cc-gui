@@ -196,7 +196,7 @@ function buildQueryOptions(workingDirectory, sdkModelName, permissionMode, maxTh
     // true when using permissionMode: 'bypassPermissions'"). Without it a future SDK
     // version could silently drop bypass and change permission behavior.
     ...(permissionMode === 'bypassPermissions' && { allowDangerouslySkipPermissions: true }),
-    ...(mcpServers && { mcpServers }),
+    ...(mcpServers && { mcpServers, strictMcpConfig: true }),
     ...(claudeCliOverride && { pathToClaudeCodeExecutable: claudeCliOverride }),
     systemPrompt: {
       type: 'preset',
@@ -262,8 +262,12 @@ async function buildRequestContext(params, withAttachments, overrides = {}) {
   const maxThinkingTokens = resolveThinkingTokens(params, settings);
   const systemPromptAppend = buildSystemPromptAppend(params);
 
+// envFile is loaded once in daemon.js before processRequest dispatches to
+  // sendMessagePersistent/preconnectPersistent, so process.env is already
+  // populated here. No per-message reload needed in daemon mode.
   const projectTrusted = projectTrustFor(params.projectTrusted, params.cwd, workingDirectory);
-  const mcpServers = await loadMcpServersConfigAsRecord(workingDirectory, projectTrusted);
+  // Allow test overrides to provide custom mcpServers for fingerprint testing
+  const mcpServers = overrides.mcpServers ?? await loadMcpServersConfigAsRecord(workingDirectory, projectTrusted);
 
   const options = buildQueryOptions(
     workingDirectory, sdkModelName, permissionMode,

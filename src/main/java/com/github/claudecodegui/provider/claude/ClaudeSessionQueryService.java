@@ -255,14 +255,24 @@ class ClaudeSessionQueryService {
 
         ProcessBuilder pb = new ProcessBuilder(command);
         pb.directory(workDir);
-        pb.redirectErrorStream(true);
+        // Do NOT merge stderr into stdout (pb.redirectErrorStream(true)).
+        // Large stdout payloads (>64KB, the OS pipe buffer) are written
+        // across multiple uv_write chunks. If stderr is merged into the
+        // same pipe, console.error/console.warn calls can interleave at
+        // the byte level, inserting raw newlines mid-JSON and causing
+        // Gson MalformedJsonException: Unterminated string.
         envConfigurator.updateProcessEnvironment(pb, node);
 
         // L5 fix: register with ProcessManager so cleanupAllProcesses sees this child.
+        // Use NodeProcessRunner which handles stdin/stdout/stderr properly with timeout
         NodeProcessRunner.Result result = NodeProcessRunner.run(
                 prepareProcessBuilder(pb), processManager, "claude-session-query", null, processTimeoutSeconds, cancellation);
 
         String outputStr = result.output().trim();
+        log.debug("[" + logPrefix + "] Captured stdout length: " + outputStr.length());
+        if (outputStr.isEmpty()) {
+            log.warn("[" + logPrefix + "] STDOUT IS EMPTY! Exit code: " + result.exitCode());
+        }
         log.debug("[" + logPrefix + "] Raw output length: " + outputStr.length());
         if (log.isDebugEnabled()) {
             log.debug("[" + logPrefix + "] Raw output (first 300 chars): "
@@ -294,7 +304,7 @@ class ClaudeSessionQueryService {
         log.debug("[" + logPrefix + "] JSON parsed successfully, success="
                 + (jsonResult.has("success") ? jsonResult.get("success").getAsBoolean() : "null"));
         return jsonResult;
-    }
+        }
 
     ProcessBuilder prepareProcessBuilder(ProcessBuilder configured) {
         return configured;

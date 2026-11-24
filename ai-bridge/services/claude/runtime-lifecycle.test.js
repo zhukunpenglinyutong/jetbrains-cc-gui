@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { buildRuntimeSignature, applyDynamicControls, applyPermissionModeToRuntime, createTurnSink } from './runtime-lifecycle.js';
+import { buildRuntimeSignature, applyDynamicControls, applyPermissionModeToRuntime, createTurnSink, fingerprintEnv, fingerprintMcpServers, fingerprintSettings } from './runtime-lifecycle.js';
 import { findRuntimeForRequest, rememberRuntime, resetRegistryState } from './runtime-registry.js';
 import { createPreToolUseHook } from './permission-mode.js';
 
@@ -711,6 +711,340 @@ test('buildRuntimeSignature is stable across native modes (default/plan/acceptEd
 test('buildRuntimeSignature treats a missing permissionMode as non-bypass', () => {
   const sig = buildRuntimeSignature({ cwd: '/w', model: 'sonnet' }, '', true, 'ep');
   assert.match(sig, /"bypassPermissions":false/);
+});
+
+// ============================================================================
+// buildRuntimeSignature — env/mcp/settings fingerprint regression tests (P0.4)
+// ============================================================================
+
+test('fingerprintEnv captures relevant environment variables', () => {
+  const env = {
+    ANTHROPIC_API_KEY: 'sk-test',
+    ANTHROPIC_BASE_URL: 'https://api.example.com',
+    CLAUDE_CODE_PATH: '/usr/local/bin/claude',
+    GROK_CLI_PATH: '/usr/local/bin/grok',
+    MAX_THINKING_TOKENS: '8000',
+    PATH: '/usr/bin:/bin',
+    NODE_OPTIONS: '--max-old-space-size=4096',
+    HOME: '/home/user',
+    USER: 'user',
+    SHELL: '/bin/bash',
+    IRRELEVANT_VAR: 'should-not-appear'
+  };
+
+  const fp = fingerprintEnv(env);
+  assert.equal(typeof fp, 'string');
+  assert.equal(fp.length, 16); // SHA256 truncated to 16 chars
+
+  // Same env produces same fingerprint
+  const fp2 = fingerprintEnv(env);
+  assert.equal(fp, fp2);
+
+  // Different API key produces different fingerprint
+  const env2 = { ...env, ANTHROPIC_API_KEY: 'sk-different' };
+  const fp3 = fingerprintEnv(env2);
+  assert.notEqual(fp, fp3);
+
+  // Empty env returns 'empty'
+  assert.equal(fingerprintEnv(null), 'empty');
+  assert.equal(fingerprintEnv({}), 'empty');
+});
+
+test('fingerprintEnv is stable regardless of key order', () => {
+  const env1 = { ANTHROPIC_API_KEY: 'a', CLAUDE_CODE_PATH: 'b', GROK_CLI_PATH: 'c' };
+  const env2 = { GROK_CLI_PATH: 'c', ANTHROPIC_API_KEY: 'a', CLAUDE_CODE_PATH: 'b' };
+
+  assert.equal(fingerprintEnv(env1), fingerprintEnv(env2));
+});
+
+test('fingerprintMcpServers captures server configuration', () => {
+  const servers = {
+    'server-a': { command: 'cmd1', args: ['--arg'], env: { VAR: 'val' }, url: '', cwd: '/tmp', headers: {} },
+    'server-b': { command: 'cmd2', args: [], env: {}, url: 'http://localhost', cwd: '', headers: { 'X-Auth': 'token' } }
+  };
+
+  const fp = fingerprintMcpServers(servers);
+  assert.equal(typeof fp, 'string');
+  assert.equal(fp.length, 16);
+
+  // Same servers produce same fingerprint
+  assert.equal(fingerprintMcpServers(servers), fp);
+
+  // Adding a server changes fingerprint
+  const servers2 = { ...servers, 'server-c': { command: 'cmd3' } };
+  assert.notEqual(fingerprintMcpServers(servers2), fp);
+
+  // Changing server config changes fingerprint
+  const servers3 = { 'server-a': { command: 'different-cmd', args: ['--arg'], env: { VAR: 'val' }, url: '', cwd: '/tmp', headers: {} } };
+  assert.notEqual(fingerprintMcpServers(servers3), fp);
+
+  // Empty/none returns 'none'
+  assert.equal(fingerprintMcpServers(null), 'none');
+  assert.equal(fingerprintMcpServers({}), 'none');
+});
+
+test('fingerprintMcpServers is stable regardless of key order', () => {
+  const servers1 = { 'z-server': { command: 'cmd' }, 'a-server': { command: 'cmd' } };
+  const servers2 = { 'a-server': { command: 'cmd' }, 'z-server': { command: 'cmd' } };
+
+  assert.equal(fingerprintMcpServers(servers1), fingerprintMcpServers(servers2));
+});
+
+test('fingerprintSettings captures relevant settings', () => {
+  const settings = {
+    env: { CUSTOM_VAR: 'value' },
+    permissions: { allow: ['Read', 'Write'] },
+    mcpServers: { 'test': { command: 'test' } },
+    model: 'sonnet',
+    cleanupPeriodDays: 30,
+    includePartialMessages: true,
+    maxThinkingTokens: 8000,
+    effort: 'high',
+    irrelevantSetting: 'ignored'
+  };
+
+  const fp = fingerprintSettings(settings);
+  assert.equal(typeof fp, 'string');
+  assert.equal(fp.length, 16);
+
+  // Same settings produce same fingerprint
+  assert.equal(fingerprintSettings(settings), fp);
+
+  // Changing model changes fingerprint
+  const settings2 = { ...settings, model: 'opus' };
+  assert.notEqual(fingerprintSettings(settings2), fp);
+
+  // Changing maxThinkingTokens changes fingerprint
+  const settings3 = { ...settings, maxThinkingTokens: 4000 };
+  assert.notEqual(fingerprintSettings(settings3), fp);
+
+  // Empty/none returns 'none'
+  assert.equal(fingerprintSettings(null), 'none');
+  assert.equal(fingerprintSettings({}), 'none');
+});
+
+test('fingerprintSettings is stable regardless of key order', () => {
+  const settings1 = { model: 'sonnet', env: {}, permissions: {}, maxThinkingTokens: 8000 };
+  const settings2 = { maxThinkingTokens: 8000, permissions: {}, env: {}, model: 'sonnet' };
+
+  assert.equal(fingerprintSettings(settings1), fingerprintSettings(settings2));
+});
+
+test('buildRuntimeSignature includes env/mcp/settings fingerprints and changes when they change', () => {
+  const baseOptions = {
+    cwd: '/project',
+    model: 'sonnet',
+    permissionMode: 'default',
+    effort: 'medium',
+    maxThinkingTokens: 8000,
+    additionalDirectories: ['/extra'],
+    env: { ANTHROPIC_API_KEY: 'sk-1' },
+    mcpServers: { 'test': { command: 'test' } },
+    settings: { model: 'sonnet', maxThinkingTokens: 8000 }
+  };
+
+  const sig1 = buildRuntimeSignature(baseOptions, '', true, 'epoch-1', 'sonnet');
+  const parsed = JSON.parse(sig1);
+
+  // Verify all fingerprints are present
+  assert.ok(parsed.envFingerprint, 'envFingerprint missing');
+  assert.ok(parsed.mcpFingerprint, 'mcpFingerprint missing');
+  assert.ok(parsed.settingsFingerprint, 'settingsFingerprint missing');
+  assert.notEqual(parsed.envFingerprint, 'empty');
+  assert.notEqual(parsed.mcpFingerprint, 'none');
+  assert.notEqual(parsed.settingsFingerprint, 'none');
+
+  // Verify SDK options are included
+  assert.ok('maxThinkingTokens' in parsed, 'maxThinkingTokens missing from signature');
+  assert.ok('reasoningEffort' in parsed, 'reasoningEffort missing from signature');
+  assert.equal(parsed.maxThinkingTokens, 8000);
+  assert.equal(parsed.reasoningEffort, 'medium');
+
+  // Changing env changes signature
+  const sig2 = buildRuntimeSignature({ ...baseOptions, env: { ANTHROPIC_API_KEY: 'sk-2' } }, '', true, 'epoch-1', 'sonnet');
+  assert.notEqual(sig1, sig2);
+
+  // Changing mcpServers changes signature
+  const sig3 = buildRuntimeSignature({ ...baseOptions, mcpServers: { 'other': { command: 'other' } } }, '', true, 'epoch-1', 'sonnet');
+  assert.notEqual(sig1, sig3);
+
+  // Changing settings changes signature
+  const sig4 = buildRuntimeSignature({ ...baseOptions, settings: { model: 'sonnet', maxThinkingTokens: 4000 } }, '', true, 'epoch-1', 'sonnet');
+  assert.notEqual(sig1, sig4);
+
+  // Changing maxThinkingTokens (SDK option) changes signature
+  const sig5 = buildRuntimeSignature({ ...baseOptions, maxThinkingTokens: 4000 }, '', true, 'epoch-1', 'sonnet');
+  assert.notEqual(sig1, sig5);
+
+  // Stable for identical inputs
+  const sig6 = buildRuntimeSignature(baseOptions, '', true, 'epoch-1', 'sonnet');
+  assert.equal(sig1, sig6);
+});
+
+test('buildRuntimeSignature differs when env file changes (ANTHROPIC_API_KEY rotation)', () => {
+  // This is the core P0.4 scenario: .env file changes should invalidate runtime
+  const opts1 = {
+    cwd: '/project',
+    model: 'sonnet',
+    env: { ANTHROPIC_API_KEY: 'sk-old-key', ANTHROPIC_BASE_URL: 'https://api.anthropic.com' },
+    mcpServers: {},
+    settings: {}
+  };
+
+  const opts2 = {
+    cwd: '/project',
+    model: 'sonnet',
+    env: { ANTHROPIC_API_KEY: 'sk-new-key', ANTHROPIC_BASE_URL: 'https://api.anthropic.com' },
+    mcpServers: {},
+    settings: {}
+  };
+
+  const sig1 = buildRuntimeSignature(opts1, '', true, 'epoch-1', 'sonnet');
+  const sig2 = buildRuntimeSignature(opts2, '', true, 'epoch-1', 'sonnet');
+
+  assert.notEqual(sig1, sig2, 'API key rotation must change runtime signature');
+
+  const p1 = JSON.parse(sig1);
+  const p2 = JSON.parse(sig2);
+  assert.notEqual(p1.envFingerprint, p2.envFingerprint, 'envFingerprint must differ');
+});
+
+test('buildRuntimeSignature differs when MCP server config changes (.mcp.json update)', () => {
+  // Adding/removing/modifying MCP servers should invalidate runtime
+  const opts1 = {
+    cwd: '/project',
+    model: 'sonnet',
+    env: {},
+    mcpServers: { 'github': { command: 'gh', args: ['mcp'] } },
+    settings: {}
+  };
+
+  const opts2 = {
+    cwd: '/project',
+    model: 'sonnet',
+    env: {},
+    mcpServers: { 'github': { command: 'gh', args: ['mcp'] }, 'notion': { command: 'notion-mcp' } },
+    settings: {}
+  };
+
+  const sig1 = buildRuntimeSignature(opts1, '', true, 'epoch-1', 'sonnet');
+  const sig2 = buildRuntimeSignature(opts2, '', true, 'epoch-1', 'sonnet');
+
+  assert.notEqual(sig1, sig2, 'MCP server change must change runtime signature');
+
+  const p1 = JSON.parse(sig1);
+  const p2 = JSON.parse(sig2);
+  assert.notEqual(p1.mcpFingerprint, p2.mcpFingerprint, 'mcpFingerprint must differ');
+});
+
+test('buildRuntimeSignature differs when settings change (model, maxThinkingTokens)', () => {
+  // Settings that affect launch should change signature
+  const opts1 = {
+    cwd: '/project',
+    model: 'sonnet',
+    env: {},
+    mcpServers: {},
+    settings: { model: 'sonnet', maxThinkingTokens: 8000 }
+  };
+
+  const opts2 = {
+    cwd: '/project',
+    model: 'sonnet',
+    env: {},
+    mcpServers: {},
+    settings: { model: 'sonnet', maxThinkingTokens: 4000 }
+  };
+
+  const sig1 = buildRuntimeSignature(opts1, '', true, 'epoch-1', 'sonnet');
+  const sig2 = buildRuntimeSignature(opts2, '', true, 'epoch-1', 'sonnet');
+
+  assert.notEqual(sig1, sig2, 'maxThinkingTokens change must change runtime signature');
+
+  const p1 = JSON.parse(sig1);
+  const p2 = JSON.parse(sig2);
+  assert.notEqual(p1.settingsFingerprint, p2.settingsFingerprint, 'settingsFingerprint must differ');
+});
+
+test('acquireRuntime rebuilds runtime when env fingerprint changes', () => {
+  // This scenario simulates .env file rotation: ANTHROPIC_API_KEY changes
+  // Run in child process with credentials to avoid setupApiKey throwing
+  const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-env-fp-'));
+  try {
+    fs.mkdirSync(path.join(tempHome, '.codemoss'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tempHome, '.codemoss', 'config.json'),
+      JSON.stringify({ claude: { current: '__cli_login__', providers: {} } }),
+      'utf8'
+    );
+
+    const childPath = fileURLToPath(
+      new URL('./runtime-lifecycle.env-fp.child.mjs', import.meta.url)
+    );
+    const output = execFileSync(process.execPath, [childPath], {
+      cwd: process.cwd(),
+      env: { ...process.env, HOME: tempHome, USERPROFILE: tempHome },
+      encoding: 'utf8',
+      timeout: 30000,
+    });
+
+    assert.match(output, /SCENARIO_OK/, `child scenario did not pass:\n${output}`);
+  } finally {
+    fs.rmSync(tempHome, { recursive: true, force: true });
+  }
+});
+
+test('acquireRuntime rebuilds runtime when MCP server config changes', () => {
+  // This scenario simulates .mcp.json update: adding/removing MCP servers
+  const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-mcp-fp-'));
+  try {
+    fs.mkdirSync(path.join(tempHome, '.codemoss'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tempHome, '.codemoss', 'config.json'),
+      JSON.stringify({ claude: { current: '__cli_login__', providers: {} } }),
+      'utf8'
+    );
+
+    const childPath = fileURLToPath(
+      new URL('./runtime-lifecycle.mcp-fp.child.mjs', import.meta.url)
+    );
+    const output = execFileSync(process.execPath, [childPath], {
+      cwd: process.cwd(),
+      env: { ...process.env, HOME: tempHome, USERPROFILE: tempHome },
+      encoding: 'utf8',
+      timeout: 30000,
+    });
+
+    assert.match(output, /SCENARIO_OK/, `child scenario did not pass:\n${output}`);
+  } finally {
+    fs.rmSync(tempHome, { recursive: true, force: true });
+  }
+});
+
+test('acquireRuntime rebuilds runtime when settings change (maxThinkingTokens)', () => {
+  // This scenario simulates settings change: maxThinkingTokens modification
+  const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-settings-fp-'));
+  try {
+    fs.mkdirSync(path.join(tempHome, '.codemoss'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tempHome, '.codemoss', 'config.json'),
+      JSON.stringify({ claude: { current: '__cli_login__', providers: {} } }),
+      'utf8'
+    );
+
+    const childPath = fileURLToPath(
+      new URL('./runtime-lifecycle.settings-fp.child.mjs', import.meta.url)
+    );
+    const output = execFileSync(process.execPath, [childPath], {
+      cwd: process.cwd(),
+      env: { ...process.env, HOME: tempHome, USERPROFILE: tempHome },
+      encoding: 'utf8',
+      timeout: 30000,
+    });
+
+    assert.match(output, /SCENARIO_OK/, `child scenario did not pass:\n${output}`);
+  } finally {
+    fs.rmSync(tempHome, { recursive: true, force: true });
+  }
 });
 
 test('applyPermissionModeToRuntime serializes transitions and preserves request order', async () => {

@@ -10,6 +10,7 @@ import {
   buildCliEnv,
   buildWebviewControlledSettingsOverride,
 } from '../../config/api-config.js';
+import { loadEnvFile, applyEnvFileVars } from '../../utils/envLoader.js';
 import { selectWorkingDirectory } from '../../utils/path-utils.js';
 import { resolveModelFromSettings, resolveSdkModelName, setModelEnvironmentVariables } from '../../utils/model-utils.js';
 import { AsyncStream } from '../../utils/async-stream.js';
@@ -100,7 +101,7 @@ function buildQueryOptions({ workingDirectory, permissionMode, sdkModelName, max
     // true when using permissionMode: 'bypassPermissions'"). Without it a future SDK
     // version could silently drop bypass and change permission behavior.
     ...(permissionMode === 'bypassPermissions' && { allowDangerouslySkipPermissions: true }),
-    ...(mcpServers && { mcpServers }),
+    ...(mcpServers && { mcpServers, strictMcpConfig: true }),
     ...(claudeCliOverride && { pathToClaudeCodeExecutable: claudeCliOverride }),
     systemPrompt: {
       type: 'preset',
@@ -499,7 +500,7 @@ export const __testing = { handleSendError, buildQueryOptions };
  * @param {string} agentPrompt - Agent prompt (optional)
  * @param {boolean} streaming - Whether to enable streaming (optional, defaults to config value)
  */
-export async function sendMessage(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null, openedFiles = null, agentPrompt = null, streaming = null, disableThinking = false, reasoningEffort = null, ultracode = undefined, supplierId = null, projectTrusted = false) {
+export async function sendMessage(message, resumeSessionId = null, cwd = null, permissionMode = null, model = null, openedFiles = null, agentPrompt = null, streaming = null, disableThinking = false, reasoningEffort = null, envFile = null, ultracode = undefined, supplierId = null, projectTrusted = false) {
   console.log('[DIAG] ========== sendMessage() START ==========');
   console.log('[DIAG] params:', { msgLen: message ? message.length : 0, resumeSessionId: resumeSessionId || '(new)', cwd, permissionMode, model });
 
@@ -537,6 +538,19 @@ export async function sendMessage(message, resumeSessionId = null, cwd = null, p
     const maxThinkingTokens = (alwaysThinkingEnabled && !normalizedReasoningEffort) ? configuredMaxThinkingTokens : undefined;
     streamingEnabled = streaming != null ? streaming : (settings?.streamingEnabled ?? false);
     console.log('[DEBUG] Config:', { effectivePermissionMode, alwaysThinkingEnabled, maxThinkingTokens, streamingEnabled, reasoningEffort: normalizedReasoningEffort });
+
+    // Load env file BEFORE MCP config expansion so ${VAR} placeholders
+    // in MCP server env blocks resolve correctly.
+    if (envFile) {
+      // Security: loadEnvFile validates the path against workingDirectory
+      // (fail-closed if that is somehow unknown) and drops denied names;
+      // applyEnvFileVars owns the "only if unset" rule so every provider
+      // behaves identically.
+      const envVars = await loadEnvFile(envFile, workingDirectory);
+      applyEnvFileVars(envVars);
+    } else {
+      console.error('[DEBUG] message-sender: envFile is null/empty/undefined — no env file loaded');
+    }
 
     const preToolUseHook = createPreToolUseHook(effectivePermissionMode, workingDirectory);
     const trusted = projectTrustFor(projectTrusted, cwd, workingDirectory);
@@ -598,6 +612,7 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
     const attachments = await loadAttachments(stdinData);
     const openedFiles = stdinData?.openedFiles || null;
     const agentPrompt = stdinData?.agentPrompt || null;
+    const envFile = stdinData?.envFile || null;
 
     const systemPromptAppend = buildSystemPromptAppend(openedFiles, agentPrompt, message);
 
@@ -623,6 +638,19 @@ export async function sendMessageWithAttachments(message, resumeSessionId = null
     const streamingParam = stdinData?.streaming;
     streamingEnabled = streamingParam != null ? streamingParam : (settings?.streamingEnabled ?? false);
     console.log('[DEBUG] (withAttachments) Config:', { normalizedPermissionMode, alwaysThinkingEnabled, maxThinkingTokens, streamingEnabled, reasoningEffort });
+
+// Load env file BEFORE MCP config expansion so ${VAR} placeholders
+    // in MCP server env blocks resolve correctly.
+    if (envFile) {
+      // Security: loadEnvFile validates the path against workingDirectory
+      // (fail-closed if that is somehow unknown) and drops denied names;
+      // applyEnvFileVars owns the "only if unset" rule so every provider
+      // behaves identically.
+      const envVars = await loadEnvFile(envFile, workingDirectory);
+      applyEnvFileVars(envVars);
+    } else {
+      console.error('[DEBUG] message-sender (withAttachments): envFile is null/empty/undefined — no env file loaded');
+    }
 
     const trusted = projectTrustFor(stdinData?.projectTrusted, cwd, workingDirectory);
     const mcpServers = await loadMcpServersConfigAsRecord(workingDirectory, trusted);

@@ -14,6 +14,8 @@ export interface ServerCardProps {
   server: McpServer;
   isExpanded: boolean;
   isCodexMode: boolean;
+  isProjectLocal?: boolean;
+  approvalStatus?: 'approved' | 'pending' | 'rejected';
   serverStatus: Map<string, McpServerStatusInfo>;
   refreshState?: ServerRefreshState[string];
   toolsInfo?: ServerToolsState[string];
@@ -23,6 +25,8 @@ export interface ServerCardProps {
   onEdit: () => void;
   onDelete: () => void;
   onCopy: () => void;
+  onApprove?: () => void;
+  onReject?: () => void;
   onRefresh: () => void;
   onLoadTools: (forceRefresh: boolean) => void;
   onCopyUrl: (url: string) => void;
@@ -36,6 +40,8 @@ export function ServerCard({
   server,
   isExpanded,
   isCodexMode,
+  isProjectLocal = false,
+  approvalStatus,
   serverStatus,
   toolsInfo,
   t,
@@ -44,6 +50,8 @@ export function ServerCard({
   onEdit,
   onDelete,
   onCopy,
+  onApprove,
+  onReject,
   onLoadTools,
   onCopyUrl,
   onToolHover,
@@ -75,6 +83,8 @@ export function ServerCard({
         effectiveStatus={effectiveStatus}
         emptyToolsWarning={emptyToolsWarning}
         isCodexMode={isCodexMode}
+        isProjectLocal={isProjectLocal}
+        approvalStatus={approvalStatus}
         iconStyle={iconStyle}
         statusColorStyle={statusColorStyle}
         t={t}
@@ -83,6 +93,8 @@ export function ServerCard({
         onEdit={onEdit}
         onCopy={onCopy}
         onDelete={onDelete}
+        onApprove={isProjectLocal ? onApprove : undefined}
+        onReject={isProjectLocal ? onReject : undefined}
       />
 
       {/* Expanded content */}

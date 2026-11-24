@@ -117,11 +117,16 @@ class ClaudeProcessInvoker {
                         streaming,
                         disableThinking,
                         reasoningEffort,
-                        ultracode,
+                        false,
                         projectTrusted
                 );
                 stdinInput.addProperty("executionScope", callback.executionScope());
                 String stdinJson = gson.toJson(stdinInput);
+                if (stdinInput.has("envFile")) {
+                    log.debug("[ClaudeProcessInvoker] envFile in stdin=" + stdinInput.get("envFile").getAsString());
+                } else {
+                    log.debug("[ClaudeProcessInvoker] envFile NOT in stdin JSON");
+                }
                 String preview = logSanitizer.buildPreview(stdinJson, 500);
                 log.debug("[PROMPT] Sending to Node.js (" + stdinJson.length() + " chars):\n" + preview);
 

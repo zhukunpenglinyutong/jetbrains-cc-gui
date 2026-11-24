@@ -17,6 +17,7 @@ import {
   removeRuntime,
   touchRuntime
 } from './runtime-registry.js';
+import { createHash } from 'node:crypto';
 
 let cachedQueryFn = null;
 
@@ -192,6 +193,15 @@ export function createTurnSink() {
 }
 
 export function buildRuntimeSignature(options, systemPromptAppend, streamingEnabled, runtimeSessionEpoch, modelId, supplierRevision) {
+  // Create a stable fingerprint of the effective launch configuration
+  // Includes env, MCP servers, and settings that affect subprocess behavior
+  // The env fingerprint should include both the actual process env (options.env from buildCliEnv)
+  // and the settings.env that gets passed to CLI via --settings
+  const combinedEnv = { ...options.env, ...(options.settings?.env || {}) };
+  const envFingerprint = fingerprintEnv(combinedEnv);
+  const mcpFingerprint = fingerprintMcpServers(options.mcpServers);
+  const settingsFingerprint = fingerprintSettings(options.settings);
+
   const material = {
     // Inside the JSON so canUpdateRuntimeSignature can still parse and compare it.
     ...(supplierRevision ? { supplierRevision } : {}),
@@ -216,6 +226,13 @@ export function buildRuntimeSignature(options, systemPromptAppend, streamingEnab
     // (default/plan/acceptEdits/auto) need no launch flag and keep applying live via
     // setPermissionMode, so they intentionally do NOT change the signature.
     bypassPermissions: options.permissionMode === 'bypassPermissions',
+    // SDK options that affect subprocess behavior (frozen at spawn)
+    maxThinkingTokens: options.maxThinkingTokens ?? null,
+    reasoningEffort: options.effort || '',
+    // Launch configuration fingerprints - changing any of these requires runtime rebuild
+    envFingerprint,
+    mcpFingerprint,
+    settingsFingerprint,
     settingSources: options.settingSources || []
   };
   return JSON.stringify(material);
@@ -1027,6 +1044,77 @@ async function acquireRuntimeUnlocked(requestContext, callbacks) {
   runtime.runtimeSignature = requestContext.runtimeSignature;
   touchRuntime(runtime);
   return runtime;
+}
+
+/**
+ * Create a stable fingerprint of environment variables that affect CLI behavior.
+ * Exported for testing.
+ * @param {Object} env - Environment object
+ * @returns {string} SHA256 hex digest
+ */
+export function fingerprintEnv(env) {
+  if (!env || typeof env !== 'object' || Object.keys(env).length === 0) return 'empty';
+  // Only include variables that affect CLI behavior
+  const relevantKeys = [
+    'ANTHROPIC_API_KEY', 'ANTHROPIC_BASE_URL', 'ANTHROPIC_API_URL',
+    'CLAUDE_CODE_PATH', 'GROK_CLI_PATH',
+    'MAX_THINKING_TOKENS', 'MAX_THINKING_TOKENS',
+    'PATH', 'NODE_OPTIONS', 'LD_PRELOAD',
+    'HOME', 'USER', 'SHELL'
+  ];
+  const filtered = {};
+  for (const key of relevantKeys) {
+    if (Object.prototype.hasOwnProperty.call(env, key)) {
+      filtered[key] = env[key];
+    }
+  }
+  return createHash('sha256').update(JSON.stringify(filtered)).digest('hex').slice(0, 16);
+}
+
+/**
+ * Create a stable fingerprint of MCP server configuration.
+ * Exported for testing.
+ * @param {Object} mcpServers - MCP servers map
+ * @returns {string} SHA256 hex digest
+ */
+export function fingerprintMcpServers(mcpServers) {
+  if (!mcpServers || typeof mcpServers !== 'object' || Object.keys(mcpServers).length === 0) return 'none';
+  const canonical = {};
+  for (const [name, config] of Object.entries(mcpServers).sort()) {
+    if (config && typeof config === 'object') {
+      canonical[name] = {
+        command: config.command || '',
+        args: config.args || [],
+        env: config.env || {},
+        url: config.url || '',
+        cwd: config.cwd || '',
+        headers: config.headers || {}
+      };
+    }
+  }
+  return createHash('sha256').update(JSON.stringify(canonical)).digest('hex').slice(0, 16);
+}
+
+/**
+ * Create a stable fingerprint of settings that affect launch behavior.
+ * Exported for testing.
+ * @param {Object} settings - Settings object
+ * @returns {string} SHA256 hex digest
+ */
+export function fingerprintSettings(settings) {
+  if (!settings || typeof settings !== 'object' || Object.keys(settings).length === 0) return 'none';
+  // Only include settings that affect subprocess launch
+  const relevantKeys = [
+    'env', 'permissions', 'mcpServers', 'model', 'cleanupPeriodDays',
+    'includePartialMessages', 'maxThinkingTokens', 'effort'
+  ];
+  const filtered = {};
+  for (const key of relevantKeys) {
+    if (Object.prototype.hasOwnProperty.call(settings, key)) {
+      filtered[key] = settings[key];
+    }
+  }
+  return createHash('sha256').update(JSON.stringify(filtered)).digest('hex').slice(0, 16);
 }
 
 export async function acquireRuntime(requestContext, callbacks) {

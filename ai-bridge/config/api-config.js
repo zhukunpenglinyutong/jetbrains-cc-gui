@@ -205,6 +205,82 @@ export function isDangerousEnvVar(varName) {
   return DANGEROUS_ENV_VAR_SET.has(String(varName ?? '').toUpperCase());
 }
 
+// Security (D): extras that are only dangerous when they come from a user
+// configured .env file — NOT from request params / settings.json.
+//
+// PATH is the motivating case. The comment on DANGEROUS_ENV_VAR_SET explains
+// why PATH must stay out of that set: the daemon's own PATH is supplied by the
+// Java EnvironmentConfigurator and rejecting it would risk breaking the plugin.
+// That reasoning holds for the daemon's *own* env, but not for a value a
+// project hands us in .env. Every apply site guards with
+// `if (!(k in process.env) || !process.env[k])`, so a daemon that started
+// with an unset or empty PATH would let a single
+//   PATH=/tmp/attacker
+// line in .env redefine the binary search path for every subsequent spawn —
+// node, npx, the claude CLI itself — silently redirecting them into an
+// attacker-controlled directory. Rejecting PATH from env files costs nothing
+// legitimate: users who need to extend PATH configure it in the IDE, which
+// still flows through the untouched params.env path.
+//
+// CLAUDE_CODE_PATH and GROK_CLI_PATH select the executable to launch.
+// An auto-discovered .env containing CLAUDE_CODE_PATH=./repo-controlled-cli
+// would become the value returned by getClaudeCliPathOverride(), allowing
+// a project to hijack the CLI binary. These must be rejected on the env-file
+// path while retaining the trusted IDE configuration path.
+const ENV_FILE_DENYLIST_EXTRA = new Set([
+  // Path manipulation — a single PATH=/tmp/attacker line would redirect every
+  // subsequent spawn (node, npx, claude CLI, npx, etc.) into an attacker directory.
+  'PATH',
+
+  // Provider executable overrides — an auto-discovered .env containing any of
+  // these would hijack the CLI binary launched by the daemon/app-server.
+  'CLAUDE_CODE_PATH',
+  'GROK_CLI_PATH',
+  'GROK_BIN',
+  'GROK_PATH',
+  'KIMI_BIN',
+  'KIMI_PATH',
+  'KIMI_CLI_PATH',
+  'KIMI_CODE_BIN',
+  'OPENCODE_BIN',
+  'OPENCODE_PATH',
+  'OPENCODE_CLI_PATH',
+  'PI_BIN',
+  'PI_PATH',
+  'PI_CLI_PATH',
+  'OMP_BIN',
+  'OMP_PATH',
+  'OMP_CLI_PATH',
+  'MINIMAX_BIN',
+  'MINIMAX_PATH',
+  'MINIMAX_CLI_PATH',
+  'MCODE_BIN',
+  'OPENCODE_BIN',
+  'OPENCODE_PATH',
+  'OPENCODE_CLI_PATH',
+  'PI_BIN',
+  'PI_PATH',
+  'PI_CLI_PATH',
+  'OMP_BIN',
+  'OMP_PATH',
+  'OMP_CLI_PATH',
+]);
+
+/**
+ * Whether an env var must be rejected when it originates from a .env file.
+ *
+ * This is a strict superset of {@link isDangerousEnvVar} — it is NOT a
+ * substitute for it, and the params.env code path keeps using isDangerousEnvVar
+ * so that the IDE-provided PATH keeps working.
+ *
+ * @param {string} varName - Environment variable name
+ * @returns {boolean} true when the variable must not be taken from an env file
+ */
+export function isEnvFileDeniedEnvVar(varName) {
+  const upper = String(varName ?? '').toUpperCase();
+  return DANGEROUS_ENV_VAR_SET.has(upper) || ENV_FILE_DENYLIST_EXTRA.has(upper);
+}
+
 /**
  * Build the inline settings override handed to the Claude CLI (the `--settings` argument).
  *
@@ -269,6 +345,18 @@ export function buildWebviewControlledSettingsOverride(modelId, settingsEnv, res
   const normalizedModel = typeof modelId === 'string' ? modelId.trim() : '';
   if (normalizedModel) {
     env.CLAUDE_CODE_DISABLE_1M_CONTEXT = /\[1m\]$/i.test(normalizedModel) ? '' : '1';
+  }
+
+  // Propagate auth-related vars from settings.env so the runtime fingerprint
+  // (runtime-lifecycle.js) sees them. buildRuntimeSignature combines options.env
+  // and options.settings.env; without this, ANTHROPIC_API_KEY changes in
+  // settings.env would not affect the envFingerprint and runtime reuse would
+  // not rebuild on key rotation (P0.4).
+  if (settingsEnv && typeof settingsEnv === 'object') {
+    if (settingsEnv.ANTHROPIC_API_KEY) env.ANTHROPIC_API_KEY = settingsEnv.ANTHROPIC_API_KEY;
+    if (settingsEnv.ANTHROPIC_BASE_URL) env.ANTHROPIC_BASE_URL = settingsEnv.ANTHROPIC_BASE_URL;
+    if (settingsEnv.ANTHROPIC_API_URL) env.ANTHROPIC_API_URL = settingsEnv.ANTHROPIC_API_URL;
+    if (settingsEnv.ANTHROPIC_AUTH_TOKEN) env.ANTHROPIC_AUTH_TOKEN = settingsEnv.ANTHROPIC_AUTH_TOKEN;
   }
 
   return { env };

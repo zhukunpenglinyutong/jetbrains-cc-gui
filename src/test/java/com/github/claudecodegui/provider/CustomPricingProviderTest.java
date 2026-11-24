@@ -2,6 +2,7 @@ package com.github.claudecodegui.provider;
 
 import com.github.claudecodegui.settings.ConfigPathManager;
 import com.github.claudecodegui.settings.ModelPricing;
+import com.google.gson.Gson;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -116,7 +117,9 @@ public class CustomPricingProviderTest {
     }
 
     private static String entry(String modelId, double inputCostPer1M) {
-        return "\"%s\": {\"inputCostPer1M\": %.1f}".formatted(modelId, inputCostPer1M);
+        // Properly escape modelId for JSON key using Gson
+        String escapedKey = new Gson().toJson(modelId);
+        return "%s: {\"inputCostPer1M\": %.1f}".formatted(escapedKey, inputCostPer1M);
     }
 
     private static void assertInputRate(Optional<ModelPricing> pricing, double expected) {
