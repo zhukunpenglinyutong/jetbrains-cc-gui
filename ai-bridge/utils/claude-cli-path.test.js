@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
@@ -222,7 +222,7 @@ test('kill() takes the process tree, not just cmd.exe', () => {
 function cmdInvocation(args, cwd) {
   return adaptCmdInvocation(
     resolveCliSpawn('C:\\tools\\work.cmd', args, { cwd, env: { PATH: 'C:\\Windows' } }, true),
-    { args, cwd },
+    { command: 'C:\\tools\\work.cmd', args, cwd },
   );
 }
 
@@ -249,11 +249,21 @@ test('arguments without a percent sign leave the command line as it was', () => 
   assert.equal('CLAUDE_GUI_ARG_0' in after.options.env, false);
 });
 
-test('a UNC working directory is entered with pushd and the process starts in a local directory', () => {
-  const invocation = cmdInvocation(['--resume=abc'], '\\\\wsl.localhost\\Ubuntu\\home\\me\\project');
-  assert.equal(invocation.args[3].startsWith('"pushd "\\\\wsl.localhost\\Ubuntu\\home\\me\\project" && "C:\\tools\\work.cmd"'), true);
-  assert.equal(invocation.args[3].endsWith('"--resume=abc""'), true);
-  assert.equal(invocation.options.cwd, tmpdir());
+test('a batch launcher is refused in a UNC working directory with an explanation', () => {
+  const unc = '\\\\wsl.localhost\\Ubuntu\\home\\me\\project';
+  assert.throws(
+    () => cmdInvocation(['--resume=abc'], unc),
+    (error) => error.message.includes('"C:\\tools\\work.cmd"')
+      && error.message.includes(unc)
+      && error.message.includes('.exe')
+      && error.message.includes('.js/.mjs'),
+  );
+});
+
+test('the spawner starts nothing for a batch launcher in a UNC working directory', () => {
+  const { calls, spawner } = makeSpawner();
+  assert.throws(() => spawner({ ...SDK_SPAWN, cwd: '\\\\srv\\share\\project' }), /network folder/);
+  assert.equal(calls.length, 0);
 });
 
 test('a local working directory stays the process directory', () => {
@@ -284,38 +294,6 @@ test('a real .cmd launcher receives percent signs and quotes exactly as given', 
     spawned.stdin.end();
     await exit;
     assert.deepEqual(JSON.parse(stdout), args);
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-function adminShareOf(dir) {
-  return `\\\\localhost\\${dir.slice(0, 1)}$\\${dir.slice(3)}`;
-}
-
-test('a real .cmd launcher started with a UNC working directory runs in that directory', { skip: !onWindows }, async (t) => {
-  const dir = mkdtempSync(join(tmpdir(), 'claude launcher unc '));
-  try {
-    const unc = adminShareOf(dir);
-    if (!existsSync(unc)) {
-      t.skip('no administrative share for the temp directory');
-      return;
-    }
-    writeFileSync(join(dir, 'where.js'), "process.stdout.write(require('fs').realpathSync.native(process.cwd()));\n");
-    const launcher = join(dir, 'work.cmd');
-    writeFileSync(launcher, `@echo off\r\n"${process.execPath}" "%~dp0where.js" %*\r\n`);
-
-    const stderrText = [];
-    const spawned = createBatchLauncherSpawner({ stderr: (text) => stderrText.push(text) })({
-      command: launcher, args: [], cwd: unc, env: process.env,
-    });
-    let stdout = '';
-    spawned.stdout.on('data', (chunk) => { stdout += chunk; });
-    const exit = new Promise((resolve) => spawned.on('exit', resolve));
-    spawned.stdin.end();
-    await exit;
-    assert.equal(stdout.toLowerCase(), unc.toLowerCase());
-    assert.equal(stderrText.join(''), '');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

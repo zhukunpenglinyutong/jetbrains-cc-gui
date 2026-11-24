@@ -1,6 +1,5 @@
 import { spawn } from 'child_process';
 import { EventEmitter } from 'events';
-import { tmpdir } from 'os';
 import { StringDecoder } from 'string_decoder';
 import { quoteCmdArg, resolveCliSpawn, stripOuterQuotes } from './cli-path.js';
 import { killChildTree } from './cli-spawn.js';
@@ -47,15 +46,18 @@ export function isWindowsBatchLauncher(
  *   not look at the value again.
  * - A UNC working directory (`\\server\share`, `\\wsl.localhost\...`) is not
  *   supported by cmd, which prints a warning and starts the launcher in the
- *   Windows directory. `pushd` maps the share to a temporary drive (released
- *   when cmd exits) and the process itself starts in a local directory.
+ *   Windows directory, so the CLI would work in the wrong folder. Mapping the
+ *   share with `pushd` is no way out: the CLI then sees a temporary drive letter
+ *   and files its sessions under that, so History and resume cannot find them.
+ *   Starting is refused with an explanation instead.
  *
  * Returns the invocation unchanged when it does not go through cmd.exe.
  *
  * @param {{ file: string, args: string[], options: object }} invocation - from resolveCliSpawn
- * @param {{ args: string[], cwd?: string }} request - the SDK's original arguments and cwd
+ * @param {{ command?: string, args: string[], cwd?: string }} request - the SDK's original launcher, arguments and cwd
+ * @throws {Error} when the launcher would run through cmd.exe in a UNC working directory
  */
-export function adaptCmdInvocation(invocation, { args = [], cwd } = {}) {
+export function adaptCmdInvocation(invocation, { command, args = [], cwd } = {}) {
   const viaCmd = invocation.options?.windowsVerbatimArguments === true
     && invocation.args.length === 4
     && invocation.args[0] === '/d'
@@ -75,16 +77,18 @@ export function adaptCmdInvocation(invocation, { args = [], cwd } = {}) {
     });
   }
 
-  let spawnCwd = invocation.options.cwd;
   if (typeof cwd === 'string' && cwd.startsWith('\\\\')) {
-    line = `"pushd ${quoteCmdArg(cwd)} && ${line.slice(1)}`;
-    spawnCwd = tmpdir();
+    throw new Error(
+      `The Claude CLI path override ${command ? `"${stripOuterQuotes(command)}" ` : ''}is a .cmd/.bat file, `
+      + `and cmd.exe cannot run in the network folder "${cwd}": the CLI would start in the Windows directory instead. `
+      + 'Use an .exe or a .js/.mjs launcher for this project, or open the project from a local drive.',
+    );
   }
 
   return {
     ...invocation,
     args: ['/d', '/s', '/c', line],
-    options: { ...invocation.options, env, cwd: spawnCwd },
+    options: { ...invocation.options, env },
   };
 }
 
@@ -130,7 +134,7 @@ export function createBatchLauncherSpawner({
         { cwd, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true },
         forceWindows,
       ),
-      { args, cwd },
+      { command, args, cwd },
     );
     const child = spawnFn(invocation.file, invocation.args, invocation.options);
     const events = new EventEmitter();
