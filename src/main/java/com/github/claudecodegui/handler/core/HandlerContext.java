@@ -6,6 +6,7 @@ import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.provider.grok.GrokSDKBridge;
 import com.github.claudecodegui.provider.zcode.ZcodeSDKBridge;
 import com.github.claudecodegui.settings.CodemossSettingsService;
+import com.github.claudecodegui.util.NotificationSource;
 import com.intellij.openapi.project.Project;
 import com.intellij.ui.jcef.JBCefBrowser;
 
@@ -223,6 +224,14 @@ public class HandlerContext {
         if (!disposed) {
             contentActivator.run();
         }
+    }
+
+    /**
+     * Describe this chat tab for a toast notification: the tab name to show, and
+     * {@link #activateContent()} to bring the tab to the front when the toast is clicked.
+     */
+    public NotificationSource notificationSource() {
+        return new NotificationSource(getContentTitle(), this::activateContent);
     }
 
     // Setters

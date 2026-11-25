@@ -244,7 +244,7 @@ public class PermissionHandler extends BaseMessageHandler {
     PermissionHandler(HandlerContext context, SafetyNetScheduler safetyNetScheduler) {
         this(context, safetyNetScheduler,
                 () -> SystemNotificationService.getInstance()
-                        .showAskUserQuestionReminderToast(context.getProject()),
+                        .showAskUserQuestionReminderToast(context.getProject(), context.notificationSource()),
                 () -> SoundNotificationService.getInstance()
                         .playAskUserQuestionReminderSound());
     }
