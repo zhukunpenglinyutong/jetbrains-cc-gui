@@ -187,6 +187,26 @@ public class ErrorPanelBuilder {
         return panel;
     }
 
+    /** Builds a bounded retry notice that leaves the still-starting browser attached below it. */
+    public static JPanel buildRetryNotice(String title, String message, String actionText, Runnable action) {
+        JPanel notice = new JPanel(new BorderLayout(8, 8));
+        notice.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
+        notice.add(new JLabel(title), BorderLayout.NORTH);
+        JTextArea details = new JTextArea(message, 4, 32);
+        details.setEditable(false);
+        details.setFocusable(false);
+        details.setOpaque(false);
+        details.setLineWrap(true);
+        details.setWrapStyleWord(true);
+        JScrollPane scrollPane = new JScrollPane(details);
+        scrollPane.setBorder(BorderFactory.createEmptyBorder());
+        notice.add(scrollPane, BorderLayout.CENTER);
+        JButton retry = new JButton(actionText);
+        retry.addActionListener(event -> action.run());
+        notice.add(retry, BorderLayout.SOUTH);
+        return notice;
+    }
+
     /**
      * Build a loading panel with icon, title, and description.
      */
