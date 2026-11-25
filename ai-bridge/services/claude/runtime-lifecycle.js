@@ -21,6 +21,7 @@ import {
 let cachedQueryFn = null;
 
 import { withExecutionScope } from '../../utils/execution-scope.js';
+import { claudeCliSdkOptions } from '../../utils/claude-cli-path.js';
 
 /**
  * Emit a process-level daemon event that bypasses daemon.js's activeRequestId
@@ -350,6 +351,33 @@ export async function disposeRuntime(runtime, callbacks) {
   return runtime.disposePromise;
 }
 
+/**
+ * Query options for a runtime: the request's options plus the handler that
+ * collects the CLI's stderr into runtime.stderrLines (expired-resume recovery
+ * reads it). The SDK calls the `stderr` option only from its own spawn, so a
+ * launcher started by a custom spawner (Windows .cmd/.bat) gets the same
+ * handler passed to that spawner.
+ */
+export function buildRuntimeQueryOptions(runtime, baseOptions, claudeCliTestHooks = {}) {
+  const stderr = (data) => {
+    try {
+      const text = (data ?? '').toString().trim();
+      if (!text) return;
+      runtime.stderrLines.push(text);
+      if (runtime.stderrLines.length > 200) {
+        runtime.stderrLines.shift();
+      }
+      console.error(`[SDK-STDERR] ${text}`);
+    } catch (_) {
+    }
+  };
+  const options = { ...baseOptions, stderr };
+  if (baseOptions.pathToClaudeCodeExecutable) {
+    Object.assign(options, claudeCliSdkOptions(baseOptions.pathToClaudeCodeExecutable, { ...claudeCliTestHooks, stderr }));
+  }
+  return options;
+}
+
 async function createRuntime(requestContext, callbacks) {
   const queryFn = await ensureQueryFn();
   const initialPermissionMode = normalizePermissionMode(requestContext.permissionMode);
@@ -395,21 +423,7 @@ async function createRuntime(requestContext, callbacks) {
     resumeExpired: false
   };
 
-  const options = {
-    ...requestContext.options,
-    stderr: (data) => {
-      try {
-        const text = (data ?? '').toString().trim();
-        if (!text) return;
-        runtime.stderrLines.push(text);
-        if (runtime.stderrLines.length > 200) {
-          runtime.stderrLines.shift();
-        }
-        console.error(`[SDK-STDERR] ${text}`);
-      } catch (_) {
-      }
-    }
-  };
+  const options = buildRuntimeQueryOptions(runtime, requestContext.options);
 
   const originalCanUseTool = options.canUseTool;
   if (typeof originalCanUseTool === 'function') {

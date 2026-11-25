@@ -110,6 +110,7 @@ function buildChildEnv(homeDir) {
     'AWS_ACCESS_KEY_ID',
     'AWS_SECRET_ACCESS_KEY',
     'AWS_SESSION_TOKEN',
+    'CLAUDE_CONFIG_DIR',
   ]) {
     delete env[key];
   }
@@ -117,7 +118,7 @@ function buildChildEnv(homeDir) {
   return env;
 }
 
-function runSetupApiKey(homeDir) {
+function runSetupApiKey(homeDir, extraEnv = {}) {
   const script = `
     import { setupApiKey } from ${JSON.stringify(API_CONFIG_MODULE)};
     try {
@@ -133,7 +134,7 @@ function runSetupApiKey(homeDir) {
     ['--input-type=module', '--eval', script],
     {
       cwd: path.resolve('.'),
-      env: buildChildEnv(homeDir),
+      env: { ...buildChildEnv(homeDir), ...extraEnv },
       encoding: 'utf8',
     }
   );
@@ -958,4 +959,92 @@ test('provider-management contract: both routing layers carry the request in eac
   } finally {
     fs.rmSync(loginHome, { recursive: true, force: true });
   }
+});
+
+test('setupApiKey reads the settings.json inside CLAUDE_CONFIG_DIR', () => {
+  const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-api-config-'));
+  const otherProfile = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-other-profile-'));
+  const claudeDir = otherProfile;
+  fs.mkdirSync(path.join(tempHome, '.claude'), { recursive: true });
+  writeCodemossClaudeConfig(tempHome, 'provider-a', {
+    'provider-a': { name: 'Provider A', settingsConfig: {} }
+  });
+  fs.writeFileSync(
+    path.join(claudeDir, 'settings.json'),
+    JSON.stringify({
+      env: {
+        ANTHROPIC_AUTH_TOKEN: 'sk-ant-managed-token',
+        ANTHROPIC_BASE_URL: 'https://api.anthropic.com',
+      },
+    }),
+    'utf8'
+  );
+
+  const result = runSetupApiKey(tempHome, { CLAUDE_CONFIG_DIR: otherProfile });
+  assert.equal(result.ok, true);
+  assert.equal(result.result.authType, 'auth_token');
+  assert.equal(result.result.baseUrl, 'https://api.anthropic.com');
+});
+
+test('setupApiKey does not fall back to ~/.claude/settings.json when CLAUDE_CONFIG_DIR is set', () => {
+  const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-api-config-'));
+  const otherProfile = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-other-profile-'));
+  fs.mkdirSync(path.join(tempHome, '.claude'), { recursive: true });
+  writeCodemossClaudeConfig(tempHome, 'provider-a', {
+    'provider-a': { name: 'Provider A', settingsConfig: {} }
+  });
+  fs.writeFileSync(
+    path.join(tempHome, '.claude', 'settings.json'),
+    JSON.stringify({ env: { ANTHROPIC_AUTH_TOKEN: 'sk-ant-default-dir-token' } }),
+    'utf8'
+  );
+
+  const result = runSetupApiKey(tempHome, { CLAUDE_CONFIG_DIR: otherProfile });
+  assert.equal(result.ok, false);
+  assert.equal(result.error, 'API Key not configured');
+});
+
+test('a managed provider keeps routing credentials into the Claude process env when CLAUDE_CONFIG_DIR is set', () => {
+  const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-api-config-'));
+  const otherProfile = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-gui-other-profile-'));
+  const claudeDir = otherProfile;
+  fs.mkdirSync(path.join(tempHome, '.claude'), { recursive: true });
+  writeCodemossClaudeConfig(tempHome, 'provider-a', {
+    'provider-a': { name: 'Provider A', settingsConfig: {} }
+  });
+  fs.writeFileSync(
+    path.join(claudeDir, 'settings.json'),
+    JSON.stringify({
+      env: {
+        ANTHROPIC_AUTH_TOKEN: 'sk-ant-managed-token',
+        ANTHROPIC_BASE_URL: 'https://api.anthropic.com',
+      },
+    }),
+    'utf8'
+  );
+
+  const script = `
+    import { setupApiKey, buildCliEnv } from ${JSON.stringify(API_CONFIG_MODULE)};
+    const result = setupApiKey();
+    const env = buildCliEnv();
+    console.log(JSON.stringify({
+      authType: result.authType,
+      CONFIG_DIR: env.CLAUDE_CONFIG_DIR,
+      TOKEN: env.ANTHROPIC_AUTH_TOKEN,
+      BASE_URL: env.ANTHROPIC_BASE_URL,
+      HOST_MANAGED: env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST,
+    }));
+  `;
+  const output = execFileSync(process.execPath, ['--input-type=module', '--eval', script], {
+    cwd: path.resolve('.'),
+    env: { ...buildChildEnv(tempHome), CLAUDE_CONFIG_DIR: otherProfile },
+    encoding: 'utf8',
+  });
+  const env = JSON.parse(output.trim().split('\n').filter(Boolean).pop());
+
+  assert.equal(env.authType, 'auth_token');
+  assert.equal(env.CONFIG_DIR, otherProfile);
+  assert.equal(env.TOKEN, 'sk-ant-managed-token');
+  assert.equal(env.BASE_URL, 'https://api.anthropic.com');
+  assert.equal(env.HOST_MANAGED, '1');
 });

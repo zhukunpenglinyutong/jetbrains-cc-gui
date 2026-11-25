@@ -13,6 +13,7 @@ import {
 import { claudeModelAllowsEffort, getAvailableReasoningLevels, resolveCurrentReasoningLevel } from '../components/ChatInputBox/reasoningUtils';
 import type { Attachment, ChatInputBoxHandle, OmpApprovalMode, PermissionMode, ReasoningEffort, SelectedAgent, CodexFastMode } from '../components/ChatInputBox/types';
 import { expandQuoteTokens } from '../components/ChatInputBox/utils/quoteRegistry';
+import { encodeReviewMessage, parseReviewMessage } from '../utils/markdownReviewMessage';
 import type { ViewMode } from './useModelProviderState';
 import { parseCodexCommand } from './codexCommandDispatcher';
 import {
@@ -49,6 +50,11 @@ function createContextUsageRequestId(): string {
 }
 
 function shouldSendReasoningEffort(provider: string, model: string): boolean {
+  // Gemini never carries a separate effort value: the tier is baked into the
+  // full model slug and some catalog slugs reject a dedicated effort flag.
+  if (provider === 'gemini') {
+    return false;
+  }
   if (provider !== 'claude') {
     return true;
   }
@@ -418,7 +424,9 @@ export function useMessageSender({
   ): MessageDispatchResult => {
     if (getSessionTransitionPending()) return 'blocked';
     // Expand inline quote chips (tokens) into their full Markdown blockquotes.
-    const text = expandQuoteTokens(content).replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+    const review = parseReviewMessage(content);
+    const text = review ? encodeReviewMessage(review.batches, expandQuoteTokens(review.userText))
+      : expandQuoteTokens(content).replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
     const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
 
     if (!text && !hasAttachments) return 'handled';

@@ -13,6 +13,53 @@
     "retry": "फिर कोशिश करें",
     "cancel": "रद्द करें"
   },
+  "markdownReview": {
+    "legacyContextCard": "Markdown समीक्षा संदर्भ",
+    "contextCard_one": "Markdown समीक्षा · {{count}} आइटम",
+    "contextCard_other": "Markdown समीक्षा · {{count}} आइटम",
+    "contextDetails": "स्रोत स्नैपशॉट और संदर्भ",
+    "settings": {
+      "submitShortcut": {
+        "label": "Markdown टिप्पणी भेजने का शॉर्टकट",
+        "enter": "Enter भेजता है, Ctrl+Enter नई पंक्ति जोड़ता है",
+        "ctrlEnter": "Ctrl+Enter भेजता है, Enter नई पंक्ति जोड़ता है",
+        "hint": "टिप्पणी जोड़ने और सहेजने पर लागू होता है। Shift+Enter हमेशा नई पंक्ति जोड़ता है; macOS पर Command का उपयोग करें। IME पुष्टि भेजती नहीं है।"
+      },
+      "title": "Markdown समीक्षाएँ (वर्तमान प्रोजेक्ट)",
+      "on": "सक्षम",
+      "off": "अक्षम",
+      "error": "समीक्षा प्राथमिकताएँ अपडेट नहीं हो सकीं। सेटिंग्स फिर खोलें और पुनः प्रयास करें।",
+      "enabled": {
+        "label": "Markdown पूर्वावलोकन एनोटेशन सक्षम करें (बीटा)",
+        "hint": "वर्तमान प्रोजेक्ट के मूल Markdown पूर्वावलोकन में समीक्षा नियंत्रण जोड़ता है। अक्षम करने पर ओवरले तुरंत छिप जाता है और मौजूदा टिप्पणियाँ बनी रहती हैं। सक्षम करने के बाद, पहले से खुला पूर्वावलोकन एक बार फिर खोलना होगा ताकि नियंत्रण दिखें।"
+      },
+      "autoAddToChat": {
+        "label": "टिप्पणियाँ वर्तमान चैट ड्राफ़्ट में स्वतः जोड़ें (बीटा)",
+        "hint": "डिफ़ॉल्ट रूप से बंद। टिप्पणी बनाने या संपादित करने पर उसका नवीनतम स्नैपशॉट चयनित CC GUI चैट इनपुट में जुड़ता है। भेजने से पहले ड्राफ़्ट जाँचें। टिप्पणी पूरी करने या हटाने पर उसका स्वतः जोड़ा गया ड्राफ़्ट भी वापस लिया जाता है; मैन्युअल रूप से जोड़ी गई टिप्पणियाँ और उद्धरण बने रहते हैं।"
+      },
+      "autoDeleteAffected": {
+        "label": "ऐसी टिप्पणियाँ स्वतः हटाएँ जिन्हें अब नहीं खोजा जा सकता (बीटा)",
+        "hint": "जब तक उद्धरण का आरंभ या अंत वाला अंश मिल सकता है, संपादन और लाइन ब्रेक केवल टिप्पणी को 'मूल पाठ बदला' के रूप में बनाए रखते हैं; वे उसे नहीं हटाते। टिप्पणी केवल तब हटती है जब कोई भी अंश न मिले। स्वरूपित चयन पूरा स्रोत ब्लॉक कवर कर सकता है। सफ़ाई पूर्णता सिद्ध नहीं करती: एजेंट को अधूरे आइटम बताने होंगे। स्वतः जोड़े गए ड्राफ़्ट हटाई गई टिप्पणी के साथ वापस लिए जाते हैं; मैन्युअल जोड़ और उद्धरण अप्रभावित रहते हैं।"
+      },
+      "persist": {
+        "label": "पुनः आरंभ के बाद टिप्पणियाँ और लंबित स्नैपशॉट रखें (बीटा)",
+        "hint": "डिफ़ॉल्ट रूप से बंद: डेटा केवल तब तक रखा जाता है जब तक यह प्रोजेक्ट खुला है। प्रोजेक्ट वर्कस्पेस में सहेजने के लिए सक्षम करें। अक्षम करने पर अगली IDE सहेजने पर संग्रहित सामग्री हट जाती है और मौजूदा टिप्पणियाँ बनी रहती हैं। चैट संदेश अपने मौजूदा स्टोरेज का उपयोग करते हैं। बंद होने पर प्रोजेक्ट बंद करने या IDE पुनः आरंभ करने से टिप्पणियाँ और न भेजे गए ड्राफ़्ट खो जाते हैं।"
+      },
+      "versionRequired": "Markdown टिप्पणियों के लिए IntelliJ IDEA 2024.3 या नया संस्करण आवश्यक है।"
+    },
+    "count_one": "{{count}} समीक्षा आइटम",
+    "count_other": "{{count}} समीक्षा आइटम",
+    "removeBatch": "ड्राफ़्ट से समीक्षा हटाएँ",
+    "remove": "हटाएँ",
+    "snapshot": "यह ड्राफ़्ट एक स्नैपशॉट है; स्रोत की बाद की टिप्पणियाँ इसे नहीं बदलतीं।",
+    "tooLarge": "यह समीक्षा बहुत बड़ी है। भेजने से पहले कुछ आइटम हटाएँ।",
+    "block": "स्रोत ब्लॉक",
+    "source": "चयनित पाठ",
+    "quote": "उद्धरण",
+    "attached": "स्थान मिल गया",
+    "ambiguous": "कई संभावित स्थान",
+    "orphaned": "मूल पाठ बदल गया"
+  },
   "common": {
     "ready": "तैयार",
     "loading": "लोड हो रहा है",
@@ -40,6 +87,18 @@
     "optional": "Optional"
   },
   "chat": {
+    "planUsage": {
+      "unavailable": "उपयोग अनुपलब्ध",
+      "dash": "उपयोग —",
+      "loading": "उपयोग लोड हो रहा है…",
+      "tooltipWindow": "{{period}} {{percent}}%",
+      "tooltipWindowWithReset": "{{period}} {{percent}}% · रीसेट {{value}}",
+      "clickToSwitch": "विंडो बदलने के लिए क्लिक करें",
+      "switchWindowHint": "विंडो बदलने के लिए अवधि लेबल पर क्लिक करें",
+      "worstHint": "बिंदु सबसे खराब विंडो दिखाता है ({{color}})",
+      "worstDot": "सबसे खराब विंडो: {{color}}",
+      "stale": "डेटा पुराना हो सकता है (रीफ्रेश विफल)"
+    },
     "sendMessage": "{{provider}} को संदेश भेजें",
     "createNewSession": "नया सत्र बनाएं",
     "confirmNewSession": "वर्तमान सत्र में संदेश हैं, क्या आप नया सत्र बनाना चाहते हैं?",
@@ -131,6 +190,7 @@
     "totalDuration": "इस जवाब में लगा समय",
     "tokenUsage": "{{input}} इन / {{output}} आउट",
     "tokenUsageDetail": "टर्न कुल — इनपुट {{input}} · कैश लेखन {{cacheWrite}} · कैश पठन {{cacheRead}} · आउटपुट {{output}}",
+    "tokenUsageThinking": "चिंतन {{thinking}}",
     "cacheHitsWithRatio": " ({{tokens}} कैश हिट, {{ratio}})",
     "search": {
       "ariaLabel": "बातचीत में खोजें",
@@ -254,6 +314,11 @@
         "label": "Claude CLI पथ (ओवरराइड)",
         "placeholder": "उदा. /usr/local/bin/claude — अंतर्निहित SDK का उपयोग करने के लिए खाली छोड़ें",
         "hint": "वैकल्पिक। सेट करने पर, प्लगइन अंतर्निहित @anthropic-ai/claude-agent-sdk के बजाय इस बाइनरी को चलाता है। सहेजने पर डेमॉन पुनः आरंभ होता है।"
+      },
+      "claudeConfigDir": {
+        "label": "Claude कॉन्फ़िग निर्देशिका (ओवरराइड)",
+        "placeholder": "उदा. ~/.claude-work — CLAUDE_CONFIG_DIR या ~/.claude का उपयोग करने के लिए खाली छोड़ें",
+        "hint": "वैकल्पिक। चैट इतिहास, सत्र क्रियाएँ और Claude प्रक्रिया ~/.claude के बजाय इस निर्देशिका को पढ़ती हैं। प्लगइन की settings.json और MCP सर्वर इसी निर्देशिका का पालन करते हैं; इसके Skills और Hooks पेज अब भी ~/.claude का उपयोग करते हैं। उपयोग सांख्यिकी इसे ~/.claude में जोड़कर संयुक्त रूप से गिनती है (प्रोफ़ाइल के अनुसार अलग नहीं), और चल रहा सांख्यिकी सर्वर अगले सिंक पर इसे उठा लेता है; इसे खाली करने पर भी पहले गिना जा चुका उपयोग बना रहता है। पूर्ण पथ या ~/… का उपयोग करें; WSL के node के साथ /home/me/.claude-work जैसा Linux पथ भी काम करता है, और Windows का CLAUDE_CONFIG_DIR उपयोग नहीं होता। इसे उसी प्रोफ़ाइल के Claude CLI पथ के साथ उपयोग करें। सहेजने पर डेमॉन पुनः आरंभ होता है।"
       },
       "workingDirectory": {
         "label": "Working Directory",
@@ -966,6 +1031,11 @@
         "saveChanges": "Save"
       }
     },
+    "gemini": {
+      "idleReapLabel": "मौन टर्न को स्वतः रोकें",
+      "idleReapHelp": "इतने मिनटों तक बिना किसी आउटपुट के चल रहे Gemini टर्न को समाप्त कर देता है — आमतौर पर इंटरैक्टिव प्रॉम्प्ट पर अटकी CLI या अटका हुआ बैकएंड। 0 से स्वतः रोकना बंद हो जाता है।",
+      "idleReapDisabled": "अक्षम"
+    },
     "cli": {
       "hint": "These CLIs must be installed and configured in your system terminal. The plugin only detects installation status and version — it will never install them for you. Confirm each CLI works in the terminal before coming back here to use it.",
       "refresh": "Re-check",
@@ -1013,6 +1083,10 @@
         "omp": {
           "name": "OMP CLI",
           "description": "मल्टी-प्रोवाइडर मॉडल सपोर्ट वाला Oh My Pi टर्मिनल कोडिंग एजेंट"
+        },
+        "gemini": {
+          "name": "Antigravity CLI",
+          "description": "गूगल एंटीग्रेविटी टर्मिनल कोडिंग एजेंट (agy)"
         }
       },
       "installDialog": {
@@ -1218,6 +1292,16 @@
     "cancelEditButton": "रद्द करें",
     "titleTooLong": "शीर्षक बहुत लंबा (अधिकतम 50 वर्ण)",
     "titleUpdated": "शीर्षक अपडेट किया गया",
+    "regenerateTitle": "बातचीत से शीर्षक फिर से जेनरेट करें",
+    "titleRegenerated": "शीर्षक फिर से जेनरेट हुआ",
+    "titleRegenerateFailed": {
+      "generic": "शीर्षक फिर से जेनरेट करने में विफल",
+      "emptySession": "शीर्षक बनाने के लिए कोई बातचीत सामग्री नहीं है",
+      "disabled": "सेटिंग्स में AI शीर्षक जेनरेशन बंद है",
+      "sessionNotFound": "सेशन रिकॉर्ड फ़ाइल नहीं मिली",
+      "generationFailed": "शीर्षक जेनरेशन विफल, कृपया बाद में पुनः प्रयास करें",
+      "customTitle": "इस सत्र के लिए मैन्युअल शीर्षक सेट है, जो AI शीर्षक पर प्राथमिकता रखता है"
+    },
     "copySessionId": "CLI resume के लिए सेशन ID कॉपी करें",
     "sessionIdCopied": "सेशन ID कॉपी किया गया",
     "copyFailed": "कॉपी विफल",
@@ -1924,6 +2008,9 @@
     }
   },
   "models": {
+    "gemini": {
+      "vanishedSelection": "मॉडल {{model}} अब उपलब्ध नहीं है — CLI डिफ़ॉल्ट मॉडल पर वापस लाया गया।"
+    },
     "addModel": "मॉडल जोड़ें",
     "searchPlaceholder": "मॉडल खोजें",
     "clearSearch": "सर्च साफ़ करें",
@@ -2045,6 +2132,12 @@
       "shortLabel": "पूर्ण",
       "tooltip": "सभी अनुमति जाँचों को बायपास करें",
       "description": "पूरी तरह स्वचालित, सभी अनुमति जाँचों को बायपास करता है [सावधानी से उपयोग करें]"
+    },
+    "sandbox": {
+      "label": "सैंडबॉक्स मोड",
+      "shortLabel": "सैंडबॉक्स",
+      "tooltip": "सैंडबॉक्स में निष्पादन (केवल Gemini CLI)",
+      "description": "टर्मिनल प्रतिबंधों के साथ सैंडबॉक्स में चलता है (Gemini CLI)"
     }
   },
   "workspaceDiff": {
@@ -2144,7 +2237,7 @@
       "label": "ZCode"
     },
     "gemini": {
-      "label": "Gemini Cli"
+      "label": "Antigravity CLI"
     },
     "opencode": {
       "label": "OpenCode"
@@ -2267,6 +2360,16 @@
     "codexNetworkErrorChecks": "कृपया जांचें:\n1. क्या नेटवर्क कनेक्शन काम कर रहा है\n2. यदि प्रॉक्सी का उपयोग कर रहे हैं, तो कृपया प्रॉक्सी कॉन्फ़िगरेशन की पुष्टि करें\n3. क्या फ़ायरवॉल कनेक्शन को अवरुद्ध कर रहा है",
     "codexError": "Codex त्रुटि:",
     "codexErrorCheck": "कृपया नेटवर्क कनेक्शन और Codex कॉन्फ़िगरेशन जांचें",
+    "geminiAuthRequired": "Gemini CLI प्रमाणीकरण आवश्यक है:",
+    "geminiAuthCause": "- कारण: Gemini CLI (agy) लॉग इन नहीं है या क्रेडेंशियल समाप्त हो गए हैं।",
+    "geminiAuthResolution": "- समाधान: बाहरी टर्मिनल में 'agy' चलाएँ और इंटरैक्टिव Google साइन-इन प्रवाह पूरा करें।",
+    "geminiAuthNote": "- नोट: यह प्लगइन Google क्रेडेंशियल प्रबंधित नहीं करता और प्लगइन के भीतर Google लॉगिन नहीं करता।",
+    "geminiErrorDetails": "त्रुटि विवरण",
+    "geminiIdleReapStopped": "Gemini टर्न स्वतः रुक गया: Gemini CLI (agy) से {{window}} से कोई आउटपुट नहीं मिला।",
+    "geminiIdleReapCauseAlive": "- संभावित कारण: CLI प्रक्रिया जीवित थी पर चुप थी — यह संभवतः किसी इंटरैक्टिव प्रॉम्प्ट (सबसे आम रूप से प्रमाणीकरण) पर अटकी हुई थी या बैकएंड/नेटवर्क पर रुकी हुई थी।",
+    "geminiIdleReapCauseExited": "- संभावित कारण: CLI प्रक्रिया पहले ही बिना परिणाम दिए समाप्त हो चुकी थी।",
+    "geminiIdleReapWhatToDo": "- क्या करें: लॉगिन जाँचने के लिए बाहरी टर्मिनल में 'agy' चलाएँ, फिर रद्द करें और पुनः प्रयास करें; यदि टर्न वास्तव में मौन था (जैसे लंबा बिल्ड), तो सीमा बढ़ाएँ।",
+    "geminiIdleReapSetting": "- यह सीमा कॉन्फ़िगर योग्य है: Gemini प्लगइन सेटिंग्स में gemini.idleReapMinutes सेट करें (0 स्वतः रुकना अक्षम कर देता है)।",
     "codexThinkingHint": "Codex ने reasoning आइटम नहीं लौटाए। यदि आप अभी भी सोचने की प्रक्रिया नहीं देख सकते हैं, तो कृपया hide_agent_reasoning/show_raw_agent_reasoning सेटिंग्स के लिए docs/codex/docs/config.md देखें, और सुनिश्चित करें कि आपका OpenAI खाता सत्यापित हो गया है।",
     "userDeniedPermission": "उपयोगकर्ता ने {{toolName}} टूल के लिए अनुमति अस्वीकार कर दी",
     "userDidNotProvideAnswers": "उपयोगकर्ता ने उत्तर प्रदान नहीं किए",
@@ -2279,7 +2382,19 @@
     "uploadedImages": "{{count}} छवि(यां) अपलोड की गईं",
     "uploadedAttachments": "अनुलग्नक अपलोड किए गए",
     "emptyMessage": "खाली संदेश",
-    "attachment": "अनुलग्नक"
+    "attachment": "अनुलग्नक",
+    "workspaceSubstituted": "[सूचना] कार्य निर्देशिका बदल दी गई: अनुरोधित \"{{requested}}\", उपयोग की जा रही \"{{effective}}\" ({{reason}}).",
+    "workspaceReasonUnsafe": "असुरक्षित कार्य निर्देशिका",
+    "workspaceReasonPluginInternal": "प्लगइन की आंतरिक निर्देशिका",
+    "workspaceReasonMissing": "निर्देशिका मौजूद नहीं है",
+    "workspaceReasonNotADirectory": "निर्देशिका नहीं है",
+    "workspaceReasonTemporary": "अस्थायी निर्देशिका",
+    "attachmentNotDelivered": {
+      "notice": "[सूचना] अटैचमेंट वितरित नहीं हुआ: \"{{name}}\" ({{reason}}).",
+      "nonImage": "केवल छवि अटैचमेंट समर्थित हैं",
+      "tooLarge": "छवि प्रति छवि 2 MB सीमा से अधिक है",
+      "invalid": "छवि डेटा अनुपलब्ध या अपठनीय है"
+    }
   },
   "changelog": {
     "title": "नया क्या है",

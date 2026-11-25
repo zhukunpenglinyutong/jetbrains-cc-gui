@@ -78,6 +78,7 @@ describe('usePasteAndDrop file references', () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     document.body.innerHTML = '';
     Reflect.deleteProperty(document, 'execCommand');
     delete window.getClipboardFilePath;
@@ -137,6 +138,36 @@ describe('usePasteAndDrop file references', () => {
     expect(editable.textContent).toBe('@C:\\Program Files\\src\\Main.java#L10-12 ');
     expect(pathMappingRef.current.get('C:\\Program Files\\src\\Main.java#L10-12'))
       .toBe('C:\\Program Files\\src\\Main.java');
+  });
+
+  it('scrolls the wrapper to the pasted caret instead of forcing the draft to the bottom', async () => {
+    const wrapper = document.createElement('div');
+    const editable = createEditable();
+    wrapper.append(editable);
+    document.body.append(wrapper);
+    Object.defineProperty(wrapper, 'clientHeight', { configurable: true, value: 100 });
+    Object.defineProperty(wrapper, 'scrollHeight', { configurable: true, value: 1000 });
+    vi.spyOn(wrapper, 'getBoundingClientRect').mockReturnValue({
+      top: 0,
+      bottom: 100,
+      left: 0,
+      right: 100,
+      width: 100,
+      height: 100,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    } as DOMRect);
+    vi.spyOn(Range.prototype, 'getClientRects').mockReturnValue([
+      { top: 130, bottom: 150 } as DOMRect,
+    ] as unknown as DOMRectList);
+    placeCaretAtEnd(editable);
+    const { result } = setupPasteHook(editable);
+
+    result.current.handlePaste(createPasteEvent('pasted text'));
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+
+    expect(wrapper.scrollTop).toBe(50);
   });
 
   it('registers a real clipboard file returned by the Java bridge', async () => {

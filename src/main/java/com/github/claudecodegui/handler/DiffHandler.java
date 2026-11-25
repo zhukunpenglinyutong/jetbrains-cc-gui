@@ -29,8 +29,8 @@ public class DiffHandler extends BaseMessageHandler {
         DiffBrowserBridge browserBridge = new DiffBrowserBridge(context, gson);
         DiffFileOperations fileOperations = new DiffFileOperations(context);
         this.dispatcher = new DiffRequestDispatcher(List.of(
-                new RefreshFileHandler(context, gson, fileOperations),
-                new SimpleDiffDisplayHandler(context, gson, fileOperations),
+                new RefreshFileHandler(context, gson),
+                new SimpleDiffDisplayHandler(context, gson),
                 new EditableDiffHandler(context, gson, browserBridge, fileOperations),
                 new InteractiveDiffMessageHandler(context, gson, browserBridge, fileOperations)
         ));

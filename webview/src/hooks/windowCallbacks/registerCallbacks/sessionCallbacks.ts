@@ -23,6 +23,16 @@ import {
 // Matches session-titles-service.cjs#updateTitle, which rejects longer titles.
 const CUSTOM_TITLE_MAX_LENGTH = 50;
 
+// Stable backend failure codes -> friendly toast copy. Unknown codes fall back
+// to the generic message (with the raw error appended when present).
+const TITLE_REGENERATION_ERROR_KEYS: Record<string, string> = {
+  empty_session: 'history.titleRegenerateFailed.emptySession',
+  disabled: 'history.titleRegenerateFailed.disabled',
+  session_not_found: 'history.titleRegenerateFailed.sessionNotFound',
+  generation_failed: 'history.titleRegenerateFailed.generationFailed',
+  custom_title: 'history.titleRegenerateFailed.customTitle',
+};
+
 export function registerSessionAndSdkCallbacks(
   options: UseWindowCallbacksOptions,
   tRef: MutableRefObject<UseWindowCallbacksOptions['t']>,
@@ -38,9 +48,11 @@ export function registerSessionAndSdkCallbacks(
     setCurrentRewindRequest,
     customSessionTitleRef,
     currentSessionIdRef,
+    historyDataRef,
     updateHistoryTitle,
     applyHistoryTitleLocal,
     setCustomSessionTitle,
+    settleTitleRegeneration,
   } = options;
 
   window.setSessionId = (sessionId: string, transitionToken?: string) => {
@@ -231,6 +243,73 @@ export function registerSessionAndSdkCallbacks(
     delete window.__pendingRestoreSessionTitle;
     window.restoreSessionTitle?.(pending.sessionId, pending.title);
   }
+
+  // =========================================================================
+  // AI Title Regeneration Result Callback (refresh buttons)
+  // =========================================================================
+
+  // Registered once for the app lifetime (unlike the per-view registration the
+  // history list originally used) so the chat-header refresh button also
+  // receives its result while the history view is not mounted.
+  window.onTitleRegenerated = (json: string) => {
+    let payload: { sessionId?: string; success?: boolean; title?: string; code?: string; error?: string };
+    try {
+      payload = JSON.parse(json);
+    } catch {
+      return;
+    }
+    if (!payload.sessionId) return;
+
+    const sessionId = payload.sessionId;
+    settleTitleRegeneration(sessionId);
+
+    if (payload.success && payload.title) {
+      applyHistoryTitleLocal(sessionId, payload.title);
+      // Live-update the on-screen header too. customSessionTitle wins in
+      // deriveSessionTitle; loading a history session seeds it with the
+      // displayed (AI) title — without this push the header keeps showing
+      // the old title until the next session switch re-seeds it. When the
+      // slot is empty (fresh session) the regenerated title goes through
+      // setRestoredSessionTitle instead: customSessionTitle is reserved for
+      // manual edits and seeded titles, and an AI title landing there would
+      // be persisted as a manual title by the B-011 migration on the next
+      // setSessionId switch.
+      const session = historyDataRef.current?.sessions?.find(
+        (entry) => entry.sessionId === sessionId,
+      );
+      if (currentSessionIdRef.current === sessionId && session?.hasCustomTitle !== true) {
+        if (customSessionTitleRef.current) {
+          setCustomSessionTitle(payload.title);
+        } else {
+          options.setRestoredSessionTitle({ sessionId, title: payload.title });
+        }
+      }
+      addToast(tRef.current('history.titleRegenerated'), 'success');
+      return;
+    }
+    // The chat-header title of the current session updates through the
+    // title_generated daemon event (updateSessionTitle above); failures keep
+    // the original title untouched, so only the toast is needed here.
+    if (payload.code === 'custom_title') {
+      // The backend found a manual title in session-titles.json that this
+      // snapshot didn't know about (e.g. the session was renamed from the
+      // chat header before the history view ever loaded it). Mark the row so
+      // both refresh buttons hide without waiting for a history reload.
+      options.setHistoryData(previous => previous?.sessions ? {
+        ...previous,
+        sessions: previous.sessions.map(session => session.sessionId === sessionId && session.hasCustomTitle !== true
+          ? { ...session, hasCustomTitle: true }
+          : session),
+      } : previous);
+    }
+    const reasonKey = payload.code ? TITLE_REGENERATION_ERROR_KEYS[payload.code] : undefined;
+    const message = reasonKey
+      ? tRef.current(reasonKey)
+      : payload.error
+        ? `${tRef.current('history.titleRegenerateFailed.generic')}: ${payload.error}`
+        : tRef.current('history.titleRegenerateFailed.generic');
+    addToast(message, 'error');
+  };
 
   // =========================================================================
   // SDK-to-CLI Session Conversion Result Callback

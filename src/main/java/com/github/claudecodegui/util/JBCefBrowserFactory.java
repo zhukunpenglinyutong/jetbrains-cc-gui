@@ -12,6 +12,7 @@ import com.intellij.ui.jcef.JBCefOSRHandlerFactory;
 import org.cef.browser.CefBrowser;
 import org.cef.handler.CefKeyboardHandler;
 import org.cef.handler.CefKeyboardHandlerAdapter;
+import org.cef.handler.CefLoadHandler;
 import org.cef.misc.BoolRef;
 
 import java.lang.reflect.Method;
@@ -90,6 +91,31 @@ public final class JBCefBrowserFactory {
         return remote;
     }
 
+    /**
+     * Registers load callbacks without losing the platform's in-process handler.
+     *
+     * <p>Classic CefClient accepts only its first load handler, already occupied by JBCefClient.
+     * Remote clients replace the previous raw handler, which takes over JBCefClient's dispatch for
+     * this browser's own client. Their browser-keyed platform dispatch can lose callbacks, so they
+     * retain the direct registration workaround.</p>
+     */
+    public static void addLoadHandler(JBCefBrowser browser, CefLoadHandler handler) {
+        CefBrowser cefBrowser = browser.getCefBrowser();
+        registerLoadHandler(
+                cefBrowser.getClass().getName(),
+                () -> browser.getJBCefClient().addLoadHandler(handler, cefBrowser),
+                () -> browser.getJBCefClient().getCefClient().addLoadHandler(handler));
+    }
+
+    static void registerLoadHandler(String browserClassName, Runnable platformRegistration, Runnable nativeRegistration) {
+        if (browserClassName != null && (browserClassName.startsWith("com.jetbrains.cef.remote.")
+                || isRemoteDevelopmentBrowserClass(browserClassName))) {
+            nativeRegistration.run();
+        } else {
+            platformRegistration.run();
+        }
+    }
+
     /** The class name is internal; matching the package tolerates a renamed proxy class. */
     static boolean isRemoteDevelopmentBrowserClass(String className) {
         return className != null && className.startsWith(REMOTE_DEVELOPMENT_PACKAGE);
@@ -123,6 +149,8 @@ public final class JBCefBrowserFactory {
                 + ", devMode=" + isDevMode + ")");
 
         try {
+            // Also cover plugin installation after the application startup callback has passed.
+            JcefJawtPreloader.preloadIfNeeded();
             // .setCreateImmediately(true) causes new tabs to stall on "Checking SDK status".
             JBCefBrowser browser = createWithFallback(
                     () -> configureBuilder(JBCefBrowser.createBuilder(), isOffScreenRendering,
@@ -130,6 +158,7 @@ public final class JBCefBrowserFactory {
                     value -> {
                         configureKeyboardWorkaround(value);
                         configureContextMenu(value, isDevMode);
+                        OsrFrameRateLimiter.install(value);
                     },
                     failure -> {
                         LOG.warn("JBCefBrowser builder failed; creating a default browser after cleanup", failure);

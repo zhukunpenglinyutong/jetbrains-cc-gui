@@ -77,7 +77,7 @@ export const FileContextChip: React.FC<FileContextChipProps> = memo(({
 
   const handlePlaceholderClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    setShowEnablePopover(true);
+    setShowEnablePopover((open) => !open);
   }, []);
 
   const handlePopoverCancel = useCallback((e: React.MouseEvent) => {

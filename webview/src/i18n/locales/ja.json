@@ -13,6 +13,51 @@
     "retry": "再試行",
     "cancel": "キャンセル"
   },
+  "markdownReview": {
+    "legacyContextCard": "Markdown レビューのコンテキスト",
+    "contextCard": "Markdown レビュー · {{count}} 件",
+    "contextDetails": "ソースのスナップショットと参照",
+    "settings": {
+      "submitShortcut": {
+        "label": "Markdown コメントの送信ショートカット",
+        "enter": "Enter で送信、Ctrl+Enter で改行",
+        "ctrlEnter": "Ctrl+Enter で送信、Enter で改行",
+        "hint": "コメントの追加と保存に適用されます。Shift+Enter は常に改行です（macOS では Command）。IME の確定では送信されません。"
+      },
+      "title": "Markdown レビュー（現在のプロジェクト）",
+      "on": "有効",
+      "off": "無効",
+      "error": "レビュー設定を更新できません。設定を開き直して再試行してください。",
+      "enabled": {
+        "label": "Markdown プレビューのコメントを有効にする（ベータ）",
+        "hint": "現在のプロジェクトのネイティブ Markdown プレビューにレビュー操作を追加します。無効にするとオーバーレイは即座に隠れ、既存のコメントは保持されます。有効にした後、すでに開いているプレビューは一度開き直すと操作が表示されます。"
+      },
+      "autoAddToChat": {
+        "label": "コメントを現在のチャット下書きに自動追加（ベータ）",
+        "hint": "既定ではオフです。コメントの作成・編集時に最新のスナップショットを選択中の CC GUI チャット入力欄に追加します。送信前に下書きを確認してください。コメントを完了または削除すると、自動追加された下書きも取り下げられます。手動で追加したコメントと引用は保持されます。"
+      },
+      "autoDeleteAffected": {
+        "label": "位置を特定できなくなったコメントを自動削除（ベータ）",
+        "hint": "引用の先頭または末尾の断片がまだ見つかる間は、編集や改行があっても「原文が変化」と表示して保持します。どの断片も見つからなくなった場合のみ削除します。書式付き選択はソースブロック全体を対象にすることがあります。削除は完了を意味しないため、agent は未完了項目を報告する必要があります。自動追加された下書きは削除されたコメントとともに取り下げられます。手動追加と引用は影響を受けません。"
+      },
+      "persist": {
+        "label": "再起動後もコメントと保留中のスナップショットを保持（ベータ）",
+        "hint": "既定ではオフです。このプロジェクトを開いている間だけ保持します。有効にするとプロジェクトワークスペースに保存されます。無効にすると次回の IDE 保存で保存内容が削除され、現在のコメントは保持されます。チャットメッセージは既存の保存方法のままです。オフの間は、プロジェクトを閉じるか IDE を再起動するとコメントと未送信の下書きは失われます。"
+      },
+      "versionRequired": "Markdown コメントには IntelliJ IDEA 2024.3 以降が必要です。"
+    },
+    "count": "レビュー項目 {{count}} 件",
+    "removeBatch": "下書きからレビューを削除",
+    "remove": "削除",
+    "snapshot": "この下書きはスナップショットです。その後のソースのコメントは反映されません。",
+    "tooLarge": "レビューが大きすぎます。送信前に項目を減らしてください。",
+    "block": "ソースブロック",
+    "source": "選択したテキスト",
+    "quote": "引用",
+    "attached": "位置を特定済み",
+    "ambiguous": "候補が複数あります",
+    "orphaned": "原文が変更されました"
+  },
   "common": {
     "ready": "準備完了",
     "loading": "読み込み中",
@@ -40,6 +85,18 @@
     "optional": "Optional"
   },
   "chat": {
+    "planUsage": {
+      "unavailable": "使用量を取得できません",
+      "dash": "使用量 —",
+      "loading": "使用量を読み込み中…",
+      "tooltipWindow": "{{period}} {{percent}}%",
+      "tooltipWindowWithReset": "{{period}} {{percent}}% · {{value}} にリセット",
+      "clickToSwitch": "クリックで期間を切り替え",
+      "switchWindowHint": "期間ラベルをクリックしてウィンドウを切り替え",
+      "worstHint": "ドットは最も悪いウィンドウを示します（{{color}}）",
+      "worstDot": "最も悪いウィンドウ: {{color}}",
+      "stale": "データが古い可能性があります（更新失敗）"
+    },
     "sendMessage": "{{provider}}にメッセージを送信",
     "createNewSession": "新規セッションを作成",
     "confirmNewSession": "現在のセッションにメッセージがあります。新規セッションを作成してもよろしいですか?",
@@ -131,6 +188,7 @@
     "totalDuration": "今回の応答時間",
     "tokenUsage": "入力 {{input}} / 出力 {{output}}",
     "tokenUsageDetail": "ターン合計 — 入力 {{input}} · キャッシュ書き込み {{cacheWrite}} · キャッシュ読み取り {{cacheRead}} · 出力 {{output}}",
+    "tokenUsageThinking": "思考 {{thinking}}",
     "cacheHitsWithRatio": "（キャッシュヒット {{tokens}}、{{ratio}}）",
     "search": {
       "ariaLabel": "会話内を検索",
@@ -254,6 +312,11 @@
         "label": "Claude CLI パス（オーバーライド）",
         "placeholder": "例: /usr/local/bin/claude — 空欄の場合は内蔵 SDK を使用",
         "hint": "任意。設定すると、内蔵の @anthropic-ai/claude-agent-sdk の代わりにこのバイナリを起動します。保存時にデーモンが再起動されます。"
+      },
+      "claudeConfigDir": {
+        "label": "Claude 設定ディレクトリ（オーバーライド）",
+        "placeholder": "例: ~/.claude-work — 空欄の場合は CLAUDE_CONFIG_DIR または ~/.claude を使用",
+        "hint": "任意。チャット履歴、セッション操作、Claude プロセスは ~/.claude の代わりにこのディレクトリを読み込みます。プラグインの settings.json と MCP サーバーはこのディレクトリに従い、スキルと Hooks のページは引き続き ~/.claude を使います。使用統計はこれを ~/.claude に加えて集計し（プロファイル別ではなく合算）、実行中の統計サーバーは次回の同期で取り込みます。クリアしても集計済みの使用量は残ります。絶対パスまたは ~/… を指定してください。WSL の node では /home/me/.claude-work のような Linux パスも使えます（Windows の CLAUDE_CONFIG_DIR は使われません）。同じプロファイルの Claude CLI パスと組み合わせてください。保存時にデーモンが再起動されます。"
       },
       "workingDirectory": {
         "label": "作業ディレクトリ",
@@ -961,6 +1024,11 @@
         "saveChanges": "Save"
       }
     },
+    "gemini": {
+      "idleReapLabel": "無応答のターンを自動停止",
+      "idleReapHelp": "指定した分数出力のない Gemini ターンを終了します。通常は CLI が対話プロンプトで止まっているか、バックエンドが停止しています。0 で自動停止を無効にします。",
+      "idleReapDisabled": "無効"
+    },
     "cli": {
       "hint": "These CLIs must be installed and configured in your system terminal. The plugin only detects installation status and version — it will never install them for you. Confirm each CLI works in the terminal before coming back here to use it.",
       "refresh": "Re-check",
@@ -1008,6 +1076,10 @@
         "omp": {
           "name": "OMP CLI",
           "description": "マルチプロバイダーのモデルに対応した Oh My Pi ターミナルコーディングエージェント"
+        },
+        "gemini": {
+          "name": "Antigravity CLI",
+          "description": "Google Antigravity ターミナルコーディングエージェント (agy)"
         }
       },
       "installDialog": {
@@ -1213,6 +1285,16 @@
     "cancelEditButton": "キャンセル",
     "titleTooLong": "タイトルが長すぎます(最大50文字)",
     "titleUpdated": "タイトルが更新されました",
+    "regenerateTitle": "会話内容からタイトルを再生成",
+    "titleRegenerated": "タイトルを再生成しました",
+    "titleRegenerateFailed": {
+      "generic": "タイトルの再生成に失敗しました",
+      "emptySession": "タイトル生成に使える会話内容がありません",
+      "disabled": "設定でAIタイトル生成が無効になっています",
+      "sessionNotFound": "セッション記録ファイルが見つかりません",
+      "generationFailed": "タイトル生成に失敗しました。後でもう一度お試しください",
+      "customTitle": "このセッションには手動のタイトルが設定されているため、AIタイトルより優先されます"
+    },
     "copySessionId": "CLI resume用にセッションIDをコピー",
     "sessionIdCopied": "セッションIDをコピーしました",
     "copyFailed": "コピーに失敗しました",
@@ -1920,6 +2002,9 @@
     }
   },
   "models": {
+    "gemini": {
+      "vanishedSelection": "モデル {{model}} は利用できなくなったため、CLI のデフォルトモデルに戻しました。"
+    },
     "addModel": "モデル追加",
     "searchPlaceholder": "モデルを検索",
     "clearSearch": "検索をクリア",
@@ -2041,6 +2126,12 @@
       "shortLabel": "完全自動",
       "tooltip": "すべての権限チェックをバイパス",
       "description": "完全自動、すべての権限チェックをバイパス[注意して使用]"
+    },
+    "sandbox": {
+      "label": "サンドボックスモード",
+      "shortLabel": "サンドボックス",
+      "tooltip": "サンドボックスで実行（Gemini CLI のみ）",
+      "description": "ターミナル制限を有効にしたサンドボックスで実行します（Gemini CLI）"
     }
   },
   "workspaceDiff": {
@@ -2138,7 +2229,7 @@
       "label": "ZCode"
     },
     "gemini": {
-      "label": "Gemini Cli"
+      "label": "Antigravity CLI"
     },
     "opencode": {
       "label": "OpenCode"
@@ -2261,6 +2352,16 @@
     "codexNetworkErrorChecks": "確認してください：\n1. ネットワーク接続は正常ですか\n2. プロキシを使用している場合、プロキシ設定を確認してください\n3. ファイアウォールが接続をブロックしていませんか",
     "codexError": "Codex エラー：",
     "codexErrorCheck": "ネットワーク接続と Codex 設定を確認してください",
+    "geminiAuthRequired": "Gemini CLI の認証が必要です：",
+    "geminiAuthCause": "- 原因：Gemini CLI (agy) がログインしていないか、認証情報の有効期限が切れています。",
+    "geminiAuthResolution": "- 解決方法：外部ターミナルで 'agy' を実行し、Google のインタラクティブなログイン フローを完了してください。",
+    "geminiAuthNote": "- 注意：このプラグインは Google の認証情報を管理せず、プラグイン内で Google ログインを行うこともありません。",
+    "geminiErrorDetails": "エラー詳細",
+    "geminiIdleReapStopped": "Gemini のターンを自動停止しました：Gemini CLI (agy) から {{window}} 間出力がありませんでした。",
+    "geminiIdleReapCauseAlive": "- 考えられる原因：CLI プロセスは存続しているものの出力がなく、インタラクティブなプロンプト（多くは認証）で停止しているか、バックエンド/ネットワークで滞留している可能性が高いです。",
+    "geminiIdleReapCauseExited": "- 考えられる原因：CLI プロセスは既に結果を返さずに終了していました。",
+    "geminiIdleReapWhatToDo": "- 対処方法：外部ターミナルで 'agy' を実行してログイン状態を確認し、キャンセルして再試行してください。ターンが正当に無出力だった場合（長時間のビルドなど）は、上限を引き上げてください。",
+    "geminiIdleReapSetting": "- この上限は設定可能です：Gemini プラグイン設定で gemini.idleReapMinutes を設定してください（0 で自動停止を無効化）。",
     "codexThinkingHint": "Codex が reasoning 項目を返しませんでした。思考プロセスが表示されない場合は、docs/codex/docs/config.md の hide_agent_reasoning/show_raw_agent_reasoning 設定を参照し、OpenAI アカウントが認証済みであることを確認してください。",
     "userDeniedPermission": "ユーザーが {{toolName}} ツールの使用権限を拒否しました",
     "userDidNotProvideAnswers": "ユーザーが回答を提供しませんでした",
@@ -2273,7 +2374,19 @@
     "uploadedImages": "{{count}} 枚の画像をアップロードしました",
     "uploadedAttachments": "添付ファイルをアップロードしました",
     "emptyMessage": "空のメッセージ",
-    "attachment": "添付ファイル"
+    "attachment": "添付ファイル",
+    "workspaceSubstituted": "[通知] 作業ディレクトリを置き換えました: 指定 \"{{requested}}\"、使用 \"{{effective}}\" ({{reason}})。",
+    "workspaceReasonUnsafe": "安全ではない作業ディレクトリ",
+    "workspaceReasonPluginInternal": "プラグイン内部のディレクトリ",
+    "workspaceReasonMissing": "ディレクトリが存在しません",
+    "workspaceReasonNotADirectory": "ディレクトリではありません",
+    "workspaceReasonTemporary": "一時ディレクトリ",
+    "attachmentNotDelivered": {
+      "notice": "[通知] 添付ファイルを配信できませんでした: \"{{name}}\" ({{reason}})。",
+      "nonImage": "画像の添付ファイルのみサポートしています",
+      "tooLarge": "画像が1画像あたり2 MBの制限を超えています",
+      "invalid": "画像データが存在しないか、読み取れません"
+    }
   },
   "changelog": {
     "title": "更新情報",

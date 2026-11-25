@@ -13,6 +13,53 @@
     "retry": "Réessayer",
     "cancel": "Annuler"
   },
+  "markdownReview": {
+    "legacyContextCard": "Contexte de revue Markdown",
+    "contextCard_one": "Revue Markdown · {{count}} élément",
+    "contextCard_other": "Revue Markdown · {{count}} éléments",
+    "contextDetails": "Instantané de la source et référence",
+    "settings": {
+      "submitShortcut": {
+        "label": "Raccourci d’envoi des commentaires Markdown",
+        "enter": "Entrée envoie, Ctrl+Entrée insère un saut de ligne",
+        "ctrlEnter": "Ctrl+Entrée envoie, Entrée insère un saut de ligne",
+        "hint": "S’applique à l’ajout et à l’enregistrement des commentaires. Maj+Entrée insère toujours un saut de ligne ; utilisez Commande sur macOS. La validation de la méthode de saisie n’envoie pas."
+      },
+      "title": "Revues Markdown (projet actuel)",
+      "on": "Activé",
+      "off": "Désactivé",
+      "error": "Impossible de mettre à jour les préférences de revue. Rouvrez les paramètres et réessayez.",
+      "enabled": {
+        "label": "Activer les annotations de l’aperçu Markdown (bêta)",
+        "hint": "Ajoute des contrôles de revue à l’aperçu Markdown natif du projet actuel. La désactivation masque immédiatement la surcouche et conserve les commentaires. Après activation, un aperçu déjà ouvert doit être rouvert une fois pour afficher les contrôles."
+      },
+      "autoAddToChat": {
+        "label": "Ajouter automatiquement les commentaires au brouillon du chat (bêta)",
+        "hint": "Désactivé par défaut. Créer ou modifier un commentaire ajoute son dernier instantané à la saisie du chat CC GUI sélectionné. Vérifiez le brouillon avant l’envoi. Terminer ou supprimer un commentaire retire aussi son brouillon ajouté automatiquement ; les commentaires ajoutés manuellement et les citations sont conservés."
+      },
+      "autoDeleteAffected": {
+        "label": "Supprimer automatiquement les commentaires introuvables (bêta)",
+        "hint": "Un commentaire est conservé avec la mention « Source modifiée » tant que le début ou la fin de la citation reste localisable ; une modification ou un saut de ligne ne le supprime pas. Il n'est supprimé que lorsqu'aucun fragment n'est localisable. Les sélections formatées peuvent couvrir tout un bloc source. Le nettoyage ne prouve pas l'achèvement : l'agent doit signaler les éléments inachevés. Les brouillons ajoutés automatiquement sont retirés avec le commentaire supprimé ; les ajouts manuels et les citations restent intacts."
+      },
+      "persist": {
+        "label": "Conserver commentaires et instantanés en attente après redémarrage (bêta)",
+        "hint": "Désactivé par défaut : les données ne sont conservées que pendant l’ouverture du projet. Activez pour enregistrer dans l’espace de travail du projet. La désactivation supprime le contenu enregistré à la prochaine sauvegarde de l’IDE et conserve les commentaires actifs. Les messages du chat utilisent leur stockage existant. Lorsque l’option est désactivée, les commentaires et brouillons non envoyés sont perdus à la fermeture du projet ou au redémarrage de l’IDE."
+      },
+      "versionRequired": "Les annotations Markdown nécessitent IntelliJ IDEA 2024.3 ou une version ultérieure."
+    },
+    "count_one": "{{count}} élément de revue",
+    "count_other": "{{count}} éléments de revue",
+    "removeBatch": "Retirer la revue du brouillon",
+    "remove": "Retirer",
+    "snapshot": "Ce brouillon est un instantané ; les modifications ultérieures des commentaires source ne l’affectent pas.",
+    "tooLarge": "Cette revue est trop volumineuse. Retirez des éléments avant l’envoi.",
+    "block": "Bloc source",
+    "source": "Texte sélectionné",
+    "quote": "Citation",
+    "attached": "Localisé",
+    "ambiguous": "Emplacements multiples possibles",
+    "orphaned": "Texte d’origine modifié"
+  },
   "common": {
     "ready": "Prêt",
     "loading": "Chargement",
@@ -40,6 +87,18 @@
     "optional": "Optional"
   },
   "chat": {
+    "planUsage": {
+      "unavailable": "Utilisation indisponible",
+      "dash": "Utilisation —",
+      "loading": "Chargement de l'utilisation…",
+      "tooltipWindow": "{{period}} {{percent}}%",
+      "tooltipWindowWithReset": "{{period}} {{percent}}% · réinitialise {{value}}",
+      "clickToSwitch": "Cliquez pour changer de période",
+      "switchWindowHint": "Cliquez sur le libellé de période pour changer de fenêtre",
+      "worstHint": "Le point montre la pire fenêtre ({{color}})",
+      "worstDot": "Pire fenêtre : {{color}}",
+      "stale": "Les données peuvent être obsolètes (échec de l'actualisation)"
+    },
     "sendMessage": "Envoyer un message à {{provider}}",
     "createNewSession": "Créer une nouvelle session",
     "confirmNewSession": "La session actuelle contient des messages, êtes-vous sûr de vouloir créer une nouvelle session ?",
@@ -131,6 +190,7 @@
     "totalDuration": "Cette réponse a pris",
     "tokenUsage": "{{input}} entrée / {{output}} sortie",
     "tokenUsageDetail": "Total du tour — entrée {{input}} · écriture cache {{cacheWrite}} · lecture cache {{cacheRead}} · sortie {{output}}",
+    "tokenUsageThinking": "Réflexion {{thinking}}",
     "cacheHitsWithRatio": " ({{tokens}} cache atteint, {{ratio}})",
     "search": {
       "ariaLabel": "Rechercher dans la conversation",
@@ -254,6 +314,11 @@
         "label": "Chemin du CLI Claude (remplacement)",
         "placeholder": "ex. /usr/local/bin/claude — laissez vide pour utiliser le SDK intégré",
         "hint": "Facultatif. Lorsqu'il est défini, le plugin lance ce binaire au lieu du @anthropic-ai/claude-agent-sdk intégré. Le démon redémarre lors de l'enregistrement."
+      },
+      "claudeConfigDir": {
+        "label": "Répertoire de configuration de Claude (remplacement)",
+        "placeholder": "ex. ~/.claude-work — laissez vide pour utiliser CLAUDE_CONFIG_DIR ou ~/.claude",
+        "hint": "Facultatif. L'historique des discussions, les actions de session et le processus Claude lisent ce répertoire à la place de ~/.claude. Le settings.json et les serveurs MCP du plugin le suivent ; ses pages de compétences et de Hooks utilisent toujours ~/.claude. Les statistiques d'utilisation l'ajoutent à ~/.claude (cumul, pas par profil) et un serveur de statistiques en cours d'exécution le prend en compte à sa prochaine synchronisation ; l'utilisation déjà comptabilisée est conservée si vous l'effacez. Utilisez un chemin absolu ou ~/… ; avec un node WSL, un chemin Linux comme /home/me/.claude-work fonctionne et le CLAUDE_CONFIG_DIR de Windows n'est pas utilisé. Associez-le au chemin du CLI Claude du même profil. Le démon redémarre lors de l'enregistrement."
       },
       "workingDirectory": {
         "label": "Working Directory",
@@ -966,6 +1031,11 @@
         "saveChanges": "Save"
       }
     },
+    "gemini": {
+      "idleReapLabel": "Arrêter automatiquement les tours silencieux",
+      "idleReapHelp": "Met fin à un tour Gemini sans aucune sortie pendant ce nombre de minutes — généralement une CLI bloquée sur une invite interactive ou un backend en panne. 0 désactive l'arrêt automatique.",
+      "idleReapDisabled": "Désactivé"
+    },
     "cli": {
       "hint": "These CLIs must be installed and configured in your system terminal. The plugin only detects installation status and version — it will never install them for you. Confirm each CLI works in the terminal before coming back here to use it.",
       "refresh": "Re-check",
@@ -1013,6 +1083,10 @@
         "omp": {
           "name": "OMP CLI",
           "description": "Agent de codage terminal Oh My Pi avec prise en charge multi-fournisseurs"
+        },
+        "gemini": {
+          "name": "Antigravity CLI",
+          "description": "Agent de codage en terminal Google Antigravity (agy)"
         }
       },
       "installDialog": {
@@ -1218,6 +1292,16 @@
     "cancelEditButton": "Annuler",
     "titleTooLong": "Titre trop long (maximum 50 caractères)",
     "titleUpdated": "Titre mis à jour",
+    "regenerateTitle": "Régénérer le titre à partir de la conversation",
+    "titleRegenerated": "Titre régénéré",
+    "titleRegenerateFailed": {
+      "generic": "Échec de la régénération du titre",
+      "emptySession": "Aucun contenu de conversation pour générer un titre",
+      "disabled": "La génération de titres par IA est désactivée dans les paramètres",
+      "sessionNotFound": "Fichier de session introuvable",
+      "generationFailed": "Échec de la génération du titre, réessayez plus tard",
+      "customTitle": "Cette session possède un titre manuel, qui prime sur le titre généré par l’IA"
+    },
     "copySessionId": "Copier l'ID de session pour CLI resume",
     "sessionIdCopied": "ID de session copié",
     "copyFailed": "Échec de la copie",
@@ -1925,6 +2009,9 @@
     }
   },
   "models": {
+    "gemini": {
+      "vanishedSelection": "Le modèle {{model}} n'est plus disponible — retour au modèle par défaut de la CLI."
+    },
     "addModel": "Ajouter un modèle",
     "searchPlaceholder": "Rechercher des modèles",
     "clearSearch": "Effacer la recherche",
@@ -2046,6 +2133,12 @@
       "shortLabel": "Totale",
       "tooltip": "Contourner toutes les vérifications d'autorisation",
       "description": "Entièrement automatisé, contourne toutes les vérifications d'autorisation [À utiliser avec prudence]"
+    },
+    "sandbox": {
+      "label": "Mode Sandbox",
+      "shortLabel": "Sandbox",
+      "tooltip": "Exécution en sandbox (Gemini CLI uniquement)",
+      "description": "S'exécute dans un sandbox avec des restrictions de terminal activées (Gemini CLI)"
     }
   },
   "workspaceDiff": {
@@ -2146,7 +2239,7 @@
       "label": "ZCode"
     },
     "gemini": {
-      "label": "Gemini Cli"
+      "label": "Antigravity CLI"
     },
     "opencode": {
       "label": "OpenCode"
@@ -2269,6 +2362,16 @@
     "codexNetworkErrorChecks": "Veuillez vérifier :\n1. La connexion réseau fonctionne-t-elle ?\n2. Si vous utilisez un proxy, veuillez confirmer la configuration du proxy\n3. Le pare-feu bloque-t-il la connexion ?",
     "codexError": "Erreur Codex :",
     "codexErrorCheck": "Veuillez vérifier la connexion réseau et la configuration Codex",
+    "geminiAuthRequired": "Authentification Gemini CLI requise :",
+    "geminiAuthCause": "- Cause : La CLI Gemini (agy) n'est pas connectée ou les identifiants ont expiré.",
+    "geminiAuthResolution": "- Résolution : Exécutez 'agy' dans un terminal externe et suivez le flux de connexion Google interactif.",
+    "geminiAuthNote": "- Remarque : Ce plugin ne gère pas les identifiants Google et n'effectue pas de connexion Google depuis le plugin.",
+    "geminiErrorDetails": "Détails de l'erreur",
+    "geminiIdleReapStopped": "Le tour Gemini a été arrêté automatiquement : aucune sortie de la CLI Gemini (agy) depuis {{window}}.",
+    "geminiIdleReapCauseAlive": "- Cause probable : le processus de la CLI était vivant mais silencieux — il est probablement bloqué sur une invite interactive (le plus souvent l'authentification) ou en attente côté backend/réseau.",
+    "geminiIdleReapCauseExited": "- Cause probable : le processus de la CLI s'était déjà terminé sans livrer de résultat.",
+    "geminiIdleReapWhatToDo": "- Que faire : exécutez 'agy' dans un terminal externe pour vérifier votre connexion, puis annulez et réessayez ; si le tour était légitimement silencieux (par ex. une longue compilation), augmentez la limite.",
+    "geminiIdleReapSetting": "- Cette limite est configurable : définissez gemini.idleReapMinutes dans les paramètres du plugin Gemini (0 désactive l'arrêt automatique).",
     "codexThinkingHint": "Codex n'a pas retourné d'éléments de raisonnement. Si vous ne pouvez toujours pas voir le processus de réflexion, veuillez consulter docs/codex/docs/config.md pour les paramètres hide_agent_reasoning/show_raw_agent_reasoning, et assurez-vous que votre compte OpenAI a été vérifié.",
     "userDeniedPermission": "L'utilisateur a refusé la permission pour l'outil {{toolName}}",
     "userDidNotProvideAnswers": "L'utilisateur n'a pas fourni de réponses",
@@ -2281,7 +2384,19 @@
     "uploadedImages": "{{count}} image(s) téléchargée(s)",
     "uploadedAttachments": "Pièce(s) jointe(s) téléchargée(s)",
     "emptyMessage": "Message vide",
-    "attachment": "Pièce jointe"
+    "attachment": "Pièce jointe",
+    "workspaceSubstituted": "[Avis] Répertoire de travail remplacé : \"{{requested}}\" demandé, utilisation de \"{{effective}}\" ({{reason}}).",
+    "workspaceReasonUnsafe": "répertoire de travail non sûr",
+    "workspaceReasonPluginInternal": "répertoire interne du plugin",
+    "workspaceReasonMissing": "le répertoire n'existe pas",
+    "workspaceReasonNotADirectory": "n'est pas un répertoire",
+    "workspaceReasonTemporary": "répertoire temporaire",
+    "attachmentNotDelivered": {
+      "notice": "[Avis] Pièce jointe non livrée : \"{{name}}\" ({{reason}}).",
+      "nonImage": "seules les pièces jointes de type image sont prises en charge",
+      "tooLarge": "l'image dépasse la limite de 2 Mo par image",
+      "invalid": "les données de l'image sont absentes ou illisibles"
+    }
   },
   "changelog": {
     "title": "Nouveautés",

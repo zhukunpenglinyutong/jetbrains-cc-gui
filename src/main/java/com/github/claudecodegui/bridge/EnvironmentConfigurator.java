@@ -2,6 +2,7 @@
 package com.github.claudecodegui.bridge;
 
 import com.github.claudecodegui.settings.CodemossSettingsService;
+import com.github.claudecodegui.util.ClaudeConfigDir;
 import com.github.claudecodegui.util.CodexHomeResolver;
 import com.github.claudecodegui.util.PlatformUtils;
 import com.github.claudecodegui.util.ShellExecutor;
@@ -187,7 +188,24 @@ public class EnvironmentConfigurator {
             env.put(CODEX_HOME_ENV, normalizePathForNodeEnvironment(codexHome, isWslNode));
         }
 
+        configureClaudeConfigDirEnv(env, ClaudeConfigDir.override(), isWslNode);
+
         configurePermissionEnv(env, nodeExecutable);
+    }
+
+    /**
+     * Hands the configured Claude config directory to every Node child, so one-shot processes
+     * (session loading, rewind, MCP status) read the same profile the daemon does. A WSL node
+     * gets the Linux spelling of the directory. Without a usable directory an inherited value is
+     * removed: the plugin reads ~/.claude then, so a relative value (or, for WSL, the Windows one)
+     * must not send node elsewhere.
+     */
+    static void configureClaudeConfigDirEnv(Map<String, String> env, Path configDir, boolean isWslNode) {
+        if (configDir == null) {
+            env.remove(ClaudeConfigDir.ENV_VAR);
+            return;
+        }
+        env.put(ClaudeConfigDir.ENV_VAR, ClaudeConfigDir.forNode(configDir, isWslNode));
     }
 
     static String resolveHomeForNodeEnvironment(String nodeExecutable, String currentHome) {
@@ -276,7 +294,8 @@ public class EnvironmentConfigurator {
             CLAUDE_PERMISSION_ENV,
             CLAUDE_SESSION_ID_ENV,
             CLAUDE_PERMISSION_SAFETY_NET_ENV,
-            CODEX_INHERIT_PROXY_ENV
+            CODEX_INHERIT_PROXY_ENV,
+            ClaudeConfigDir.ENV_VAR
     };
 
     /** Appends the propagated keys to WSLENV so they reach the daemon inside WSL. */

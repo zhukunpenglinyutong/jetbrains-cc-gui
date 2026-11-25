@@ -17,6 +17,52 @@ import java.util.List;
  */
 public class JBCefBrowserFactoryTest {
 
+    /** Classic clients already have a raw handler, so plugin callbacks must join the multiplexer. */
+    @Test
+    public void classicLoadHandlersUsePlatformMultiplexer() {
+        List<String> calls = new ArrayList<>();
+        for (String className : List.of("com.intellij.ui.jcef.JBCefBrowserBase$8",
+                "org.cef.browser.CefBrowserOsrWithHandler", "org.cef.browser.CefBrowserWr")) {
+            JBCefBrowserFactory.registerLoadHandler(className,
+                    () -> calls.add("platform"), () -> calls.add("native"));
+        }
+        Assert.assertEquals(List.of("platform", "platform", "platform"), calls);
+    }
+
+    /** Remote runtime and Gateway proxies retain the direct callback-dispatch workaround. */
+    @Test
+    public void remoteLoadHandlersKeepDirectRegistration() {
+        List<String> calls = new ArrayList<>();
+        for (String className : List.of("com.jetbrains.cef.remote.browser.RemoteBrowser",
+                "com.jetbrains.cef.remote.browser.FutureBrowser", "com.jetbrains.rdserver.cef.BackendCefBrowser")) {
+            JBCefBrowserFactory.registerLoadHandler(className,
+                    () -> calls.add("platform"), () -> calls.add("native"));
+        }
+        Assert.assertEquals(List.of("native", "native", "native"), calls);
+    }
+
+    /** Unrecognized implementations must not silently register a second ignored raw handler. */
+    @Test
+    public void unknownLoadHandlersPreferPlatformRegistration() {
+        AtomicInteger platform = new AtomicInteger();
+        AtomicInteger nativeCalls = new AtomicInteger();
+        JBCefBrowserFactory.registerLoadHandler(null, platform::incrementAndGet, nativeCalls::incrementAndGet);
+        JBCefBrowserFactory.registerLoadHandler("example.Browser", platform::incrementAndGet, nativeCalls::incrementAndGet);
+        Assert.assertEquals(2, platform.get());
+        Assert.assertEquals(0, nativeCalls.get());
+    }
+
+    /** A platform registration error cannot be hidden by falling back to an ignored raw handler. */
+    @Test
+    public void classicRegistrationFailureDoesNotFallBackToRawHandler() {
+        AtomicInteger nativeCalls = new AtomicInteger();
+        Assert.assertThrows(IllegalStateException.class, () -> JBCefBrowserFactory.registerLoadHandler(
+                "org.cef.browser.CefBrowserOsrWithHandler", () -> {
+                    throw new IllegalStateException("registration failed");
+                }, nativeCalls::incrementAndGet));
+        Assert.assertEquals(0, nativeCalls.get());
+    }
+
     @Test
     public void disposesPartialPrimaryBeforeAllocatingFallback() {
         BrowserFixture fixture = new BrowserFixture();

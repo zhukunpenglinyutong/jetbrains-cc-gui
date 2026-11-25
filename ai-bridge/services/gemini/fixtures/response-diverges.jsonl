@@ -1,0 +1,3 @@
+{"event":"init","conversation_id":"2235b3f8-2222-4357-be0b-e53c4f1bb260","init":{"cwd":"<TMP>","tools":["search_web"],"permission_mode":"request-review"}}
+{"event":"step_update","step_update":{"conversation_id":"2235b3f8-2222-4357-be0b-e53c4f1bb260","step_index":1,"state":"DONE","step_type":"agent_response","text_delta":"Hello"}}
+{"event":"result","result":{"conversation_id":"2235b3f8-2222-4357-be0b-e53c4f1bb260","duration_seconds":1.0,"num_turns":1,"usage":{"input_tokens":10,"output_tokens":10,"thinking_tokens":0,"cache_read_tokens":0,"total_tokens":20},"status":"SUCCESS","response":"A different and longer answer.","error":null}}

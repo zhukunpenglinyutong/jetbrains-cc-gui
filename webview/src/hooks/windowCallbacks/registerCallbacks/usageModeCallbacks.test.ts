@@ -85,3 +85,22 @@ describe('updateActiveProvider forwarding', () => {
     unsubscribe();
   });
 });
+
+describe('gemini mode from Java', () => {
+  it('lands in the gemini slot, never the claude slot', () => {
+    const setClaudePermissionMode = vi.fn();
+    const setGeminiPermissionMode = vi.fn();
+    const { options } = createOptions();
+    registerUsageModeCallbacks({
+      ...options,
+      setClaudePermissionMode,
+      setGeminiPermissionMode,
+      currentProviderRef: { current: 'gemini' },
+    } as unknown as UseWindowCallbacksOptions);
+
+    (window.onModeReceived as (mode: string) => void)('sandbox');
+
+    expect(setGeminiPermissionMode).toHaveBeenCalledTimes(1);
+    expect(setClaudePermissionMode).not.toHaveBeenCalled();
+  });
+});

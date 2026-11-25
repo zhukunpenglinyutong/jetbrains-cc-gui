@@ -46,7 +46,7 @@ import {
 } from './stream-delta-normalizer.js';
 import { generateSessionTitle } from '../session-title-service.js';
 import { projectTrustFor, settingSourcesFor } from './project-trust.js';
-import { getClaudeCliPathOverride } from '../../utils/claude-cli-path.js';
+import { getClaudeCliPathOverride, claudeCliSdkOptions } from '../../utils/claude-cli-path.js';
 import { buildSessionClaudeConfig, buildSessionClaudeSettingsOverride } from '../../config/session-supplier.js';
 import { createUltracodeQuery, withUltracodeSetting } from './ultracode.js';
 
@@ -80,6 +80,16 @@ function resolveThinkingConfig(settings) {
  */
 function buildQueryOptions({ workingDirectory, permissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines, mcpServers, modelId, settingsEnv, resolvedModelId, ultracode, childEnv, projectTrusted }) {
   const claudeCliOverride = getClaudeCliPathOverride();
+  const stderr = (data) => {
+    try {
+      const text = (data ?? '').toString().trim();
+      if (text) {
+        sdkStderrLines.push(text);
+        if (sdkStderrLines.length > 50) sdkStderrLines.shift();
+        console.error(`[SDK-STDERR] ${text}`);
+      }
+    } catch (_) { /* ignore */ }
+  };
   return {
     cwd: workingDirectory,
     permissionMode,
@@ -101,22 +111,13 @@ function buildQueryOptions({ workingDirectory, permissionMode, sdkModelName, max
     // version could silently drop bypass and change permission behavior.
     ...(permissionMode === 'bypassPermissions' && { allowDangerouslySkipPermissions: true }),
     ...(mcpServers && { mcpServers }),
-    ...(claudeCliOverride && { pathToClaudeCodeExecutable: claudeCliOverride }),
+    ...claudeCliSdkOptions(claudeCliOverride, { stderr }),
     systemPrompt: {
       type: 'preset',
       preset: 'claude_code',
       ...(systemPromptAppend && { append: systemPromptAppend })
     },
-    stderr: (data) => {
-      try {
-        const text = (data ?? '').toString().trim();
-        if (text) {
-          sdkStderrLines.push(text);
-          if (sdkStderrLines.length > 50) sdkStderrLines.shift();
-          console.error(`[SDK-STDERR] ${text}`);
-        }
-      } catch (_) { /* ignore */ }
-    }
+    stderr
   };
 }
 
@@ -194,6 +195,7 @@ function processStreamMessage(msg, state, logPrefix) {
         // or duplicate this turn's index-0 block (see resetTurnBlockState). Mirrors
         // stream-event-processor.js — both streaming paths must reset identically.
         resetTurnBlockState(state);
+        state.streamedKindsThisMessage = new Set();
         // Emit BLOCK_RESET — mirrors stream-event-processor.js, see there for rationale.
         if (state.streamingEnabled) {
           process.stdout.write('[BLOCK_RESET]\n');
@@ -328,12 +330,13 @@ function emitTextDelta(currentText, state, blockIndex = 0) {
     return;
   }
   // Single-source the delta through the normalizer (see resolveSnapshotDelta).
-  // Emit gate (unchanged from the tail-fill fix):
-  //   - !hasStreamEvents: pre-stream fallback, emit the whole computed delta
-  //   - hasStreamEvents && hadPrevious: genuine tail-fill / snapshot correction
-  //   - hasStreamEvents && !hadPrevious: stream will deliver this block, suppress
-  const { delta, hadPrevious } = resolveSnapshotDelta(state, 'text', blockIndex, currentText);
-  if (delta && (!state.hasStreamEvents || hadPrevious)) {
+  // Emit gate:
+  //   - kind never streamed this message: the snapshot is the only source (no
+  //     stream events, or a relay that streams thinking_delta but no text_delta)
+  //   - hadPrevious: genuine tail-fill / snapshot correction
+  //   - otherwise the stream already delivers this kind, suppress
+  const { delta, hadPrevious, kindStreamed } = resolveSnapshotDelta(state, 'text', blockIndex, currentText);
+  if (delta && (!kindStreamed || hadPrevious)) {
     process.stdout.write(`[CONTENT_DELTA] ${JSON.stringify(delta)}\n`);
   }
   state.lastAssistantContent = currentText;
@@ -345,8 +348,8 @@ function emitThinkingDelta(thinkingText, state, blockIndex = 0) {
     console.log('[THINKING]', thinkingText);
     return;
   }
-  const { delta, hadPrevious } = resolveSnapshotDelta(state, 'thinking', blockIndex, thinkingText);
-  if (delta && (!state.hasStreamEvents || hadPrevious)) {
+  const { delta, hadPrevious, kindStreamed } = resolveSnapshotDelta(state, 'thinking', blockIndex, thinkingText);
+  if (delta && (!kindStreamed || hadPrevious)) {
     process.stdout.write(`[THINKING_DELTA] ${JSON.stringify(delta)}\n`);
   }
   state.lastThinkingContent = thinkingText;

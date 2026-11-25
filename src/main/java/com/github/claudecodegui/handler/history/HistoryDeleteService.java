@@ -1,5 +1,6 @@
 package com.github.claudecodegui.handler.history;
 
+import com.github.claudecodegui.util.ClaudeConfigDir;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.NodeJsServiceCaller;
 import com.github.claudecodegui.handler.core.HandlerContext;
@@ -305,6 +306,9 @@ class HistoryDeleteService {
         if ("minimax".equals(currentProvider)) {
             return new DeleteResult(deleteMiniMaxSession(sessionId), 0);
         }
+        if ("gemini".equals(currentProvider)) {
+            return new DeleteResult(deleteGeminiSession(sessionId), 0);
+        }
         if ("zcode".equals(currentProvider)) {
             return new DeleteResult(deleteZcodeSession(sessionId), 0);
         }
@@ -390,6 +394,17 @@ class HistoryDeleteService {
                 new com.github.claudecodegui.provider.minimax.MiniMaxHistoryReader();
         boolean deleted = reader.deleteSession(sessionId, projectPath);
         LOG.info("[HistoryHandler] Delete MiniMax session " + sessionId + ": " + (deleted ? "ok" : "not found"));
+        return deleted;
+    }
+
+    private boolean deleteGeminiSession(String sessionId) throws java.io.IOException {
+        String rawPath = context.resolveEffectiveWorkingDirectory();
+        String nodePath = NodeDetector.getInstance().getCachedNodePath();
+        String projectPath = NodeDetector.isWslPath(nodePath) ? NodeDetector.convertToWslPath(rawPath) : rawPath;
+        com.github.claudecodegui.provider.gemini.GeminiHistoryReader reader =
+                new com.github.claudecodegui.provider.gemini.GeminiHistoryReader();
+        boolean deleted = reader.deleteSession(sessionId, projectPath);
+        LOG.info("[HistoryHandler] Delete Gemini session " + sessionId + ": " + (deleted ? "ok" : "not found"));
         return deleted;
     }
 
@@ -597,9 +612,7 @@ class HistoryDeleteService {
      * @return int[2]: [mainDeleted(0/1), agentFilesDeleted]
      */
     private int[] deleteClaudeSession(String sessionId, String projectPath) throws java.io.IOException {
-        String homeDir = NodeDetector.resolveHomeForFileOps();
-        Path claudeDir = Paths.get(homeDir, ".claude");
-        Path projectsDir = claudeDir.resolve("projects");
+        Path projectsDir = ClaudeConfigDir.current().resolve("projects");
         List<Path> sessionDirs = PathUtils.getSanitizedPathCandidates(projectPath).stream()
                 .map(projectsDir::resolve)
                 .filter(Files::isDirectory)

@@ -4,7 +4,7 @@ import { useReasoningEffortGuard } from '../../components/ChatInputBox/reasoning
 import type { ReasoningEffort } from '../../components/ChatInputBox/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { __resetCliModelsCacheForTests, useCliModels, useOmpRoles } from './useCliModels';
-import { CODEX_MODELS, KIMI_MODELS, OMP_ROLE_MODELS, apply1MContextSuffix, modelSupports1MContext } from '../../components/ChatInputBox/types';
+import { CODEX_MODELS, GEMINI_MODELS, KIMI_MODELS, OMP_ROLE_MODELS, apply1MContextSuffix, modelSupports1MContext } from '../../components/ChatInputBox/types';
 import { installRuntimeProviderDispatchers } from '../../utils/runtimeProviderCapabilities';
 import { readClaudeModelMapping, writeClaudeModelMapping } from '../../utils/claudeModelMapping';
 import { setSessionClaudeModelCatalog } from '../../utils/sessionClaudeModelCatalog';
@@ -351,6 +351,19 @@ describe('useCliModels', () => {
     expect(result.current.cliModelsLoaded).toBe(true);
     expect(result.current.cliModelsReplaceBuiltIns).toBe(false);
     expect(result.current.cliModels).toEqual([]);
+  });
+
+  it('fetches the gemini catalog when the gemini provider is active', () => {
+    renderHook(() => useCliModels('gemini'));
+    expect(sendBridgeEventMock).toHaveBeenCalledWith('get_cli_models', 'gemini');
+  });
+
+  it('falls back to the auto-only GEMINI_MODELS list before the gemini catalog arrives', () => {
+    const { result } = renderHook(() => useCliModels('gemini'));
+    // Honest offline fallback: just the 'auto' sentinel, no fabricated families.
+    expect(result.current.cliModels).toEqual(GEMINI_MODELS);
+    expect(result.current.cliModels[0].id).toBe('auto');
+    expect(result.current.cliModelsLoading).toBe(true);
   });
 
   it('falls back to the static CODEX_MODELS list before the catalog arrives', () => {

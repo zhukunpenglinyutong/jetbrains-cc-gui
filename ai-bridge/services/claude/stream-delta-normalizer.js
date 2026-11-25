@@ -162,6 +162,9 @@ export function normalizeStreamDelta(turnState, kind, index, incoming, origin = 
   blockMap.set(blockIndex, result.next);
   if (origin === 'stream' && text) {
     streamPayloads.set(mKey, text);
+    // Per-message, not per-block: content_block_start resets the block maps, and
+    // Claude Code snapshots number blocks from 0 while stream events do not.
+    (turnState.streamedKindsThisMessage ??= new Set()).add(kind);
   }
   if (origin === 'snapshot' && text) {
     snapshotPayloads.set(mKey, text);
@@ -185,7 +188,8 @@ export function normalizeStreamDelta(turnState, kind, index, incoming, origin = 
  * absorbs that case in snapshot mode and keeps the block map single-sourced.
  *
  * Returns the novel delta to emit plus `hadPrevious` (whether the block already
- * held streamed content before this snapshot) — the gate the tail-fill fix
+ * held streamed content before this snapshot) and `kindStreamed` (whether this
+ * kind got any live delta since message_start) — the gates the tail-fill fix
  * depends on. IO and emit-gating stay with the caller so this stays pure.
  */
 export function resolveSnapshotDelta(turnState, kind, index, snapshot) {
@@ -194,7 +198,8 @@ export function resolveSnapshotDelta(turnState, kind, index, snapshot) {
   const blockIndex = getBlockIndex(index);
   const hadPrevious = (blockMap.get(blockIndex) || '').length > 0;
   const delta = normalizeStreamDelta(turnState, kind, index, snapshot, 'snapshot');
-  return { delta, hadPrevious };
+  const kindStreamed = turnState.streamedKindsThisMessage?.has(kind) === true;
+  return { delta, hadPrevious, kindStreamed };
 }
 
 /**

@@ -50,7 +50,7 @@ tasks.named('checkstyleTest') {
 group = 'com.github.idea-claude-code-gui'
 // Keep this line as a plain literal: webview/scripts/extract-version.mjs matches it
 // with /^version\s*=\s*'(.+)'$/ to generate the webview's APP_VERSION.
-version = '0.6.6-fix1'
+version = '0.6.7'
 
 // Local-only override for custom builds (e.g. distribution flavors). Put
 // plugin.version=... in the gitignored local.properties (or pass -Pplugin.version=...)
@@ -143,6 +143,8 @@ dependencies {
         // Git-less IDE configurations. Used for real `git diff` via
         // git4idea.commands.* in the Commit AI feature.
         bundledPlugin('Git4Idea')
+        // Native Markdown preview annotations load only with this optional plugin.
+        bundledPlugin('org.intellij.plugins.markdown')
 
         instrumentationTools()
 
@@ -178,6 +180,9 @@ intellijPlatform {
             // the CefResourceHandler / PluginManagerCore issues during
             // marketplace verification.
             ide('IU', '262.9437.22')
+            // sinceBuild floor (2023.3): verifies the native Markdown preview
+            // annotation classes can load on the oldest supported IDE.
+            ide('IC', '2023.3.7')
         }
     }
 }

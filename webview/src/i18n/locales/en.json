@@ -19,6 +19,53 @@
     "retry": "Retry",
     "cancel": "Cancel"
   },
+  "markdownReview": {
+    "legacyContextCard": "Markdown review context",
+    "contextCard_one": "Markdown review · {{count}} item",
+    "contextCard_other": "Markdown review · {{count}} items",
+    "contextDetails": "Source snapshot and reference",
+    "settings": {
+      "submitShortcut": {
+        "label": "Markdown comment submit shortcut",
+        "enter": "Enter submits, Ctrl+Enter inserts a newline",
+        "ctrlEnter": "Ctrl+Enter submits, Enter inserts a newline",
+        "hint": "Applies to adding and saving comments. Shift+Enter always inserts a newline; use Command on macOS. IME confirmation does not submit."
+      },
+      "title": "Markdown reviews (current project)",
+      "on": "Enabled",
+      "off": "Disabled",
+      "error": "Unable to update review preferences. Reopen settings and try again.",
+      "enabled": {
+        "label": "Enable Markdown preview annotations (beta)",
+        "hint": "Add review controls to the current project's native Markdown preview. Disabling hides the overlay immediately and keeps current comments. After enabling, a preview that is already open must be reopened once to show the controls."
+      },
+      "autoAddToChat": {
+        "label": "Automatically add comments to the current chat draft (beta)",
+        "hint": "Off by default. Creating or editing a comment adds its latest snapshot to the selected CC GUI chat input. Review the draft before sending. Completing or deleting a comment also withdraws its automatically added draft; manually added comments and quotes are kept."
+      },
+      "autoDeleteAffected": {
+        "label": "Automatically delete comments that can no longer be located (beta)",
+        "hint": "Comments are kept as \"Source changed\" while the beginning or end of the quoted text can still be found; edits and line breaks alone do not delete them. A comment is removed only when no fragment can be located. Formatted selections may cover a whole source block. Cleanup does not prove completion: the agent must report unfinished items. Automatically added drafts are withdrawn with a removed comment; manual transfers and quotes remain intact."
+      },
+      "persist": {
+        "label": "Keep comments and pending snapshots after restart (beta)",
+        "hint": "Off by default: keep data only while this project is open. Enable to save to the project workspace. Disabling removes stored content on the next IDE save and retains current comments. Chat messages still use their existing storage. While off, comments and unsent drafts are lost when the project closes or the IDE restarts."
+      },
+      "versionRequired": "Markdown annotations require IntelliJ IDEA 2024.3 or newer."
+    },
+    "count_one": "{{count}} review item",
+    "count_other": "{{count}} review items",
+    "removeBatch": "Remove review from draft",
+    "remove": "Remove",
+    "snapshot": "This draft is a snapshot; later source comments do not change it.",
+    "tooLarge": "This review is too large. Remove some items before sending.",
+    "block": "Source block",
+    "source": "Selected text",
+    "quote": "Quotation",
+    "attached": "Located",
+    "ambiguous": "Multiple possible locations",
+    "orphaned": "Original text changed"
+  },
   "codexPet": {
     "title": "Codex pet",
     "close": "Hide pet",
@@ -63,6 +110,18 @@
     "optional": "Optional"
   },
   "chat": {
+    "planUsage": {
+      "unavailable": "Usage unavailable",
+      "dash": "Usage —",
+      "loading": "Loading usage…",
+      "tooltipWindow": "{{period}} {{percent}}%",
+      "tooltipWindowWithReset": "{{period}} {{percent}}% · Resets {{value}}",
+      "clickToSwitch": "Click to switch between windows",
+      "switchWindowHint": "Click period label to switch window",
+      "worstHint": "Dot shows worst window ({{color}})",
+      "worstDot": "Worst window: {{color}}",
+      "stale": "Data may be outdated (refresh failed)"
+    },
     "sendMessage": "Send message to {{provider}}",
     "createNewSession": "Create New Session",
     "confirmNewSession": "Current session has messages. Are you sure you want to create a new session?",
@@ -178,6 +237,7 @@
     "totalDuration": "This reply took",
     "tokenUsage": "{{input}} in / {{output}} out",
     "tokenUsageDetail": "Turn total — input {{input}} · cache write {{cacheWrite}} · cache read {{cacheRead}} · output {{output}}",
+    "tokenUsageThinking": "Thinking {{thinking}}",
     "cacheHitsWithRatio": " (cache hit {{tokens}}, {{ratio}})",
     "search": {
       "ariaLabel": "Search in conversation",
@@ -521,6 +581,11 @@
         "placeholder": "e.g. /usr/local/bin/claude — leave empty to use the bundled SDK",
         "hint": "Optional. When set, the plugin spawns this binary instead of the bundled @anthropic-ai/claude-agent-sdk. Daemon restarts on save."
       },
+      "claudeConfigDir": {
+        "label": "Claude Config Directory (override)",
+        "placeholder": "e.g. ~/.claude-work — leave empty to use CLAUDE_CONFIG_DIR or ~/.claude",
+        "hint": "Optional. Chat history, session actions and the Claude process read this directory instead of ~/.claude. The plugin's settings.json and MCP servers follow it; its skills and hooks pages still use ~/.claude. Usage statistics add it to ~/.claude (combined, not per profile) and a running statistics server picks it up at its next sync; usage already counted stays if you clear it. Use an absolute path or ~/…; with a WSL node a Linux path such as /home/me/.claude-work works, and the Windows CLAUDE_CONFIG_DIR is not used. Pair it with the Claude CLI path of the same profile. Daemon restarts on save."
+      },
       "workingDirectory": {
         "label": "Working Directory",
         "placeholder": "e.g. project1 or leave empty to use project root",
@@ -755,6 +820,11 @@
       "codex": "Codex",
       "cli": "CLI"
     },
+    "gemini": {
+      "idleReapLabel": "Stop silent turns automatically",
+      "idleReapHelp": "Ends a Gemini turn that has produced no output for this many minutes — usually a CLI stuck at an interactive prompt or a stalled backend. 0 disables automatic stopping.",
+      "idleReapDisabled": "Disabled"
+    },
     "cli": {
       "hint": "These CLIs must be installed and configured in your system terminal. The plugin only detects installation status and version — it will never install them for you. Confirm each CLI works in the terminal before coming back here to use it.",
       "refresh": "Re-check",
@@ -806,6 +876,10 @@
         "dsh": {
           "name": "DeepSeek Harness",
           "description": "DeepSeek terminal agent CLI (dsh)"
+        },
+        "gemini": {
+          "name": "Antigravity CLI",
+          "description": "Google Antigravity terminal coding agent (agy)"
         }
       },
       "installDialog": {
@@ -1674,6 +1748,16 @@
     "cancelEditButton": "Cancel",
     "titleTooLong": "Title too long (max 50 characters)",
     "titleUpdated": "Title updated",
+    "regenerateTitle": "Regenerate title from conversation",
+    "titleRegenerated": "Title regenerated",
+    "titleRegenerateFailed": {
+      "generic": "Title regeneration failed",
+      "emptySession": "No conversation content to derive a title from",
+      "disabled": "AI title generation is disabled in settings",
+      "sessionNotFound": "Session transcript file not found",
+      "generationFailed": "Title generation failed, please try again later",
+      "customTitle": "This session has a manual title, which takes precedence over the AI title"
+    },
     "copySessionId": "Copy session ID for CLI resume",
     "sessionIdCopied": "Session ID copied",
     "copyFailed": "Copy failed",
@@ -1747,9 +1831,6 @@
   },
   "askUserQuestion": {
     "ompTitle": "OMP has some questions for you",
-    "configWarning": "Codex reported a configuration warning. Review the details.",
-    "configWarningTitle": "Codex configuration warning",
-    "warningDetails": "View details",
     "title": "Claude has some questions for you",
     "progress": "Question {{current}} / {{total}}",
     "multiSelectHint": "You can select multiple options",
@@ -2424,6 +2505,9 @@
     }
   },
   "models": {
+    "gemini": {
+      "vanishedSelection": "Model {{model}} is no longer available — switched back to the CLI default model."
+    },
     "addModel": "Add Model",
     "searchPlaceholder": "Search models",
     "clearSearch": "Clear search",
@@ -2568,6 +2652,12 @@
       "shortLabel": "Full Auto",
       "tooltip": "Bypass all permission checks",
       "description": "Fully automated, bypassing all permission checks [Use with caution]"
+    },
+    "sandbox": {
+      "label": "Sandbox Mode",
+      "shortLabel": "Sandbox",
+      "tooltip": "Sandboxed execution (Gemini CLI only)",
+      "description": "Runs in a sandbox with terminal restrictions enabled (Gemini CLI)"
     }
   },
   "workspaceDiff": {
@@ -2655,7 +2745,7 @@
       "label": "ZCode"
     },
     "gemini": {
-      "label": "Gemini Cli"
+      "label": "Antigravity CLI"
     },
     "opencode": {
       "label": "OpenCode"
@@ -2820,6 +2910,16 @@
     "codexNetworkErrorChecks": "Please check:\n1. Is the network connection working\n2. If using a proxy, please confirm proxy configuration\n3. Is the firewall blocking the connection",
     "codexError": "Codex error:",
     "codexErrorCheck": "Please check network connection and Codex configuration",
+    "geminiAuthRequired": "Gemini CLI authentication required:",
+    "geminiAuthCause": "- Cause: The Gemini CLI (agy) is not logged in or credentials have expired.",
+    "geminiAuthResolution": "- Resolution: Run 'agy' in an external terminal and complete the interactive Google Sign-In flow.",
+    "geminiAuthNote": "- Note: This plugin does not manage Google credentials or perform Google login in-plugin.",
+    "geminiErrorDetails": "Error details",
+    "geminiIdleReapStopped": "Gemini turn stopped automatically: no output from the Gemini CLI (agy) for {{window}}.",
+    "geminiIdleReapCauseAlive": "- Likely cause: the CLI process was alive but silent — it is likely stuck at an interactive prompt (most commonly authentication) or stalled on the backend/network.",
+    "geminiIdleReapCauseExited": "- Likely cause: the CLI process had already exited without delivering a result.",
+    "geminiIdleReapWhatToDo": "- What to do: run 'agy' in an external terminal to check your login, then cancel and retry; if the turn was legitimately silent (e.g. a long build), raise the window.",
+    "geminiIdleReapSetting": "- This limit is configurable: set gemini.idleReapMinutes in the Gemini plugin settings (0 disables automatic stopping).",
     "codexThinkingHint": "Codex did not return reasoning items. If you still cannot see the thinking process, please refer to docs/codex/docs/config.md for hide_agent_reasoning/show_raw_agent_reasoning settings, and ensure your OpenAI account has been verified.",
     "userDeniedPermission": "User denied permission for {{toolName}} tool",
     "userDidNotProvideAnswers": "User did not provide answers",
@@ -2832,7 +2932,19 @@
     "uploadedImages": "Uploaded {{count}} image(s)",
     "uploadedAttachments": "Uploaded attachment(s)",
     "emptyMessage": "Empty message",
-    "attachment": "Attachment"
+    "attachment": "Attachment",
+    "workspaceSubstituted": "[Notice] Working directory substituted: requested \"{{requested}}\", using \"{{effective}}\" ({{reason}}).",
+    "workspaceReasonUnsafe": "unsafe working directory",
+    "workspaceReasonPluginInternal": "plugin-internal directory",
+    "workspaceReasonMissing": "directory does not exist",
+    "workspaceReasonNotADirectory": "not a directory",
+    "workspaceReasonTemporary": "temporary directory",
+    "attachmentNotDelivered": {
+      "notice": "[Notice] Attachment not delivered: \"{{name}}\" ({{reason}}).",
+      "nonImage": "only image attachments are supported",
+      "tooLarge": "image exceeds the 2 MB per-image limit",
+      "invalid": "image data is missing or unreadable"
+    }
   },
   "changelog": {
     "title": "What's New",

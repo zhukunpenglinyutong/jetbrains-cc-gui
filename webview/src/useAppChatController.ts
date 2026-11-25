@@ -65,6 +65,8 @@ export interface ChatControllerModelSlice {
   setCodexPermissionMode: UseWindowCallbacksOptions['setCodexPermissionMode'];
   setSelectedClaudeModel: UseWindowCallbacksOptions['setSelectedClaudeModel'];
   setSelectedCodexModel: UseWindowCallbacksOptions['setSelectedCodexModel'];
+  setSelectedGeminiModel?: UseWindowCallbacksOptions['setSelectedGeminiModel'];
+  setGeminiPermissionMode?: UseWindowCallbacksOptions['setGeminiPermissionMode'];
   setLongContextEnabled: UseWindowCallbacksOptions['setLongContextEnabled'];
   setReasoningEffort: UseWindowCallbacksOptions['setReasoningEffort'];
   setClaudeUltracode?: UseWindowCallbacksOptions['setClaudeUltracode'];
@@ -139,7 +141,8 @@ export const useAppChatController = ({
     customSessionTitle, setCustomSessionTitle,
     restoredSessionTitle, setRestoredSessionTitle,
     historyData, setHistoryData,
-    currentSessionIdRef, customSessionTitleRef,
+    regeneratingTitleSessionIds, setRegeneratingTitleSessionIds,
+    currentSessionIdRef, customSessionTitleRef, historyDataRef,
   } = useSession();
 
   // ── UI state (UIStateContext) ──
@@ -168,7 +171,7 @@ export const useAppChatController = ({
     currentProviderRef, syncActiveProviderModelMapping,
     setPermissionMode, setCurrentProvider,
     setClaudePermissionMode, setCodexPermissionMode,
-    setSelectedClaudeModel, setSelectedCodexModel,
+    setSelectedClaudeModel, setSelectedCodexModel, setSelectedGeminiModel, setGeminiPermissionMode,
     setLongContextEnabled, setReasoningEffort, setClaudeUltracode, setCodexFastMode,
     setProviderConfigVersion, setActiveProviderConfig,
     setClaudeSettingsAlwaysThinkingEnabled, setStreamingEnabledSetting,
@@ -231,10 +234,11 @@ export const useAppChatController = ({
     handleConfirmNewSession, handleCancelNewSession,
     handleConfirmInterrupt, handleCancelInterrupt,
     loadHistorySession, deleteHistorySession, deleteHistorySessions, exportHistorySession,
-    toggleFavoriteSession, updateHistoryTitle, applyHistoryTitleLocal, convertToCliSession,
+    toggleFavoriteSession, updateHistoryTitle, applyHistoryTitleLocal, regenerateHistoryTitle,
+    settleTitleRegeneration, convertToCliSession,
   } = useSessionManagement({
     messages, loading, historyData, currentSessionId, currentSessionIdRef, currentProvider,
-    setHistoryData, setMessages, setCurrentView, setCurrentSessionId,
+    setHistoryData, setRegeneratingTitleSessionIds, setMessages, setCurrentView, setCurrentSessionId,
     setCustomSessionTitle, setUsagePercentage, setUsageUsedTokens, setUsageMaxTokens,
     setStatus, setLoading, setIsThinking, setStreamingActive,
     setTaskEvents,
@@ -253,7 +257,7 @@ export const useAppChatController = ({
     setIsThinking, setStreamingActive, setHistoryData,
     setCurrentSessionId, setUsagePercentage, setUsageUsedTokens, setUsageMaxTokens,
     setPermissionMode, setCurrentProvider, setClaudePermissionMode, setCodexPermissionMode,
-    setSelectedClaudeModel, setSelectedCodexModel,
+    setSelectedClaudeModel, setSelectedCodexModel, setSelectedGeminiModel, setGeminiPermissionMode,
     setLongContextEnabled, setReasoningEffort, setClaudeUltracode, setCodexFastMode,
     setProviderConfigVersion, setActiveProviderConfig,
     setClaudeSettingsAlwaysThinkingEnabled, setStreamingEnabledSetting,
@@ -279,8 +283,9 @@ export const useAppChatController = ({
     forceClosePermissionDialog, forceCloseAskUserQuestionDialog, forceClosePlanApprovalDialog,
     openContextUsageDialog, updateContextUsageData,
     closeContextUsageDialog,
-    customSessionTitleRef, currentSessionIdRef, updateHistoryTitle, applyHistoryTitleLocal,
+    customSessionTitleRef, currentSessionIdRef, historyDataRef, updateHistoryTitle, applyHistoryTitleLocal,
     setCustomSessionTitle,
+    setRegeneratingTitleSessionIds, settleTitleRegeneration,
     setRestoredSessionTitle,
     setPermissionDialogTimeoutSeconds,
     setStartupHistoryLoadState,
@@ -512,8 +517,10 @@ export const useAppChatController = ({
     codexCompactionStartedAt,
     onContinueCodexPlan: handleContinueCodexPlan,
     // Session management
-    createNewSession, loadHistorySession, deleteHistorySession, deleteHistorySessions,
-    exportHistorySession, toggleFavoriteSession, updateHistoryTitle, convertToCliSession,
+    createNewSession, forceCreateNewSession, loadHistorySession, deleteHistorySession, deleteHistorySessions,
+    exportHistorySession, toggleFavoriteSession, updateHistoryTitle, applyHistoryTitleLocal,
+    regenerateHistoryTitle, convertToCliSession,
+    regeneratingTitleSessionIds,
     showNewSessionConfirm, handleConfirmNewSession, handleCancelNewSession,
     showInterruptConfirm, handleConfirmInterrupt, handleCancelInterrupt,
     // Rewind

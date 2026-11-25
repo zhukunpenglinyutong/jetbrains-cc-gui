@@ -154,6 +154,62 @@ public class ProjectConfigHandler {
 
     // ---- Working Directory -------------------------------------------------
 
+    public void handleGetMarkdownReviewConfig() {
+        JsonObject config = gson.toJsonTree(
+                com.github.claudecodegui.markdown.MarkdownReviewService.getInstance(context.getProject()).getConfig()).getAsJsonObject();
+        config.addProperty("versionSupported",
+                com.intellij.openapi.application.ApplicationInfo.getInstance().getBuild().getBaselineVersion() >= 243);
+        pushJson("window.setMarkdownReviewConfig", config);
+    }
+
+    public void handleSetMarkdownReviewConfig(String content) {
+        try {
+            JsonObject patch = gson.fromJson(content, JsonObject.class);
+            if (patch == null || patch.size() != 1) {
+                throw new IllegalArgumentException("Expected one Markdown review preference");
+            }
+            var service = com.github.claudecodegui.markdown.MarkdownReviewService.getInstance(context.getProject());
+            var config = service.getConfig();
+            for (var entry : patch.entrySet()) {
+                if ("submitShortcut".equals(entry.getKey())) {
+                    if (!entry.getValue().isJsonPrimitive() || !entry.getValue().getAsJsonPrimitive().isString()
+                            || !java.util.Set.of("enter", "ctrlEnter").contains(entry.getValue().getAsString())) {
+                        throw new IllegalArgumentException("Expected a valid Markdown review submit shortcut");
+                    }
+                    config.submitShortcut = entry.getValue().getAsString();
+                    continue;
+                }
+                if (!entry.getValue().isJsonPrimitive() || !entry.getValue().getAsJsonPrimitive().isBoolean()) {
+                    throw new IllegalArgumentException("Expected a boolean preference");
+                }
+                switch (entry.getKey()) {
+                    case "enabled":
+                        config.enabled = entry.getValue().getAsBoolean();
+                        break;
+                    case "autoAddToChat":
+                        config.autoAddToChat = entry.getValue().getAsBoolean();
+                        break;
+                    case "autoDeleteAffected":
+                        config.autoDeleteAffected = entry.getValue().getAsBoolean();
+                        break;
+                    case "persist":
+                        config.persist = entry.getValue().getAsBoolean();
+                        break;
+                    default:
+                        throw new IllegalArgumentException("Unknown Markdown review preference");
+                }
+            }
+            service.configure(config);
+            handleGetMarkdownReviewConfig();
+        } catch (RuntimeException error) {
+            JsonObject response = gson.toJsonTree(
+                    com.github.claudecodegui.markdown.MarkdownReviewService.getInstance(context.getProject()).getConfig()).getAsJsonObject();
+            response.addProperty("error", "Unable to update Markdown review preferences");
+            pushJson("window.setMarkdownReviewConfig", response);
+            LOG.warn("Unable to update Markdown review preferences", error);
+        }
+    }
+
     public void handleGetWorkingDirectory() {
         try {
             String projectPath = context.getProject().getBasePath();
@@ -382,6 +438,45 @@ public class ProjectConfigHandler {
         settingsService.setPermissionDialogTimeoutSeconds(seconds);
         int effectiveSeconds = settingsService.getPermissionDialogTimeoutSeconds();
         return jsonOf("permissionDialogTimeoutSeconds", effectiveSeconds);
+    }
+
+    public void handleGetGeminiIdleReapMinutes() {
+        respondWithJson("window.updateGeminiIdleReapMinutes",
+            () -> jsonOf("geminiIdleReapMinutes", settingsService.getGeminiIdleReapMinutes()),
+            jsonOf("geminiIdleReapMinutes", CodemossSettingsService.DEFAULT_GEMINI_IDLE_REAP_MINUTES),
+            "Failed to get Gemini idle reap window");
+    }
+
+    /**
+     * Parses, clamps to {@code [0, 1440]} (rounding fractions in {@code (0, 1)} up to {@code 1}),
+     * persists, and echoes the Gemini idle reap silence window.
+     *
+     * @param content JSON payload containing {@code geminiIdleReapMinutes}
+     */
+    public void handleSetGeminiIdleReapMinutes(String content) {
+        try {
+            JsonObject json = gson.fromJson(content, JsonObject.class);
+            // Strict type check like the permission-dialog timeout: only a JSON
+            // numeric primitive is accepted; anything else keeps the default.
+            int minutes = CodemossSettingsService.DEFAULT_GEMINI_IDLE_REAP_MINUTES;
+            if (json != null && json.has("geminiIdleReapMinutes")) {
+                JsonElement element = json.get("geminiIdleReapMinutes");
+                if (element != null
+                        && element.isJsonPrimitive()
+                        && element.getAsJsonPrimitive().isNumber()) {
+                    minutes = CodemossSettingsService.clampGeminiIdleReapMinutes(element.getAsDouble());
+                }
+            }
+            settingsService.setGeminiIdleReapMinutes(minutes);
+            LOG.info("[ProjectConfigHandler] Set Gemini idle reap window: "
+                    + settingsService.getGeminiIdleReapMinutes() + " min");
+            pushJson("window.updateGeminiIdleReapMinutes",
+                    jsonOf("geminiIdleReapMinutes", settingsService.getGeminiIdleReapMinutes()));
+        } catch (Exception e) {
+            LOG.error("[ProjectConfigHandler] Failed to set Gemini idle reap window; errorClass="
+                    + e.getClass().getSimpleName(), e);
+            showError("Failed to save Gemini idle reap window. See IDE log for details.");
+        }
     }
 
     public void handleGetSendShortcut() {

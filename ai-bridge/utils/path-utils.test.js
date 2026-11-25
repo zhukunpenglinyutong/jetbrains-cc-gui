@@ -15,6 +15,10 @@ import {
   getClaudeProjectSessionFilePath,
   getClaudeProjectSessionFileCandidates,
   isMainEntryModule,
+  getClaudeDir,
+  getPluginClaudeSettingsPath,
+  getClaudeJsonPath,
+  getClaudeSettingsDisplayPath,
 } from './path-utils.js';
 
 // This test sits in <bridge>/utils/, so the bridge install dir is one level up.
@@ -210,4 +214,71 @@ test('isMainEntryModule survives a junctioned entry path', (t) => {
   } finally {
     fs.rmSync(fixtureDir, { recursive: true, force: true });
   }
+});
+
+test('getClaudeDir follows CLAUDE_CONFIG_DIR like the Claude CLI and defaults to ~/.claude', () => {
+  const saved = process.env.CLAUDE_CONFIG_DIR;
+  try {
+    delete process.env.CLAUDE_CONFIG_DIR;
+    assert.equal(path.basename(getClaudeDir()), '.claude');
+
+    const custom = path.join(os.tmpdir(), 'cfg-work');
+    process.env.CLAUDE_CONFIG_DIR = custom;
+    assert.equal(getClaudeDir(), path.resolve(custom));
+
+    process.env.CLAUDE_CONFIG_DIR = '   ';
+    assert.equal(path.basename(getClaudeDir()), '.claude');
+  } finally {
+    if (saved === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+    else process.env.CLAUDE_CONFIG_DIR = saved;
+  }
+});
+
+function withConfigDir(value, fn) {
+  const saved = process.env.CLAUDE_CONFIG_DIR;
+  try {
+    if (value === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+    else process.env.CLAUDE_CONFIG_DIR = value;
+    fn();
+  } finally {
+    if (saved === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+    else process.env.CLAUDE_CONFIG_DIR = saved;
+  }
+}
+
+test('getPluginClaudeSettingsPath is settings.json inside the Claude config directory', () => {
+  withConfigDir(undefined, () => {
+    assert.equal(getPluginClaudeSettingsPath(), path.join(fs.realpathSync(homedir()), '.claude', 'settings.json'));
+  });
+  const custom = path.join(os.tmpdir(), 'cfg-work');
+  withConfigDir(custom, () => {
+    assert.equal(getPluginClaudeSettingsPath(), path.join(path.resolve(custom), 'settings.json'));
+    assert.equal(path.dirname(getPluginClaudeSettingsPath()), getClaudeDir());
+  });
+  withConfigDir('   ', () => {
+    assert.equal(getPluginClaudeSettingsPath(), path.join(fs.realpathSync(homedir()), '.claude', 'settings.json'));
+  });
+});
+
+test('getClaudeJsonPath is ~/.claude.json by default and moves into CLAUDE_CONFIG_DIR when it is set', () => {
+  withConfigDir(undefined, () => {
+    assert.equal(getClaudeJsonPath(), path.join(fs.realpathSync(homedir()), '.claude.json'));
+  });
+  const custom = path.join(os.tmpdir(), 'cfg-work');
+  withConfigDir(custom, () => {
+    assert.equal(getClaudeJsonPath(), path.join(path.resolve(custom), '.claude.json'));
+  });
+  withConfigDir('', () => {
+    assert.equal(getClaudeJsonPath(), path.join(fs.realpathSync(homedir()), '.claude.json'));
+  });
+});
+
+test('getClaudeSettingsDisplayPath keeps the familiar ~/.claude path until a directory is configured', () => {
+  withConfigDir(undefined, () => {
+    assert.equal(getClaudeSettingsDisplayPath(), '~/.claude/settings.json');
+  });
+  const custom = path.join(os.tmpdir(), 'cfg-work');
+  withConfigDir(custom, () => {
+    assert.equal(getClaudeSettingsDisplayPath(), path.join(path.resolve(custom), 'settings.json'));
+  });
 });

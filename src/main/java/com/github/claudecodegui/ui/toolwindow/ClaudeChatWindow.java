@@ -18,6 +18,7 @@ import com.github.claudecodegui.provider.minimax.MiniMaxCliBridge;
 import com.github.claudecodegui.provider.opencode.OpenCodeCliBridge;
 import com.github.claudecodegui.provider.pi.PiCliBridge;
 import com.github.claudecodegui.provider.omp.OmpCliBridge;
+import com.github.claudecodegui.provider.gemini.GeminiCliBridge;
 import com.github.claudecodegui.session.SessionProviderRouter;
 import com.github.claudecodegui.provider.common.DaemonBridge;
 import com.github.claudecodegui.provider.common.MessageCallback;
@@ -94,12 +95,15 @@ public class ClaudeChatWindow {
     private final OpenCodeCliBridge openCodeCliBridge;
     private final PiCliBridge piCliBridge;
     private final OmpCliBridge ompCliBridge;
+    private final GeminiCliBridge geminiCliBridge;
     private final MiniMaxCliBridge miniMaxCliBridge;
     private final Project project;
     private final CodemossSettingsService settingsService;
     private final HtmlLoader htmlLoader;
 
     private Content parentContent;
+    private String reviewTargetId = java.util.UUID.randomUUID().toString();
+    private boolean allowReviewRecovery;
     private String originalTabName;
     private volatile String sessionId = null;
     // Stable PermissionService routing key, assigned once at construction.
@@ -239,6 +243,25 @@ public class ClaudeChatWindow {
         this(project, false);
     }
 
+    /**
+     * Register the bundled marker-CLI bridges (kimi, openCode, pi, omp, dsh,
+     * gemini, minimax) under their provider ids. Extracted from the constructor
+     * so a test can pin the bundled set — a provider dropped from the list (e.g.
+     * gemini) fails there instead of only surfacing as a missing CLI provider
+     * inside the IDE. Grok is not on this list: it uses {@code GrokSDKBridge}
+     * (persistent ACP / grok agent stdio), not {@link MarkerCliBridge}.
+     */
+    static Map<String, MarkerCliBridge> registerBundledCliBridges(
+            MarkerCliBridge kimi,
+            MarkerCliBridge openCode,
+            MarkerCliBridge pi,
+            MarkerCliBridge omp,
+            MarkerCliBridge gemini,
+            MarkerCliBridge miniMax
+    ) {
+        return SessionProviderRouter.registerCliBridges(kimi, openCode, pi, omp, new DshCliBridge(), gemini, miniMax);
+    }
+
     private static void showUntrustedProjectNotice(Project project) {
         Notification notification = NotificationGroupManager.getInstance()
                 .getNotificationGroup("CC GUI Notifications")
@@ -284,11 +307,13 @@ public class ClaudeChatWindow {
         this.openCodeCliBridge = new OpenCodeCliBridge();
         this.piCliBridge = new PiCliBridge();
         this.ompCliBridge = new OmpCliBridge();
+        this.geminiCliBridge = new GeminiCliBridge();
         this.miniMaxCliBridge = new MiniMaxCliBridge();
         // Grok uses GrokSDKBridge (persistent ACP / grok agent stdio), not MarkerCliBridge.
-        this.cliBridges = SessionProviderRouter.registerCliBridges(
+        // DshCliBridge is fieldless and constructed inside registerBundledCliBridges.
+        this.cliBridges = registerBundledCliBridges(
                 this.kimiCliBridge, this.openCodeCliBridge, this.piCliBridge,
-                this.ompCliBridge, new DshCliBridge(), this.miniMaxCliBridge);
+                this.ompCliBridge, this.geminiCliBridge, this.miniMaxCliBridge);
         this.settingsService = new CodemossSettingsService();
         this.restoredHistoryLoader = new RestoredHistoryLoader(settingsService, new RestoredHistoryLoader.Host() {
             @Override
@@ -379,6 +404,7 @@ public class ClaudeChatWindow {
                 () -> frontendReady,
                 () -> webviewInitializer != null && webviewInitializer.canRecoverWebview()
         );
+        this.webviewWatchdog.setStartupFailureHandler(() -> this.webviewInitializer.showStartupFailureNotice());
 
         this.session = new ClaudeSession(
                 project, claudeSDKBridge, codexSDKBridge, cliBridges, grokSDKBridge, zcodeSDKBridge);
@@ -443,7 +469,22 @@ public class ClaudeChatWindow {
 
             @Override
             public void setSession(ClaudeSession s) {
+                if (session != s) {
+                    // Persist the conversation identity, not only the tab.
+                    // Two fresh conversations can both have a null provider
+                    // session ID; a later IDE restart must not merge them.
+                    String retiredReviewTargetId = reviewTargetId;
+                    reviewTargetId = java.util.UUID.randomUUID().toString();
+                    // Handoff drafts registered for the retired identity can no longer
+                    // be acknowledged by anyone; keep the bounded history orphan-free.
+                    if (retiredReviewTargetId != null && !project.isDisposed()) {
+                        com.github.claudecodegui.markdown.MarkdownReviewService.getInstance(project)
+                                .dropPending(retiredReviewTargetId);
+                    }
+                }
                 session = s;
+                allowReviewRecovery = false;
+                syncArtifactReviewTarget();
                 persistTabSessionState();
             }
 
@@ -1649,6 +1690,10 @@ public class ClaudeChatWindow {
         return ompCliBridge;
     }
 
+    public GeminiCliBridge getGeminiCliBridge() {
+        return geminiCliBridge;
+    }
+
     public MiniMaxCliBridge getMiniMaxCliBridge() {
         return miniMaxCliBridge;
     }
@@ -1717,10 +1762,6 @@ public class ClaudeChatWindow {
         if (savedState == null || session == null) {
             return;
         }
-
-        if (savedState.permissionMode != null && !savedState.permissionMode.trim().isEmpty()) {
-            session.setPermissionMode(savedState.permissionMode);
-        }
         if (savedState.claudeSupplierId != null) {
             session.getState().setSupplierId("claude", savedState.claudeSupplierId);
         }
@@ -1740,6 +1781,10 @@ public class ClaudeChatWindow {
             if (handlerContext != null) {
                 handlerContext.setCurrentProvider(savedState.provider);
             }
+        }
+        // After the provider: SessionState drops "sandbox" while the provider is not gemini.
+        if (savedState.permissionMode != null && !savedState.permissionMode.trim().isEmpty()) {
+            session.setPermissionMode(savedState.permissionMode);
         }
         if (savedState.model != null && !savedState.model.trim().isEmpty()) {
             session.setModel(savedState.model);
@@ -1761,6 +1806,10 @@ public class ClaudeChatWindow {
                 savedState,
                 project != null ? project.getBasePath() : null,
                 session.getCwd());
+        if (sameProject && isNonEmpty(savedState.reviewTargetId)) {
+            reviewTargetId = savedState.reviewTargetId;
+            allowReviewRecovery = true;
+        }
         String restoredSessionId = sameProject && isNonEmpty(savedState.sessionId)
                 ? savedState.sessionId : null;
         String restoredCwd = sameProject && isNonEmpty(savedState.cwd)
@@ -1869,6 +1918,7 @@ public class ClaudeChatWindow {
         flushPendingSelectionContext();
         flushPendingCodeSnippet();
         flushPendingFileReferences();
+        restoreArtifactReviews();
         // No transcript replay here: the only caller that passes true is
         // handleFrontendReady, which replays immediately afterwards through
         // replayCurrentSessionStateToFrontend — a superset that also restores the
@@ -2526,6 +2576,29 @@ public class ClaudeChatWindow {
         String type = parts[0];
         String content = parts.length > 1 ? parts[1] : "";
 
+        if ("artifact_review_ready".equals(type)) {
+            restoreArtifactReviews();
+            return;
+        }
+        if ("artifact_review_ack".equals(type)) {
+            try {
+                JsonObject ack = GSON.fromJson(content, JsonObject.class);
+                String status = ack.get("status").getAsString();
+                if (!java.util.Set.of("received", "queued", "removed").contains(status)) {
+                    return;
+                }
+                // Receipts describe the batch's own frozen target identity, which may
+                // already differ from this window's current one after a session switch.
+                com.github.claudecodegui.markdown.MarkdownReviewService.getInstance(project)
+                        .acknowledge(ack.get("targetId").getAsString(), ack.get("targetEpoch").getAsString(),
+                                ack.get("id").getAsString(), status,
+                                GSON.fromJson(ack.get("annotationIds"), new com.google.gson.reflect.TypeToken<List<String>>() {}.getType()));
+            } catch (RuntimeException error) {
+                LOG.warn("Invalid Markdown review acknowledgement", error);
+            }
+            return;
+        }
+
         MessageDispatcher dispatcher = this.messageDispatcher;
         if (dispatcher == null) {
             return;
@@ -2592,6 +2665,8 @@ public class ClaudeChatWindow {
                     return;
                 }
                 super.onSessionIdReceived(newSessionId, transitionToken);
+                com.github.claudecodegui.markdown.MarkdownReviewService.getInstance(project)
+                        .bindSession(reviewTargetId, callbackSession.getRuntimeSessionEpoch(), newSessionId);
                 String exposedSessionId = resolveExposedSessionId(newSessionId, ClaudeChatWindow.this.permissionServiceKey);
                 if (exposedSessionId.equals(ClaudeChatWindow.this.sessionId)) {
                     return;
@@ -2999,6 +3074,7 @@ public class ClaudeChatWindow {
                 ApplicationManager.getApplication().invokeLater(() -> {
                     if (!disposed) {
                         restoredHistoryLoader.settleIfCommitted(current, committedBefore);
+                        retireCodexPagesAfterFullReload(current, targetSessionId, committedBefore);
                     }
                 });
             }
@@ -3054,6 +3130,23 @@ public class ClaudeChatWindow {
         return pending && !disposed && sessionMatches;
     }
 
+    /** Busy clears at stream end, before a native turn settles; both mean work is still in flight. */
+    static boolean hasTurnInFlight(ClaudeSession session) {
+        return session != null && (session.isBusy() || session.getState().getExecutionState().hasLiveTurn());
+    }
+
+    /**
+     * A committed Codex reload holds the whole thread, so the page's earlier-page cursor is spent.
+     * Codex switches threads on the same session object, hence the thread id check.
+     */
+    private void retireCodexPagesAfterFullReload(ClaudeSession reloaded, String threadId, long committedBefore) {
+        if (historyHandler != null && reloaded == session && "codex".equals(reloaded.getProvider())
+                && reloaded.getCommittedHistoryLoadCount() != committedBefore
+                && threadId != null && threadId.equals(reloaded.getSessionId())) {
+            historyHandler.retireCodexPageCursor(threadId);
+        }
+    }
+
     /**
      * Returns true iff the window currently holds the session identified by
      * {@code sessionId} (i.e. it has not been replaced by a new-session /
@@ -3093,10 +3186,12 @@ public class ClaudeChatWindow {
             return;
         }
         if ("claude".equals(session.getProvider()) && session.getError() == null) {
+            HandlerContext ctx = this.handlerContext;
             com.github.claudecodegui.notifications.ClaudeNotifier.showSuccess(
                 project,
                 com.github.claudecodegui.notifications.ClaudeNotifier.buildTitleFromSession(session),
-                com.github.claudecodegui.notifications.ClaudeNotifier.buildPreviewFromSession(session, "Task completed"));
+                com.github.claudecodegui.notifications.ClaudeNotifier.buildPreviewFromSession(session, "Task completed"),
+                ctx == null ? null : ctx.notificationSource());
         }
     }
 
@@ -3177,6 +3272,7 @@ public class ClaudeChatWindow {
         snapshot.ompApprovalMode = session.getState().getOmpApprovalMode();
         snapshot.unread = chatWindowDelegate.hasUnread();
         snapshot.claudeUltracode = session.isClaudeUltracode();
+        snapshot.reviewTargetId = reviewTargetId;
 
         TabStateService.getInstance(project).saveTabSessionState(tabIndex, snapshot);
     }
@@ -3214,6 +3310,46 @@ public class ClaudeChatWindow {
     }
 
     // ==================== Code Snippets ====================
+
+    public String getReviewTargetId() {
+        return reviewTargetId;
+    }
+
+    public void addArtifactReview(com.github.claudecodegui.markdown.ReviewBatch batch) {
+        if (disposed || session == null || !reviewTargetId.equals(batch.targetId)
+                || !session.getRuntimeSessionEpoch().equals(batch.targetEpoch)) {
+            throw new IllegalStateException("Target chat changed. Add the review again to the intended chat.");
+        }
+        if (frontendReady) {
+            callJavaScript("showArtifactReviewChat");
+            syncArtifactReviewTarget();
+            callJavaScript("addArtifactReview", JsUtils.escapeJs(GSON.toJson(batch)));
+        }
+        persistTabSessionState();
+    }
+
+    private void restoreArtifactReviews() {
+        if (disposed || session == null || !frontendReady) {
+            return;
+        }
+        syncArtifactReviewTarget();
+        for (com.github.claudecodegui.markdown.ReviewBatch batch
+                : com.github.claudecodegui.markdown.MarkdownReviewService.getInstance(project)
+                .pending(reviewTargetId, session.getRuntimeSessionEpoch(), session.getSessionId(), allowReviewRecovery)) {
+            // Recovery must not navigate away from Settings during page init.
+            callJavaScript("addArtifactReview", JsUtils.escapeJs(GSON.toJson(batch)));
+        }
+        allowReviewRecovery = false;
+    }
+
+    private void syncArtifactReviewTarget() {
+        if (!disposed && session != null && frontendReady) {
+            JsonObject target = new JsonObject();
+            target.addProperty("targetId", reviewTargetId);
+            target.addProperty("targetEpoch", session.getRuntimeSessionEpoch());
+            callJavaScript("setArtifactReviewTarget", JsUtils.escapeJs(GSON.toJson(target)));
+        }
+    }
 
     private void addCodeSnippet(String selectionInfo) {
         if (selectionInfo != null && !selectionInfo.isEmpty()) {
@@ -3277,6 +3413,9 @@ public class ClaudeChatWindow {
             return;
         }
         this.disposed = true;
+        // Deliberately no dropPending here: an IDE restart restores the saved
+        // reviewTargetId with its drafts. An explicit tab close is a separate
+        // event and drops them in ClaudeSDKToolWindow (R3).
         JBCefBrowser targetBrowser = this.browser;
         try {
             disposeWindowResources();
@@ -3436,6 +3575,26 @@ public class ClaudeChatWindow {
             LOG.warn("Failed to clean up ZCode processes: " + e.getMessage());
         }
 
+        // Bundled CLI bridges (gemini/omp/dsh/kimi/opencode/pi): the per-provider
+        // blocks above only cover SDK-based bridges — without this loop their
+        // spawned CLI processes would survive window dispose until the JVM
+        // shutdown hook (same shape as ClaudeSDKToolWindow.cleanupWindowProcesses).
+        try {
+            if (getCliBridges() != null) {
+                for (MarkerCliBridge bridge : getCliBridges().values()) {
+                    if (bridge == null) {
+                        continue;
+                    }
+                    int activeCount = bridge.getActiveProcessCount();
+                    if (activeCount > 0) {
+                        LOG.info("Cleaning up " + activeCount + " active CLI process(es)...");
+                    }
+                    bridge.cleanupAllProcesses();
+                }
+            }
+        } catch (Exception e) {
+            LOG.warn("Failed to clean up bundled CLI processes: " + e.getMessage());
+        }
         if (messageDispatcher != null) {
             messageDispatcher.clear();
         }
@@ -3589,8 +3748,8 @@ public class ClaudeChatWindow {
      * <p>Used when the user re-opens the session that is already active: instead
      * of tearing it down (interrupt + recreate), we merely refresh the transcript
      * so the latest on-disk state is reflected. Reuses the {@code session_updated}
-     * reload path (coalescing + isSessionActive guard), and defers to stream end
-     * when a turn is live so the streaming bubble is never disturbed.</p>
+     * reload path (coalescing + isSessionActive guard), and waits for idle work
+     * and its final snapshot so pre-stream and non-streaming turns remain intact.</p>
      */
     void reloadActiveSessionMessages() {
         ApplicationManager.getApplication().invokeLater(() -> {
@@ -3607,14 +3766,14 @@ public class ClaudeChatWindow {
                 callJavaScript("historyLoadComplete", "0");
                 return;
             }
-            if (streamCoalescer != null && streamCoalescer.isStreamActive()) {
-                deferredReload.defer(currentId);
-                LOG.info("[ClaudeChatWindow] Same-session resume deferred — "
-                        + "turn streaming, will reload at stream end, sessionId=" + currentId);
-                // Frontend may have begun a transition (cleared the list). Release the
-                // guard now so a later deferred reload can paint; if the list is empty
-                // the stream-end drain will repopulate it.
-                callJavaScript("historyLoadComplete", String.valueOf(current.getMessages().size()));
+            if (hasTurnInFlight(current) || (this.streamCoalescer != null
+                    && (this.streamCoalescer.isStreamActive() || this.streamCoalescer.isSnapshotBuildPending()))) {
+                this.deferredReload.defer(currentId);
+                // Pre-stream and non-streaming work may never produce a stream-end edge.
+                this.scheduleDeferredReloadSafetyDrain();
+                // No historyLoadComplete: the page never cleared, and that signal marks
+                // every tool still running in this turn as interrupted.
+                LOG.info("[ClaudeChatWindow] Same-session resume deferred until the turn is idle, sessionId=" + currentId);
                 return;
             }
             LOG.info("[ClaudeChatWindow] Same-session resume soft reload (no interrupt), sessionId=" + currentId);
@@ -3628,6 +3787,7 @@ public class ClaudeChatWindow {
                     return;
                 }
                 restoredHistoryLoader.settleIfCommitted(restoring, committedBefore);
+                retireCodexPagesAfterFullReload(restoring, currentId, committedBefore);
                 int count = restoring.getMessages().size();
                 if (streamCoalescer != null) {
                     // Same lock contract as enqueue: the flush may deep-copy live messages.

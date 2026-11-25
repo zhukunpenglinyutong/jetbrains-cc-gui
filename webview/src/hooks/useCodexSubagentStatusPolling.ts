@@ -25,19 +25,21 @@ export function useCodexSubagentStatusPolling({
   const pendingRequestRef = useRef<{ requestId: string; startedAt: number } | null>(null);
   const agentsJson = useMemo(() => JSON.stringify(
     subagents
-      .filter((subagent) => subagent.isAsync && subagent.status === 'running')
+      .filter((subagent) => subagent.isAsync && subagent.status === 'running' && (currentProvider !== 'gemini' || !!subagent.agentId))
       .map((subagent) => ({
         toolUseId: subagent.id,
         agentId: subagent.agentId,
-        agentPath: subagent.agentPath,
-        nativeTaskId: subagent.nativeTaskId,
-        nativeTaskPreviousTurnId: subagent.nativeTaskPreviousTurnId,
+        ...(currentProvider === 'codex' ? {
+          agentPath: subagent.agentPath,
+          nativeTaskId: subagent.nativeTaskId,
+          nativeTaskPreviousTurnId: subagent.nativeTaskPreviousTurnId,
+        } : {}),
       })),
-  ), [subagents]);
+  ), [subagents, currentProvider]);
   const tasksJson = useMemo(() => JSON.stringify(subagents.map(agent => ({ id: agent.id, nativeTaskId: agent.nativeTaskId }))), [subagents]);
 
   useEffect(() => {
-    if (currentProvider !== 'codex' || !currentSessionId) {
+    if ((currentProvider !== 'codex' && currentProvider !== 'gemini') || !currentSessionId) {
       pendingRequestRef.current = null;
       batchCursorRef.current = { sessionId: null, offset: 0 };
       return;
@@ -46,7 +48,9 @@ export function useCodexSubagentStatusPolling({
       batchCursorRef.current = { sessionId: currentSessionId, offset: 0 };
       pendingRequestRef.current = null;
     }
-    trackCodexSubagentTasks(currentSessionId, JSON.parse(tasksJson) as Array<{ id: string; nativeTaskId?: string }>);
+    if (currentProvider === 'codex') {
+      trackCodexSubagentTasks(currentSessionId, JSON.parse(tasksJson) as Array<{ id: string; nativeTaskId?: string }>);
+    }
 
     const agents = JSON.parse(agentsJson) as Array<{
       toolUseId: string;
@@ -77,7 +81,7 @@ export function useCodexSubagentStatusPolling({
 
     const onSettled = (event: Event) => {
       const result = (event as CustomEvent<{ requestId?: string; sessionId?: string; provider?: string }>).detail;
-      if (result?.sessionId === currentSessionId && result.provider === 'codex'
+      if (result?.sessionId === currentSessionId && result.provider === currentProvider
           && result.requestId === pendingRequestRef.current?.requestId) {
         pendingRequestRef.current = null;
       }

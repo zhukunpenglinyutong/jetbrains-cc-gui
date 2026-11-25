@@ -143,10 +143,10 @@ public class ClaudeSettingsManagerRepairTest {
                 after.getAsJsonObject("env").get("ANTHROPIC_BASE_URL").getAsString());
     }
 
-    /** Missing env keys are added; existing ones are not touched. */
+    /** Missing env keys are added next to unrelated user keys, which are not touched. */
     @Test
     public void repairsMissingEnvKeysOnly() throws Exception {
-        String preexisting = "{\"env\":{\"ANTHROPIC_API_KEY\":\"sk-USER\"}}";
+        String preexisting = "{\"env\":{\"MY_FLAG\":\"1\"}}";
         Files.writeString(settingsPath, preexisting, StandardCharsets.UTF_8);
 
         boolean changed = manager.repairMissingProviderFields(
@@ -154,8 +154,51 @@ public class ClaudeSettingsManagerRepairTest {
 
         assertTrue("should add the missing env keys", changed);
         JsonObject env = manager.readClaudeSettings().getAsJsonObject("env");
-        assertEquals("sk-USER", env.get("ANTHROPIC_API_KEY").getAsString());
+        assertEquals("1", env.get("MY_FLAG").getAsString());
+        assertEquals("sk-ant-provider-key", env.get("ANTHROPIC_API_KEY").getAsString());
         assertEquals("https://api.anthropic.com", env.get("ANTHROPIC_BASE_URL").getAsString());
+    }
+
+    /**
+     * The token, key and base URL are one group: a file that has any of them keeps its own set, so
+     * the user's key is never sent to the provider's endpoint.
+     */
+    @Test
+    public void doesNotPairAUserKeyWithTheProvidersBaseUrl() throws Exception {
+        Files.writeString(settingsPath, "{\"env\":{\"ANTHROPIC_API_KEY\":\"sk-USER\"}}", StandardCharsets.UTF_8);
+
+        boolean changed = manager.repairMissingProviderFields(
+                buildProvider("p1", "claude-sonnet-4-6"));
+
+        assertFalse("a file with its own API settings is left alone", changed);
+        JsonObject after = manager.readClaudeSettings();
+        assertEquals("sk-USER", after.getAsJsonObject("env").get("ANTHROPIC_API_KEY").getAsString());
+        assertFalse(after.getAsJsonObject("env").has("ANTHROPIC_BASE_URL"));
+        assertFalse(after.has("model"));
+        assertFalse(after.has("codemossProviderId"));
+    }
+
+    /** A file holding this provider's own token and URL still gets the fields it lost. */
+    @Test
+    public void repairsAFileThatHoldsThisProvidersApiSettings() throws Exception {
+        Files.writeString(settingsPath, "{\"env\":{\"ANTHROPIC_API_KEY\":\"sk-ant-provider-key\","
+                + "\"ANTHROPIC_BASE_URL\":\"https://api.anthropic.com\"},\"codemossProviderId\":\"p1\"}",
+                StandardCharsets.UTF_8);
+
+        boolean changed = manager.repairMissingProviderFields(buildProvider("p1", "claude-sonnet-4-6"));
+
+        assertTrue("the missing model is the same provider's", changed);
+        assertEquals("claude-sonnet-4-6", manager.readClaudeSettings().get("model").getAsString());
+    }
+
+    /** Another provider's base URL is not completed with this provider's key. */
+    @Test
+    public void doesNotRepairAFileThatHoldsAnotherProvidersBaseUrl() throws Exception {
+        Files.writeString(settingsPath, "{\"env\":{\"ANTHROPIC_BASE_URL\":\"https://other.example.invalid\"}}",
+                StandardCharsets.UTF_8);
+
+        assertFalse(manager.repairMissingProviderFields(buildProvider("p1", "claude-sonnet-4-6")));
+        assertFalse(manager.readClaudeSettings().getAsJsonObject("env").has("ANTHROPIC_API_KEY"));
     }
 
     /** codemossProviderId is only set when missing — never overwritten. */

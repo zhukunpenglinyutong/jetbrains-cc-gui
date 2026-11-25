@@ -31,7 +31,7 @@ import {
 import { resolveModelFromSettings, resolveSdkModelName } from '../utils/model-utils.js';
 import { askNonStreamingText, buildAskThinkingFields, createWithThinkingFallback } from '../utils/ask-thinking.js';
 import { getRealHomeDir, isMainEntryModule } from '../utils/path-utils.js';
-import { getClaudeCliPathOverride } from '../utils/claude-cli-path.js';
+import { getClaudeCliPathOverride, claudeCliSdkOptions } from '../utils/claude-cli-path.js';
 import { ensureAnthropicSdk } from './claude/message-utils.js';
 import { generateCodexText } from './codex/codex-text-service.js';
 import { askCliProvider, isCliAskProvider } from './cli-ask.js';
@@ -253,7 +253,7 @@ export function buildClaudeAgentCommitOptions({
     strictMcpConfig: true,
     canUseTool: async () => ({ behavior: 'deny', message: 'Commit message generation does not execute tools' }),
     includePartialMessages: true,
-    ...(claudeCliOverride && { pathToClaudeCodeExecutable: claudeCliOverride }),
+    ...claudeCliSdkOptions(claudeCliOverride),
   };
 }
 

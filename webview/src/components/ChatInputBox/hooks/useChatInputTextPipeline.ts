@@ -13,6 +13,7 @@ import { useSpaceKeyListener } from './useSpaceKeyListener.js';
 import { debounce } from '../utils/debounce.js';
 import { perfTimer } from '../../../utils/debug.js';
 import { DEBOUNCE_TIMING } from '../../../constants/performance.js';
+import { scrollCaretIntoView } from '../utils/scrollCaretIntoView.js';
 
 /**
  * InputEvent.inputType values that belong to an active IME composition.
@@ -229,6 +230,10 @@ export function useChatInputTextPipeline({
       // Adjust height
       adjustHeight();
       timer.mark('adjustHeight');
+
+      // The wrapper, rather than the contenteditable itself, owns overflow.
+      // Follow the actual caret so editing a long draft does not strand it outside the viewport.
+      scrollCaretIntoView(editableRef.current);
 
       // Trigger completion detection and state update
       debouncedDetectCompletion();

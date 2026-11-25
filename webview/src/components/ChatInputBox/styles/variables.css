@@ -9,11 +9,15 @@
 :root, [data-theme="dark"] {
   --dropdown-bg: #252526;
   --dropdown-border: #454545;
+  --dropdown-hover: #2a2d2e;
+  --dropdown-selected: #094771;
 }
 
 [data-theme="light"] {
   --dropdown-bg: #ffffff;
   --dropdown-border: #d0d0d0;
+  --dropdown-hover: #f5f5f5;
+  --dropdown-selected: #e3f2fd;
 }
 
 /* ============================================================

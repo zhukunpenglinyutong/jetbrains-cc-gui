@@ -8,6 +8,7 @@ describe('useSessionManagement', () => {
 
   const createMocks = () => ({
     setHistoryData: vi.fn(),
+    setRegeneratingTitleSessionIds: vi.fn(),
     setMessages: vi.fn(),
     setCurrentView: vi.fn(),
     setCurrentSessionId: vi.fn(),
@@ -328,6 +329,9 @@ describe('useSessionManagement', () => {
     act(() => { result.current.updateHistoryTitle('open', 'New title'); });
     expect(mocks.setCustomSessionTitle).toHaveBeenCalledWith('New title');
     expect(historyData.sessions?.[0].title).toBe('New title');
+    // A manual rename makes the manual title win over AI titles — flag it so
+    // the refresh-title buttons hide immediately (matches the next reload).
+    expect(historyData.sessions?.[0].hasCustomTitle).toBe(true);
   });
 
   it('leaves the open session title alone when another session is edited', () => {
@@ -606,6 +610,50 @@ describe('useSessionManagement', () => {
     act(() => { commitPendingSessionTransition(window.__sessionTransitionToken ?? undefined); });
     expect(mocks.setMessages).toHaveBeenCalledWith([]);
     expect(mocks.setCurrentSessionId).toHaveBeenCalledWith(null);
+  });
+
+  it('a provider switch away from gemini and back never carries the gemini conversation id (Story 1.3 AC4)', () => {
+    // The single session-id slot is provider-agnostic; leak prevention is
+    // TEMPORAL: every provider switch forces a transition that nulls it. A
+    // gemini conversation UUID must therefore never survive a switch — nor
+    // ride any bridge event of the following turns.
+    const geminiConversationId = 'd5451c2b-751a-4248-9d75-47344e4bc885';
+    const mocks = createMocks();
+
+    const { result } = renderHook(() =>
+      useSessionManagement({
+        messages: [{ type: 'assistant', content: 'gemini answer', timestamp: new Date().toISOString() }],
+        loading: false,
+        historyData: null,
+        currentSessionId: geminiConversationId,
+        ...mocks,
+        t,
+      })
+    );
+
+    // gemini → codex
+    act(() => {
+      result.current.forceCreateNewSessionWithProvider('codex');
+    });
+    expect(sentTransition('create_new_session')).toMatchObject({ provider: 'codex' });
+    // Java accepts the transition only after releasing the old runtime.
+    act(() => { commitPendingSessionTransition(window.__sessionTransitionToken ?? undefined); });
+    expect(mocks.setCurrentSessionId).toHaveBeenNthCalledWith(1, null);
+    act(() => { finishSessionTransition(); });
+
+    // …and back to gemini: another fresh session, still no conversation id.
+    act(() => {
+      result.current.forceCreateNewSessionWithProvider('gemini');
+    });
+    expect(sentTransition('create_new_session')).toMatchObject({ provider: 'gemini' });
+    act(() => { commitPendingSessionTransition(window.__sessionTransitionToken ?? undefined); });
+    expect(mocks.setCurrentSessionId).toHaveBeenNthCalledWith(2, null);
+
+    // The gemini UUID never re-enters the slot nor any bridge payload.
+    expect(mocks.setCurrentSessionId).not.toHaveBeenCalledWith(geminiConversationId);
+    const bridgePayloads = (window.sendToJava as ReturnType<typeof vi.fn>).mock.calls
+      .map((c: unknown[]) => String(c[0]));
+    expect(bridgePayloads.some((p) => p.includes(geminiConversationId))).toBe(false);
   });
 
   it('shows confirm dialog when creating new session with existing messages', () => {
@@ -891,6 +939,47 @@ describe('useSessionManagement', () => {
     });
 
     expect(sentTransition('load_session')).toMatchObject({"sessionId":"hist-codex","provider":"codex","model":"gpt-5.4"});
+  });
+
+  it('codex same-session selection soft-reloads without a session transition', () => {
+    const historyData = {
+      success: true,
+      sessions: [
+        {
+          sessionId: 'thread-current',
+          title: 'Current Codex Session',
+          provider: 'codex',
+          messageCount: 2,
+          lastTimestamp: Date.now(),
+        },
+      ],
+      total: 1,
+    } as unknown as HistoryData;
+
+    const mocks = createMocks();
+
+    const { result } = renderHook(() =>
+      useSessionManagement({
+        messages: [],
+        loading: false,
+        historyData,
+        currentSessionId: 'thread-current',
+        currentProvider: 'codex',
+        ...mocks,
+        t,
+      })
+    );
+
+    act(() => {
+      result.current.loadHistorySession('thread-current', 'codex');
+    });
+
+    // The in-place refresh never holds the transition guard or resets messages:
+    // a live turn keeps streaming and stays stoppable across the reload.
+    expect(window.__sessionTransitioning).toBe(false);
+    expect(window.__sessionTransitionToken).toBe(null);
+    expect(sentTransition('load_session')).toMatchObject({ sessionId: 'thread-current', provider: 'codex' });
+    expect(mocks.setMessages).not.toHaveBeenCalledWith([]);
   });
 
   it('loadHistorySession falls back to current provider when history item has no provider', () => {

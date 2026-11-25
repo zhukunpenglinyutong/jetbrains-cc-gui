@@ -339,8 +339,7 @@ function splitMarkdownBlocks(content: string): string[] {
 }
 
 /**
- * Strip system-internal XML tags injected by Claude Code's prompt protocol.
- * Mirrors `stripPromptXMLTags` from the CLI source (src/utils/messages.ts).
+ * Strip paired system-internal XML tags injected by the host prompt protocol.
  */
 const SYSTEM_XML_TAGS_RE =
   /<(commit_analysis|context|function_analysis|pr_analysis)>[\s\S]*?<\/\1>\n?/g;
@@ -388,6 +387,57 @@ function splitCodeFences(content: string, trackIndentedCode = true): string[] {
   return parts;
 }
 const INLINE_CODE_RE = /(`[^`\n]+`)/g;
+const CODEX_BLOCK_OPEN_RE = /<(oai-mem-citation|proposed_plan)>/g;
+
+/**
+ * Resolve Codex protocol blocks before Markdown splits their paragraphs and code.
+ * Only prose may open a block. A proposed plan loses just its tags: its body is the plan,
+ * and history has no plan card to show it. A memory citation is hidden through its closer,
+ * or through EOF while the snapshot is still streaming; a finished message keeps the text
+ * after an unclosed tag, so a prose mention cannot swallow the rest of the reply.
+ */
+function stripCodexBlocks(content: string, isStreaming: boolean): string {
+  if (!content.includes('<oai-mem-citation>') && !content.includes('<proposed_plan>')) {
+    return content;
+  }
+  const cuts: Array<[number, number]> = [];
+  let hiddenUntil = 0;
+  let offset = 0;
+
+  for (const [fenceIndex, fencePart] of splitCodeFences(content).entries()) {
+    if (fenceIndex % 2 === 1) {
+      offset += fencePart.length;
+      continue;
+    }
+    for (const [inlineIndex, part] of fencePart.split(INLINE_CODE_RE).entries()) {
+      if (inlineIndex % 2 === 0) {
+        for (const match of part.matchAll(CODEX_BLOCK_OPEN_RE)) {
+          const start = offset + match.index;
+          if (start < hiddenUntil) continue;
+          const closer = `</${match[1]}>`;
+          const closeAt = content.indexOf(closer, start + match[0].length);
+          if (match[1] === 'proposed_plan') {
+            cuts.push([start, start + match[0].length]);
+            if (closeAt !== -1) cuts.push([closeAt, closeAt + closer.length]);
+          } else if (closeAt !== -1 || isStreaming) {
+            hiddenUntil = closeAt === -1 ? content.length : closeAt + closer.length;
+            cuts.push([start, hiddenUntil]);
+          }
+        }
+      }
+      offset += part.length;
+    }
+  }
+
+  let visible = '';
+  let keptFrom = 0;
+  for (const [from, to] of cuts.sort((a, b) => a[0] - b[0])) {
+    if (from >= keptFrom) visible += content.slice(keptFrom, from);
+    keptFrom = Math.max(keptFrom, to);
+  }
+  return visible + content.slice(keptFrom);
+}
+
 const DISPLAY_MATH_DELIMITER_LINE_RE = /^([ \t]*)\$\$\s*$/;
 const BRACKET_MATH_DELIMITER_RE = /(?<!\\)(\\\[|\\\]|\\\(|\\\))/g;
 const BRACKET_MATH_DELIMITER_MAP: Record<string, string> = {
@@ -1049,8 +1099,8 @@ const MarkdownBlock = ({ content = '', isStreaming = false }: MarkdownBlockProps
   // growing; every earlier block is memoized by source and never re-parsed,
   // so per-token render cost is O(last block) instead of O(document).
   const blocks = useMemo(
-    () => splitMarkdownBlocks(normalizedContent.replace(/[\r\n]+$/, '')),
-    [normalizedContent],
+    () => splitMarkdownBlocks(stripCodexBlocks(normalizedContent, isStreaming).replace(/[\r\n]+$/, '')),
+    [normalizedContent, isStreaming],
   );
 
   const copySuccessText = t('markdown.copySuccess');

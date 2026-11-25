@@ -48,6 +48,8 @@ public class WebviewWatchdog {
     private volatile ScheduledFuture<?> watchdogFuture = null;
     private final AtomicBoolean recoveryPending = new AtomicBoolean();
     private final AtomicInteger startupRecoveryAttempts = new AtomicInteger();
+    private final AtomicBoolean startupFailureReported = new AtomicBoolean();
+    private volatile Runnable startupFailureHandler = () -> { };
 
     private final JPanel mainPanel;
     private final BooleanSupplier browserAvailableCheck;
@@ -172,6 +174,11 @@ public class WebviewWatchdog {
         this.lastReceivedHeartbeatAtMs = now;
         this.lastResumeAtMs = now - MIN_RESUME_INTERVAL_MS;
         this.lastRafAtMs = now;
+    }
+
+    /** Sets the non-destructive notice shown if the final startup recovery also times out. */
+    public void setStartupFailureHandler(Runnable handler) {
+        this.startupFailureHandler = java.util.Objects.requireNonNull(handler);
     }
 
     /**
@@ -361,6 +368,7 @@ public class WebviewWatchdog {
         stallCount = 0;
         lastRecoveryAtMs = 0L;
         startupRecoveryAttempts.set(0);
+        this.startupFailureReported.set(false);
     }
 
     static long heartbeatTimeoutMs(boolean frontendReady, boolean streaming) {
@@ -427,7 +435,15 @@ public class WebviewWatchdog {
         }
         // Preparing or quarantined browsers cannot be recreated. A skipped request must
         // leave the startup budget, escalation stage and cooldown untouched.
-        if (!recoveryAllowed.getAsBoolean() || !tryAcquireRecoveryPermit(frontendReady)) { return; }
+        if (!recoveryAllowed.getAsBoolean()) { return; }
+        if (!tryAcquireRecoveryPermit(frontendReady)) {
+            // Give the last replacement its own startup window before reporting failure. The
+            // browser and fallback bridge retries stay alive so late readiness can still win.
+            if (!frontendReady && this.startupFailureReported.compareAndSet(false, true)) {
+                this.startupFailureHandler.run();
+            }
+            return;
+        }
 
         stallCount += 1;
         String reason = "frontendReady=" + frontendReady
