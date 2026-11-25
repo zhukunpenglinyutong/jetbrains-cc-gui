@@ -31,10 +31,27 @@ public class ErrorPanelBuilderTest {
         Assert.assertEquals(1, invocations.get());
     }
 
+    /** Startup recovery must leave room for the browser and keep retry under user control. */
+    @Test
+    public void retryNoticeIsBoundedAndInvokesOnlyItsRetryAction() {
+        AtomicInteger invocations = new AtomicInteger();
+        JPanel notice = ErrorPanelBuilder.buildRetryNotice(
+                "Browser still starting", "Inspect startup diagnostics.\nRetry without interrupting the session.",
+                "Retry browser", invocations::incrementAndGet);
+        Assert.assertTrue(notice.getPreferredSize().height < 250);
+        Assert.assertEquals(0, invocations.get());
+        JButton button = findButton(notice);
+        Assert.assertNotNull(button);
+        Assert.assertEquals("Retry browser", button.getText());
+        button.doClick();
+        Assert.assertEquals(1, invocations.get());
+    }
+
     private static JButton findButton(Container container) {
         for (Component component : container.getComponents()) {
-            if (component instanceof JButton) {
-                return (JButton) component;
+            // Scrollbar arrow buttons are not the panel's user-facing action.
+            if (component instanceof JButton button && button.getText() != null && !button.getText().isEmpty()) {
+                return button;
             }
             if (component instanceof Container) {
                 JButton nestedButton = findButton((Container) component);

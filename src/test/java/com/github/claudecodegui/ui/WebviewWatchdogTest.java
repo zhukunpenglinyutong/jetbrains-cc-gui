@@ -375,6 +375,88 @@ public class WebviewWatchdogTest {
         assertEquals(2, recoveries.get());
     }
 
+    /** The final replacement gets a full startup window before a single retry notice is shown. */
+    @Test
+    public void reportsExhaustedStartupOnlyAfterLastReplacementTimesOut() {
+        AtomicLong now = new AtomicLong(1_000L);
+        AtomicInteger reloads = new AtomicInteger();
+        AtomicInteger recreates = new AtomicInteger();
+        AtomicInteger failures = new AtomicInteger();
+        WebviewWatchdog watchdog = createWatchdog(new ShowingPanel(true), now, reloads, recreates, Runnable::run);
+        watchdog.setStartupFailureHandler(failures::incrementAndGet);
+        now.addAndGet(20_001L);
+        watchdog.checkHealth();
+        now.addAndGet(20_001L);
+        watchdog.checkHealth();
+        assertEquals(1, reloads.get());
+        assertEquals(1, recreates.get());
+        assertEquals(0, failures.get());
+
+        now.addAndGet(1_000L);
+        watchdog.checkHealth();
+        assertEquals(0, failures.get());
+        for (int i = 0; i < 3; i++) {
+            now.addAndGet(20_001L);
+            watchdog.checkHealth();
+        }
+        assertEquals(1, failures.get());
+        assertEquals(1, reloads.get());
+        assertEquals(1, recreates.get());
+
+        watchdog.markTabActivated();
+        for (int i = 0; i < 3; i++) {
+            now.addAndGet(20_001L);
+            watchdog.checkHealth();
+        }
+        assertEquals(2, failures.get());
+    }
+
+    /** Readiness arriving before a queued failure check wins without disturbing the recovered page. */
+    @Test
+    public void lateReadinessCancelsQueuedStartupFailure() {
+        AtomicLong now = new AtomicLong(1_000L);
+        AtomicBoolean ready = new AtomicBoolean();
+        AtomicReference<Runnable> queued = new AtomicReference<>();
+        AtomicInteger failures = new AtomicInteger();
+        WebviewWatchdog watchdog = new WebviewWatchdog(
+                new ShowingPanel(true), () -> true, () -> { }, () -> { },
+                () -> false, () -> false, ready::get, now::get, queued::set);
+        watchdog.setStartupFailureHandler(failures::incrementAndGet);
+        assertTrue(watchdog.tryAcquireRecoveryPermit(false));
+        assertTrue(watchdog.tryAcquireRecoveryPermit(false));
+        now.addAndGet(20_001L);
+        watchdog.checkHealth();
+        ready.set(true);
+        watchdog.markFrontendReady();
+        queued.getAndSet(null).run();
+        assertEquals(0, failures.get());
+    }
+
+    /** Pending preparation and hidden tabs must not report failure just because a budget is spent. */
+    @Test
+    public void unavailableAndHiddenBrowsersDeferStartupFailureNotice() {
+        AtomicLong now = new AtomicLong(1_000L);
+        AtomicBoolean allowed = new AtomicBoolean(false);
+        ShowingPanel panel = new ShowingPanel(true);
+        AtomicInteger failures = new AtomicInteger();
+        WebviewWatchdog watchdog = new WebviewWatchdog(
+                panel, () -> true, () -> { }, () -> { }, () -> false, () -> false, () -> false,
+                now::get, Runnable::run, allowed::get);
+        watchdog.setStartupFailureHandler(failures::incrementAndGet);
+        assertTrue(watchdog.tryAcquireRecoveryPermit(false));
+        assertTrue(watchdog.tryAcquireRecoveryPermit(false));
+        now.addAndGet(20_001L);
+        watchdog.checkHealth();
+        assertEquals(0, failures.get());
+        allowed.set(true);
+        panel.setShowing(false);
+        watchdog.checkHealth();
+        assertEquals(0, failures.get());
+        panel.setShowing(true);
+        watchdog.checkHealth();
+        assertEquals(1, failures.get());
+    }
+
     private static String heartbeat(long ts, long raf, String visibility) {
         return "{\"ts\":" + ts + ",\"raf\":" + raf + ",\"visibility\":\"" + visibility + "\"}";
     }

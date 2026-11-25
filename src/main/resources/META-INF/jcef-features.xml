@@ -2,4 +2,8 @@
     <extensions defaultExtensionNs="com.intellij">
         <applicationService serviceImplementation="com.github.claudecodegui.util.JcefModuleAvailability"/>
     </extensions>
+    <applicationListeners>
+        <listener class="com.github.claudecodegui.startup.JcefNativeStartupListener"
+                  topic="com.intellij.ide.AppLifecycleListener"/>
+    </applicationListeners>
 </idea-plugin>

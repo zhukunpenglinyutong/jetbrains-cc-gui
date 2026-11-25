@@ -404,6 +404,7 @@ public class ClaudeChatWindow {
                 () -> frontendReady,
                 () -> webviewInitializer != null && webviewInitializer.canRecoverWebview()
         );
+        this.webviewWatchdog.setStartupFailureHandler(() -> this.webviewInitializer.showStartupFailureNotice());
 
         this.session = new ClaudeSession(
                 project, claudeSDKBridge, codexSDKBridge, cliBridges, grokSDKBridge, zcodeSDKBridge);

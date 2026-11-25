@@ -118,8 +118,8 @@ public class HtmlLoader {
         return result.toString();
     }
 
-    /** One line for the startup failure page, so a user's screenshot identifies their setup. */
-    static String describeHost() {
+    /** Describes the plugin and host runtime for both HTML and native startup failure reports. */
+    public static String describeHost() {
         StringBuilder info = new StringBuilder("CC GUI ").append(PluginMetadata.getPluginVersion());
         try {
             ApplicationInfo app = ApplicationInfo.getInstance();
