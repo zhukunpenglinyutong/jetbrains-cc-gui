@@ -3,15 +3,20 @@
  *
  * In RPC mode OMP has no dialog of its own. Tool approvals arrive as a `select`
  * titled `Allow tool: <name>` and go to the permission dialog; the `ask` tool
- * and extension prompts arrive as `select` / `confirm` / `input` / `editor` and
- * go to the question dialog. Both dialogs are reached over the file IPC in
- * permission-ipc.js.
+ * and extension prompts go to the question dialog. Both dialogs are reached
+ * over the file IPC in permission-ipc.js.
  *
- * A checkbox group has no request of its own: OMP sends its options as a
+ * From omp 19 on the `ask` tool sends its whole HTML form in one `form`
+ * request; the dialog asks one question per field (see `handleForm` and
+ * html-form.js). Older versions and extension prompts send `select` /
+ * `confirm` / `input` / `editor`, one request per answer.
+ *
+ * There a checkbox group has no request of its own: OMP sends its options as a
  * `select` again and again, one toggle per answer. The plugin shows it as one
  * multi-select question (see `handleCheckboxRound`).
  */
 
+import { fieldError, formEntries, formQuestion, formValue } from './html-form.js';
 import { absolutePath, isPlainFilePath } from './tool-mapping.js';
 
 const APPROVAL_TITLE_PREFIX = 'Allow tool: ';
@@ -479,7 +484,60 @@ export function createUiBridge({
     reply(frame.id, answer === undefined ? { cancelled: true } : { value: answer });
   };
 
-  const handlers = { select: handleSelect, confirm: handleConfirm, input: handleText, editor: handleText };
+  /**
+   * The `ask` tool's form: one dialog with a question per named field,
+   * answered with the field values by control name.
+   *
+   * OMP fails the whole `ask` call on a value that breaks a field's
+   * constraints, so such an answer is asked again, with the reason, until it
+   * fits or the dialog is dismissed.
+   */
+  const handleForm = async (frame) => {
+    const entries = formEntries(typeof frame.html === 'string' ? frame.html : '');
+    if (entries.length === 0) {
+      log('form request has no field the dialog can ask about; cancelling it');
+      reply(frame.id, { cancelled: true });
+      return;
+    }
+    const ids = new Map(entries.map((entry, index) => [entry, `${frame.id}:${index}`]));
+    const values = new Map();
+    let asking = entries.map((entry) => ({ entry }));
+    while (asking.length > 0) {
+      const answers = await requestAnswers({
+        questions: asking.map(({ entry, rejected }) => ({ id: ids.get(entry), ...formQuestion(entry, rejected) })),
+        provider: 'omp',
+      });
+      // A submitted dialog names every question it asked, the blank ones too.
+      if (!answers || typeof answers !== 'object' || Object.keys(answers).length === 0) {
+        reply(frame.id, { cancelled: true });
+        return;
+      }
+      asking = asking.flatMap(({ entry }) => {
+        const answer = answerLabels(answers[ids.get(entry)]);
+        const value = formValue(entry, answer);
+        values.set(entry, value);
+        const error = fieldError(entry.field, value);
+        return error ? [{ entry, rejected: { error, text: answer[0] ?? '' } }] : [];
+      });
+      // OMP gave up on the form meanwhile: there is nothing left to correct.
+      if (withdrawn.has(frame.id)) break;
+    }
+    // A field without a value (no option chosen) is left out, as a browser leaves it out.
+    reply(frame.id, {
+      data: Object.fromEntries(entries.flatMap((entry) => {
+        const value = values.get(entry);
+        return value === undefined ? [] : [[entry.field.name, value]];
+      })),
+    });
+  };
+
+  const handlers = {
+    select: handleSelect,
+    confirm: handleConfirm,
+    input: handleText,
+    editor: handleText,
+    form: handleForm,
+  };
 
   return {
     /**

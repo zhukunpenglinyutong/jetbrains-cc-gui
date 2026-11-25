@@ -1,8 +1,14 @@
 import { useEffect, useState, type RefObject } from 'react';
 import type { AskUserQuestionRequest, Question } from '../AskUserQuestionDialog';
 import { isEditableEventTarget } from '../../utils/isEditableEventTarget';
-import { OTHER_OPTION_MARKER, MAX_CUSTOM_INPUT_LENGTH } from './constants';
-import { buildInitialAnswerState, formatAnswers, syncOtherSelection, toggleAnswerSelection } from './answerState';
+import { OTHER_OPTION_MARKER } from './constants';
+import {
+  buildInitialAnswerState,
+  customInputLimit,
+  formatAnswers,
+  syncOtherSelection,
+  toggleAnswerSelection,
+} from './answerState';
 import { clearDialogDraft, readDialogDraft, writeDialogDraft } from '../../utils/dialogStateStorage';
 
 interface AskUserQuestionDraft {
@@ -61,10 +67,9 @@ export const useAskUserQuestionState = ({
       }
       if (draft?.customInputs && typeof draft.customInputs === 'object') {
         for (const [question, value] of Object.entries(draft.customInputs)) {
-          const secretQuestion = normalizedQuestions
-            .some((item) => (item.id ?? item.question) === question && item.isSecret);
-          if (!secretQuestion && typeof value === 'string') {
-            initialCustomInputs[question] = value.slice(0, MAX_CUSTOM_INPUT_LENGTH);
+          const owner = normalizedQuestions.find((item) => (item.id ?? item.question) === question);
+          if (!owner?.isSecret && typeof value === 'string') {
+            initialCustomInputs[question] = value.slice(0, customInputLimit(owner));
           }
         }
       }
@@ -182,7 +187,7 @@ export const useAskUserQuestionState = ({
     if (!currentQuestion) return;
 
     // Limit input length to prevent excessively long input
-    const sanitizedValue = value.slice(0, MAX_CUSTOM_INPUT_LENGTH);
+    const sanitizedValue = value.slice(0, customInputLimit(currentQuestion));
     const questionKey = currentQuestion.id ?? currentQuestion.question;
     setCustomInputs((prev) => ({
       ...prev,

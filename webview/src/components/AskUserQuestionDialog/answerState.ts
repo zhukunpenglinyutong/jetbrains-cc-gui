@@ -1,5 +1,5 @@
 import type { AskUserQuestionRequest, Question } from '../AskUserQuestionDialog';
-import { OTHER_OPTION_MARKER } from './constants';
+import { MAX_CUSTOM_INPUT_LENGTH, OTHER_OPTION_MARKER } from './constants';
 import { normalizeQuestion } from './normalizeQuestion';
 
 export const normalizeQuestions = (rawQuestions: unknown): Question[] =>
@@ -8,6 +8,10 @@ export const normalizeQuestions = (rawQuestions: unknown): Question[] =>
       const question = normalizeQuestion(raw);
       return question === null ? [] : [question];
     });
+
+/** How much text a question's answer box holds: a prefilled answer longer than the usual limit stays whole. */
+export const customInputLimit = (question: Question | undefined): number =>
+  Math.max(MAX_CUSTOM_INPUT_LENGTH, question?.defaultText?.length ?? 0);
 
 export const buildInitialAnswerState = (request: AskUserQuestionRequest) => {
   const questions = normalizeQuestions(request.questions);
@@ -20,7 +24,7 @@ export const buildInitialAnswerState = (request: AskUserQuestionRequest) => {
       return [q.id ?? q.question, new Set(q.multiSelect ? preselected : preselected.slice(0, 1))];
     }));
   const initialCustomInputs: Record<string, string> = Object.fromEntries(
-    questions.map(q => [q.id ?? q.question, '']));
+    questions.map(q => [q.id ?? q.question, q.defaultText ?? '']));
   return { initialAnswers, initialCustomInputs };
 };
 

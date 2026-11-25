@@ -33,6 +33,8 @@ export function normalizeQuestion(raw: any): Question | null {
     if (!label) return [];
     return [{ label, description, ...(opt.selected === true ? { selected: true } : {}) }];
   });
+  // A prefilled answer belongs to the text box, which is the whole answer only when there are no options.
+  const defaultText = options.length === 0 && typeof raw.defaultText === 'string' ? raw.defaultText : '';
   if (!questionText) return null;
   // `detail` (DSH's plan under review) and `intent` are part of the question,
   // not decoration: dropping them made a plan-review unanswerable in cc-gui.
@@ -45,6 +47,7 @@ export function normalizeQuestion(raw: any): Question | null {
     required,
     ...(isSecret ? { isSecret: true } : {}),
     ...(choiceOnly ? { choiceOnly: true } : {}),
+    ...(defaultText ? { defaultText } : {}),
     ...(detail ? { detail } : {}),
     ...(intent ? { intent } : {}),
   };
