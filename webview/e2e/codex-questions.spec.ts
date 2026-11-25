@@ -102,15 +102,12 @@ test('async choices use the bottom dialog and display the selected answer after 
   await expect(page.locator('.ask-user-question-dialog')).toHaveCount(0);
 });
 
-test('configuration warnings retain details and do not prevent custom answers', async ({ page }) => {
+test('configuration warnings stay quiet and do not prevent custom answers', async ({ page }) => {
   const dialog = await openQuestion(page);
   await page.evaluate(() => window.onCodexRuntimeEvent?.(JSON.stringify({ kind: 'nativeWarning',
     threadId: 'question-thread', payload: { method: 'configWarning',
       message: 'Codex is ignoring old settings.\ndisable_response_storage is ignored.\nnetwork_access is ignored.' } })));
-  await expect(page.locator('.toast-message')).not.toContainText('disable_response_storage');
-  await page.locator('.toast-action').click();
-  await expect(page.locator('.ant-modal-confirm-content')).toContainText('disable_response_storage is ignored.');
-  await page.locator('.ant-modal-confirm-btns button').click();
+  await expect(page.locator('.toast-message')).toHaveCount(0);
   await expect(dialog).toBeVisible();
   await dialog.locator('textarea').fill('A custom answer');
   await dialog.locator('.action-button.primary').click();
@@ -200,12 +197,7 @@ test('ordinary chat stays usable through native notices and refreshes edits with
   }, messages([{ type: 'userMessage', id: 'hello', content: [{ type: 'text', text: '你好' }] }]));
   await expect(page.locator('.ask-user-question-dialog')).toHaveCount(0);
   await expect(page.locator('.stop-button')).toBeVisible();
-  await expect(page.locator('.toast-message')).toHaveCount(1);
-  await expect(page.locator('.toast-message')).not.toContainText('Full-history hydration is deprecated');
-  await page.locator('.toast-action').click();
-  await expect(page.locator('.ant-modal-confirm-content')).toContainText('Old setting is ignored.');
-  await expect(page.locator('.ant-modal-confirm-content')).not.toContainText('Full-history hydration is deprecated');
-  await page.locator('.ant-modal-confirm-btns button').click();
+  await expect(page.locator('.toast-message')).toHaveCount(0);
   await page.evaluate(value => {
     window.updateMessages?.(JSON.stringify(value)); window.onStreamEnd?.(); window.showLoading?.('false');
   }, messages([{ type: 'userMessage', id: 'hello', content: [{ type: 'text', text: '你好' }] },

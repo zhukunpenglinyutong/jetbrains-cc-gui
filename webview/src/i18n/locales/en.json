@@ -1831,9 +1831,6 @@
   },
   "askUserQuestion": {
     "ompTitle": "OMP has some questions for you",
-    "configWarning": "Codex reported a configuration warning. Review the details.",
-    "configWarningTitle": "Codex configuration warning",
-    "warningDetails": "View details",
     "title": "Claude has some questions for you",
     "progress": "Question {{current}} / {{total}}",
     "multiSelectHint": "You can select multiple options",

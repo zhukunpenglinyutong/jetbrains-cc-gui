@@ -1824,9 +1824,6 @@
   },
   "askUserQuestion": {
     "ompTitle": "OMP 有一些问题想问你",
-    "configWarning": "Codex 部分配置可能未生效，请查看兼容提示详情。",
-    "configWarningTitle": "Codex 配置兼容提示",
-    "warningDetails": "查看详情",
     "title": "Claude 有一些问题想问你",
     "progress": "问题 {{current}} / {{total}}",
     "multiSelectHint": "可以选择多个选项",

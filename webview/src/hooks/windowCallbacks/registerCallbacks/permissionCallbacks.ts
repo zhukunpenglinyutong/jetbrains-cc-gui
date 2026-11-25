@@ -1,6 +1,4 @@
 import type { UseWindowCallbacksOptions } from '../../useWindowCallbacks';
-import { createElement } from 'react';
-import { Modal } from 'antd';
 import { sendBridgeEvent } from '../../../utils/bridge';
 import type { AskUserQuestionRequest, Question } from '../../../components/AskUserQuestionDialog';
 import {
@@ -39,18 +37,6 @@ interface CodexRuntimeEnvelope {
     version?: string;
     minimumVersion?: string;
   };
-}
-
-const FALLBACK_MODEL_METADATA_WARNING = /^Model metadata for `[^`\n]*` not found\. Defaulting to fallback metadata; this can degrade performance and cause issues\.$/;
-
-/**
- * The CLI re-sends this on every turn for any model outside its catalog, including
- * third-party models that no update can help, while the chat keeps working. The
- * native TUI only counts it in its footer, so it gets no toast here either. A CLI
- * below the recommended minimum is told to update by its cliVersionOutdated notice.
- */
-function isFallbackModelMetadataWarning(method?: string, message?: string): boolean {
-  return method === 'warning' && FALLBACK_MODEL_METADATA_WARNING.test(message ?? '');
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -214,9 +200,7 @@ function buildMcpQuestionRequest(
 }
 
 export function registerPermissionCallbacks(options: PermissionCallbacks, getTranslation?: () => UseWindowCallbacksOptions['t']): void {
-  const recentConfigurationWarnings = new Map<string, number>();
   const shownOneShotWarnings = new Set<string>();
-  const translate = (key: string, fallback: string) => (getTranslation?.() ?? options.t)?.(key, fallback) ?? fallback;
   /** @returns false when this warning was already shown. */
   const rememberOneShotWarning = (key: string) => {
     if (shownOneShotWarnings.has(key)) return false;
@@ -288,17 +272,8 @@ export function registerPermissionCallbacks(options: PermissionCallbacks, getTra
           || !warningRoot || !currentThread || warningRoot === currentThread;
         if (options.currentProviderRef.current === 'codex' && inScope && event.payload?.message) {
           const method = event.payload.method;
-          // Match the native TUI: successful reviews need no attention; subscribers already received the event.
-          if (method === 'guardianWarning' && event.payload.message.startsWith('Automatic approval review approved (')) {
-            return;
-          }
-          if (isFallbackModelMetadataWarning(method, event.payload.message)) {
-            return;
-          }
-          // API deprecations are addressed to client developers; users cannot act on them.
-          if (method === 'deprecationNotice') {
-            return;
-          }
+          // Codex warnings (config, deprecation, guardian, model metadata) repeat often and the chat
+          // keeps working, so only errors (no method) and the CLI version notice interrupt the user.
           if (method === 'cliVersionOutdated') {
             const { message, version, minimumVersion } = event.payload;
             // Stays true until the CLI changes, so a new runtime on this channel does not repeat it.
@@ -309,30 +284,7 @@ export function registerPermissionCallbacks(options: PermissionCallbacks, getTra
             options.addToast(t?.('chat.codexCliOutdated', { defaultValue: message, version, minimumVersion }) ?? message, 'warning');
             return;
           }
-          if (method === 'configWarning') {
-            // Startup and thread loading can repeat the same notice. Other warnings stay independent.
-            const key = JSON.stringify([event.channelId, event.sessionEpoch, event.runtimeBackend, event.payload.message]);
-            const now = Date.now();
-            const previous = recentConfigurationWarnings.get(key);
-            if (previous !== undefined && now - previous < 60_000) return;
-            recentConfigurationWarnings.delete(key);
-            recentConfigurationWarnings.set(key, now);
-            if (recentConfigurationWarnings.size > 64) {
-              const oldest = recentConfigurationWarnings.keys().next().value;
-              if (oldest !== undefined) recentConfigurationWarnings.delete(oldest);
-            }
-            const diagnostic = event.payload.message;
-            options.addToast(translate('askUserQuestion.configWarning', 'Codex reported a configuration warning. Review the details.'), 'warning', {
-              label: translate('askUserQuestion.warningDetails', 'View details'),
-              onClick: () => Modal.warning({
-                zIndex: 12000,
-                title: translate('askUserQuestion.configWarningTitle', 'Codex configuration warning'),
-                content: createElement('pre', {
-                  style: { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: '60vh', overflow: 'auto' },
-                }, diagnostic),
-              }),
-            });
-          } else {
+          if (!method) {
             options.addToast(event.payload.message, 'warning');
           }
         }

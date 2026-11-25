@@ -4,7 +4,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useDialogManagement } from '../../useDialogManagement';
 import { registerPermissionCallbacks } from './permissionCallbacks';
 import { sendBridgeEvent } from '../../../utils/bridge';
-import { Modal } from 'antd';
 
 vi.mock('../../../utils/bridge', () => ({ sendBridgeEvent: vi.fn() }));
 const t = ((key: string) => key) as TFunction;
@@ -110,149 +109,32 @@ it('shows native warnings for the current Codex root without changing loading or
   expect(result.current.currentPermissionRequest).toBeNull();
 });
 
-it('keeps approved automatic reviews quiet during bootstrap and live delivery while retaining their events', () => {
+it.each([
+  ['configWarning', 'Codex is ignoring 3 unrecognized configuration settings. Check for typos or deprecated settings.'],
+  ['deprecationNotice', 'Full-history hydration is deprecated for paginated threads'],
+  ['guardianWarning', 'Automatic approval review approved (risk: low, authorization: high): Read the requested directory.'],
+  ['guardianWarning', 'Automatic approval review denied (risk: high): The action is outside the requested scope.'],
+  ['warning', 'Model metadata for `kimi-k3` not found. Defaulting to fallback metadata; this can degrade performance and cause issues.'],
+  ['warning', 'Long threads can make the model less accurate.'],
+])('keeps Codex %s quiet while subscribers still receive it: %s', (method, message) => {
   const { result } = renderHook(() => useDialogManagement({ t }));
   const addToast = vi.fn();
   const onEvent = vi.fn();
-  const approved = 'Automatic approval review approved (risk: low, authorization: high): Read the requested directory.';
-  const events = [
-    approved,
-    approved,
-    'Automatic approval review approved (risk: low, authorization: [redacted]): 仅读取监听器元数据。',
-    'Automatic approval review approved (risk: medium, authorization: high): Run the requested checks.',
-  ].map(message => ({
-    kind: 'nativeWarning', channelId: 'C', sessionEpoch: 'epoch', rootThreadId: 'root', threadId: 'root',
-    payload: { method: 'guardianWarning', message },
-  }));
-  window.__pendingCodexRuntimeEvents = [JSON.stringify(events[0])];
+  const event = { kind: 'nativeWarning', channelId: 'C', sessionEpoch: 'epoch', rootThreadId: 'root', threadId: 'root',
+    payload: { method, message } };
+  window.__pendingCodexRuntimeEvents = [JSON.stringify(event)];
   window.addEventListener('codex-runtime-event', onEvent);
   try {
     act(() => registerPermissionCallbacks({ ...result.current, addToast,
       currentProviderRef: { current: 'codex' }, currentSessionIdRef: { current: 'root' } }));
-    for (const event of events.slice(1)) {
-      act(() => window.onCodexRuntimeEvent?.(JSON.stringify(event)));
-    }
+    act(() => window.onCodexRuntimeEvent?.(JSON.stringify(event)));
     expect(addToast).not.toHaveBeenCalled();
-    expect(onEvent.mock.calls.map(([event]) => event.detail)).toEqual(events);
-    expect(window.__pendingCodexRuntimeEvents).toEqual([]);
+    expect(onEvent).toHaveBeenCalledTimes(2);
     expect(sendBridgeEvent).not.toHaveBeenCalled();
     expect(result.current.currentPermissionRequest).toBeNull();
   } finally {
     window.removeEventListener('codex-runtime-event', onEvent);
   }
-});
-
-it.each([
-  ['guardianWarning', 'Automatic approval review denied (risk: high): The action is outside the requested scope.'],
-  ['guardianWarning', 'Automatic approval review timed out while evaluating the requested approval.'],
-  ['guardianWarning', 'Automatic approval review failed: reviewer unavailable.'],
-  ['guardianWarning', 'Automatic approval review aborted while evaluating the requested approval.'],
-  ['guardianWarning', 'Automatic approval review stopped after repeated denials.'],
-  ['guardianWarning', 'Automatic approval review approved without a recognized result format.'],
-  ['guardianWarning', 'An unknown reviewer warning requires attention.'],
-  ['warning', 'Automatic approval review approved (risk: low, authorization: high): An ordinary warning.'],
-])('retains actionable or unrecognized %s notifications: %s', (method, message) => {
-  const { result } = renderHook(() => useDialogManagement({ t }));
-  const addToast = vi.fn();
-  act(() => registerPermissionCallbacks({ ...result.current, addToast,
-    currentProviderRef: { current: 'codex' }, currentSessionIdRef: { current: 'root' } }));
-  act(() => window.onCodexRuntimeEvent?.(JSON.stringify({ kind: 'nativeWarning', rootThreadId: 'root',
-    payload: { method, message } })));
-  expect(addToast).toHaveBeenCalledExactlyOnceWith(message, 'warning');
-  expect(sendBridgeEvent).not.toHaveBeenCalled();
-  expect(result.current.currentPermissionRequest).toBeNull();
-});
-
-it('coalesces repeated configuration toasts while retaining raw events and distinct notices', () => {
-  const { result } = renderHook(() => useDialogManagement({ t }));
-  const addToast = vi.fn();
-  const onEvent = vi.fn();
-  window.addEventListener('codex-runtime-event', onEvent);
-  vi.useFakeTimers();
-  vi.setSystemTime(new Date('2026-10-20T00:00:00Z'));
-  act(() => registerPermissionCallbacks({ ...result.current, addToast,
-    currentProviderRef: { current: 'codex' }, currentSessionIdRef: { current: 'root' } }));
-  const emit = (method: string, message = 'Ignored native configuration', sessionEpoch = 'epoch', rootThreadId: string | null = null) => {
-    act(() => window.onCodexRuntimeEvent?.(JSON.stringify({ kind: 'nativeWarning', channelId: 'C',
-      sessionEpoch, runtimeBackend: 'cli', rootThreadId, payload: { method, message } })));
-  };
-  try {
-    emit('configWarning');
-    emit('configWarning', undefined, undefined, 'root');
-    emit('deprecationNotice');
-    expect(addToast).toHaveBeenCalledTimes(1);
-    expect(onEvent).toHaveBeenCalledTimes(3);
-    emit('configWarning', 'A different setting was ignored');
-    emit('configWarning', undefined, 'new-epoch');
-    emit('guardianWarning');
-    emit('guardianWarning');
-    emit('error');
-    emit('error');
-    expect(addToast).toHaveBeenCalledTimes(7);
-    vi.advanceTimersByTime(60_000);
-    emit('configWarning');
-    expect(addToast).toHaveBeenCalledTimes(8);
-    expect(sendBridgeEvent).not.toHaveBeenCalled();
-  } finally {
-    window.removeEventListener('codex-runtime-event', onEvent);
-  }
-});
-
-describe('Codex fallback model metadata warning', () => {
-  const metadataWarning = (slug: string) =>
-    `Model metadata for \`${slug}\` not found. Defaulting to fallback metadata; this can degrade performance and cause issues.`;
-
-  const setup = () => {
-    const { result } = renderHook(() => useDialogManagement({ t }));
-    const addToast = vi.fn();
-    const onEvent = vi.fn();
-    window.addEventListener('codex-runtime-event', onEvent);
-    const currentSessionIdRef = { current: 'root' };
-    act(() => registerPermissionCallbacks({ ...result.current, addToast,
-      currentProviderRef: { current: 'codex' }, currentSessionIdRef }));
-    const emit = (message: string, { rootThreadId = 'root', sessionEpoch = 'epoch', method = 'warning' } = {}) =>
-      act(() => window.onCodexRuntimeEvent?.(JSON.stringify({ kind: 'nativeWarning', channelId: 'C', sessionEpoch,
-        rootThreadId, threadId: rootThreadId, payload: { method, message } })));
-    return { addToast, emit, onEvent, currentSessionIdRef,
-      cleanup: () => window.removeEventListener('codex-runtime-event', onEvent) };
-  };
-
-  it('never interrupts the chat, for any model, while subscribers still receive it', () => {
-    const { addToast, emit, onEvent, cleanup } = setup();
-    try {
-      emit(metadataWarning('gpt-6.1-sol'));
-      emit(metadataWarning('gpt-6.1-sol'));
-      emit(metadataWarning('kimi-k3'));
-      expect(addToast).not.toHaveBeenCalled();
-      expect(onEvent).toHaveBeenCalledTimes(3);
-    } finally { cleanup(); }
-  });
-
-  it('stays quiet in a new conversation or a new runtime session', () => {
-    const { addToast, emit, currentSessionIdRef, cleanup } = setup();
-    try {
-      emit(metadataWarning('gpt-6.1-sol'));
-      currentSessionIdRef.current = 'next-root';
-      emit(metadataWarning('gpt-6.1-sol'), { rootThreadId: 'next-root' });
-      emit(metadataWarning('gpt-6.1-sol'), { rootThreadId: 'next-root', sessionEpoch: 'next-epoch' });
-      expect(addToast).not.toHaveBeenCalled();
-    } finally { cleanup(); }
-  });
-
-  it('still shows other warnings, including similar text or the same text from another method', () => {
-    const { addToast, emit, cleanup } = setup();
-    try {
-      emit('Long threads can make the model less accurate.');
-      emit('Long threads can make the model less accurate.');
-      expect(addToast).toHaveBeenCalledTimes(2);
-      emit('Model metadata for `gpt-6.1-sol` could not be refreshed.');
-      emit('Catalog entry `gpt-6.1-sol` not found. Defaulting to fallback metadata; this can degrade performance and cause issues.');
-      emit(`${metadataWarning('gpt-6.1-sol')}\nThe catalog will refresh later.`);
-      expect(addToast).toHaveBeenCalledTimes(5);
-      emit(metadataWarning('gpt-6.1-sol'), { method: 'guardianWarning' });
-      expect(addToast).toHaveBeenCalledTimes(6);
-    } finally { cleanup(); }
-  });
 });
 
 describe('Codex CLI version notice', () => {
@@ -315,59 +197,14 @@ describe('Codex CLI version notice', () => {
   });
 });
 
-it('drops Codex API deprecation notices without a toast', () => {
-  const { result } = renderHook(() => useDialogManagement({ t }));
-  const addToast = vi.fn();
-  act(() => registerPermissionCallbacks({ ...result.current, addToast,
-    currentProviderRef: { current: 'codex' }, currentSessionIdRef: { current: 'thread' } }));
-  act(() => window.onCodexRuntimeEvent?.(JSON.stringify({ kind: 'nativeWarning', threadId: 'thread',
-    payload: { method: 'deprecationNotice', message: 'Full-history hydration is deprecated for paginated threads' } })));
-  expect(addToast).not.toHaveBeenCalled();
-});
-
-it.each(['configWarning'])('keeps %s details behind a compact warning without interrupting the question', method => {
-  const { result } = renderHook(() => useDialogManagement({ t }));
-  const addToast = vi.fn();
-  const showWarning = vi.spyOn(Modal, 'warning').mockReturnValue({ destroy: vi.fn(), update: vi.fn() });
-  const diagnostic = 'Codex is ignoring old settings.\ndisable_response_storage is ignored.\nnetwork_access is ignored.';
-  act(() => registerPermissionCallbacks({ ...result.current, addToast,
-    currentProviderRef: { current: 'codex' }, currentSessionIdRef: { current: 'thread' } }));
-  act(() => window.onCodexRuntimeEvent?.(JSON.stringify({ kind: 'nativeWarning', threadId: 'thread',
-    payload: { method, message: diagnostic } })));
-  expect(addToast).toHaveBeenCalledTimes(1);
-  const [message, severity, action] = addToast.mock.calls[0];
-  expect(message).not.toContain('disable_response_storage');
-  expect(severity).toBe('warning');
-  expect(message).toBe('Codex reported a configuration warning. Review the details.');
-  expect(showWarning).not.toHaveBeenCalled();
-  action.onClick();
-  expect(showWarning).toHaveBeenCalledWith(expect.objectContaining({
-    content: expect.objectContaining({ props: expect.objectContaining({ children: diagnostic }) }),
-  }));
-  expect(sendBridgeEvent).not.toHaveBeenCalled();
-  showWarning.mockRestore();
-});
-
-it('uses the current translation when the language changes after callback registration', () => {
-  const { result } = renderHook(() => useDialogManagement({ t }));
-  const addToast = vi.fn();
-  let current = ((_key: string, fallback: string) => fallback) as TFunction;
-  registerPermissionCallbacks({ ...result.current, addToast,
-    currentProviderRef: { current: 'codex' }, currentSessionIdRef: { current: 'thread' } }, () => current);
-  current = ((key: string) => key === 'askUserQuestion.warningDetails' ? '查看详情' : 'Codex 配置兼容提示') as TFunction;
-  act(() => window.onCodexRuntimeEvent?.(JSON.stringify({ kind: 'nativeWarning', threadId: 'thread',
-    payload: { method: 'configWarning', message: 'The native configuration has an ignored setting' } })));
-  expect(addToast).toHaveBeenCalledWith('Codex 配置兼容提示', 'warning', expect.objectContaining({ label: '查看详情' }));
-});
-
-it('does not consume a configuration notice while another session or provider is selected', () => {
+it('does not consume an error notice while another session or provider is selected', () => {
   const { result } = renderHook(() => useDialogManagement({ t }));
   const addToast = vi.fn();
   const currentProviderRef = { current: 'claude' };
   const currentSessionIdRef = { current: 'other-root' as string | null };
   act(() => registerPermissionCallbacks({ ...result.current, addToast, currentProviderRef, currentSessionIdRef }));
   const emit = () => act(() => window.onCodexRuntimeEvent?.(JSON.stringify({ kind: 'nativeWarning', rootThreadId: 'root',
-    payload: { method: 'configWarning', message: 'Ignored native configuration' } })));
+    payload: { message: 'Upstream request failed' } })));
   emit();
   currentProviderRef.current = 'codex';
   emit();
