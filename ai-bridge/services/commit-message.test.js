@@ -118,6 +118,13 @@ test('buildClaudeAgentCommitOptions forwards the CLI path override only when set
   );
 });
 
+test('buildClaudeAgentCommitOptions starts a Windows .cmd launcher through its own spawner', { skip: process.platform !== 'win32' }, () => {
+  const batch = buildAgentOptions({ claudeCliOverride: 'C:\\tools\\work.cmd' });
+  assert.equal(batch.pathToClaudeCodeExecutable, 'C:\\tools\\work.cmd');
+  assert.equal(typeof batch.spawnClaudeCodeProcess, 'function');
+  assert.equal('spawnClaudeCodeProcess' in buildAgentOptions({ claudeCliOverride: 'C:\\tools\\claude.exe' }), false);
+});
+
 // ---------- thinking setting per model (#1949) ----------
 
 test('buildCommitAskRequest uses between_tools for Claude Sonnet 5.5', () => {

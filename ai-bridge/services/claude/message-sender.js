@@ -46,7 +46,7 @@ import {
 } from './stream-delta-normalizer.js';
 import { generateSessionTitle } from '../session-title-service.js';
 import { projectTrustFor, settingSourcesFor } from './project-trust.js';
-import { getClaudeCliPathOverride } from '../../utils/claude-cli-path.js';
+import { getClaudeCliPathOverride, claudeCliSdkOptions } from '../../utils/claude-cli-path.js';
 import { buildSessionClaudeConfig, buildSessionClaudeSettingsOverride } from '../../config/session-supplier.js';
 import { createUltracodeQuery, withUltracodeSetting } from './ultracode.js';
 
@@ -80,6 +80,16 @@ function resolveThinkingConfig(settings) {
  */
 function buildQueryOptions({ workingDirectory, permissionMode, sdkModelName, maxThinkingTokens, streamingEnabled, systemPromptAppend, preToolUseHook, sdkStderrLines, mcpServers, modelId, settingsEnv, resolvedModelId, ultracode, childEnv, projectTrusted }) {
   const claudeCliOverride = getClaudeCliPathOverride();
+  const stderr = (data) => {
+    try {
+      const text = (data ?? '').toString().trim();
+      if (text) {
+        sdkStderrLines.push(text);
+        if (sdkStderrLines.length > 50) sdkStderrLines.shift();
+        console.error(`[SDK-STDERR] ${text}`);
+      }
+    } catch (_) { /* ignore */ }
+  };
   return {
     cwd: workingDirectory,
     permissionMode,
@@ -101,22 +111,13 @@ function buildQueryOptions({ workingDirectory, permissionMode, sdkModelName, max
     // version could silently drop bypass and change permission behavior.
     ...(permissionMode === 'bypassPermissions' && { allowDangerouslySkipPermissions: true }),
     ...(mcpServers && { mcpServers }),
-    ...(claudeCliOverride && { pathToClaudeCodeExecutable: claudeCliOverride }),
+    ...claudeCliSdkOptions(claudeCliOverride, { stderr }),
     systemPrompt: {
       type: 'preset',
       preset: 'claude_code',
       ...(systemPromptAppend && { append: systemPromptAppend })
     },
-    stderr: (data) => {
-      try {
-        const text = (data ?? '').toString().trim();
-        if (text) {
-          sdkStderrLines.push(text);
-          if (sdkStderrLines.length > 50) sdkStderrLines.shift();
-          console.error(`[SDK-STDERR] ${text}`);
-        }
-      } catch (_) { /* ignore */ }
-    }
+    stderr
   };
 }
 
