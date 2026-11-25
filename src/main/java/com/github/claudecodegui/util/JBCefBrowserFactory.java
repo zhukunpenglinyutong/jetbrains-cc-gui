@@ -95,8 +95,9 @@ public final class JBCefBrowserFactory {
      * Registers load callbacks without losing the platform's in-process handler.
      *
      * <p>Classic CefClient accepts only its first load handler, already occupied by JBCefClient.
-     * Remote clients multiplex raw handlers, and their browser-keyed platform dispatch can lose
-     * callbacks, so they retain the direct registration workaround.</p>
+     * Remote clients replace the previous raw handler, which takes over JBCefClient's dispatch for
+     * this browser's own client. Their browser-keyed platform dispatch can lose callbacks, so they
+     * retain the direct registration workaround.</p>
      */
     public static void addLoadHandler(JBCefBrowser browser, CefLoadHandler handler) {
         CefBrowser cefBrowser = browser.getCefBrowser();

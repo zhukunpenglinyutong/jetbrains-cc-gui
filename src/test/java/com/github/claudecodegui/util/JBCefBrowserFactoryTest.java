@@ -31,7 +31,7 @@ public class JBCefBrowserFactoryTest {
 
     /** Remote runtime and Gateway proxies retain the direct callback-dispatch workaround. */
     @Test
-    public void remoteLoadHandlersKeepNativeMultiplexer() {
+    public void remoteLoadHandlersKeepDirectRegistration() {
         List<String> calls = new ArrayList<>();
         for (String className : List.of("com.jetbrains.cef.remote.browser.RemoteBrowser",
                 "com.jetbrains.cef.remote.browser.FutureBrowser", "com.jetbrains.rdserver.cef.BackendCefBrowser")) {

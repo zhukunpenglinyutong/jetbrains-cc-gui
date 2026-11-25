@@ -445,6 +445,21 @@ public class WebviewInitializer {
             host.setBrowser(createdBrowser);
             host.getHandlerContext().setBrowser(createdBrowser);
 
+            // Register before ExternalNavigationGuard: JBCefClient 2024.1 answers onBeforePopup with
+            // the last life-span handler, and this adapter's default false would allow the popup.
+            createdBrowser.getJBCefClient().addLifeSpanHandler(new CefLifeSpanHandlerAdapter() {
+                /** Records native creation independently of the Java browser wrapper. */
+                @Override
+                public void onAfterCreated(CefBrowser target) {
+                    BrowserBridges currentBridges = bridges;
+                    if (currentBridges != null && currentBridges.belongsTo(createdBrowser)
+                            && isCurrentBrowser(currentBridges)) {
+                        currentBridges.startupProgress.nativeBrowserCreated();
+                        logStartupProgress("native_browser_created", currentBridges);
+                    }
+                }
+            }, createdBrowser.getCefBrowser());
+
             // One registration: JBCefClient 2024.1 keeps only the last handler's answer (see CombinedRequestHandler).
             createdBrowser.getJBCefClient().addRequestHandler(
                     new CombinedRequestHandler(
@@ -461,16 +476,6 @@ public class WebviewInitializer {
             synchronized (this.bridgeLock) {
                 this.bridges = currentBridges;
             }
-            createdBrowser.getJBCefClient().addLifeSpanHandler(new CefLifeSpanHandlerAdapter() {
-                /** Records native creation independently of the Java browser wrapper. */
-                @Override
-                public void onAfterCreated(CefBrowser target) {
-                    if (isCurrentBrowser(currentBridges)) {
-                        currentBridges.startupProgress.nativeBrowserCreated();
-                        logStartupProgress("native_browser_created", currentBridges);
-                    }
-                }
-            }, createdBrowser.getCefBrowser());
             currentBridges.jsQuery.addHandler((msg) -> {
                 boolean dispatch;
                 int pageGeneration;
@@ -554,8 +559,8 @@ public class WebviewInitializer {
             host.setFrontendReady(false);
 
             // Register before loadHTML so the first page can establish its bridge. Classic CEF
-            // needs JBCefClient's multiplexer; only remote implementations accept a second raw
-            // handler and need the workaround for unreliable browser-keyed callback dispatch.
+            // needs JBCefClient's multiplexer. Remote clients replace their raw handler instead, so
+            // they keep the direct registration that avoids unreliable browser-keyed dispatch.
             CefLoadHandlerAdapter bridgeLoadHandler = new CefLoadHandlerAdapter() {
                 /** Records when the main frame starts loading. */
                 @Override
