@@ -13,6 +13,56 @@ export interface ChangelogEntry {
 
 export const CHANGELOG_DATA: ChangelogEntry[] = [
   {
+    version: '0.6.7',
+    date: '2026-11-25',
+    content: {
+      en: `✨ Features
+- **Antigravity CLI (agy) as a provider** (#1098, #2024): chat with Google's Antigravity terminal agent from the provider menu, with its models, thinking summaries, context usage, plan usage, a sandbox permission mode and restored history including subagent conversations. A turn that produces no output for a set number of minutes is stopped automatically and the likely cause is shown; set it to 0 in Settings to turn this off. Sign in by running \`agy\` once in a terminal; the plugin does not handle Google login (by @toxeh, @zhukunpenglinyutong)
+- **Markdown preview annotations (beta)** (#1935): comment on passages in the IDE's own Markdown preview and send the comments to the chat as a review draft you check before sending. Off by default; turn it on in Settings. Requires IntelliJ IDEA 2024.3 or newer and the bundled Markdown plugin (by @IcarusAegis, @zhukunpenglinyutong)
+- **Use a custom Claude config directory** (#2049, #2097, #2103, #2110): set a directory in Settings > Basic Configuration, or keep using \`CLAUDE_CONFIG_DIR\`. Chat history, session actions, the Claude process, the plugin's \`settings.json\` and MCP servers then use it instead of \`~/.claude\`. The Skills and Hooks pages, slash commands and plugins still read \`~/.claude\` for now, so a hook toggled there does not apply to the custom directory yet (by @Faq, @zhukunpenglinyutong)
+- **Regenerate a session title** (#1997, #2111): a refresh button on the history row and in the chat header writes a new title from the conversation, using the supplier the conversation is bound to (by @Mrlihao, @EeeasyCode, @zhukunpenglinyutong)
+- **Notifications name their tab** (#1958, #2112): a toast shows which chat tab it came from, and clicking it focuses that tab (by @beluga73)
+
+🔧 Improvements
+- **Hidden chat tabs render less**: a chat browser that is not on screen is throttled, so background tabs use less CPU and GPU (#2094) (by @romanbesedinskiy-jpg, @zhukunpenglinyutong)
+- **Node.js path messages follow the IDE language** instead of always being Chinese (#2101) (by @Faq)
+- **Windows setup guide**: \`docs/WINDOWS_GUIDE.md\` covers Node.js, Claude, Codex and WSL setup and common errors, linked from the README (#2108) (by @rokkalababu-dotcom, @zhukunpenglinyutong)
+- **Smaller README images** (by @zhukunpenglinyutong)
+
+🐛 Fixes
+- **Multi-line prompts reach npm-installed CLIs on Windows intact** (#1820, #2093): OpenCode, Grok, Kimi, Pi and other CLIs started through a \`.cmd\` shim received only the first line, because cmd.exe ends the command at a line break. A standard npm shim is now run with Node directly for such prompts (by @hebulin, @zhukunpenglinyutong)
+- **Claude CLI \`.cmd\` and \`.bat\` launchers start on Windows** (#2049, #2110): a Claude CLI path pointing at a batch launcher now starts, and its error output reaches the chat (by @Faq)
+- **Codex relay suppliers work again** (#2099): since v0.6.6, a globally active relay provider using \`experimental_bearer_token\`, \`http_headers\`, no key or a provider table in \`~/.codex/config.toml\` failed every send, model list and history read with "The conversation supplier is unavailable or invalid". The active provider now falls back to the native launch (by @zhukunpenglinyutong)
+- **Answers appear with relays that stream only thinking**: some Claude-compatible relays stream thinking but deliver the answer only at the end, and only the thinking bubble was shown (by @zhukunpenglinyutong)
+- **Codex turns survive a session refresh** (#2100): refreshing or reloading the session no longer cuts off a running Codex turn (by @saligia3173, @zhukunpenglinyutong)
+- **Chat starts on Linux with in-process JCEF** (#2113): when JCEF runs in the IDE process, the missing \`libjawt.so\` is loaded first so the chat no longer stays blank, and a notice offers a retry or restart when startup still fails (by @saligia3173, @zhukunpenglinyutong)
+- **Changes outside the project open as a read-only diff** (#2105) instead of failing silently (by @R-Tsubasa)
+- **The stop button shows right after Enter sends**: it looked unchanged until hovered (by @zhukunpenglinyutong)`,
+      zh: `✨ 新功能
+- **新增 Antigravity CLI（agy）供应商**（#1098、#2024）：可以在 Provider 菜单中使用 Google 的 Antigravity 终端 agent，支持模型列表、thinking 摘要、上下文用量、套餐用量、沙箱权限模式，恢复历史时包含子 agent 对话。回合在设定的分钟数内没有任何输出时会被自动停止，并提示可能原因；在设置中设为 0 即可关闭。请先在终端运行一次 \`agy\` 完成登录，插件不处理 Google 登录（by @toxeh、@zhukunpenglinyutong）
+- **Markdown 预览批注（Beta）**（#1935）：可以在 IDE 原生 Markdown 预览中对段落添加批注，批注会作为评审草稿加入聊天输入框，发送前可检查。默认关闭，需在设置中开启。要求 IntelliJ IDEA 2024.3 及以上并启用内置 Markdown 插件（by @IcarusAegis、@zhukunpenglinyutong）
+- **支持自定义 Claude 配置目录**（#2049、#2097、#2103、#2110）：可以在 设置 > 基础配置 中指定目录，或继续使用 \`CLAUDE_CONFIG_DIR\`。聊天历史、会话操作、Claude 进程、插件写入的 \`settings.json\` 和 MCP 服务器都会改用该目录而不是 \`~/.claude\`。Skills 和 Hooks 页面、斜杠命令和插件目前仍读取 \`~/.claude\`，因此在 Hooks 页面开关的 hook 暂时不会作用于自定义目录（by @Faq、@zhukunpenglinyutong）
+- **重新生成会话标题**（#1997、#2111）：历史记录行和聊天标题栏新增刷新按钮，会根据对话内容重新生成标题，并使用该对话绑定的供应商（by @Mrlihao、@EeeasyCode、@zhukunpenglinyutong）
+- **通知显示来源标签页**（#1958、#2112）：通知会显示来自哪个聊天标签页，点击即可切换到该标签页（by @beluga73）
+
+🔧 优化
+- **隐藏的聊天标签页减少渲染**：不在屏幕上的聊天浏览器会降低帧率，后台标签页占用更少的 CPU 和 GPU（#2094）（by @romanbesedinskiy-jpg、@zhukunpenglinyutong）
+- **Node.js 路径相关提示跟随 IDE 语言**，不再固定显示中文（#2101）（by @Faq）
+- **Windows 配置指南**：新增 \`docs/WINDOWS_GUIDE.md\`，说明 Node.js、Claude、Codex 与 WSL 的配置和常见错误，README 中有入口（#2108）（by @rokkalababu-dotcom、@zhukunpenglinyutong）
+- **压缩 README 图片**（by @zhukunpenglinyutong）
+
+🐛 修复
+- **Windows 上多行提示词完整传给 npm 安装的 CLI**（#1820、#2093）：通过 \`.cmd\` 启动器运行的 OpenCode、Grok、Kimi、Pi 等 CLI 此前只收到第一行，因为 cmd.exe 遇到换行就结束命令。现在遇到多行提示词时，标准 npm 启动器会直接用 Node 运行（by @hebulin、@zhukunpenglinyutong）
+- **Windows 上可以使用 \`.cmd\` / \`.bat\` 形式的 Claude CLI 启动器**（#2049、#2110）：Claude CLI 路径指向批处理启动器时可以正常启动，其错误输出也会显示在聊天中（by @Faq）
+- **Codex 中转供应商恢复可用**（#2099）：自 v0.6.6 起，全局启用的中转供应商如果使用 \`experimental_bearer_token\`、\`http_headers\`、不配置密钥，或供应商表写在 \`~/.codex/config.toml\` 中，发送消息、获取模型列表和读取历史都会报 “The conversation supplier is unavailable or invalid”。现在当前启用的供应商会回退到原生方式启动（by @zhukunpenglinyutong）
+- **只流式返回 thinking 的中转也能显示回答**：部分 Claude 兼容中转只流式发送 thinking，回答在最后才一次性给出，此前只显示 thinking 气泡（by @zhukunpenglinyutong）
+- **刷新会话不再中断进行中的 Codex 回合**（#2100）（by @saligia3173、@zhukunpenglinyutong）
+- **Linux 上进程内 JCEF 可以启动聊天**（#2113）：JCEF 运行在 IDE 进程内时，会先加载缺失的 \`libjawt.so\`，聊天页不再空白；仍启动失败时会提示重试或重启 IDE（by @saligia3173、@zhukunpenglinyutong）
+- **项目外文件的改动以只读 diff 打开**（#2105），不再静默失败（by @R-Tsubasa）
+- **按 Enter 发送后停止按钮立即显示**：此前要鼠标悬停才能看出变化（by @zhukunpenglinyutong）`,
+    },
+  },
+  {
     version: '0.6.6-fix1',
     date: '2026-11-16',
     content: {
