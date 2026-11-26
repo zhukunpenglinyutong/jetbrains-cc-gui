@@ -816,6 +816,11 @@ interface Window {
   updateCodexSubscriptionQuota?: (json: string) => void;
 
   /**
+   * Update Codex plan usage snapshot for ContextBar indicator.
+   */
+  updateCodexPlanUsage?: (json: string) => void;
+
+  /**
    * Update active Codex provider
    */
   updateActiveCodexProvider?: (json: string) => void;

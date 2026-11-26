@@ -1,6 +1,7 @@
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useClaudePlanUsage } from '../../hooks/useClaudePlanUsage';
+import { useCodexPlanUsage } from '../../hooks/useCodexPlanUsage';
 import { useGeminiPlanUsage } from '../../hooks/useGeminiPlanUsage';
 import { useGrokPlanUsage } from '../../hooks/useGrokPlanUsage';
 import { useOmpPlanUsage } from '../../hooks/useOmpPlanUsage';
@@ -27,10 +28,12 @@ export const ContextToolsRight: React.FC<ContextToolsRightProps> = memo(({
 }) => {
   const { t } = useTranslation();
   const isClaude = currentProvider === 'claude';
+  const isCodex = currentProvider === 'codex';
   const isGemini = currentProvider === 'gemini';
   const isGrok = currentProvider === 'grok';
   const isOmp = currentProvider === 'omp';
   const claudePlanUsage = useClaudePlanUsage(currentProvider);
+  const codexPlanUsage = useCodexPlanUsage(currentProvider);
   const geminiPlanUsage = useGeminiPlanUsage(currentProvider, selectedModel);
   const grokPlanUsage = useGrokPlanUsage(currentProvider);
   const ompPlanUsage = useOmpPlanUsage(currentProvider, selectedModel ?? '');
@@ -41,6 +44,12 @@ export const ContextToolsRight: React.FC<ContextToolsRightProps> = memo(({
         <PlanUsageIndicator
           snapshot={claudePlanUsage.snapshot}
           status={claudePlanUsage.status}
+        />
+      )}
+      {isCodex && (
+        <PlanUsageIndicator
+          snapshot={codexPlanUsage.snapshot}
+          status={codexPlanUsage.status}
         />
       )}
       {isGemini && (

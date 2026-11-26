@@ -116,7 +116,9 @@ export function buildPlanUsageTooltip({
   const period = display?.periodType || display?.windowId || 'limit';
   const lines = [snapshot?.provider === 'grok'
     ? t('chat.planUsage.grokTitle', { defaultValue: 'Grok plan usage' })
-    : t('chat.planUsage.title', { defaultValue: 'Claude plan usage' })];
+    : snapshot?.provider === 'codex'
+      ? t('chat.planUsage.codexTitle', { defaultValue: 'Codex plan usage' })
+      : t('chat.planUsage.title', { defaultValue: 'Claude plan usage' })];
   if (snapshot?.level) {
     lines.push(snapshot.level.toUpperCase());
   }

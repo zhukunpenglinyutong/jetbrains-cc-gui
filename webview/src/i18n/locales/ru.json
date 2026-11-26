@@ -268,6 +268,7 @@
       "other": "Задача"
     },
     "planUsage": {
+      "codexTitle": "Расход тарифа Codex",
       "balanceLabel": "Баланс: ",
       "balanceRemaining": "Баланс: {{value}}",
       "balanceDetail": "Всего {{total}} · Использовано {{used}}"

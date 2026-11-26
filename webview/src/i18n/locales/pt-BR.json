@@ -264,6 +264,7 @@
       "other": "Tarefa"
     },
     "planUsage": {
+      "codexTitle": "Uso do plano Codex",
       "balanceLabel": "Saldo: ",
       "balanceRemaining": "Saldo: {{value}}",
       "balanceDetail": "Total {{total}} · Usado {{used}}"

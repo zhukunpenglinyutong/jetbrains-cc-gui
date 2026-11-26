@@ -169,6 +169,7 @@
       "balanceRemaining": "Balance: {{value}}",
       "balanceDetail": "Total {{total}} · Used {{used}}",
       "grokTitle": "Grok plan usage",
+      "codexTitle": "Codex plan usage",
       "staleIdle": "Last reading. It refreshes the next time you use Grok",
       "loading": "Loading usage…",
       "unavailable": "Usage unavailable",

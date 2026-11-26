@@ -90,11 +90,22 @@ public final class CodexSubscriptionQuotaService {
     }
 
     static JsonObject buildPayloadFromUsage(JsonObject usage, long now) {
-        return buildPayloadFromRateLimit(pickFirstObject(usage, "rate_limit"), now, "wham_usage");
+        JsonObject payload = buildPayloadFromRateLimit(pickFirstObject(usage, "rate_limit"), now, "wham_usage");
+        attachPlanType(payload, usage);
+        return payload;
     }
 
     static JsonObject buildPayloadFromSessionRateLimits(JsonObject rateLimits, long now) {
-        return buildPayloadFromRateLimit(rateLimits, now, "session_event");
+        JsonObject payload = buildPayloadFromRateLimit(rateLimits, now, "session_event");
+        attachPlanType(payload, rateLimits);
+        return payload;
+    }
+
+    private static void attachPlanType(JsonObject payload, JsonObject source) {
+        String planType = readStringNullable(source, "plan_type", "planType");
+        if (planType != null && !planType.isBlank()) {
+            payload.addProperty("planType", planType.trim());
+        }
     }
 
     public static JsonObject buildUnavailablePayload(String reason, long now) {

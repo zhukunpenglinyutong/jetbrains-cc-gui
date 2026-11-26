@@ -64,6 +64,7 @@ public class CodexSubscriptionQuotaServiceTest {
                 """).getAsJsonObject();
 
         JsonObject payload = CodexSubscriptionQuotaService.buildPayloadFromUsage(usage, 1710000000000L);
+        assertEquals("plus", payload.get("planType").getAsString());
         JsonObject windows = payload.getAsJsonObject("windows");
         JsonObject fiveHour = windows.getAsJsonObject("fiveHour");
         JsonObject weekly = windows.getAsJsonObject("weekly");
@@ -81,11 +82,13 @@ public class CodexSubscriptionQuotaServiceTest {
     @Test
     public void mapsSessionRateLimitsSnapshotToQuotaPayload() {
         JsonObject rateLimits = sessionRateLimits(53.0, 24.0);
+        rateLimits.addProperty("plan_type", "pro");
 
         JsonObject payload = CodexSubscriptionQuotaService.buildPayloadFromSessionRateLimits(rateLimits, 1710000000000L);
         JsonObject windows = payload.getAsJsonObject("windows");
 
         assertEquals("session_event", payload.get("source").getAsString());
+        assertEquals("pro", payload.get("planType").getAsString());
         assertEquals(53.0, windows.getAsJsonObject("fiveHour").get("usedPercent").getAsDouble(), 0.001);
         assertEquals(47.0, windows.getAsJsonObject("fiveHour").get("remainingPercent").getAsDouble(), 0.001);
         assertEquals(5, windows.getAsJsonObject("fiveHour").get("windowHours").getAsInt());

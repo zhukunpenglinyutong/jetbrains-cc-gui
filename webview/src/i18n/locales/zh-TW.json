@@ -86,6 +86,7 @@
   },
   "chat": {
     "planUsage": {
+      "codexTitle": "Codex 額度詳情",
       "unavailable": "用量無法使用",
       "dash": "用量 —",
       "loading": "正在載入用量…",

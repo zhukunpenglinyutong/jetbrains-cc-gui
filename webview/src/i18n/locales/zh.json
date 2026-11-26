@@ -167,6 +167,7 @@
       "balanceRemaining": "余额：{{value}}",
       "balanceDetail": "总额 {{total}} · 已用 {{used}}",
       "grokTitle": "Grok 额度详情",
+      "codexTitle": "Codex 额度详情",
       "staleIdle": "这是上次读取的额度，下次使用 Grok 时会自动刷新",
       "loading": "正在获取额度…",
       "unavailable": "额度暂不可用",
