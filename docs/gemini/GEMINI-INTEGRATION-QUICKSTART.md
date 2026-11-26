@@ -35,6 +35,35 @@ The plugin does not install or configure the Gemini CLI.
 - Conversation storage under the CLI home is CLI-owned: the plugin reads it and
   deletes only whole conversation databases on explicit user request.
 
+## Subscription Quota
+
+Open the chat toolbar's provider menu and hover over or focus **Antigravity CLI**
+(without selecting it). The panel shows the remaining percentage and local reset
+time for each available Gemini, Gemini Argon, and shared Claude/GPT window. Use
+Right Arrow to focus the panel and Left Arrow to return to the provider row.
+The selected chat model does not filter this account-wide view. Missing windows,
+out-of-range fractions, and invalid reset times are not shown. 0% is distinct
+from a nonzero remainder below 1%.
+
+The AI Bridge runs `agy --print /usage --output-format json` in the same native
+or WSL runtime used for chat, reusing the chat CLI lookup (including explicit
+`GEMINI_BIN` / `GEMINI_PATH` / `GEMINI_CLI_PATH` overrides and the native Windows
+standalone directory `%LOCALAPPDATA%\agy\bin`). The version check and `/usage`
+use the same executable and child environment. As in CC Switch's CLI path,
+the probe removes `GEMINI_API_KEY` and `GOOGLE_GEMINI_BASE_URL` from that
+child environment so it queries the official CLI login rather than an API-key
+endpoint. It does not read Google tokens, directly call Google's quota endpoints,
+or change accounts. Builds below 1.1.11, prereleases and unverifiable versions
+are blocked because an old build can interpret `/usage` as a model prompt. If
+an otherwise qualified launcher actually reports a model turn instead of a
+structured `usage` result, automatic probes are paused for ten minutes.
+
+The quota panel queries on open instead of polling during chat. Concurrent
+requests share one in-flight probe without blocking extra worker threads. A
+successful snapshot can be reused for 30 seconds with its original update time.
+Reopen after that interval for a fresh snapshot. If a refresh fails, the
+previous snapshot is not presented as current.
+
 ## CLI Storage Contract
 
 Everything below was pinned against live storage (agy 1.1.22, macOS, verified

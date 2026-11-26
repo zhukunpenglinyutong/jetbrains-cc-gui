@@ -16,6 +16,7 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.InvalidPathException;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
@@ -127,6 +128,8 @@ public class CodexSkillService {
 
     /**
      * Finds the nearest repository boundary, including Git worktree and submodule gitfiles.
+     * Mirrors git discovery: empty or corrupt .git entries are skipped like git skips them,
+     * so leftover junk directories such as an unused /tmp/.git do not fake a repository root.
      *
      * @return the repo root path, or null if not in a git repository
      */
@@ -137,13 +140,44 @@ public class CodexSkillService {
         Path current = Paths.get(normalizePath(cwd));
 
         while (current != null) {
-            Path git = current.resolve(".git");
-            if (Files.isDirectory(git) || Files.isRegularFile(git)) {
+            if (isRepositoryBoundary(current.resolve(".git"))) {
                 return current.toString();
             }
             current = current.getParent();
         }
         return null;
+    }
+
+    /**
+     * Checks whether a .git entry marks a usable repository: a git directory with HEAD,
+     * or a gitfile whose gitdir target resolves to one.
+     */
+    private static boolean isRepositoryBoundary(Path gitEntry) {
+        if (Files.isDirectory(gitEntry)) {
+            return Files.isRegularFile(gitEntry.resolve("HEAD"));
+        }
+        if (!Files.isRegularFile(gitEntry)) {
+            return false;
+        }
+        try {
+            String line = Files.readString(gitEntry).split("\n", 2)[0].strip();
+            if (!line.toLowerCase(Locale.ROOT).startsWith("gitdir:")) {
+                return false;
+            }
+            String target = line.substring("gitdir:".length()).strip();
+            if (target.isEmpty()) {
+                return false;
+            }
+            Path gitDir = Paths.get(target);
+            // Relative gitfile targets resolve against the directory holding the .git file.
+            if (!gitDir.isAbsolute()) {
+                gitDir = gitEntry.getParent().resolve(target).normalize();
+            }
+            return Files.isDirectory(gitDir) && Files.isRegularFile(gitDir.resolve("HEAD"));
+        } catch (IOException | InvalidPathException e) {
+            LOG.warn("[CodexSkills] Failed to read .git gitfile: " + e.getMessage());
+            return false;
+        }
     }
 
     // ==================== Scanning ====================

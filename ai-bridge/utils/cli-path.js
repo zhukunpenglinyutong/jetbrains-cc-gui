@@ -1053,11 +1053,14 @@ export function resolveMiniMaxCliPath() {
 }
 
 export function resolveGeminiCliPath() {
+  const homeCandidates = ['{home}/.local/bin/{bin}'];
+  if (process.platform === 'win32') {
+    // Keep chat and native quota queries able to discover the standalone install without PATH.
+    homeCandidates.push('{localAppData}/agy/bin/{bin}');
+  }
   return resolveCliPath({
     binaryName: 'agy',
     envKeys: ['GEMINI_BIN', 'GEMINI_PATH', 'GEMINI_CLI_PATH'],
-    homeCandidates: [
-      '{home}/.local/bin/{bin}',
-    ],
+    homeCandidates,
   });
 }

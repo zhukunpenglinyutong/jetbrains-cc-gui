@@ -1,618 +1,300 @@
 package com.github.claudecodegui.provider.gemini;
 
-import com.github.claudecodegui.cli.CliStatusDetector;
-import com.github.claudecodegui.cli.CliToolId;
-import com.github.claudecodegui.cli.CliToolStatus;
+import com.github.claudecodegui.bridge.EnvironmentConfigurator;
+import com.github.claudecodegui.bridge.NodeDetector;
+import com.github.claudecodegui.startup.BridgePreloader;
 import com.github.claudecodegui.util.PlatformUtils;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.Locale;
+import java.time.Instant;
+import java.time.format.DateTimeParseException;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.function.LongSupplier;
+import java.util.function.Supplier;
 
-/**
- * Gemini (Antigravity CLI) plan-usage snapshot builder + resolver.
- *
- * <p>Feeds the ContextBar plan-usage indicator using the same payload shape as
- * Claude ({@code capacity_pct} + {@code windows[]}), so the shared
- * {@code PlanUsageIndicator} renders it unchanged. The billing family follows
- * the selected model slug: {@code gemini-*} maps to the "Gemini Models" quota
- * group, {@code claude-*}/{@code gpt-*} to the third-party group; unknown or
- * {@code auto} defaults to the Gemini family (the CLI's own default routing).
- *
- * <p>Quota data comes from a one-shot {@code agy -p "/usage" --output-format
- * json} probe. The command is answered structurally by the CLI itself —
- * {@code usage} stays all-zero, {@code num_turns} is 0 and no conversation is
- * left behind — so reading quota never consumes tokens or quota.
- *
- * <p>Hard gate: the structural answer only exists on CLI 1.1.11+. On older
- * CLIs the same text runs as a <b>model prompt</b> and burns tokens, so the
- * probe is never spawned below the floor — the only outcome is an
- * unavailable payload with an upgrade hint. A {@code SUCCESS} payload without
- * the {@code command} object is the documented old-CLI marker and is treated
- * the same way — and that outcome is negative-cached so the 120s poll never
- * re-spawns the probe until the cache TTL expires.
- *
- * <p>The webview polls {@code get_gemini_plan_usage} every ~120s with the
- * selected model slug riding along; the cache is keyed by billing family so a
- * family switch always re-probes instead of serving the other family's numbers.
- */
+/** Reads Antigravity subscription quota through the locally signed-in CLI. */
 public final class GeminiPlanUsageService {
 
-    /** Minimum CLI version whose {@code /usage} command answers structurally. */
-    static final String PRODUCT_FLOOR = "1.1.11";
-    /**
-     * Fresh-cache TTL. Set just under the webview's 120s poll cadence so that
-     * back-to-back polls (multiple tool windows, manual refresh) dedupe onto a
-     * single probe; a regular 120s poll always re-probes.
-     */
-    static final long CACHE_TTL_MS = 115_000L;
-    /**
-     * Negative-cache TTL for old-CLI responses that lack the structural
-     * {@code command} object. Must be strictly longer than the 120s poll
-     * interval so an old CLI is not re-spawned (burning model tokens) on the
-     * very next poll.
-     */
-    static final long OLD_CLI_NEGATIVE_TTL_MS = 10 * 60_000L;
-    /** TTL for cached Gemini CLI binary/version detection across 120s polls. */
-    static final long CLI_STATUS_TTL_MS = 10 * 60_000L;
-    // Missing or below-floor CLI: re-detect on the next poll so `agy install/update` shows up at once.
-    static final long CLI_STATUS_UNUSABLE_TTL_MS = 60_000L;
-    /** Max age for serving a stale cached payload after repeated probe failures. */
-    static final long STALE_MAX_MS = 30 * 60_000L;
-    private static final long PROBE_TIMEOUT_SECONDS = 15L;
-    private static final long READER_JOIN_TIMEOUT_MS = 1_000L;
-    private static final int MAX_OUTPUT_CHARS = 65_536;
-
-    private static final String FAMILY_GEMINI = "gemini";
-    private static final String FAMILY_THIRD_PARTY = "third-party";
-
+    static final long CACHE_TTL_MS = 30_000L;
+    static final long FAILURE_TTL_MS = 3_000L;
+    static final long UNSUPPORTED_TTL_MS = 10 * 60_000L;
+    // Includes CLI discovery, version verification and cold WSL startup in addition to /usage.
+    private static final int BRIDGE_TIMEOUT_SECONDS = 50;
+    private static final int MAX_OUTPUT_BYTES = 256 * 1024;
+    private static final String SCRIPT = "services/gemini/quota-probe.js";
+    private static final List<String> BUCKET_ORDER = List.of(
+            "gemini-5h", "gemini-weekly", "gemini-argon-wtu-weekly", "3p-5h", "3p-weekly");
+    private static final List<String> REASONS = List.of("cli_missing", "cli_outdated", "no_quota", "timeout", "query_failed");
     private static final Logger LOG = Logger.getInstance(GeminiPlanUsageService.class);
-
-    /** Per-family cached snapshot: fresh for the TTL, stale-servable up to the cap. */
-    private static final Map<String, FamilyCache> CACHE = new ConcurrentHashMap<>();
-
-    /** Cached single-tool Gemini CLI detection so 120s polls do not re-detect on every tick. */
-    private static volatile CachedCliStatus cachedCliStatus;
-
-    /** Test-only seam replacing the real CLI spawn. */
-    private static volatile AgyTransport transportOverride;
-
-    /**
-     * Test-only version-gate override. Once set, {@code null} means "not
-     * installed"; production reads the version from {@link CliStatusDetector}.
-     */
-    private static volatile String cliVersionOverride;
-    private static volatile boolean cliVersionOverrideSet;
+    private static final QuotaReader READER = new QuotaReader(
+            () -> NodeDetector.getInstance().getCachedNodePath(), GeminiPlanUsageService::runBridgeProbe, System::currentTimeMillis,
+            task -> ApplicationManager.getApplication().executeOnPooledThread(task));
 
     private GeminiPlanUsageService() {
     }
 
-    /** Transport seam for the {@code /usage} probe — production spawns the CLI, tests substitute. */
-    interface AgyTransport {
-        JsonObject runUsageProbe() throws Exception;
+    /** Requests an account-wide quota snapshot without blocking the caller. */
+    public static CompletableFuture<JsonObject> requestPlanUsage() {
+        return READER.fetch();
     }
 
-    // ===== resolver pipeline =====
+    static final class QuotaReader {
+        private final Supplier<String> runtime;
+        private final UsageProbe probe;
+        private final LongSupplier clock;
+        private final Executor executor;
+        private CachedQuota cached;
+        private PendingQuota inFlight;
 
-    /**
-     * Resolves the current Gemini plan-usage snapshot for the billing family of the selected model.
-     *
-     * @param selectedModelSlug Active model identifier used to select the billing family
-     * @return JSON payload describing quota windows or an unavailable marker
-     */
-    public static JsonObject resolvePlanUsagePayload(String selectedModelSlug) {
-        return resolvePlanUsagePayload(selectedModelSlug, System.currentTimeMillis());
+        QuotaReader(Supplier<String> runtime, UsageProbe probe, LongSupplier clock, Executor executor) {
+            this.runtime = runtime;
+            this.probe = probe;
+            this.clock = clock;
+            this.executor = executor;
+        }
+
+        CompletableFuture<JsonObject> fetch() {
+            PendingQuota request;
+            synchronized (this) {
+                String node = this.runtime.get();
+                // A native Windows result must not be reused after switching the bridge to WSL.
+                if (this.cached != null && Objects.equals(this.cached.node(), node) && this.clock.getAsLong() < this.cached.expiresAt()) {
+                    return CompletableFuture.completedFuture(this.cached.payload().deepCopy());
+                }
+                if (this.inFlight != null && Objects.equals(this.inFlight.node(), node)) {
+                    return this.inFlight.result().thenApply(JsonObject::deepCopy);
+                }
+                request = new PendingQuota(node, new CompletableFuture<>());
+                this.inFlight = request;
+            }
+            // Joining an existing probe should not occupy another pooled thread.
+            try {
+                this.executor.execute(() -> this.finish(request));
+            } catch (RuntimeException e) {
+                this.complete(request, unavailable("query_failed"), FAILURE_TTL_MS);
+            }
+            return request.result().thenApply(JsonObject::deepCopy);
+        }
+
+        private void finish(PendingQuota request) {
+            JsonObject payload;
+            long ttl = FAILURE_TTL_MS;
+            try {
+                JsonObject result = this.probe.read(request.node());
+                payload = parseBridgePayload(result, this.clock.getAsLong());
+                if ("ok".equals(stringField(payload, "status"))) {
+                    ttl = CACHE_TTL_MS;
+                } else if ("cli_outdated".equals(stringField(payload, "reasonCode")) && isTrue(result, "legacyModelTurn")) {
+                    // Avoid repeating a billable prompt when a launcher reported a misleading version.
+                    ttl = UNSUPPORTED_TTL_MS;
+                }
+            } catch (TimeoutException e) {
+                payload = unavailable("timeout");
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                payload = unavailable("query_failed");
+            } catch (Exception e) {
+                // CLI output and exception messages may contain account or local configuration details.
+                LOG.debug("Antigravity quota probe failed: " + e.getClass().getSimpleName());
+                payload = unavailable("query_failed");
+            }
+            this.complete(request, payload, ttl);
+        }
+
+        private void complete(PendingQuota request, JsonObject payload, long ttl) {
+            synchronized (this) {
+                String currentNode = this.runtime.get();
+                if (this.inFlight != request || (request.node() != null && !Objects.equals(request.node(), currentNode))) {
+                    payload = unavailable("query_failed");
+                } else {
+                    this.cached = new CachedQuota(currentNode, this.clock.getAsLong() + ttl, payload);
+                }
+                if (this.inFlight == request) {
+                    this.inFlight = null;
+                }
+            }
+            request.result().complete(payload);
+        }
     }
 
-    static JsonObject resolvePlanUsagePayload(String selectedModelSlug, long nowMs) {
-        // Gate BEFORE anything else: on a below-floor CLI the probe itself is
-        // the hazard, so not even a cached payload's refresh may spawn it.
-        // The test override short-circuits BEFORE the detector so unit tests
-        // never spawn real `--version` processes.
-        String version = cliVersionOverrideSet ? cliVersionOverride : detectedCliVersion(nowMs);
-        if (!cliMeetsProductFloor(version)) {
-            return unavailable(upgradeHint(version));
-        }
-
-        String family = familyOf(selectedModelSlug);
-        FamilyCache cached = CACHE.get(family);
-        if (cached != null && nowMs - cached.atMs < cached.ttlMs) {
-            return cached.payload.deepCopy();
-        }
-
-        try {
-            JsonObject raw = transport().runUsageProbe();
-            JsonObject parsed = parseUsagePayload(raw, selectedModelSlug);
-            if (parsed != null) {
-                CACHE.put(family, new FamilyCache(nowMs, CACHE_TTL_MS, parsed));
-                return parsed.deepCopy();
-            }
-            // The probe answered but not with usable quota data. A SUCCESS
-            // without the command object is the old-CLI marker: that single
-            // probe already ran as a model prompt (the damage is done), so
-            // negative-cache the outcome — the 120s poll must not re-spawn it
-            // until the TTL expires. Other unparseable answers are zero-cost
-            // to re-probe and self-healing, so they stay uncached.
-            if (isOldCliMarker(raw)) {
-                JsonObject negative = unavailable(outcomeMessage(raw));
-                CACHE.put(family, new FamilyCache(nowMs, OLD_CLI_NEGATIVE_TTL_MS, negative));
-                return negative.deepCopy();
-            }
-            return unavailable(outcomeMessage(raw));
-        } catch (Exception e) {
-            LOG.warn("Gemini usage probe failed: " + e.getMessage());
-            // Serve the last good payload while probes keep failing — but only
-            // for a bounded window, so a long outage doesn't masquerade as live.
-            if (cached != null && nowMs - cached.atMs < STALE_MAX_MS) {
-                JsonObject copy = cached.payload.deepCopy();
-                copy.addProperty("stale", true);
-                return copy;
-            }
-            return unavailable("Gemini usage unavailable: " + e.getMessage());
-        }
+    @FunctionalInterface
+    interface UsageProbe {
+        JsonObject read(String configuredNode) throws Exception;
     }
 
-    // ===== payload mapping =====
+    private record PendingQuota(String node, CompletableFuture<JsonObject> result) {
+    }
 
-    /**
-     * Map a {@code /usage} answer onto the shared capacity shape for the
-     * selected model's billing family. Returns {@code null} when the payload is
-     * not a valid CLI-1.1.11+ usage answer (old-CLI marker, {@code status}
-     * {@code ERROR}, or no buckets for the family) — the human-readable
-     * {@code response} text is never treated as data.
-     */
-    static JsonObject parseUsagePayload(JsonObject payload, String selectedModelSlug) {
-        if (payload == null
-                || !"SUCCESS".equals(asString(payload, "status"))) {
-            return null;
-        }
-        JsonElement command = payload.get("command");
-        if (command == null || !command.isJsonObject()) {
-            return null;
-        }
-        JsonElement data = command.getAsJsonObject().get("data");
-        if (data == null || !data.isJsonObject()) {
-            return null;
-        }
-        JsonElement groups = data.getAsJsonObject().get("groups");
-        if (groups == null || !groups.isJsonArray()) {
-            return null;
-        }
-        JsonObject group = findFamilyGroup(groups.getAsJsonArray(), familyOf(selectedModelSlug));
-        if (group == null) {
-            return null;
-        }
-        JsonElement buckets = group.get("buckets");
-        if (buckets == null || !buckets.isJsonArray()) {
-            return null;
-        }
+    private record CachedQuota(String node, long expiresAt, JsonObject payload) {
+    }
 
+    static JsonObject parseBridgePayload(JsonObject result, long fetchedAt) {
+        if ("SUCCESS".equals(stringField(result, "status"))) {
+            return parseUsagePayload(result, fetchedAt);
+        }
+        String reason = stringField(result, "reasonCode");
+        if (!"unavailable".equals(stringField(result, "status")) || reason == null || !REASONS.contains(reason)) {
+            return unavailable("query_failed");
+        }
+        JsonObject payload = unavailable(reason);
+        if ("cli_outdated".equals(reason)) {
+            String version = stringField(result, "minimumVersion");
+            if (version == null || !version.matches("[0-9]+\\.[0-9]+\\.[0-9]+")) {
+                return unavailable("query_failed");
+            }
+            payload.addProperty("minimumVersion", version);
+        }
+        return payload;
+    }
+
+    private static JsonObject parseUsagePayload(JsonObject output, long fetchedAt) {
+        JsonObject command = objectField(output, "command");
+        if (!"usage".equals(stringField(command, "name"))) {
+            return unavailable("query_failed");
+        }
+        Map<String, JsonObject> byId = new HashMap<>();
+        // The CLI may rename or reorder groups. Billing identity lives on the bucket, not the display name.
+        for (JsonElement group : arrayField(objectField(command, "data"), "groups")) {
+            for (JsonElement bucket : arrayField(asObject(group), "buckets")) {
+                JsonObject row = parseBucket(asObject(bucket));
+                if (row != null) {
+                    byId.putIfAbsent(row.get("id").getAsString(), row);
+                }
+            }
+        }
+        if (byId.isEmpty()) {
+            return unavailable("no_quota");
+        }
         JsonArray windows = new JsonArray();
-        JsonObject first = null;
-        JsonObject binding5h = null;
-        for (JsonElement el : buckets.getAsJsonArray()) {
-            if (!el.isJsonObject()) {
-                continue;
-            }
-            JsonObject window = toWindow(el.getAsJsonObject());
-            if (window == null) {
-                continue;
-            }
-            windows.add(window);
-            if (first == null) {
-                first = window;
-            }
-            if (binding5h == null && "5h".equals(window.get("period_type").getAsString())) {
-                binding5h = window;
+        for (String id : BUCKET_ORDER) {
+            if (byId.containsKey(id)) {
+                windows.add(byId.get(id));
             }
         }
-        // The 5h window binds the display when the CLI reports it; otherwise the
-        // reported window stands in (weekly-only shape) — never a fabricated 5h.
-        JsonObject binding = binding5h != null ? binding5h : first;
-        if (binding == null) {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("status", "ok");
+        payload.addProperty("fetchedAt", fetchedAt);
+        payload.add("windows", windows);
+        return payload;
+    }
+
+    private static JsonObject parseBucket(JsonObject bucket) {
+        String id = stringField(bucket, "id");
+        if (id == null || !BUCKET_ORDER.contains(id)) {
             return null;
         }
-
-        JsonObject out = new JsonObject();
-        out.addProperty("ok", true);
-        out.addProperty("present", true);
-        out.addProperty("provider", "gemini");
-        out.addProperty("source", "agy-usage");
-        out.addProperty("capacity_pct", binding.get("used_pct").getAsDouble());
-        if (binding.has("reset_at")) {
-            out.addProperty("reset_at", binding.get("reset_at").getAsString());
-        }
-        out.addProperty("period_type", binding.get("period_type").getAsString());
-        out.add("windows", windows);
-        return out;
-    }
-
-    /** One quota bucket → one shared window; missing/invalid fields skip the bucket (never fabricated). */
-    private static JsonObject toWindow(JsonObject bucket) {
-        String id = asString(bucket, "id");
-        Double remaining = asDouble(bucket, "remaining_fraction");
-        if (id == null || id.isBlank() || remaining == null || !Double.isFinite(remaining)) {
+        JsonElement fraction = bucket.get("remaining_fraction");
+        if (fraction == null || !fraction.isJsonPrimitive() || !fraction.getAsJsonPrimitive().isNumber()) {
             return null;
         }
-        JsonObject w = new JsonObject();
-        w.addProperty("id", id);
-        w.addProperty("used_pct", clampPct((1.0 - remaining) * 100.0));
-        String resetTime = asString(bucket, "reset_time");
-        if (resetTime != null) {
-            w.addProperty("reset_at", resetTime);
+        double remaining = fraction.getAsDouble();
+        if (!Double.isFinite(remaining) || remaining < 0 || remaining > 1) {
+            return null;
         }
-        String window = asString(bucket, "window");
-        w.addProperty("period_type", window != null ? window : id);
-        return w;
-    }
-
-    // ===== billing family (follows the selected model) =====
-
-    /**
-     * {@code gemini-*} slugs bill the Gemini family; {@code claude-*}/{@code
-     * gpt-*} bill the third-party family. Unknown, {@code auto} (the default
-     * selection state — the CLI routes it to a Gemini model), null or empty
-     * default to the Gemini family so third-party numbers never leak in.
-     */
-    static String familyOf(String slug) {
-        String s = slug == null ? "" : slug.trim().toLowerCase(Locale.ROOT);
-        if (s.startsWith("claude-") || s.startsWith("gpt-")) {
-            return FAMILY_THIRD_PARTY;
-        }
-        return FAMILY_GEMINI;
-    }
-
-    /**
-     * Groups are matched by name (case-insensitive contains): the group whose
-     * name mentions "gemini" is the Gemini family, any other group is the
-     * third-party one (live names: "Gemini Models" / "Claude and GPT models").
-     */
-    private static JsonObject findFamilyGroup(JsonArray groups, String family) {
-        for (JsonElement el : groups) {
-            if (!el.isJsonObject()) {
-                continue;
-            }
-            JsonObject group = el.getAsJsonObject();
-            String name = asString(group, "name");
-            boolean isGeminiGroup = name != null && name.toLowerCase(Locale.ROOT).contains("gemini");
-            if (FAMILY_GEMINI.equals(family) == isGeminiGroup) {
-                return group;
+        JsonObject row = new JsonObject();
+        row.addProperty("id", id);
+        row.addProperty("remainingPercent", remaining * 100);
+        String resetsAt = stringField(bucket, "reset_time");
+        if (resetsAt != null) {
+            try {
+                row.addProperty("resetsAt", Instant.parse(resetsAt).toEpochMilli());
+            } catch (DateTimeParseException | ArithmeticException ignored) {
+                // A bad timestamp does not invalidate a known remaining fraction.
             }
         }
-        return null;
+        return row;
     }
 
-    // ===== version gate =====
-
-    private static String detectedCliVersion(long nowMs) {
-        CliToolStatus cli = geminiCliStatus(nowMs);
-        return cli != null && cli.isInstalled() ? cli.getVersion() : null;
+    private static JsonObject unavailable(String reason) {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("status", "unavailable");
+        payload.addProperty("reasonCode", reason);
+        return payload;
     }
 
-    private static boolean cliMeetsProductFloor(String version) {
-        return version != null && atLeastVersion(version, PRODUCT_FLOOR);
-    }
-
-    /** Dotted-numeric comparison; any non-numeric part counts as unverifiable (gate stays closed). */
-    static boolean atLeastVersion(String version, String floor) {
-        String v = version.trim().toLowerCase(Locale.ROOT);
-        if (v.startsWith("v")) {
-            v = v.substring(1);
+    private static JsonObject runBridgeProbe(String configuredNode) throws Exception {
+        String node = configuredNode != null ? configuredNode : NodeDetector.getInstance().findNodeExecutable();
+        File bridgeDir = BridgePreloader.getSharedResolver().findSdkDir();
+        if (bridgeDir == null) {
+            return unavailable("query_failed");
         }
-        String[] parts = v.split("\\.");
-        String[] floorParts = floor.split("\\.");
-        for (int i = 0; i < Math.max(parts.length, floorParts.length); i++) {
-            int p = i < parts.length ? numericPart(parts[i]) : 0;
-            int f = i < floorParts.length ? numericPart(floorParts[i]) : 0;
-            if (p < 0 || f < 0) {
-                return false;
-            }
-            if (p != f) {
-                return p > f;
-            }
+        File script = new File(bridgeDir, SCRIPT);
+        if (!script.isFile()) {
+            return unavailable("query_failed");
         }
-        return true;
-    }
-
-    private static int numericPart(String part) {
-        if (part == null || part.isEmpty()) {
-            return 0;
-        }
-        int end = 0;
-        while (end < part.length() && Character.isDigit(part.charAt(end))) {
-            end++;
-        }
-        if (end == 0 || end < part.length()) {
-            // No leading digits, or a trailing qualifier ("11-rc1"): a
-            // prerelease of the floor must NOT pass the gate, so any
-            // non-numeric residue counts as unverifiable (gate stays closed).
-            return -1;
-        }
-        try {
-            return Integer.parseInt(part.substring(0, end));
-        } catch (NumberFormatException e) {
-            return -1;
-        }
-    }
-
-    /** Upgrade hint — must name both the remedy and the required floor. */
-    private static String upgradeHint(String version) {
-        if (version == null) {
-            return "Antigravity CLI (agy) " + PRODUCT_FLOOR
-                    + "+ is required for usage data. Install the CLI or run `agy update`.";
-        }
-        return "Antigravity CLI " + PRODUCT_FLOOR + "+ is required for usage data (found: " + version
-                + "). Run `agy update` to upgrade.";
-    }
-
-    /**
-     * The documented old-CLI marker: a {@code SUCCESS} answer that carries no
-     * {@code command} object — on CLIs below the product floor {@code /usage}
-     * ran as a model prompt instead of a structural command.
-     */
-    private static boolean isOldCliMarker(JsonObject raw) {
-        JsonElement command = raw == null ? null : raw.get("command");
-        return "SUCCESS".equals(asString(raw, "status"))
-                && (command == null || !command.isJsonObject());
-    }
-
-    /** Unavailable message for a probe that answered without usable quota data. */
-    private static String outcomeMessage(JsonObject raw) {
-        String status = raw == null ? null : asString(raw, "status");
-        if ("SUCCESS".equals(status)) {
-            if (isOldCliMarker(raw)) {
-                return "Antigravity CLI " + PRODUCT_FLOOR
-                        + "+ is required for usage data — the CLI answered without the usage structure. "
-                        + "Run `agy update` to upgrade.";
-            }
-            // New CLI, structural answer — the family simply has no quota group
-            // (no upgrade hint here; `agy update` would not change anything).
-            return "Gemini usage unavailable: the CLI reported no quota group for this model's billing family.";
-        }
-        return "Gemini usage unavailable: the CLI reported "
-                + (status != null ? "status " + status : "no status") + " for /usage.";
-    }
-
-    private static JsonObject unavailable(String message) {
-        JsonObject out = new JsonObject();
-        out.addProperty("present", false);
-        out.addProperty("unavailable", true);
-        out.addProperty("provider", "gemini");
-        out.addProperty("message", message);
-        return out;
-    }
-
-    // ===== CLI resolution + real probe =====
-
-    private static CliToolStatus geminiCliStatus() {
-        return geminiCliStatus(System.currentTimeMillis());
-    }
-
-    private static long cliStatusTtlMs(CliToolStatus status) {
-        boolean usable = status.isInstalled() && cliMeetsProductFloor(status.getVersion());
-        return usable ? CLI_STATUS_TTL_MS : CLI_STATUS_UNUSABLE_TTL_MS;
-    }
-
-    static CliToolStatus geminiCliStatus(long nowMs) {
-        CachedCliStatus cached = cachedCliStatus;
-        if (cached != null && nowMs - cached.atMs < cliStatusTtlMs(cached.status)) {
-            return cached.status;
-        }
-        try {
-            CliToolStatus detected = CliStatusDetector.detectSingle(CliToolId.GEMINI);
-            if (detected != null) {
-                cachedCliStatus = new CachedCliStatus(nowMs, detected);
-            }
-            return detected;
-        } catch (Exception e) {
-            LOG.debug("Gemini CLI status unavailable: " + e.getMessage());
-            return cached != null ? cached.status : null;
-        }
-    }
-
-    /**
-     * Spawn {@code agy -p "/usage" --output-format json} and return its parsed
-     * answer. The exit code is not authoritative (live behavior: 0, 1 and 2 all
-     * occur for structurally valid answers), so the answer is taken from
-     * stdout, not from the exit status. The CLI waits for stdin EOF on
-     * non-interactive subcommands, so the child's stdin is closed right away.
-     */
-    static JsonObject runUsageProbeViaCli() throws Exception {
-        String resolved = resolvedCliPath();
-        ProcessBuilder pb = new ProcessBuilder(
-                resolved, "-p", "/usage", "--output-format", "json");
-        pb.redirectErrorStream(true);
-        File bin = new File(resolved);
-        File parent = bin.getAbsoluteFile().getParentFile();
-        if (parent != null) {
-            // IDE-launched processes may not carry the user's bin dirs on PATH;
-            // give the child its own directory so wrapper scripts can resolve siblings.
-            Map<String, String> env = pb.environment();
-            String pathKey = File.pathSeparatorChar == ';' ? "Path" : "PATH";
-            String existing = env.getOrDefault(pathKey, env.getOrDefault("PATH", ""));
-            env.put(pathKey, parent.getAbsolutePath() + File.pathSeparator + existing);
-            if (!"PATH".equals(pathKey)) {
-                env.put("PATH", parent.getAbsolutePath() + File.pathSeparator + existing);
-            }
-        }
-        Process process = pb.start();
+        ProcessBuilder builder = new ProcessBuilder(NodeDetector.buildNodeScriptCommand(node, script.getAbsolutePath()));
+        builder.directory(bridgeDir);
+        builder.redirectError(ProcessBuilder.Redirect.DISCARD);
+        new EnvironmentConfigurator().updateProcessEnvironment(builder, node);
+        Process process = builder.start();
+        FutureTask<String> stdout = new FutureTask<>(() -> readStdout(process.getInputStream()));
+        Thread reader = new Thread(stdout, "agy-quota-stdout");
+        reader.setDaemon(true);
         try {
             process.getOutputStream().close();
-            ProbeStdout output = new ProbeStdout();
-            Thread readerThread = startOutputDrainThread(process, output);
-
-            if (!process.waitFor(PROBE_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-                throw new IllegalStateException("agy /usage probe timed out after "
-                        + PROBE_TIMEOUT_SECONDS + "s");
+            reader.start();
+            if (!process.waitFor(BRIDGE_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                throw new TimeoutException();
             }
-            readerThread.join(READER_JOIN_TIMEOUT_MS);
-            JsonObject answer = lastJsonObject(output.snapshot());
-            if (answer == null) {
-                throw new IllegalStateException("agy /usage produced no JSON answer");
+            if (!node.equals(NodeDetector.getInstance().getCachedNodePath()) || process.exitValue() != 0) {
+                return null;
             }
-            return answer;
+            return asObject(JsonParser.parseString(stdout.get(1, TimeUnit.SECONDS)));
         } finally {
             if (process.isAlive()) {
                 PlatformUtils.terminateProcess(process);
             }
+            stdout.cancel(true);
         }
     }
 
-    private static Thread startOutputDrainThread(Process process, ProbeStdout output) {
-        Thread readerThread = new Thread(
-                () -> drainProcessOutput(process, output),
-                "gemini-usage-probe-reader");
-        readerThread.setDaemon(true);
-        readerThread.start();
-        return readerThread;
-    }
-
-    private static void drainProcessOutput(Process process, ProbeStdout output) {
-        try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                output.appendLine(line);
+    private static String readStdout(InputStream stream) throws IOException {
+        try (stream) {
+            byte[] output = stream.readNBytes(MAX_OUTPUT_BYTES + 1);
+            if (output.length > MAX_OUTPUT_BYTES) {
+                throw new IOException("Quota response exceeded the output limit");
             }
-        } catch (IOException ignored) {
-            // Stream closed on process termination or timeout
+            return new String(output, StandardCharsets.UTF_8);
         }
     }
 
-    /**
-     * Stderr is merged into stdout, so scan for the LAST line that parses as a
-     * JSON object rather than trusting line 1 or the exit code. Non-JSON noise
-     * lines (spinner/status text) are skipped; a text with no JSON object line
-     * yields {@code null}.
-     */
-    static JsonObject lastJsonObject(String text) {
-        JsonObject found = null;
-        for (String line : text.split("\n")) {
-            String trimmed = line.trim();
-            if (!trimmed.startsWith("{")) {
-                continue;
-            }
-            try {
-                JsonElement el = JsonParser.parseString(trimmed);
-                if (el.isJsonObject()) {
-                    found = el.getAsJsonObject();
-                }
-            } catch (Exception ignored) {
-                // noise line (spinner/status text) — keep scanning
-            }
-        }
-        return found;
+    private static String stringField(JsonObject object, String name) {
+        JsonElement value = object == null ? null : object.get(name);
+        return value != null && value.isJsonPrimitive() && value.getAsJsonPrimitive().isString() ? value.getAsString() : null;
     }
 
-    private static String resolvedCliPath() {
-        CliToolStatus cli = geminiCliStatus();
-        if (cli != null && cli.isInstalled() && cli.getPath() != null && !cli.getPath().isBlank()) {
-            return cli.getPath();
-        }
-        return CliToolId.GEMINI.getBinaryName();
+    private static boolean isTrue(JsonObject object, String name) {
+        JsonElement value = object == null ? null : object.get(name);
+        return value != null && value.isJsonPrimitive() && value.getAsJsonPrimitive().isBoolean() && value.getAsBoolean();
     }
 
-    private static AgyTransport transport() {
-        AgyTransport override = transportOverride;
-        return override != null ? override : GeminiPlanUsageService::runUsageProbeViaCli;
+    private static JsonObject objectField(JsonObject object, String name) {
+        return object == null ? null : asObject(object.get(name));
     }
 
-    // ===== test seams =====
-
-    /** Test-only: replace the CLI probe. Pass null to restore the real one. */
-    static void setAgyTransportForTests(AgyTransport transport) {
-        transportOverride = transport;
+    private static JsonObject asObject(JsonElement value) {
+        return value != null && value.isJsonObject() ? value.getAsJsonObject() : null;
     }
 
-    /** Test-only: pin the CLI version for the gate. Null = not installed. */
-    static void setCliVersionForTests(String version) {
-        cliVersionOverride = version;
-        cliVersionOverrideSet = true;
-    }
-
-    /** Test-only: drop all cached family payloads. */
-    static void resetCacheForTests() {
-        CACHE.clear();
-        cachedCliStatus = null;
-    }
-
-    // ===== helpers =====
-
-    private static String asString(JsonObject o, String key) {
-        if (o != null && o.has(key) && o.get(key).isJsonPrimitive() && !o.get(key).isJsonNull()) {
-            return o.get(key).getAsString();
-        }
-        return null;
-    }
-
-    private static Double asDouble(JsonObject o, String key) {
-        if (o != null && o.has(key) && o.get(key).isJsonPrimitive() && !o.get(key).isJsonNull()) {
-            try {
-                return o.get(key).getAsDouble();
-            } catch (RuntimeException ignored) {
-                return null;
-            }
-        }
-        return null;
-    }
-
-    static double clampPct(double v) {
-        if (!Double.isFinite(v)) {
-            return 0;
-        }
-        return Math.max(0, Math.min(100, v));
-    }
-
-    private static final class FamilyCache {
-        final long atMs;
-        final long ttlMs;
-        final JsonObject payload;
-
-        FamilyCache(long atMs, long ttlMs, JsonObject payload) {
-            this.atMs = atMs;
-            this.ttlMs = ttlMs;
-            this.payload = payload;
-        }
-    }
-
-    private static final class CachedCliStatus {
-        final long atMs;
-        final CliToolStatus status;
-
-        CachedCliStatus(long atMs, CliToolStatus status) {
-            this.atMs = atMs;
-            this.status = status;
-        }
-    }
-
-    /** Bounded stdout buffer shared by the probe reader thread and the caller. */
-    private static final class ProbeStdout {
-        private final StringBuilder output = new StringBuilder();
-        private final Object lock = new Object();
-
-        void appendLine(String line) {
-            synchronized (lock) {
-                if (output.length() < MAX_OUTPUT_CHARS) {
-                    output.append(line).append('\n');
-                }
-            }
-        }
-
-        String snapshot() {
-            synchronized (lock) {
-                return output.toString();
-            }
-        }
+    private static JsonArray arrayField(JsonObject object, String name) {
+        JsonElement value = object == null ? null : object.get(name);
+        return value != null && value.isJsonArray() ? value.getAsJsonArray() : new JsonArray();
     }
 }

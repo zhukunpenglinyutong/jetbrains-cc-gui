@@ -1591,6 +1591,21 @@
       "empty": "Nenhum provedor disponível",
       "switched": "Alternado para {{provider}}"
     },
+    "antigravityQuota": {
+      "title": "Cota do Antigravity",
+      "cliMissing": "Instale o Antigravity CLI (agy) para consultar a cota.",
+      "cliOutdated": "É necessário o Antigravity CLI {{version}} ou posterior. Execute agy update.",
+      "noQuota": "Nenhuma cota foi retornada. Confira qual conta está conectada ao agy.",
+      "timeout": "A consulta da cota expirou. Reabra este painel para tentar novamente.",
+      "queryFailed": "Não foi possível consultar a cota. Reabra este painel para tentar novamente.",
+      "buckets": {
+        "gemini-5h": "Gemini · 5 horas",
+        "gemini-weekly": "Gemini · Semanal",
+        "gemini-argon-wtu-weekly": "Gemini Argon · Semanal",
+        "3p-5h": "Claude e GPT · 5 horas",
+        "3p-weekly": "Claude e GPT · Semanal"
+      }
+    },
     "codexQuota": {
       "title": "Cota do Codex",
       "loading": "Carregando cota...",

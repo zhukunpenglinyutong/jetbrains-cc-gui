@@ -366,6 +366,11 @@ public final class CliStatusDetector {
                 break;
             case GEMINI:
                 dirs.add(join(home, ".local", "bin"));
+                if (PlatformUtils.isWindows()) {
+                    // The official installer may not be on the PATH inherited by the IDE.
+                    String localAppData = firstNonBlank(System.getenv("LOCALAPPDATA"));
+                    dirs.add(join(localAppData != null ? localAppData : join(home, "AppData", "Local"), "agy", "bin"));
+                }
                 break;
             default:
                 break;

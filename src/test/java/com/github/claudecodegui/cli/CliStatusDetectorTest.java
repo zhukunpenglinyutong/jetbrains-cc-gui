@@ -1,5 +1,6 @@
 package com.github.claudecodegui.cli;
 
+import com.github.claudecodegui.util.PlatformUtils;
 import org.junit.Test;
 
 import java.io.File;
@@ -8,6 +9,8 @@ import java.util.List;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assume.assumeTrue;
 
 public class CliStatusDetectorTest {
 
@@ -53,6 +56,16 @@ public class CliStatusDetectorTest {
         String expected = new File(new File(home, ".local"), "bin").getAbsolutePath();
         assertEquals(expected, dirs.get(0));
         assertEquals(true, dirs.contains(expected));
+    }
+
+    /** Checks the official Windows install path even when the IDE has a sparse PATH. */
+    @Test
+    public void homeBinDirs_geminiLooksInOfficialWindowsInstallDirectory() {
+        assumeTrue(PlatformUtils.isWindows());
+        String home = "C:\\Users\\test-user";
+        String localAppData = System.getenv("LOCALAPPDATA");
+        File local = localAppData == null || localAppData.isBlank() ? new File(home, "AppData\\Local") : new File(localAppData);
+        assertTrue(CliStatusDetector.homeBinDirs(CliToolId.GEMINI, home).contains(new File(local, "agy\\bin").getAbsolutePath()));
     }
 
     @Test

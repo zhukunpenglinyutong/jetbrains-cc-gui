@@ -1452,6 +1452,21 @@
       "empty": "No hay proveedores disponibles",
       "switched": "Cambiado a {{provider}}"
     },
+    "antigravityQuota": {
+      "title": "Cuota de Antigravity",
+      "cliMissing": "Instala Antigravity CLI (agy) para consultar la cuota.",
+      "cliOutdated": "Se necesita Antigravity CLI {{version}} o posterior. Ejecuta agy update.",
+      "noQuota": "No se recibió ninguna cuota. Comprueba qué cuenta tiene la sesión iniciada en agy.",
+      "timeout": "La consulta de cuota agotó el tiempo de espera. Vuelve a abrir este panel para reintentar.",
+      "queryFailed": "No se pudo consultar la cuota. Vuelve a abrir este panel para reintentar.",
+      "buckets": {
+        "gemini-5h": "Gemini · 5 horas",
+        "gemini-weekly": "Gemini · Semanal",
+        "gemini-argon-wtu-weekly": "Gemini Argon · Semanal",
+        "3p-5h": "Claude y GPT · 5 horas",
+        "3p-weekly": "Claude y GPT · Semanal"
+      }
+    },
     "codexQuota": {
       "title": "Cuota de Codex",
       "loading": "Cargando cuota...",

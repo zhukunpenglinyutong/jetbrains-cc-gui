@@ -5,6 +5,8 @@ import com.github.claudecodegui.model.SessionTemplate;
 import com.github.claudecodegui.provider.claude.ClaudeSDKBridge;
 import com.github.claudecodegui.provider.codex.CodexSDKBridge;
 import com.github.claudecodegui.provider.common.MarkerCliBridge;
+import com.github.claudecodegui.provider.common.SessionHistoryNotFoundException;
+import com.google.gson.JsonObject;
 import com.intellij.openapi.application.Application;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.Project;
@@ -20,6 +22,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 import static org.junit.Assert.assertEquals;
@@ -67,7 +70,7 @@ public class SessionLifecycleQuiescenceTest {
                 assertNotSame(previous, host.session);
                 assertTrue(host.invalidated);
                 assertEquals(1, host.events.stream().filter("clearMessages"::equals).count());
-                assertFalse(host.events.contains("sessionTransitionFailed"));
+                assertFalse("events=" + host.events + " failureArgs=" + host.transitionFailureArgs, host.events.contains("sessionTransitionFailed"));
             }
         }
     }
@@ -113,7 +116,7 @@ public class SessionLifecycleQuiescenceTest {
                 host.stopped.complete(null);
                 assertEquals("selected-after-acceptance", host.session.getModel());
                 assertEquals(oldModel, previous.getModel());
-                assertFalse(host.events.contains("sessionTransitionFailed"));
+                assertFalse("events=" + host.events + " failureArgs=" + host.transitionFailureArgs, host.events.contains("sessionTransitionFailed"));
                 if (host.events.contains("setSessionId")) {
                     assertTrue(host.events.indexOf("clearMessages") < host.events.indexOf("setSessionId"));
                 }
@@ -179,6 +182,26 @@ public class SessionLifecycleQuiescenceTest {
     }
 
     private static final class Host implements SessionLifecycleManager.SessionHost, AutoCloseable {
+        // A missing transcript is the normal "no history yet" outcome for a fresh session id.
+        // Routing history reads to that signal keeps loadFromServer on its retire path; with
+        // null bridges every load would fail asynchronously on the common pool and race the
+        // test's immediate no-failure assertions.
+        private final ClaudeSDKBridge historyBridge = new ClaudeSDKBridge() {
+            @Override public JsonObject getSessionMessagesPage(String sessionId, String cwd, Integer beforeTurn, int limit) {
+                throw new SessionHistoryNotFoundException(sessionId, cwd);
+            }
+
+            @Override public JsonObject getSessionMessagesPage(String sessionId, String cwd, Integer beforeTurn, int limit,
+                    BooleanSupplier cancellation) {
+                throw new SessionHistoryNotFoundException(sessionId, cwd);
+            }
+
+            @Override public void resetPersistentRuntime(String runtimeSessionEpoch) {
+            }
+
+            @Override public void shutdownDaemon() {
+            }
+        };
         private final CompletableFuture<Void> stopped = new CompletableFuture<>();
         private CompletableFuture<Void> secondStop;
         private int stopCalls;
@@ -190,6 +213,7 @@ public class SessionLifecycleQuiescenceTest {
         private boolean invalidated;
         private String lastSnapshot = "";
         private String lastClearToken;
+        private volatile String transitionFailureArgs = "";
         private Consumer<ClaudeSession> onClear = ignored -> { };
 
         Host() {
@@ -215,7 +239,7 @@ public class SessionLifecycleQuiescenceTest {
         }
 
         @Override public Project getProject() { return null; }
-        @Override public ClaudeSDKBridge getClaudeSDKBridge() { return null; }
+        @Override public ClaudeSDKBridge getClaudeSDKBridge() { return historyBridge; }
         @Override public CodexSDKBridge getCodexSDKBridge() { return null; }
         @Override public Map<String, MarkerCliBridge> getCliBridges() { return Map.of(); }
         @Override public ClaudeSession getSession() { return session; }
@@ -231,7 +255,10 @@ public class SessionLifecycleQuiescenceTest {
                 if (args.length > 1) { lastClearToken = args[1]; }
                 onClear.accept(session);
             }
-            if (name.equals("sessionTransitionFailed")) { failure.countDown(); }
+            if (name.equals("sessionTransitionFailed")) {
+                transitionFailureArgs = String.join(" | ", args);
+                failure.countDown();
+            }
         }
         @Override public boolean isDisposed() { return false; }
         @Override public JBCefBrowser getBrowser() { return null; }

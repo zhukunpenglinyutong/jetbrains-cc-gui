@@ -1899,6 +1899,21 @@
       "empty": "No providers available",
       "switched": "Switched to {{provider}}"
     },
+    "antigravityQuota": {
+      "title": "Antigravity quota",
+      "cliMissing": "Install Antigravity CLI (agy) to view quota.",
+      "cliOutdated": "Antigravity CLI {{version}} or later is required. Run agy update.",
+      "noQuota": "No quota returned. Check which account is signed in to agy.",
+      "timeout": "Quota query timed out. Reopen this panel to try again.",
+      "queryFailed": "Could not fetch quota. Reopen this panel to try again.",
+      "buckets": {
+        "gemini-5h": "Gemini · 5 hours",
+        "gemini-weekly": "Gemini · Weekly",
+        "gemini-argon-wtu-weekly": "Gemini Argon · Weekly",
+        "3p-5h": "Claude and GPT · 5 hours",
+        "3p-weekly": "Claude and GPT · Weekly"
+      }
+    },
     "codexQuota": {
       "title": "Codex quota",
       "loading": "Loading quota...",

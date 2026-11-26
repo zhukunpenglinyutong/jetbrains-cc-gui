@@ -1,6 +1,12 @@
 import type { ProviderInfo } from '../types';
 import { ProviderModelIcon } from '../../shared/ProviderModelIcon';
 
+export type QuotaProvider = 'codex' | 'gemini';
+
+export function hasProviderQuota(id: string): id is QuotaProvider {
+  return id === 'codex' || id === 'gemini';
+}
+
 function getProviderOptionStyle(enabled: boolean): React.CSSProperties {
   return {
     opacity: enabled ? 1 : 0.5,
@@ -14,6 +20,7 @@ interface ProviderOptionRowProps {
   label: string;
   onSelect: (providerId: string) => void;
   onActivate: (providerId: string) => void;
+  onQuotaHover: (providerId: QuotaProvider | null) => void;
   quotaId?: string;
 }
 
@@ -26,15 +33,18 @@ export const ProviderOptionRow = ({
   label,
   onSelect,
   onActivate,
+  onQuotaHover,
   quotaId,
 }: ProviderOptionRowProps) => {
+  const quotaProvider = hasProviderQuota(provider.id) ? provider.id : null;
   return (
     <div
       className={`selector-option ${isSelected ? 'selected' : ''} ${!provider.enabled ? 'disabled' : ''}`}
       role="menuitemradio"
+      aria-label={label}
       aria-checked={isSelected}
       aria-disabled={!provider.enabled || undefined}
-      aria-describedby={provider.id === 'codex' ? quotaId : undefined}
+      aria-describedby={quotaId}
       tabIndex={-1}
       onClick={() => onSelect(provider.id)}
       onKeyDown={(e) => {
@@ -47,10 +57,8 @@ export const ProviderOptionRow = ({
       style={getProviderOptionStyle(!!provider.enabled)}
       data-provider-id={provider.id}
       onFocus={() => onActivate(provider.id)}
-      onMouseEnter={() => {
-        // Reaching quota above or below the menu can require crossing other rows.
-        if (provider.id === 'codex') onActivate(provider.id);
-      }}
+      onMouseEnter={quotaProvider ? () => onQuotaHover(quotaProvider) : undefined}
+      onMouseLeave={quotaProvider ? () => onQuotaHover(null) : undefined}
     >
       <ProviderModelIcon providerId={provider.id} size={16} colored />
       <span>{label}</span>
@@ -58,7 +66,7 @@ export const ProviderOptionRow = ({
         {isSelected && (
           <span className="provider-active-dot" aria-hidden="true" />
         )}
-        {provider.id === 'codex' && (
+        {quotaProvider && (
           <span
             className="codicon codicon-chevron-right"
             style={{ fontSize: '10px' }}

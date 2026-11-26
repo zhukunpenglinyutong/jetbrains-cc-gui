@@ -1,14 +1,13 @@
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useClaudePlanUsage } from '../../hooks/useClaudePlanUsage';
-import { useGeminiPlanUsage } from '../../hooks/useGeminiPlanUsage';
 import { useGrokPlanUsage } from '../../hooks/useGrokPlanUsage';
 import { useOmpPlanUsage } from '../../hooks/useOmpPlanUsage';
 import { PlanUsageIndicator } from './PlanUsageIndicator';
 
 interface ContextToolsRightProps {
   currentProvider: string;
-  /** Selected model id (OMP plan usage follows it; the gemini slug picks the quota billing family). */
+  /** Selected model id used by OMP plan usage. */
   selectedModel?: string;
   hasMessages: boolean;
   onRewind?: () => void;
@@ -27,11 +26,9 @@ export const ContextToolsRight: React.FC<ContextToolsRightProps> = memo(({
 }) => {
   const { t } = useTranslation();
   const isClaude = currentProvider === 'claude';
-  const isGemini = currentProvider === 'gemini';
   const isGrok = currentProvider === 'grok';
   const isOmp = currentProvider === 'omp';
   const claudePlanUsage = useClaudePlanUsage(currentProvider);
-  const geminiPlanUsage = useGeminiPlanUsage(currentProvider, selectedModel);
   const grokPlanUsage = useGrokPlanUsage(currentProvider);
   const ompPlanUsage = useOmpPlanUsage(currentProvider, selectedModel ?? '');
 
@@ -41,12 +38,6 @@ export const ContextToolsRight: React.FC<ContextToolsRightProps> = memo(({
         <PlanUsageIndicator
           snapshot={claudePlanUsage.snapshot}
           status={claudePlanUsage.status}
-        />
-      )}
-      {isGemini && (
-        <PlanUsageIndicator
-          snapshot={geminiPlanUsage.snapshot}
-          status={geminiPlanUsage.status}
         />
       )}
       {isGrok && (

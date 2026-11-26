@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, realpathSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, join, normalize } from 'node:path';
 import {
@@ -444,6 +444,28 @@ test('resolveGeminiCliPath respects env override precedence', () => {
     if (originalCliPath !== undefined) process.env.GEMINI_CLI_PATH = originalCliPath;
     else delete process.env.GEMINI_CLI_PATH;
   }
+});
+
+test('finds the official Windows agy install without a PATH entry', { skip: process.platform !== 'win32' }, (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'ccgui-agy-'));
+  const localAppData = join(root, 'AppData', 'Local');
+  const binary = join(localAppData, 'agy', 'bin', 'agy.exe');
+  mkdirSync(dirname(binary), { recursive: true });
+  writeFileSync(binary, '');
+  const overrides = {
+    Path: root, USERPROFILE: root, LOCALAPPDATA: localAppData,
+    GEMINI_BIN: '', GEMINI_PATH: '', GEMINI_CLI_PATH: '',
+  };
+  const previous = Object.fromEntries(Object.keys(overrides).map((key) => [key, process.env[key]]));
+  t.after(() => {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    rmSync(root, { recursive: true, force: true });
+  });
+  Object.assign(process.env, overrides);
+  assert.equal(normalize(resolveGeminiCliPath()), binary);
 });
 
 test('isDeadCmdShim flags a shim whose last quoted target is missing', () => {

@@ -6,7 +6,8 @@ import { ProviderModelIcon } from '../../shared/ProviderModelIcon';
 import { useDropdownPosition } from '../../../hooks/useDropdownPosition';
 import { useHiddenCliProviders } from '../../../hooks/useCliProviderVisibility';
 import { CodexQuotaSubmenu } from './CodexQuotaSubmenu';
-import { ProviderOptionRow } from './ProviderOptionRow';
+import { GeminiQuotaSubmenu } from './GeminiQuotaSubmenu';
+import { hasProviderQuota, ProviderOptionRow, type QuotaProvider } from './ProviderOptionRow';
 import { ProviderCliFooter } from './ProviderCliFooter';
 
 const RELATIVE_INLINE_BLOCK_STYLE: React.CSSProperties = { position: 'relative', display: 'inline-block' };
@@ -19,6 +20,7 @@ const DROPDOWN_STYLE: React.CSSProperties = {
   maxWidth: 'calc(100vw - 16px)',
 };
 const TOAST_STYLE: React.CSSProperties = { zIndex: 20000 };
+const QUOTA_SWITCH_DELAY_MS = 180;
 
 interface ProviderSelectProps {
   value: string;
@@ -39,13 +41,15 @@ export const ProviderSelect = ({ value, onChange, compact = false, onOpenCliSett
   const [isOpen, setIsOpen] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
-  const [activeSubmenu, setActiveSubmenu] = useState<'none' | 'codexQuota'>('none');
+  const [activeQuota, setActiveQuota] = useState<QuotaProvider | null>(null);
   const menuId = useId();
   const quotaId = `${menuId}-quota`;
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const openingFocusRef = useRef<'selected' | 'first' | 'last' | null>(null);
+  const pendingQuotaSwitch = useRef<number | undefined>(undefined);
+  const quotaFocusRef = useRef<QuotaProvider | null>(null);
   const { positionedStyle, maxHeight, recalculate } = useDropdownPosition({ buttonRef, dropdownRef });
 
   const currentProvider = AVAILABLE_PROVIDERS.find(p => p.id === value) || AVAILABLE_PROVIDERS[0];
@@ -59,10 +63,19 @@ export const ProviderSelect = ({ value, onChange, compact = false, onOpenCliSett
     return t(`providers.${providerId}.label`);
   };
 
-  const closeMenu = useCallback(() => {
-    setIsOpen(false);
-    setActiveSubmenu('none');
+  const cancelQuotaSwitch = useCallback(() => {
+    window.clearTimeout(pendingQuotaSwitch.current);
+    pendingQuotaSwitch.current = undefined;
   }, []);
+
+  const closeMenu = useCallback(() => {
+    cancelQuotaSwitch();
+    quotaFocusRef.current = null;
+    setIsOpen(false);
+    setActiveQuota(null);
+  }, [cancelQuotaSwitch]);
+
+  useEffect(() => cancelQuotaSwitch, [cancelQuotaSwitch]);
 
   const handleToggle = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -118,7 +131,28 @@ export const ProviderSelect = ({ value, onChange, compact = false, onOpenCliSett
       buttonRef.current?.focus();
       return;
     }
-    if ((event.target as HTMLElement).closest('.provider-quota-panel')) return;
+    const target = event.target as HTMLElement;
+    if (target.closest('.provider-quota-panel')) {
+      if (event.key === 'ArrowLeft') {
+        dropdownRef.current?.querySelector<HTMLElement>(`[data-provider-id="${activeQuota}"]`)?.focus();
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      return;
+    }
+    const providerId = target.dataset.providerId ?? '';
+    if (event.key === 'ArrowRight' && hasProviderQuota(providerId)) {
+      cancelQuotaSwitch();
+      if (activeQuota === providerId) {
+        dropdownRef.current?.querySelector<HTMLElement>('.provider-quota-panel')?.focus();
+      } else {
+        quotaFocusRef.current = providerId;
+        setActiveQuota(providerId);
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
     event.preventDefault();
     event.stopPropagation();
@@ -195,9 +229,33 @@ export const ProviderSelect = ({ value, onChange, compact = false, onOpenCliSett
     return () => window.removeEventListener('resize', recalculate);
   }, [isOpen, recalculate]);
 
+  useLayoutEffect(() => {
+    if (activeQuota && quotaFocusRef.current === activeQuota) {
+      quotaFocusRef.current = null;
+      dropdownRef.current?.querySelector<HTMLElement>('.provider-quota-panel')?.focus();
+    }
+  }, [activeQuota]);
+
   const handleActivate = useCallback((providerId: string) => {
-    setActiveSubmenu(providerId === 'codex' ? 'codexQuota' : 'none');
-  }, []);
+    cancelQuotaSwitch();
+    setActiveQuota(hasProviderQuota(providerId) ? providerId : null);
+  }, [cancelQuotaSwitch]);
+
+  const quotaHasFocus = () => dropdownRef.current?.contains(document.activeElement)
+    && document.activeElement?.closest('.provider-quota-panel');
+
+  const handleQuotaHover = (providerId: QuotaProvider | null) => {
+    cancelQuotaSwitch();
+    if (!providerId || providerId === activeQuota) return;
+    // Pointer movement must not remove a panel while someone is scrolling it with the keyboard.
+    if (quotaHasFocus()) return;
+    if (!activeQuota) {
+      setActiveQuota(providerId);
+    } else {
+      // A stacked panel can be reached only by crossing other menu rows.
+      pendingQuotaSwitch.current = window.setTimeout(() => setActiveQuota(providerId), QUOTA_SWITCH_DELAY_MS);
+    }
+  };
 
   return (
     <>
@@ -234,15 +292,18 @@ export const ProviderSelect = ({ value, onChange, compact = false, onOpenCliSett
             style={{ ...DROPDOWN_STYLE, ...positionedStyle, maxHeight }}
             onKeyDown={handleMenuKeyDown}
             onMouseLeave={() => {
-              const focused = document.activeElement;
-              if (!focused?.matches('[data-provider-id="codex"]')
-                && !focused?.closest('.provider-quota-panel')) {
-                setActiveSubmenu('none');
+              cancelQuotaSwitch();
+              const focused = document.activeElement as HTMLElement | null;
+              if (focused?.dataset.providerId !== activeQuota && !quotaHasFocus()) {
+                setActiveQuota(null);
               }
             }}
           >
-            {activeSubmenu === 'codexQuota' && (
+            {activeQuota === 'codex' && (
               <CodexQuotaSubmenu id={quotaId} anchorRef={dropdownRef} />
+            )}
+            {activeQuota === 'gemini' && (
+              <GeminiQuotaSubmenu id={quotaId} anchorRef={dropdownRef} />
             )}
             <div className="provider-option-list">
               <div ref={menuRef} id={menuId} role="menu" aria-label={t('config.switchProvider')}>
@@ -254,12 +315,13 @@ export const ProviderSelect = ({ value, onChange, compact = false, onOpenCliSett
                     label={getProviderLabel(provider.id)}
                     onSelect={handleSelect}
                     onActivate={handleActivate}
-                    quotaId={activeSubmenu === 'codexQuota' ? quotaId : undefined}
+                    onQuotaHover={handleQuotaHover}
+                    quotaId={activeQuota === provider.id ? quotaId : undefined}
                   />
                 ))}
               </div>
               {onOpenCliSettings && (
-                <div onFocus={() => setActiveSubmenu('none')}>
+                <div onFocus={() => handleActivate('')}>
                   <ProviderCliFooter
                     onOpenCliSettings={() => {
                       closeMenu();
