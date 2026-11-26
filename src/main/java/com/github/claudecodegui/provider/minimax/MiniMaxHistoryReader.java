@@ -10,6 +10,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.intellij.openapi.diagnostic.Logger;
 
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
@@ -18,6 +19,7 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -25,14 +27,21 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CancellationException;
 import java.util.function.BooleanSupplier;
+import java.util.regex.Pattern;
 
 /**
  * Reads MiniMax Code (mcode) session history from its on-disk v2 layout.
  *
- * <p>Layout (mcode 0.2.x):
- * {@code ~/.minimax/v2/sessions/YYYY/MM/DD/&lt;HH-mm-ss-ms&gt;-session_&lt;base64&gt;/}
- * containing {@code snapshot.json} (record + displayMessages) plus
- * {@code display.jsonl} (event log fallback).
+ * <p>Layouts:
+ * <ul>
+ *   <li>mcode 0.7.x "v2-final-dated-session": the dir name suffix
+ *       {@code session_&lt;base64-of-sessionId&gt;} identifies the session and the dir holds
+ *       {@code manifest.json} (sessionId + timestamps) plus {@code messages.jsonl}
+ *       (raw transcript; user prompts may arrive prefixed with injected reminder/context
+ *       blocks, and workspace/cwd is not persisted).</li>
+ *   <li>mcode 0.2.x legacy: {@code snapshot.json} (record + displayMessages) plus
+ *       {@code display.jsonl} (event log fallback).</li>
+ * </ul>
  *
  * <p>{@code snapshot.json} shape:
  * <pre>
@@ -57,6 +66,16 @@ public class MiniMaxHistoryReader {
     private static final Logger LOG = Logger.getInstance(MiniMaxHistoryReader.class);
     private static final int MAX_TITLE_CHARS = 80;
     private static final int MAX_TOOL_RESULT_CHARS = 20_000;
+    private static final int MAX_TITLE_SCAN_LINES = 200;
+
+    /**
+     * Matches a balanced XML-ish block at the very start of a text: injected
+     * reminder/context wrappers ({@code <system-reminder>…</system-reminder>},
+     * {@code <plugin-hook-context>…</plugin-hook-context>}, …). The real user
+     * prompt follows these leading blocks; repeated application strips them all.
+     */
+    private static final Pattern LEADING_XML_BLOCK =
+            Pattern.compile("^<([A-Za-z][\\w-]*)(?:\\s[^>]*)?>[\\s\\S]*?</\\1>\\s*");
 
     private final Gson gson;
     private final Path minimaxHome;
@@ -133,7 +152,9 @@ public class MiniMaxHistoryReader {
         }
         List<SessionInfo> filtered = new ArrayList<>();
         for (SessionInfo session : all) {
-            if (session.cwd != null && pathsMatch(session.cwd, projectPath)) {
+            // 0.7.x layouts persist no workspace, so their sessions carry no cwd;
+            // filtering them out would keep the new transcript layout invisible.
+            if (session.cwd == null || pathsMatch(session.cwd, projectPath)) {
                 filtered.add(session);
             }
         }
@@ -194,7 +215,7 @@ public class MiniMaxHistoryReader {
         try {
             Path snapshotPath = sessionDir.resolve("snapshot.json");
             if (!Files.isRegularFile(snapshotPath)) {
-                return null;
+                return readManifestSummary(sessionDir);
             }
             JsonObject snapshot = JsonParser
                     .parseString(Files.readString(snapshotPath, StandardCharsets.UTF_8))
@@ -240,6 +261,168 @@ public class MiniMaxHistoryReader {
             LOG.warn("[MiniMaxHistoryReader] Failed to read session summary " + sessionDir + ": " + e.getMessage());
             return null;
         }
+    }
+
+    /**
+     * Reads a mcode 0.7.x "v2-final-dated-session" directory. The manifest
+     * carries the session id and timestamps; the transcript (messages.jsonl)
+     * supplies the title. The layout does not persist the workspace, so
+     * {@code cwd} stays null and such sessions are surfaced in every project
+     * list (see {@link #listSessionsForProject}).
+     */
+    private SessionInfo readManifestSummary(Path sessionDir) {
+        Path manifestPath = sessionDir.resolve("manifest.json");
+        if (!Files.isRegularFile(manifestPath)) {
+            return null;
+        }
+        try {
+            JsonObject manifest = JsonParser
+                    .parseString(Files.readString(manifestPath, StandardCharsets.UTF_8))
+                    .getAsJsonObject();
+            String sessionId = text(manifest, "sessionId");
+            if (sessionId == null || sessionId.isBlank()) {
+                return null;
+            }
+
+            SessionInfo info = new SessionInfo();
+            info.sessionId = sessionId;
+            info.cwd = null;
+            info.title = truncate(stripInjectedContext(firstUserText(sessionDir)), MAX_TITLE_CHARS);
+            info.firstTimestamp = longVal(manifest, "createdAtMs", 0L);
+            info.lastTimestamp = longVal(manifest, "updatedAtMs", info.firstTimestamp);
+            if (info.lastTimestamp <= 0) {
+                try {
+                    info.lastTimestamp = Files.getLastModifiedTime(manifestPath).toMillis();
+                } catch (IOException ignored) {
+                }
+            }
+
+            MessageScan scan = scanMessagesFile(sessionDir.resolve("messages.jsonl"));
+            info.messageCount = scan.lineCount;
+            info.fileSize = Files.size(manifestPath);
+            Path messagesPath = sessionDir.resolve("messages.jsonl");
+            if (Files.isRegularFile(messagesPath)) {
+                info.fileSize += Files.size(messagesPath);
+            }
+            return info;
+        } catch (Exception e) {
+            LOG.warn("[MiniMaxHistoryReader] Failed to read manifest summary " + sessionDir + ": " + e.getMessage());
+            return null;
+        }
+    }
+
+    /** The first user prompt of the transcript with injected context stripped. */
+    private static String firstUserText(Path sessionDir) {
+        Path messagesPath = sessionDir.resolve("messages.jsonl");
+        if (!Files.isRegularFile(messagesPath)) {
+            return "";
+        }
+        try (BufferedReader reader = Files.newBufferedReader(messagesPath, StandardCharsets.UTF_8)) {
+            String rawLine;
+            int scanned = 0;
+            while (scanned < MAX_TITLE_SCAN_LINES && (rawLine = reader.readLine()) != null) {
+                scanned++;
+                String line = rawLine.trim();
+                if (line.isEmpty()) {
+                    continue;
+                }
+                JsonObject msg = messageOf(line);
+                if (msg == null || !"user".equals(text(msg, "role"))) {
+                    continue;
+                }
+                String stripped = stripInjectedContext(joinedTextBlocks(msg));
+                if (!stripped.isBlank()) {
+                    return stripped;
+                }
+            }
+        } catch (Exception e) {
+            LOG.warn("[MiniMaxHistoryReader] Failed to derive title from " + messagesPath + ": " + e.getMessage());
+        }
+        return "";
+    }
+
+    private static final class MessageScan {
+        final int lineCount;
+
+        MessageScan(int lineCount) {
+            this.lineCount = lineCount;
+        }
+    }
+
+    /** Counts non-blank transcript lines without parsing the JSON. */
+    private static MessageScan scanMessagesFile(Path messagesPath) {
+        if (!Files.isRegularFile(messagesPath)) {
+            return new MessageScan(0);
+        }
+        int lines = 0;
+        try (BufferedReader reader = Files.newBufferedReader(messagesPath, StandardCharsets.UTF_8)) {
+            String rawLine;
+            while ((rawLine = reader.readLine()) != null) {
+                if (!rawLine.isBlank()) {
+                    lines++;
+                }
+            }
+        } catch (IOException e) {
+            LOG.warn("[MiniMaxHistoryReader] Failed to count messages in " + messagesPath + ": " + e.getMessage());
+        }
+        return new MessageScan(lines);
+    }
+
+    /** Parses one messages.jsonl line into its inner {@code message} object, or null. */
+    private static JsonObject messageOf(String line) {
+        try {
+            JsonObject obj = JsonParser.parseString(line).getAsJsonObject();
+            return obj.has("message") && obj.get("message").isJsonObject()
+                    ? obj.getAsJsonObject("message") : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** Joins the {@code text} blocks of a message, skipping non-object entries. */
+    private static String joinedTextBlocks(JsonObject msg) {
+        StringBuilder sb = new StringBuilder();
+        JsonArray content = msg.has("content") && msg.get("content").isJsonArray()
+                ? msg.getAsJsonArray("content") : null;
+        if (content == null) {
+            return "";
+        }
+        for (JsonElement el : content) {
+            if (!el.isJsonObject()) {
+                continue;
+            }
+            String t = text(el.getAsJsonObject(), "text");
+            if (t != null && !t.isEmpty()) {
+                if (sb.length() > 0) {
+                    sb.append('\n');
+                }
+                sb.append(t);
+            }
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Removes leading balanced XML blocks (mcode-injected reminders/context)
+     * from a user prompt, e.g. {@code <system-reminder>…</system-reminder>
+     * <plugin-hook-context>…</plugin-hook-context>\n\nreal prompt} →
+     * {@code real prompt}. A prompt that itself starts with XML-ish text loses
+     * its first balanced block — accepted trade-off, since every CCGUI-spawned
+     * session's first message is context-prefixed.
+     */
+    static String stripInjectedContext(String userText) {
+        if (userText == null) {
+            return "";
+        }
+        String stripped = userText.trim();
+        while (!stripped.isEmpty()) {
+            var matcher = LEADING_XML_BLOCK.matcher(stripped);
+            if (!matcher.find()) {
+                break;
+            }
+            stripped = stripped.substring(matcher.end()).trim();
+        }
+        return stripped;
     }
 
     private static String deriveTitleFromSnapshot(JsonObject snapshot) {
@@ -320,17 +503,37 @@ public class MiniMaxHistoryReader {
             }
         }
 
+        // Preferred source for the 0.7.x layout: the raw messages.jsonl transcript.
+        boolean manifestReadable = isReadableManifest(sessionDir.resolve("manifest.json"));
+        Path messagesPath = sessionDir.resolve("messages.jsonl");
+        if (Files.isRegularFile(messagesPath)) {
+            return parseMessagesJsonl(messagesPath, cancellation);
+        }
+
         // Fallback: replay display.jsonl events, deduplicating upserts by msg_id.
         Path displayPath = sessionDir.resolve("display.jsonl");
         if (Files.isRegularFile(displayPath)) {
             return parseDisplayJsonl(displayPath, cancellation);
         }
-        if (failMissing && !snapshotReadable) {
+        if (failMissing && !snapshotReadable && !manifestReadable) {
             // The session directory exists, so an unreadable transcript is retryable, never a retirement signal.
             throw new IOException("MiniMax session history is not readable yet: " + sessionId);
         }
-        // A readable snapshot without display messages is a valid empty session.
+        // A readable snapshot/manifest without messages is a valid empty session.
         return new ArrayList<>();
+    }
+
+    /** True when a manifest.json exists and parses into a JSON object. */
+    private static boolean isReadableManifest(Path manifestPath) {
+        if (!Files.isRegularFile(manifestPath)) {
+            return false;
+        }
+        try {
+            JsonParser.parseString(Files.readString(manifestPath, StandardCharsets.UTF_8));
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private Path resolveSessionDir(String sessionId, String cwd) throws IOException {
@@ -357,6 +560,14 @@ public class MiniMaxHistoryReader {
         boolean inconclusive = false;
         if (!Files.isDirectory(sessionsRoot)) {
             return new SessionLookup(null, false);
+        }
+        // Fast path: 0.7.x dir names embed the session id as base64
+        // ("…-session_<base64(sessionId)>"), and their manifest carries no
+        // workspace to filter on — a name match is authoritative regardless of
+        // cwd. Falls through to the snapshot scan below for legacy layouts.
+        Path dated = findSessionDirByName(wanted);
+        if (dated != null) {
+            return new SessionLookup(dated, false);
         }
         // Session dirs are dated mcode-internal names; match by the sessionId
         // inside snapshot.json instead of guessing the dir naming scheme.
@@ -413,6 +624,60 @@ public class MiniMaxHistoryReader {
             }
         }
         return new SessionLookup(best, best == null && inconclusive);
+    }
+
+    /**
+     * Locates a 0.7.x session directory by decoding the base64 suffix of
+     * {@code …-session_<base64(sessionId)>} dir names; null when no dir name
+     * decodes to the wanted id (legacy layouts fall back to the snapshot scan).
+     */
+    private Path findSessionDirByName(String wantedSessionId) throws IOException {
+        try (DirectoryStream<Path> years = Files.newDirectoryStream(sessionsRoot)) {
+            for (Path year : years) {
+                if (!Files.isDirectory(year)) {
+                    continue;
+                }
+                try (DirectoryStream<Path> months = Files.newDirectoryStream(year)) {
+                    for (Path month : months) {
+                        if (!Files.isDirectory(month)) {
+                            continue;
+                        }
+                        try (DirectoryStream<Path> days = Files.newDirectoryStream(month)) {
+                            for (Path day : days) {
+                                if (!Files.isDirectory(day)) {
+                                    continue;
+                                }
+                                try (DirectoryStream<Path> sessionDirs = Files.newDirectoryStream(day)) {
+                                    for (Path sessionDir : sessionDirs) {
+                                        if (wantedSessionId.equals(decodeSessionId(sessionDir))) {
+                                            return sessionDir;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    /** Decodes the base64-encoded session id embedded in a dated session dir name. */
+    static String decodeSessionId(Path sessionDir) {
+        String name = sessionDir.getFileName().toString();
+        int idx = name.indexOf("session_");
+        if (idx < 0) {
+            return null;
+        }
+        String encoded = name.substring(idx + "session_".length());
+        try {
+            int padding = (4 - encoded.length() % 4) % 4;
+            return new String(Base64.getDecoder().decode(encoded + "=".repeat(padding)),
+                    StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     /**
@@ -670,6 +935,161 @@ public class MiniMaxHistoryReader {
                         Comparator.comparingLong((JsonObject m) -> longVal(m, "timestamp", 0L))))
                 .forEach(entry -> ordered.add(entry.getValue()));
         return buildMessages(ordered, cancellation);
+    }
+
+    /**
+     * Parses the mcode 0.7.x {@code messages.jsonl} raw transcript. Each line is
+     * converted to the legacy displayMessage shape and fed through
+     * {@link #buildMessages}, so thinking / text / tool_use / tool_result and
+     * usage mapping behave exactly as with the 0.2.x layout. Injected
+     * reminder/context prefixes are stripped from user prompts; tool results
+     * arrive as separate {@code toolResult} lines and are re-paired with their
+     * tool calls by id afterwards.
+     */
+    private List<JsonObject> parseMessagesJsonl(Path messagesPath, BooleanSupplier cancellation) throws IOException {
+        JsonArray display = new JsonArray();
+        // tool_call display objects in file order — tool results are looked up later.
+        Map<String, JsonObject> toolCallsByCallId = new LinkedHashMap<>();
+        Map<String, String> resultDataByCallId = new HashMap<>();
+        try (BufferedReader reader = Files.newBufferedReader(messagesPath, StandardCharsets.UTF_8)) {
+            String rawLine;
+            while ((rawLine = reader.readLine()) != null) {
+                HistoryCancellation.check(cancellation);
+                String line = rawLine.trim();
+                if (line.isEmpty()) {
+                    continue;
+                }
+                JsonObject msg = messageOf(line);
+                if (msg == null) {
+                    continue;
+                }
+                String role = text(msg, "role");
+                JsonArray content = msg.has("content") && msg.get("content").isJsonArray()
+                        ? msg.getAsJsonArray("content") : null;
+                if ("toolResult".equals(role)) {
+                    String callId = firstNonBlank(text(msg, "toolCallId"), text(msg, "tool_call_id"));
+                    String joined = joinedTextBlocks(msg);
+                    if (callId != null && !joined.isBlank()) {
+                        JsonObject data = new JsonObject();
+                        JsonArray blocks = new JsonArray();
+                        JsonObject textBlock = new JsonObject();
+                        textBlock.addProperty("type", "text");
+                        textBlock.addProperty("text", joined);
+                        blocks.add(textBlock);
+                        data.add("content", blocks);
+                        resultDataByCallId.put(callId, data.toString());
+                    }
+                    continue;
+                }
+                if ("user".equals(role)) {
+                    String stripped = stripInjectedContext(joinedTextBlocks(msg));
+                    if (stripped.isBlank()) {
+                        continue;
+                    }
+                    JsonObject displayMsg = new JsonObject();
+                    displayMsg.addProperty("role", "user");
+                    displayMsg.addProperty("msg_content", stripped);
+                    display.add(displayMsg);
+                    continue;
+                }
+                if ("assistant".equals(role)) {
+                    JsonObject displayMsg = new JsonObject();
+                    displayMsg.addProperty("role", "assistant");
+                    String thinking = joinedBlocks(msg, content, "thinking");
+                    if (!thinking.isBlank()) {
+                        displayMsg.addProperty("thinking_content", thinking);
+                    }
+                    String textContent = joinedBlocks(msg, content, "text");
+                    if (!textContent.isBlank()) {
+                        displayMsg.addProperty("msg_content", textContent);
+                    }
+                    JsonArray toolCalls = toolCallEntries(msg, content, toolCallsByCallId);
+                    if (toolCalls.size() > 0) {
+                        displayMsg.add("tool_calls", toolCalls);
+                    }
+                    if (msg.has("usage") && msg.get("usage").isJsonObject()) {
+                        displayMsg.add("usage", msg.getAsJsonObject("usage").deepCopy());
+                    }
+                    if (displayMsg.size() > 1) {
+                        display.add(displayMsg);
+                    }
+                }
+                // Other roles (e.g. "custom" internal messages) are not displayable.
+            }
+        }
+        // Re-pair tool results with their calls (separate toolResult lines upstream).
+        for (Map.Entry<String, JsonObject> entry : toolCallsByCallId.entrySet()) {
+            String resultData = resultDataByCallId.get(entry.getKey());
+            if (resultData != null) {
+                entry.getValue().addProperty("tool_call_result_data", resultData);
+            }
+        }
+        return buildMessages(display, cancellation);
+    }
+
+    /** Joins the string payload of every block of {@code blockType} in a message. */
+    private static String joinedBlocks(JsonObject msg, JsonArray content, String blockType) {
+        StringBuilder sb = new StringBuilder();
+        if (content == null) {
+            return "";
+        }
+        for (JsonElement el : content) {
+            if (!el.isJsonObject()) {
+                continue;
+            }
+            JsonObject block = el.getAsJsonObject();
+            if (!blockType.equals(text(block, "type"))) {
+                continue;
+            }
+            String t = text(block, blockType.equals("thinking") ? "thinking" : "text");
+            if (t != null && !t.isEmpty()) {
+                if (sb.length() > 0) {
+                    sb.append('\n');
+                }
+                sb.append(t);
+            }
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Collects {@code toolCall} blocks into legacy {@code tool_calls} entries and
+     * registers them by call id so later {@code toolResult} lines can pair up.
+     */
+    private static JsonArray toolCallEntries(JsonObject msg, JsonArray content,
+                                             Map<String, JsonObject> toolCallsByCallId) {
+        JsonArray entries = new JsonArray();
+        if (content == null) {
+            return entries;
+        }
+        for (JsonElement el : content) {
+            if (!el.isJsonObject()) {
+                continue;
+            }
+            JsonObject block = el.getAsJsonObject();
+            if (!"toolCall".equals(text(block, "type"))) {
+                continue;
+            }
+            String callId = firstNonBlank(text(block, "id"), text(block, "tool_call_id"));
+            if (callId == null || callId.isBlank()) {
+                continue;
+            }
+            String name = firstNonBlank(text(block, "name"), text(block, "tool_name"));
+            JsonObject entry = new JsonObject();
+            entry.addProperty("tool_call_id", callId);
+            entry.addProperty("tool_name", name != null ? name : "tool");
+            JsonElement args = block.get("arguments");
+            if (args != null && args.isJsonObject()) {
+                entry.addProperty("tool_call_args", args.getAsJsonObject().toString());
+            } else if (args != null && args.isJsonPrimitive()) {
+                entry.addProperty("tool_call_args", args.getAsString());
+            } else {
+                entry.addProperty("tool_call_args", "{}");
+            }
+            entries.add(entry);
+            toolCallsByCallId.put(callId, entry);
+        }
+        return entries;
     }
 
     public boolean deleteSession(String sessionId, String projectPath) throws IOException {
