@@ -16,6 +16,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class OsrFrameRateLimiterTest {
 
     @Test
+    public void reflectiveSetterResolvesOnTheBuildPlatform() {
+        // The name is a string now, so a typo would silently disable the limiter everywhere.
+        Assert.assertNotNull(OsrFrameRateLimiter.findFrameRateSetter());
+    }
+
+    @Test
     public void defaultRegistryValueRestoresCefDefault() {
         Assert.assertEquals(OsrFrameRateLimiter.DEFAULT_FRAME_RATE, OsrFrameRateLimiter.visibleFrameRate(0));
         Assert.assertEquals(OsrFrameRateLimiter.DEFAULT_FRAME_RATE, OsrFrameRateLimiter.visibleFrameRate(-5));
