@@ -262,6 +262,7 @@
       "other": "작업"
     },
     "planUsage": {
+      "codexTitle": "Codex 플랜 사용량",
       "balanceLabel": "잔액: ",
       "balanceRemaining": "잔액: {{value}}",
       "balanceDetail": "총 {{total}} · 사용 {{used}}"

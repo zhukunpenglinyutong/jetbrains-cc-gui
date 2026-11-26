@@ -264,6 +264,7 @@
       "other": "Tâche"
     },
     "planUsage": {
+      "codexTitle": "Utilisation du forfait Codex",
       "balanceLabel": "Solde : ",
       "balanceRemaining": "Solde : {{value}}",
       "balanceDetail": "Total {{total}} · Utilisé {{used}}"

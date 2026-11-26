@@ -264,6 +264,7 @@
       "other": "कार्य"
     },
     "planUsage": {
+      "codexTitle": "Codex प्लान उपयोग",
       "balanceLabel": "शेष राशि: ",
       "balanceRemaining": "शेष राशि: {{value}}",
       "balanceDetail": "कुल {{total}} · उपयोग किया गया {{used}}"

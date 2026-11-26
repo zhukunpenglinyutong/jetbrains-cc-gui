@@ -262,6 +262,7 @@
       "other": "タスク"
     },
     "planUsage": {
+      "codexTitle": "Codex プラン使用状況",
       "balanceLabel": "残高：",
       "balanceRemaining": "残高：{{value}}",
       "balanceDetail": "合計 {{total}} · 使用済み {{used}}"

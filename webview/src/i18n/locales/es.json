@@ -264,6 +264,7 @@
       "other": "Tarea"
     },
     "planUsage": {
+      "codexTitle": "Uso del plan de Codex",
       "balanceLabel": "Saldo: ",
       "balanceRemaining": "Saldo: {{value}}",
       "balanceDetail": "Total {{total}} · Usado {{used}}"
