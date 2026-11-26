@@ -1452,6 +1452,21 @@
       "empty": "कोई प्रदाता उपलब्ध नहीं",
       "switched": "{{provider}} पर स्विच किया गया"
     },
+    "antigravityQuota": {
+      "title": "Antigravity कोटा",
+      "cliMissing": "कोटा देखने के लिए Antigravity CLI (agy) इंस्टॉल करें।",
+      "cliOutdated": "Antigravity CLI {{version}} या नया संस्करण ज़रूरी है। agy update चलाएँ।",
+      "noQuota": "कोटा नहीं मिला। देखें कि agy में कौन-सा खाता साइन इन है।",
+      "timeout": "कोटा जाँच का समय समाप्त हुआ। फिर से कोशिश करने के लिए यह पैनल दोबारा खोलें।",
+      "queryFailed": "कोटा नहीं मिल सका। फिर से कोशिश करने के लिए यह पैनल दोबारा खोलें।",
+      "buckets": {
+        "gemini-5h": "Gemini · 5 घंटे",
+        "gemini-weekly": "Gemini · साप्ताहिक",
+        "gemini-argon-wtu-weekly": "Gemini Argon · साप्ताहिक",
+        "3p-5h": "Claude और GPT · 5 घंटे",
+        "3p-weekly": "Claude और GPT · साप्ताहिक"
+      }
+    },
     "codexQuota": {
       "title": "Codex कोटा",
       "loading": "कोटा लोड हो रहा है...",

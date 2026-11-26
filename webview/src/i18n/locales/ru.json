@@ -1468,6 +1468,21 @@
       "empty": "Нет доступных провайдеров",
       "switched": "Переключено на {{provider}}"
     },
+    "antigravityQuota": {
+      "title": "Квота Antigravity",
+      "cliMissing": "Чтобы посмотреть квоту, установите Antigravity CLI (agy).",
+      "cliOutdated": "Требуется Antigravity CLI {{version}} или новее. Выполните agy update.",
+      "noQuota": "Данные о квоте не получены. Проверьте, в какой аккаунт выполнен вход в agy.",
+      "timeout": "Истекло время ожидания квоты. Откройте панель снова, чтобы повторить запрос.",
+      "queryFailed": "Не удалось получить квоту. Откройте панель снова, чтобы повторить запрос.",
+      "buckets": {
+        "gemini-5h": "Gemini · 5 часов",
+        "gemini-weekly": "Gemini · Неделя",
+        "gemini-argon-wtu-weekly": "Gemini Argon · Неделя",
+        "3p-5h": "Claude и GPT · 5 часов",
+        "3p-weekly": "Claude и GPT · Неделя"
+      }
+    },
     "codexQuota": {
       "title": "Квота Codex",
       "loading": "Загрузка квоты...",

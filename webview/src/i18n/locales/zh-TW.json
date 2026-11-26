@@ -1472,6 +1472,21 @@
       "empty": "暫無可用供應商",
       "switched": "已切換到 {{provider}}"
     },
+    "antigravityQuota": {
+      "title": "Antigravity 額度",
+      "cliMissing": "請安裝 Antigravity CLI（agy）後查看額度。",
+      "cliOutdated": "需要 Antigravity CLI {{version}} 或更新版本，請執行 agy update。",
+      "noQuota": "未傳回額度，請檢查 agy 目前登入的帳號。",
+      "timeout": "查詢額度逾時，重新開啟此面板可重試。",
+      "queryFailed": "無法取得額度，重新開啟此面板可重試。",
+      "buckets": {
+        "gemini-5h": "Gemini · 5 小時",
+        "gemini-weekly": "Gemini · 每週",
+        "gemini-argon-wtu-weekly": "Gemini Argon · 每週",
+        "3p-5h": "Claude 和 GPT · 5 小時",
+        "3p-weekly": "Claude 和 GPT · 每週"
+      }
+    },
     "codexQuota": {
       "title": "Codex 配額",
       "loading": "正在載入配額...",

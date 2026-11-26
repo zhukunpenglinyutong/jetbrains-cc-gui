@@ -14,9 +14,7 @@ import java.time.Instant;
 /**
  * Claude plan-usage snapshot builder + resolver.
  *
- * <p>Feeds the ContextBar plan-usage indicator using the same payload shape as
- * Gemini/Codex ({@code capacity_pct} + {@code windows[]}), so the shared
- * {@code GeminiPlanUsageIndicator} renders it unchanged.
+ * <p>Feeds the shared ContextBar plan-usage indicator with capacity and billing windows.
  *
  * <p>Two data sources, picked by backend:
  * <ul>

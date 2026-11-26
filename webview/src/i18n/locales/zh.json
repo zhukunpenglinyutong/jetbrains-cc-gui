@@ -1892,6 +1892,21 @@
       "empty": "暂无可用供应商",
       "switched": "已切换到 {{provider}}"
     },
+    "antigravityQuota": {
+      "title": "Antigravity 额度",
+      "cliMissing": "请安装 Antigravity CLI（agy）后查看额度。",
+      "cliOutdated": "需要 Antigravity CLI {{version}} 或更高版本，请运行 agy update。",
+      "noQuota": "未返回额度，请检查 agy 当前登录的账号。",
+      "timeout": "查询额度超时，重新打开此面板可重试。",
+      "queryFailed": "无法获取额度，重新打开此面板可重试。",
+      "buckets": {
+        "gemini-5h": "Gemini · 5 小时",
+        "gemini-weekly": "Gemini · 每周",
+        "gemini-argon-wtu-weekly": "Gemini Argon · 每周",
+        "3p-5h": "Claude 和 GPT · 5 小时",
+        "3p-weekly": "Claude 和 GPT · 每周"
+      }
+    },
     "codexQuota": {
       "title": "Codex 配额",
       "loading": "正在加载配额...",

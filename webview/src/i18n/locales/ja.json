@@ -1445,6 +1445,21 @@
       "empty": "利用可能なプロバイダーがありません",
       "switched": "{{provider}} に切り替えました"
     },
+    "antigravityQuota": {
+      "title": "Antigravity の利用枠",
+      "cliMissing": "利用枠を確認するには Antigravity CLI（agy）をインストールしてください。",
+      "cliOutdated": "Antigravity CLI {{version}} 以降が必要です。agy update を実行してください。",
+      "noQuota": "利用枠が取得できませんでした。agy にログイン中のアカウントを確認してください。",
+      "timeout": "利用枠の取得がタイムアウトしました。このパネルを開き直してください。",
+      "queryFailed": "利用枠の取得に失敗しました。このパネルを開き直してください。",
+      "buckets": {
+        "gemini-5h": "Gemini · 5 時間",
+        "gemini-weekly": "Gemini · 週間",
+        "gemini-argon-wtu-weekly": "Gemini Argon · 週間",
+        "3p-5h": "Claude と GPT · 5 時間",
+        "3p-weekly": "Claude と GPT · 週間"
+      }
+    },
     "codexQuota": {
       "title": "Codex クォータ",
       "loading": "クォータを読み込み中...",

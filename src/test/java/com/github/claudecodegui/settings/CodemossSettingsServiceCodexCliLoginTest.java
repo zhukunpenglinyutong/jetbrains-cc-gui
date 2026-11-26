@@ -281,7 +281,7 @@ public class CodemossSettingsServiceCodexCliLoginTest {
         Path tempHome = Files.createTempDirectory("codex-ancestor-skill-delete-home");
         useTemporaryHomeDirectory(tempHome);
         Path repo = Files.createDirectories(tempHome.resolve("repository"));
-        Files.createDirectory(repo.resolve(".git"));
+        createRealGitDirectory(repo);
         Path ancestor = Files.createDirectory(repo.resolve("module"));
         Path cwd = Files.createDirectories(ancestor.resolve("a/b/c/d/e"));
         Path skillDir = Files.createDirectories(ancestor.resolve(".agents/skills/example"));
@@ -299,8 +299,10 @@ public class CodemossSettingsServiceCodexCliLoginTest {
         Path tempHome = Files.createTempDirectory("codex-worktree-skill-delete-home");
         useTemporaryHomeDirectory(tempHome);
         Path outer = Files.createDirectory(tempHome.resolve("outer"));
-        Files.createDirectory(outer.resolve(".git"));
+        createRealGitDirectory(outer);
         Path linked = Files.createDirectory(outer.resolve("linked"));
+        Path worktreeGitDir = Files.createDirectories(outer.resolve(".git/worktrees/linked"));
+        Files.writeString(worktreeGitDir.resolve("HEAD"), "ref: refs/heads/linked\n");
         Files.writeString(linked.resolve(".git"), "gitdir: ../.git/worktrees/linked\n");
         Path cwd = Files.createDirectories(linked.resolve("a/b/c/d"));
         Path skillDir = Files.createDirectories(linked.resolve(".agents/skills/example"));
@@ -320,7 +322,7 @@ public class CodemossSettingsServiceCodexCliLoginTest {
         Path tempHome = Files.createTempDirectory("codex-linked-skill-delete-home");
         useTemporaryHomeDirectory(tempHome);
         Path repo = Files.createDirectories(tempHome.resolve("repository"));
-        Files.createDirectory(repo.resolve(".git"));
+        createRealGitDirectory(repo);
         Path skillDir = Files.createDirectories(repo.resolve(".agents/skills/example"));
         Files.writeString(skillDir.resolve("SKILL.md"), "# Example");
         Path alias = tempHome.resolve("workspace-alias");
@@ -365,6 +367,14 @@ public class CodemossSettingsServiceCodexCliLoginTest {
         } else {
             Files.createSymbolicLink(alias, target);
         }
+    }
+
+    /**
+     * Git discovery rejects a .git directory without HEAD, so fixtures model real repositories.
+     */
+    private void createRealGitDirectory(Path repo) throws Exception {
+        Files.createDirectories(repo.resolve(".git"));
+        Files.writeString(repo.resolve(".git/HEAD"), "ref: refs/heads/main\n");
     }
 
     private void useTemporaryHomeDirectory(Path tempHome) throws Exception {

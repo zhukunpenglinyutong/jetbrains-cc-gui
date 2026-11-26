@@ -1,142 +1,95 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useGeminiPlanUsage } from './useGeminiPlanUsage';
-import { resolveDisplayWindow, type CapacityWindow } from '../utils/planUsagePace';
 
-const w = window as unknown as {
-  sendToJava?: (cmd: string) => void;
-  updateGeminiPlanUsage?: (json: string) => void;
+const SNAPSHOT = {
+  status: 'ok',
+  fetchedAt: 1_790_000_000_000,
+  windows: [{ id: 'gemini-weekly', remainingPercent: 50 }, { id: '3p-5h', remainingPercent: 0 }],
 };
 
-const unavailablePayload = {
-  present: false,
-  unavailable: true,
-  provider: 'gemini',
-  message: 'Gemini usage unavailable',
-};
-
-// Live-shaped quota payload (agy /usage, spec external-cli-behaviors.md):
-// the Java service maps command.data.groups for the SELECTED model's billing
-// family onto the shared capacity shape. AC3 markers: num_turns 0, empty
-// conversation_id, all-zero usage — the probe is not a model turn.
-const presentPayload = {
-  ok: true,
-  present: true,
-  provider: 'gemini',
-  source: 'agy-usage',
-  capacity_pct: 58,
-  reset_at: '2026-09-08T18:15:00Z',
-  period_type: '5h',
-  windows: [
-    { id: 'gemini-5h', used_pct: 58, reset_at: '2026-09-08T18:15:00Z', period_type: '5h' },
-    { id: 'gemini-weekly', used_pct: 23.83, reset_at: '2026-09-10T20:06:55Z', period_type: 'weekly' },
-  ],
-};
+function reply(command: string, snapshot: unknown) {
+  window.updateGeminiPlanUsage?.(command.slice('get_gemini_plan_usage:'.length), JSON.stringify(snapshot));
+}
 
 afterEach(() => {
-  vi.restoreAllMocks();
-  delete w.sendToJava;
-  delete w.updateGeminiPlanUsage;
+  vi.useRealTimers();
+  delete window.sendToJava;
+  delete window.updateGeminiPlanUsage;
 });
 
 describe('useGeminiPlanUsage', () => {
-  it('stays hidden (idle) while no payload has ever arrived', () => {
-    w.sendToJava = vi.fn();
-    const { result } = renderHook(() =>
-      useGeminiPlanUsage('gemini', 'gemini-3.7-flash-high'));
-    expect(w.sendToJava).toHaveBeenCalledWith('get_gemini_plan_usage:gemini-3.7-flash-high');
+  it('discards the late reply from a closed panel', () => {
+    const send = vi.fn();
+    window.sendToJava = send;
+    const first = renderHook(useGeminiPlanUsage);
+    first.unmount();
+    const second = renderHook(useGeminiPlanUsage);
+    expect(send.mock.calls[0][0]).toMatch(/^get_gemini_plan_usage:\d+$/);
+    expect(send.mock.calls[0][0]).not.toBe(send.mock.calls[1][0]);
 
-    act(() => {
-      w.updateGeminiPlanUsage?.(JSON.stringify(unavailablePayload));
-    });
-    expect(result.current.status).toBe('idle');
-    expect(result.current.snapshot).toBeNull();
+    act(() => reply(send.mock.calls[0][0], SNAPSHOT));
+    expect(second.result.current).toBeNull();
+    act(() => reply(send.mock.calls[1][0], SNAPSHOT));
+    expect(second.result.current).toEqual(SNAPSHOT);
   });
 
-  it('becomes ready on the first present payload, then keeps data visible', () => {
-    w.sendToJava = vi.fn();
-    const { result } = renderHook(() =>
-      useGeminiPlanUsage('gemini', 'gemini-3.7-flash-high'));
+  it('routes concurrent requests to their own panel instances', () => {
+    const send = vi.fn();
+    window.sendToJava = send;
+    const first = renderHook(useGeminiPlanUsage);
+    const second = renderHook(useGeminiPlanUsage);
 
-    act(() => {
-      w.updateGeminiPlanUsage?.(JSON.stringify(presentPayload));
-    });
-    expect(result.current.status).toBe('ready');
-    expect(result.current.snapshot?.capacityPct).toBe(58);
-    expect(result.current.snapshot?.provider).toBe('gemini');
-
-    // Later unavailable poll after data was seen → dash, not hidden.
-    act(() => {
-      w.updateGeminiPlanUsage?.(JSON.stringify(unavailablePayload));
-    });
-    expect(result.current.status).toBe('unavailable');
-    expect(result.current.snapshot?.present).toBe(false);
+    act(() => reply(send.mock.calls[0][0], SNAPSHOT));
+    expect(first.result.current).toEqual(SNAPSHOT);
+    expect(second.result.current).toBeNull();
+    act(() => reply(send.mock.calls[1][0], { status: 'unavailable', reasonCode: 'cli_missing' }));
+    expect(second.result.current).toMatchObject({ status: 'unavailable', reasonCode: 'cli_missing' });
   });
 
-  it('is empty for non-gemini providers and never polls', () => {
-    w.sendToJava = vi.fn();
-    const { result } = renderHook(() =>
-      useGeminiPlanUsage('claude', 'claude-sonnet-4-6'));
-    expect(result.current.status).toBe('idle');
-    expect(result.current.snapshot).toBeNull();
-    expect(w.sendToJava).not.toHaveBeenCalled();
+  it('never promotes invalid or missing quota values to a success snapshot', () => {
+    const send = vi.fn();
+    window.sendToJava = send;
+    const { result } = renderHook(useGeminiPlanUsage);
+    act(() => reply(send.mock.calls[0][0], {
+      ...SNAPSHOT,
+      windows: [
+        { id: '3p-5h', remainingPercent: null },
+        { id: 'gemini-weekly', remainingPercent: '100' },
+        { id: 'unknown', remainingPercent: 100 },
+      ],
+    }));
+    expect(result.current).toEqual({ status: 'unavailable', reasonCode: 'query_failed' });
   });
 
-  it('carries the selected model slug on the poll so the family follows the selection', () => {
-    w.sendToJava = vi.fn();
-    const { rerender } = renderHook(
-      ({ model }) => useGeminiPlanUsage('gemini', model),
-      { initialProps: { model: 'gemini-3.7-flash-high' } },
-    );
-    expect(w.sendToJava).toHaveBeenLastCalledWith('get_gemini_plan_usage:gemini-3.7-flash-high');
+  it('omits out-of-range reset dates and rejects an unrenderable fetch timestamp', () => {
+    const send = vi.fn();
+    window.sendToJava = send;
+    const first = renderHook(useGeminiPlanUsage);
+    act(() => reply(send.mock.calls[0][0], { ...SNAPSHOT, fetchedAt: 1e20 }));
+    expect(first.result.current).toEqual({ status: 'unavailable', reasonCode: 'query_failed' });
 
-    // Switch to the other billing family → the next poll asks for THAT family
-    rerender({ model: 'claude-sonnet-4-6' });
-    expect(w.sendToJava).toHaveBeenLastCalledWith('get_gemini_plan_usage:claude-sonnet-4-6');
+    const second = renderHook(useGeminiPlanUsage);
+    act(() => reply(send.mock.calls[1][0], {
+      ...SNAPSHOT, windows: [{ ...SNAPSHOT.windows[0], resetsAt: 1e20 }],
+    }));
+    expect(second.result.current).toEqual({ ...SNAPSHOT, windows: [SNAPSHOT.windows[0]] });
   });
 
-  it('exposes the family windows for the shared window switcher (5h vs weekly)', () => {
-    w.sendToJava = vi.fn();
-    const { result } = renderHook(() =>
-      useGeminiPlanUsage('gemini', 'gemini-3.7-flash-high'));
-
-    act(() => {
-      w.updateGeminiPlanUsage?.(JSON.stringify(presentPayload));
-    });
-    const snapshot = result.current.snapshot;
-    expect(snapshot?.windows?.map((win: CapacityWindow) => win.id))
-      .toEqual(['gemini-5h', 'gemini-weekly']);
-    expect(resolveDisplayWindow(snapshot!, 'gemini-5h').capacityPct).toBe(58);
-    expect(resolveDisplayWindow(snapshot!, 'gemini-weekly').capacityPct).toBe(23.83);
+  it('leaves loading on refused bridge dispatch', () => {
+    window.sendToJava = vi.fn(() => false);
+    const { result } = renderHook(useGeminiPlanUsage);
+    expect(result.current).toEqual({ status: 'unavailable', reasonCode: 'query_failed' });
   });
 
-  it('installs the exact contracted JS callback global (review M1: bridge wiring)', () => {
-    // Java pushes through `window.updateGeminiPlanUsage` — pinned byte-identical
-    // on the Java side by GeminiPlanUsageHandlerCallbackTest.
-    w.sendToJava = vi.fn();
-    renderHook(() => useGeminiPlanUsage('gemini', 'gemini-3.7-flash-high'));
-    expect(typeof w.updateGeminiPlanUsage).toBe('function');
-  });
-
-  it('repolls on the pinned 120s cadence and stops after unmount (review L6)', () => {
+  it('times out if Java never replies, without polling or accepting the late response', () => {
     vi.useFakeTimers();
-    try {
-      w.sendToJava = vi.fn();
-      const { unmount } = renderHook(() =>
-        useGeminiPlanUsage('gemini', 'gemini-3.7-flash-high'));
-      expect(w.sendToJava).toHaveBeenCalledTimes(1); // initial poll
-
-      act(() => { vi.advanceTimersByTime(119_999); });
-      expect(w.sendToJava).toHaveBeenCalledTimes(1);
-
-      act(() => { vi.advanceTimersByTime(1); });
-      expect(w.sendToJava).toHaveBeenCalledTimes(2); // exactly one repoll at 120s
-
-      unmount();
-      act(() => { vi.advanceTimersByTime(10 * 120_000); });
-      expect(w.sendToJava).toHaveBeenCalledTimes(2); // interval cleared on unmount
-    } finally {
-      vi.useRealTimers();
-    }
+    const send = vi.fn();
+    window.sendToJava = send;
+    const { result } = renderHook(useGeminiPlanUsage);
+    act(() => vi.advanceTimersByTime(120_000));
+    expect(send).toHaveBeenCalledTimes(1);
+    act(() => reply(send.mock.calls[0][0], SNAPSHOT));
+    expect(result.current).toEqual({ status: 'unavailable', reasonCode: 'timeout' });
   });
 });

@@ -21,6 +21,8 @@ public class CodexSkillServicePathTest {
         Path outer = temporary.getRoot().toPath();
         Files.createDirectory(outer.resolve(".git"));
         Path linked = Files.createDirectory(outer.resolve("linked"));
+        Path worktreeGitDir = Files.createDirectories(outer.resolve(".git/worktrees/linked"));
+        Files.writeString(worktreeGitDir.resolve("HEAD"), "ref: refs/heads/linked\n");
         Files.writeString(linked.resolve(".git"), "gitdir: ../.git/worktrees/linked\n");
         Path cwd = Files.createDirectories(linked.resolve("a/b/c/d"));
         Path skill = createSkill(linked, "linked-root");
@@ -33,7 +35,7 @@ public class CodexSkillServicePathTest {
 
     @Test public void allAncestorsThroughRepositoryRootAreManageable() throws Exception {
         Path repo = temporary.getRoot().toPath();
-        Files.createDirectory(repo.resolve(".git"));
+        createRealGitDirectory(repo);
         Path intermediate = Files.createDirectory(repo.resolve("modules"));
         Path cwd = Files.createDirectories(intermediate.resolve("a/b/c/d/e"));
         for (Path directory : List.of(repo, intermediate, cwd)) {
@@ -51,6 +53,28 @@ public class CodexSkillServicePathTest {
         assertNull(CodexSkillService.findRepoRoot(cwd.toString()));
         assertTrue(CodexSkillService.isToggleSkillPathAllowed(currentSkill.toString(), cwd.toString()));
         assertFalse(CodexSkillService.isToggleSkillPathAllowed(parentSkill.toString(), cwd.toString()));
+    }
+
+    @Test public void corruptGitEntriesDoNotFakeARepositoryRoot() throws Exception {
+        Path parent = temporary.getRoot().toPath();
+        // A leftover empty .git directory and a dangling worktree gitfile are junk git rejects,
+        // matching git discovery, which keeps searching or reports no repository for them.
+        Files.createDirectory(parent.resolve(".git"));
+        Path linked = Files.createDirectory(parent.resolve("dangling"));
+        Files.writeString(linked.resolve(".git"), "gitdir: ../.git/worktrees/gone\n");
+        Path cwd = Files.createDirectories(parent.resolve("a/b/c/d"));
+        Path parentSkill = createSkill(parent, "parent");
+        Path currentSkill = createSkill(cwd, "current");
+
+        assertNull(CodexSkillService.findRepoRoot(cwd.toString()));
+        assertNull(CodexSkillService.findRepoRoot(linked.toString()));
+        assertTrue(CodexSkillService.isToggleSkillPathAllowed(currentSkill.toString(), cwd.toString()));
+        assertFalse(CodexSkillService.isToggleSkillPathAllowed(parentSkill.toString(), cwd.toString()));
+    }
+
+    private void createRealGitDirectory(Path repo) throws Exception {
+        Files.createDirectories(repo.resolve(".git"));
+        Files.writeString(repo.resolve(".git/HEAD"), "ref: refs/heads/main\n");
     }
 
     private Path createSkill(Path directory, String name) throws Exception {

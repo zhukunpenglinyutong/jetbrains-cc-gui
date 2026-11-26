@@ -1,102 +1,85 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { parseCapacityPayload, type PlanUsageSnapshot } from '../utils/planUsagePace';
+import { useEffect, useState } from 'react';
+import { sendBridgeEvent } from '../utils/bridge';
 
-export type GeminiPlanUsageState = {
-  status: 'idle' | 'loading' | 'ready' | 'unavailable';
-  snapshot: PlanUsageSnapshot | null;
-};
+const BUCKET_IDS = ['gemini-5h', 'gemini-weekly', 'gemini-argon-wtu-weekly', '3p-5h', '3p-weekly'] as const;
+// Allow for cold Node discovery and the bounded bridge probe before treating the reply as lost.
+const REQUEST_TIMEOUT_MS = 90_000;
 
-const EMPTY: GeminiPlanUsageState = { status: 'idle', snapshot: null };
+type BucketId = typeof BUCKET_IDS[number];
 
-/**
- * Apply one poll result. Until the first present payload the bar stays hidden:
- * backends without quota data (CLI absent, not logged in, probe errors) would
- * otherwise show a permanent "Usage —" dash.
- */
-function applySnapshot(
-  prev: GeminiPlanUsageState,
-  snap: PlanUsageSnapshot,
-): GeminiPlanUsageState {
-  if (snap.present) {
-    return { status: 'ready', snapshot: snap };
-  }
-  if (!prev.snapshot?.present) {
-    return EMPTY;
-  }
-  return { status: 'unavailable', snapshot: snap };
+interface GeminiQuotaWindow {
+  id: BucketId;
+  remainingPercent: number;
+  resetsAt?: number;
 }
 
-/**
- * Gemini (Antigravity CLI) plan usage for ContextBar via the Java bridge
- * ({@code get_gemini_plan_usage:<slug>} → zero-cost {@code agy -p "/usage"}
- * probe resolved for the selected model's billing family). The selected model
- * slug rides the poll so the Java cache keys the snapshot by billing family
- * and a family switch re-probes instead of serving the other family's quota.
- */
-export function useGeminiPlanUsage(currentProvider: string, selectedModel?: string) {
-  const [state, setState] = useState<GeminiPlanUsageState>(EMPTY);
-  const genRef = useRef(0);
-  const handlerRef = useRef<((json: string) => void) | null>(null);
+type GeminiQuotaSnapshot =
+  | { status: 'ok'; fetchedAt: number; windows: GeminiQuotaWindow[] }
+  | { status: 'unavailable'; reasonCode: string; minimumVersion?: string };
 
-  const refresh = useCallback(() => {
-    if (currentProvider !== 'gemini') {
-      setState(EMPTY);
-      return;
-    }
-    const gen = ++genRef.current;
-    // Keep the last data while re-polling; stay hidden until the first payload.
-    setState((prev) => (prev.snapshot?.present ? prev : EMPTY));
+const UNAVAILABLE: GeminiQuotaSnapshot = { status: 'unavailable', reasonCode: 'query_failed' };
+const pending = new Map<string, (json: string) => void>();
+let nextRequestId = 0;
 
-    const w = window as unknown as {
-      updateGeminiPlanUsage?: (json: string) => void;
-      sendToJava?: (cmd: string) => void;
-    };
+function isTimestamp(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(new Date(value).getTime());
+}
 
-    const handler = (jsonStr: string) => {
-      if (gen !== genRef.current) return;
-      try {
-        const data = typeof jsonStr === 'string' ? JSON.parse(jsonStr) : jsonStr;
-        setState((prev) => applySnapshot(prev, parseCapacityPayload(data)));
-      } catch {
-        setState((prev) =>
-          applySnapshot(prev, { present: false, message: 'Usage unavailable' }));
-      }
-    };
+function parseSnapshot(json: string): GeminiQuotaSnapshot {
+  const data = JSON.parse(json);
+  if (data?.status === 'unavailable' && typeof data.reasonCode === 'string') {
+    const minimumVersion = typeof data.minimumVersion === 'string' && /^[0-9]+\.[0-9]+\.[0-9]+$/.test(data.minimumVersion)
+      ? data.minimumVersion : undefined;
+    if (data.reasonCode === 'cli_outdated' && !minimumVersion) return UNAVAILABLE;
+    return { status: 'unavailable', reasonCode: data.reasonCode, minimumVersion };
+  }
+  if (data?.status !== 'ok' || !isTimestamp(data.fetchedAt) || !Array.isArray(data.windows)) {
+    return UNAVAILABLE;
+  }
+  const byId = new Map<string, GeminiQuotaWindow>();
+  for (const row of data.windows) {
+    if (!row || !BUCKET_IDS.includes(row.id) || byId.has(row.id)
+      || !Number.isFinite(row.remainingPercent) || row.remainingPercent < 0 || row.remainingPercent > 100) continue;
+    byId.set(row.id, {
+      id: row.id,
+      remainingPercent: row.remainingPercent,
+      resetsAt: isTimestamp(row.resetsAt) ? row.resetsAt : undefined,
+    });
+  }
+  const windows = [...byId.values()];
+  return windows.length ? { status: 'ok', fetchedAt: data.fetchedAt, windows } : UNAVAILABLE;
+}
 
-    handlerRef.current = handler;
-    w.updateGeminiPlanUsage = (json: string) => {
-      if (handlerRef.current) {
-        handlerRef.current(json);
-      }
-    };
+function receiveQuota(requestId: string, json: string) {
+  pending.get(requestId)?.(json);
+}
 
-    try {
-      w.sendToJava?.(`get_gemini_plan_usage:${selectedModel ?? ''}`);
-    } catch {
-      if (gen === genRef.current) {
-        setState((prev) =>
-          applySnapshot(prev, { present: false, message: 'Usage unavailable' }));
-      }
-    }
-  }, [currentProvider, selectedModel]);
+/** Ask for quota only while the Antigravity panel is open. */
+export function useGeminiPlanUsage() {
+  const [quota, setQuota] = useState<GeminiQuotaSnapshot | null>(null);
 
   useEffect(() => {
-    void refresh();
-    if (currentProvider !== 'gemini') {
-      return () => {
-        genRef.current += 1;
-      };
-    }
-    const id = window.setInterval(() => {
-      void refresh();
-    }, 120_000);
-    return () => {
-      window.clearInterval(id);
-      genRef.current += 1;
+    window.updateGeminiPlanUsage = receiveQuota;
+    const id = String(++nextRequestId);
+    const finish = (snapshot: GeminiQuotaSnapshot) => {
+      if (!pending.delete(id)) return;
+      window.clearTimeout(timer);
+      setQuota(snapshot);
     };
-  }, [currentProvider, refresh]);
+    const timer = window.setTimeout(() => finish({ status: 'unavailable', reasonCode: 'timeout' }), REQUEST_TIMEOUT_MS);
+    pending.set(id, (json) => {
+      try {
+        finish(parseSnapshot(json));
+      } catch {
+        finish(UNAVAILABLE);
+      }
+    });
+    if (!sendBridgeEvent('get_gemini_plan_usage', id)) finish(UNAVAILABLE);
+    return () => {
+      pending.delete(id);
+      window.clearTimeout(timer);
+    };
+  }, []);
 
-  return { ...state, refresh };
+  return quota;
 }
-
-export type UseGeminiPlanUsageReturn = ReturnType<typeof useGeminiPlanUsage>;

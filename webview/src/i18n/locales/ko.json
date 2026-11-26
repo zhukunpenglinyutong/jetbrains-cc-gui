@@ -1535,6 +1535,21 @@
       "empty": "사용 가능한 제공자 없음",
       "switched": "{{provider}}(으)로 전환됨"
     },
+    "antigravityQuota": {
+      "title": "Antigravity 할당량",
+      "cliMissing": "할당량을 보려면 Antigravity CLI(agy)를 설치하세요.",
+      "cliOutdated": "Antigravity CLI {{version}} 이상이 필요합니다. agy update를 실행하세요.",
+      "noQuota": "할당량이 반환되지 않았습니다. agy에 로그인한 계정을 확인하세요.",
+      "timeout": "할당량 조회 시간이 초과되었습니다. 이 패널을 다시 열어 시도하세요.",
+      "queryFailed": "할당량을 가져올 수 없습니다. 이 패널을 다시 열어 시도하세요.",
+      "buckets": {
+        "gemini-5h": "Gemini · 5시간",
+        "gemini-weekly": "Gemini · 주간",
+        "gemini-argon-wtu-weekly": "Gemini Argon · 주간",
+        "3p-5h": "Claude 및 GPT · 5시간",
+        "3p-weekly": "Claude 및 GPT · 주간"
+      }
+    },
     "codexQuota": {
       "title": "Codex 쿼터",
       "loading": "쿼터를 불러오는 중...",

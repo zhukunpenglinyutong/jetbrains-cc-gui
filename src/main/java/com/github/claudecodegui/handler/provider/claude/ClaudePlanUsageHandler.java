@@ -10,7 +10,7 @@ import com.intellij.openapi.application.ApplicationManager;
 /**
  * Bridges the webview's {@code get_claude_plan_usage} poll to
  * {@link ClaudePlanUsageService} and pushes the snapshot back via
- * {@code window.updateClaudePlanUsage}. Mirrors {@code GeminiPlanUsageHandler}.
+ * {@code window.updateClaudePlanUsage}.
  *
  * <p>The poll's content is an opaque request id (the webview's poll
  * generation); it is echoed as {@code request_id} so the webview can discard

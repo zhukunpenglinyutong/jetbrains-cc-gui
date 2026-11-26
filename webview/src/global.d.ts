@@ -815,6 +815,9 @@ interface Window {
    */
   updateCodexSubscriptionQuota?: (json: string) => void;
 
+  /** Reply to the Antigravity quota request identified by requestId. */
+  updateGeminiPlanUsage?: (requestId: string, json: string) => void;
+
   /**
    * Update active Codex provider
    */

@@ -121,6 +121,28 @@ async function installBridgeMocks(page: Page, customModels = [LONG_MODEL]) {
       if (message.startsWith('get_node_processes:')) respond('updateNodeProcesses', processSnapshot);
       if (message.startsWith('get_providers:')) respond('updateProviders', claudeProviders);
       if (message.startsWith('get_codex_providers:')) respond('updateCodexProviders', codexProviders);
+      if (message.startsWith('create_new_session:')) {
+        const { transitionToken } = JSON.parse(message.slice('create_new_session:'.length)) as { transitionToken: string };
+        // A provider selection commits only after Java accepts the new session.
+        window.setTimeout(() => {
+          window.sessionTransitionStarted?.('', '', transitionToken);
+          window.clearMessages?.(undefined, transitionToken);
+          window.historyLoadComplete?.(0, transitionToken);
+        }, 0);
+      }
+      if (message.startsWith('get_gemini_plan_usage:')) {
+        const requestId = message.slice('get_gemini_plan_usage:'.length);
+        window.updateGeminiPlanUsage?.(requestId, JSON.stringify({
+          status: 'ok', fetchedAt: Date.now(),
+          windows: [
+            { id: 'gemini-5h', remainingPercent: 100, resetsAt: Date.now() + 18_000_000 },
+            { id: 'gemini-weekly', remainingPercent: 75, resetsAt: Date.now() + 604_800_000 },
+            { id: 'gemini-argon-wtu-weekly', remainingPercent: 80, resetsAt: Date.now() + 604_800_000 },
+            { id: '3p-5h', remainingPercent: 0, resetsAt: Date.now() + 18_000_000 },
+            { id: '3p-weekly', remainingPercent: 10, resetsAt: Date.now() + 604_800_000 },
+          ],
+        }));
+      }
       if (message.startsWith('get_session_suppliers:')) {
         const request = JSON.parse(message.slice('get_session_suppliers:'.length));
         const providers = request.provider === 'codex' ? codexProviders : claudeProviders;
@@ -297,6 +319,52 @@ test('Codex quota stays within the viewport without moving provider rows', async
 test('Codex quota stays readable when the viewport is both narrow and short', async ({ page }) => {
   await page.setViewportSize({ width: 393, height: 365 });
   await expectCodexQuotaToLeaveRowsClickable(page);
+});
+
+test('Antigravity quota stays open as the pointer crosses the menu border', async ({ page }) => {
+  await page.setViewportSize({ width: 900, height: 650 });
+  await page.goto('/');
+  await page.locator('.button-area-left .selector-button').nth(1).click();
+  const dropdown = page.locator('.provider-dropdown');
+  const row = dropdown.getByRole('menuitemradio', { name: 'Antigravity CLI', exact: true });
+  await row.hover();
+  const panel = dropdown.getByRole('region', { name: 'Antigravity quota' });
+  await expect(panel.getByText('Antigravity quota')).toBeVisible();
+  const menuBox = (await dropdown.boundingBox())!;
+  const panelBox = (await panel.boundingBox())!;
+  const edge = menuBox.x + menuBox.width;
+  expect(Math.abs(panelBox.x - edge)).toBeLessThan(0.5);
+  const y = panelBox.y + 30;
+  await page.mouse.move(edge - 8, y, { steps: 12 });
+  await page.mouse.move(edge + 8, y, { steps: 16 });
+  await expect(panel.getByText('Antigravity quota')).toBeVisible();
+});
+
+test('Antigravity quota remains reachable and scrollable in a narrow, short tool window', async ({ page }) => {
+  await page.setViewportSize({ width: 393, height: 365 });
+  await page.addInitScript(() => localStorage.setItem('fontSizeLevel', '6'));
+  await page.goto('/');
+  const providerButton = page.locator('.button-area-left .selector-button').nth(1);
+  await providerButton.click();
+  const dropdown = page.locator('.provider-dropdown');
+  const row = dropdown.locator('[data-provider-id="gemini"]');
+  await row.hover();
+  const panel = dropdown.getByRole('region', { name: 'Antigravity quota' });
+  await expect(panel.getByText('Gemini Argon · Weekly')).toBeAttached();
+  await expectInsideViewport(page, panel, 'Antigravity quota');
+  expect(await panel.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+  expect(await panel.evaluate((node) => node.scrollHeight > node.clientHeight)).toBe(true);
+
+  await row.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(panel).toBeFocused();
+  await page.keyboard.press('End');
+  await expect(panel.getByText(/^10% remaining/)).toBeInViewport();
+  await page.keyboard.press('ArrowLeft');
+  await expect(row).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.button-area').first()).toHaveAttribute('data-provider', 'gemini');
+  await expect(providerButton).toHaveAttribute('aria-expanded', 'false');
 });
 
 test('tabbing from a pointer-opened provider menu continues through the toolbar', async ({ page }) => {
