@@ -2184,12 +2184,9 @@
   },
   "tools": {
     "browserAccessHint": {
-      "title": "Codex 无法控制你的浏览器",
-      "description": "此错误由 Codex 的浏览器工具（cua_repl）报告，而非 CC GUI。该工具无法连接到它的浏览器访问服务（browser access host），或无法验证页面网址。CC GUI v{{version}} 不提供此连接。",
-      "optionsTitle": "你可以这样做：",
-      "desktopOption": "请直接在 Codex 桌面应用中执行此浏览器任务，不要通过 CC GUI。",
-      "manualOption": "或在此继续但不使用浏览器控制，例如粘贴页面内容或附加文件。",
-      "note": "重新打开浏览器或更改 CC GUI 权限大概率无法解决此问题。"
+      "title": "此浏览器错误发生在 CC GUI 之外",
+      "description": "外部浏览器工具无法访问该页面。这不是 CC GUI 的错误。",
+      "report": "请反馈给该工具的提供方。"
     },
     "toolCall": "工具调用",
     "runCommand": "运行命令",

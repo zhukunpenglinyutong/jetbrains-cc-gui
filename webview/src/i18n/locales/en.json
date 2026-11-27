@@ -2191,12 +2191,9 @@
   },
   "tools": {
     "browserAccessHint": {
-      "title": "Codex couldn't control your browser",
-      "description": "This error was reported by Codex's browser tool (cua_repl), not by CC GUI. The tool couldn't connect to its browser access host or verify the page address. CC GUI v{{version}} does not provide that connection.",
-      "optionsTitle": "What you can do:",
-      "desktopOption": "Run this browser task directly in the Codex desktop app, not through CC GUI.",
-      "manualOption": "Or continue here without browser control, for example by pasting the page content or attaching a file.",
-      "note": "Reopening the browser or changing CC GUI permissions is unlikely to help."
+      "title": "This browser error happened outside CC GUI",
+      "description": "An external browser tool could not access the page. This is not a CC GUI error.",
+      "report": "Please report it to the provider of that tool."
     },
     "toolCall": "Tool Call",
     "runCommand": "Run Command",

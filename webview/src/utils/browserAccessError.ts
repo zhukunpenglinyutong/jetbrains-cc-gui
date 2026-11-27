@@ -8,7 +8,7 @@ const BROWSER_ACCESS_ERRORS = [
   'could not verify whether the current browser url is allowed',
 ];
 
-/** A failed call of Codex's browser tool (cua_repl) that could not reach the user's browser. */
+/** A failed call of an external browser tool (cua_repl) that could not reach the user's browser. */
 export function isBrowserAccessError(
   name: string | undefined,
   input: ToolInput | undefined,

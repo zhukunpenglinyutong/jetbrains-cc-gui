@@ -1726,12 +1726,9 @@
   },
   "tools": {
     "browserAccessHint": {
-      "title": "Codex no pudo controlar tu navegador",
-      "description": "Este error lo notificó la herramienta de navegador de Codex (cua_repl), no CC GUI. La herramienta no pudo conectarse a su host de acceso al navegador ni verificar la dirección de la página. CC GUI v{{version}} no proporciona esa conexión.",
-      "optionsTitle": "Qué puedes hacer:",
-      "desktopOption": "Ejecuta esta tarea de navegador directamente en la aplicación de escritorio de Codex, no a través de CC GUI.",
-      "manualOption": "O continúa aquí sin control del navegador, por ejemplo pegando el contenido de la página o adjuntando un archivo.",
-      "note": "Es poco probable que reabrir el navegador o cambiar los permisos de CC GUI sirva de algo."
+      "title": "Este error del navegador ocurrió fuera de CC GUI",
+      "description": "Una herramienta de navegador externa no pudo acceder a la página. No es un error de CC GUI.",
+      "report": "Informa de ello al proveedor de esa herramienta."
     },
     "toolCall": "Llamada de herramienta",
     "runCommand": "Ejecutar comando",
