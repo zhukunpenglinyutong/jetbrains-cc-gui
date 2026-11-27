@@ -1727,9 +1727,9 @@
   "tools": {
     "browserAccessHint": {
       "title": "Codex no pudo controlar tu navegador",
-      "description": "La herramienta de navegador de Codex (cua_repl) intentó acceder a Chrome/Edge, pero no pudo conectarse al host de acceso al navegador ni verificar la dirección de la página.",
+      "description": "Este error lo notificó la herramienta de navegador de Codex (cua_repl), no CC GUI. La herramienta no pudo conectarse a su host de acceso al navegador ni verificar la dirección de la página. CC GUI v{{version}} no proporciona esa conexión.",
       "optionsTitle": "Qué puedes hacer:",
-      "desktopOption": "Usa la aplicación de escritorio oficial de Codex para esta tarea en el navegador.",
+      "desktopOption": "Ejecuta esta tarea de navegador directamente en la aplicación de escritorio de Codex, no a través de CC GUI.",
       "manualOption": "O continúa aquí sin control del navegador, por ejemplo pegando el contenido de la página o adjuntando un archivo.",
       "note": "Es poco probable que reabrir el navegador o cambiar los permisos de CC GUI sirva de algo."
     },

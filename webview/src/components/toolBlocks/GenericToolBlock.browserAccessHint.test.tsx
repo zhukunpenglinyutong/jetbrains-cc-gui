@@ -1,6 +1,7 @@
 import { render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import GenericToolBlock from './GenericToolBlock';
+import { APP_VERSION } from '../../version/version';
 import en from '../../i18n/locales/en.json';
 import es from '../../i18n/locales/es.json';
 import fr from '../../i18n/locales/fr.json';
@@ -13,7 +14,9 @@ import zh from '../../i18n/locales/zh.json';
 import zhTW from '../../i18n/locales/zh-TW.json';
 
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({
+    t: (key: string, options?: { version?: string }) => options?.version ? `${key}:${options.version}` : key,
+  }),
 }));
 vi.mock('../../hooks/useIsToolDenied', () => ({ useIsToolDenied: () => false }));
 vi.mock('../../utils/bridge', () => ({ openFile: vi.fn() }));
@@ -36,6 +39,11 @@ describe('browser access hint', () => {
     for (const key of ['title', 'description', 'optionsTitle', 'desktopOption', 'manualOption', 'note']) {
       expect(text).toContain(`tools.browserAccessHint.${key}`);
     }
+  });
+
+  it('names the running CC GUI version', () => {
+    expect(hint(renderCall('cua_repl', HOST_ERROR))?.textContent)
+      .toContain(`tools.browserAccessHint.description:${APP_VERSION}`);
   });
 
   it('recognizes the error inside MCP text blocks', () => {
@@ -61,10 +69,11 @@ describe('browser access hint', () => {
   it('keeps the agreed English wording', () => {
     expect(en.tools.browserAccessHint).toEqual({
       title: 'Codex couldn\'t control your browser',
-      description: 'Codex\'s browser tool (cua_repl) tried to access Chrome/Edge, but couldn\'t connect to '
-        + 'the browser access host or verify the page address.',
+      description: 'This error was reported by Codex\x27s browser tool (cua_repl), not by CC GUI. The tool couldn\x27t '
+        + 'connect to its browser access host or verify the page address. CC GUI v{{version}} does not provide that '
+        + 'connection.',
       optionsTitle: 'What you can do:',
-      desktopOption: 'Use the official Codex desktop app for this browser task.',
+      desktopOption: 'Run this browser task directly in the Codex desktop app, not through CC GUI.',
       manualOption: 'Or continue here without browser control, for example by pasting the page content or '
         + 'attaching a file.',
       note: 'Reopening the browser or changing CC GUI permissions is unlikely to help.',
@@ -75,6 +84,8 @@ describe('browser access hint', () => {
     const messages: Record<string, string> = locale.tools.browserAccessHint;
     expect(Object.keys(messages)).toEqual(Object.keys(en.tools.browserAccessHint));
     expect(messages.description).toContain('cua_repl');
+    expect(messages.description).toContain('{{version}}');
+    expect(messages.description).not.toContain('Chrome');
     expect(messages.description).not.toBe(en.tools.browserAccessHint.description);
   });
 });

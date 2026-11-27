@@ -1727,9 +1727,9 @@
   "tools": {
     "browserAccessHint": {
       "title": "Codex n'a pas pu contrôler votre navigateur",
-      "description": "L'outil de navigation de Codex (cua_repl) a tenté d'accéder à Chrome/Edge, mais n'a pas pu se connecter à l'hôte d'accès au navigateur ou vérifier l'adresse de la page.",
+      "description": "Cette erreur a été signalée par l'outil de navigation de Codex (cua_repl), et non par CC GUI. L'outil n'a pas pu se connecter à son hôte d'accès au navigateur ou vérifier l'adresse de la page. CC GUI v{{version}} ne fournit pas cette connexion.",
       "optionsTitle": "Ce que vous pouvez faire :",
-      "desktopOption": "Utilisez l'application de bureau officielle Codex pour cette tâche dans le navigateur.",
+      "desktopOption": "Exécutez cette tâche de navigation directement dans l'application de bureau Codex, sans passer par CC GUI.",
       "manualOption": "Ou continuez ici sans contrôle du navigateur, par exemple en collant le contenu de la page ou en joignant un fichier.",
       "note": "Rouvrir le navigateur ou modifier les autorisations de CC GUI a peu de chances de résoudre le problème."
     },

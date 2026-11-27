@@ -2192,9 +2192,9 @@
   "tools": {
     "browserAccessHint": {
       "title": "Codex couldn't control your browser",
-      "description": "Codex's browser tool (cua_repl) tried to access Chrome/Edge, but couldn't connect to the browser access host or verify the page address.",
+      "description": "This error was reported by Codex's browser tool (cua_repl), not by CC GUI. The tool couldn't connect to its browser access host or verify the page address. CC GUI v{{version}} does not provide that connection.",
       "optionsTitle": "What you can do:",
-      "desktopOption": "Use the official Codex desktop app for this browser task.",
+      "desktopOption": "Run this browser task directly in the Codex desktop app, not through CC GUI.",
       "manualOption": "Or continue here without browser control, for example by pasting the page content or attaching a file.",
       "note": "Reopening the browser or changing CC GUI permissions is unlikely to help."
     },

@@ -1747,9 +1747,9 @@
   "tools": {
     "browserAccessHint": {
       "title": "Codex 無法控制你的瀏覽器",
-      "description": "Codex 的瀏覽器工具（cua_repl）嘗試存取 Chrome/Edge，但無法連線到瀏覽器存取服務（browser access host），或無法驗證頁面網址。",
+      "description": "此錯誤由 Codex 的瀏覽器工具（cua_repl）回報，而非 CC GUI。該工具無法連線到它的瀏覽器存取服務（browser access host），或無法驗證頁面網址。CC GUI v{{version}} 不提供此連線。",
       "optionsTitle": "你可以這樣做：",
-      "desktopOption": "使用官方 Codex 桌面應用程式完成此瀏覽器工作。",
+      "desktopOption": "請直接在 Codex 桌面應用程式中執行此瀏覽器工作，不要透過 CC GUI。",
       "manualOption": "或在此繼續但不使用瀏覽器控制，例如貼上頁面內容或附加檔案。",
       "note": "重新開啟瀏覽器或變更 CC GUI 權限很可能無法解決此問題。"
     },
