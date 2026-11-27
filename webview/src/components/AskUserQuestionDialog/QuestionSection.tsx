@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next';
 import type { Question } from '../AskUserQuestionDialog';
 import MarkdownBlock from '../MarkdownBlock';
 import QuestionOptionRow from './QuestionOptionRow';
-import { OTHER_OPTION_MARKER, MAX_CUSTOM_INPUT_LENGTH } from './constants';
+import { OTHER_OPTION_MARKER } from './constants';
+import { customInputLimit } from './answerState';
 
 interface QuestionSectionProps {
   question: Question;
@@ -96,7 +97,7 @@ const QuestionSection = ({
             placeholder={t('askUserQuestion.customInputPlaceholder', '请输入您的答案...')}
             aria-label={t('askUserQuestion.customInputPlaceholder', '请输入您的答案...')}
             rows={3}
-            maxLength={MAX_CUSTOM_INPUT_LENGTH}
+            maxLength={customInputLimit(question)}
           />
         </div>
       )}

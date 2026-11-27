@@ -40,6 +40,15 @@ describe('preselected options', () => {
   });
 });
 
+describe('prefilled text answers', () => {
+  it('prefills nothing next to options, where the text would replace the choice unseen', () => {
+    const { initialCustomInputs } = buildInitialAnswerState({ requestId: 'r', toolName: 'AskUserQuestion',
+      questions: [{ id: 'ttl', question: 'Days?', header: '', multiSelect: false, defaultText: '30',
+        options: [{ label: 'A week', description: '' }] }] });
+    expect(initialCustomInputs.ttl).toBe('');
+  });
+});
+
 describe('withBlankOptionalAnswers', () => {
   const questions = normalizeQuestions([
     { id: 'extras', question: 'Extras?', header: '', options: [{ label: 'A', description: '' }], multiSelect: true, required: false },

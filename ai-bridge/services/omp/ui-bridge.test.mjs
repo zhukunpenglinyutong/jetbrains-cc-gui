@@ -691,3 +691,165 @@ test('an answer that comes after OMP withdrew a checkbox question is not replaye
     { checked: ['B'], typed: undefined },
   );
 });
+
+const ASK_FORM = `<form>
+  <p>Sessions live in memory and are lost on restart</p>
+  <fieldset>
+    <legend>Session store</legend>
+    <label><input type="radio" name="store" value="sqlite" checked> SQLite: one file</label>
+    <label><input type="radio" name="store" value="redis"> Redis: shared</label>
+  </fieldset>
+  <fieldset>
+    <legend>Extras</legend>
+    <label><input type="checkbox" name="extras" value="ci" checked> CI</label>
+    <label><input type="checkbox" name="extras" value="docs"> Docs</label>
+  </fieldset>
+  <label>Session lifetime (days) <input type="number" name="ttl_days" value="30" min="1"></label>
+  <input type="hidden" name="ticket" value="42">
+</form>`;
+
+/**
+ * The question dialog as the user submits it: `replies` by question text, and
+ * every other question the way it opened (preselected options, prefilled text).
+ */
+function fillingIn(replies = {}) {
+  return async ({ questions }) => Object.fromEntries(questions.map((question) => {
+    if (question.question in replies) return [question.id, replies[question.question]];
+    const selected = question.options.filter((option) => option.selected).map((option) => option.label);
+    return [question.id, question.multiSelect ? selected : selected[0] ?? question.defaultText ?? ''];
+  }));
+}
+
+test('an ask form is one dialog with a question per field, answered with the values by control name', async () => {
+  const { bridge, sent, asked, idle } = harness({
+    answers: fillingIn({
+      'Session store': 'Redis: shared',
+      Extras: ['CI', 'Docs', 'terraform'],
+      'Session lifetime (days)': '45',
+    }),
+  });
+  bridge.handle({ type: 'extension_ui_request', id: 'ui-1', method: 'form', html: ASK_FORM });
+  await idle();
+
+  assert.deepEqual(asked.answers, [{
+    provider: 'omp',
+    questions: [
+      {
+        id: 'ui-1:0',
+        question: 'Session store',
+        header: '',
+        detail: 'Sessions live in memory and are lost on restart',
+        options: [
+          { label: 'SQLite: one file', description: '', selected: true },
+          { label: 'Redis: shared', description: '' },
+        ],
+        multiSelect: false,
+        required: false,
+      },
+      {
+        id: 'ui-1:1',
+        question: 'Extras',
+        header: '',
+        options: [{ label: 'CI', description: '', selected: true }, { label: 'Docs', description: '' }],
+        multiSelect: true,
+        required: false,
+      },
+      {
+        id: 'ui-1:2',
+        question: 'Session lifetime (days)',
+        header: '',
+        options: [],
+        multiSelect: false,
+        required: false,
+        defaultText: '30',
+      },
+    ],
+  }]);
+  // Labels go back as option values, typed text as the group's "Other" answer, a number input as a
+  // number. The hidden input is OMP's to add.
+  assert.deepEqual(sent, [{
+    type: 'extension_ui_response',
+    id: 'ui-1',
+    data: { store: 'redis', extras: ['ci', 'docs', 'terraform'], ttl_days: 45 },
+  }]);
+});
+
+test('a form submitted the way it opened answers with the form\'s own values', async () => {
+  const { bridge, sent, idle } = harness({ answers: fillingIn() });
+  bridge.handle({ type: 'extension_ui_request', id: 'ui-1', method: 'form', html: ASK_FORM });
+  await idle();
+  assert.deepEqual(sent.map((frame) => frame.data), [{ store: 'sqlite', extras: ['ci'], ttl_days: 30 }]);
+});
+
+test('a select, a lone checkbox and a blank text field go back in the shapes OMP accepts', async () => {
+  const { bridge, sent, asked, idle } = harness({ answers: fillingIn({ Region: 'Europe' }) });
+  bridge.handle({
+    type: 'extension_ui_request',
+    id: 'ui-1',
+    method: 'form',
+    html: `<form>
+      <label>Region <select name="region"><option value="eu">Europe<option value="us" selected>United States</select></label>
+      <label><input type="checkbox" name="notify" value="yes"> Email me when done</label>
+      <label>Notes <textarea name="notes"></textarea></label>
+    </form>`,
+  });
+  await idle();
+
+  assert.deepEqual(asked.answers[0].questions, [
+    {
+      id: 'ui-1:0',
+      question: 'Region',
+      header: '',
+      options: [{ label: 'Europe', description: '' }, { label: 'United States', description: '', selected: true }],
+      multiSelect: false,
+      // A select always holds one of its options, and nothing else.
+      required: true,
+      choiceOnly: true,
+    },
+    {
+      id: 'ui-1:1',
+      question: 'Email me when done',
+      header: '',
+      options: [{ label: 'Email me when done', description: '' }],
+      multiSelect: true,
+      required: false,
+      choiceOnly: true,
+    },
+    { id: 'ui-1:2', question: 'Notes', header: '', options: [], multiSelect: false, required: false },
+  ]);
+  // An unchecked checkbox is left out; a text field always has its text.
+  assert.deepEqual(sent.map((frame) => frame.data), [{ region: 'eu', notes: '' }]);
+});
+
+test('an answer that breaks its field is asked again with the reason, and only that field', async () => {
+  const rounds = [fillingIn({ 'Session lifetime (days)': '0' }), fillingIn({ 'Session lifetime (days)': '7' })];
+  const { bridge, sent, asked, idle } = harness({ answers: (input) => rounds.shift()(input) });
+  bridge.handle({ type: 'extension_ui_request', id: 'ui-1', method: 'form', html: ASK_FORM });
+  await idle();
+
+  assert.deepEqual(asked.answers[1].questions, [{
+    id: 'ui-1:2',
+    question: 'Session lifetime (days)',
+    header: '',
+    detail: '**Must be at least 1**',
+    options: [],
+    multiSelect: false,
+    required: false,
+    // The rejected answer is there to be corrected.
+    defaultText: '0',
+  }]);
+  assert.deepEqual(sent.map((frame) => frame.data), [{ store: 'sqlite', extras: ['ci'], ttl_days: 7 }]);
+});
+
+test('a dismissed form is cancelled, also while an answer is being corrected', async () => {
+  const dismissed = harness({ answers: async () => ({}) });
+  dismissed.bridge.handle({ type: 'extension_ui_request', id: 'ui-1', method: 'form', html: ASK_FORM });
+  await dismissed.idle();
+  assert.deepEqual(dismissed.sent, [{ type: 'extension_ui_response', id: 'ui-1', cancelled: true }]);
+
+  const rounds = [fillingIn({ 'Session lifetime (days)': 'soon' }), async () => null];
+  const corrected = harness({ answers: (input) => rounds.shift()(input) });
+  corrected.bridge.handle({ type: 'extension_ui_request', id: 'ui-2', method: 'form', html: ASK_FORM });
+  await corrected.idle();
+  assert.deepEqual(corrected.sent, [{ type: 'extension_ui_response', id: 'ui-2', cancelled: true }]);
+});

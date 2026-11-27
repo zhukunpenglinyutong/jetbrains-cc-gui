@@ -22,7 +22,7 @@
  *   { "type":"tool_execution_end", "toolCallId":"...", "isError":false, "result":{ "content":[...], "details":{...} } }
  *   { "type":"message_end", "message":{"role":"assistant","usage":{...}} }
  *   { "type":"command_output", "text":"..." }            local slash commands
- *   { "type":"extension_ui_request", "method":"select"|"confirm"|"input"|"editor", ... }
+ *   { "type":"extension_ui_request", "method":"select"|"confirm"|"input"|"editor"|"form", ... }
  *   { "type":"prompt_result", "id":"...", "status":"completed"|"aborted"|"error", "sessionSettled":true }
  *
  * Auth/config comes from OMP CLI native home (~/.omp).

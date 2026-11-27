@@ -27,13 +27,13 @@ const OPTIONS = [
 
 const OTHER_PLACEHOLDER = '请输入您的答案...';
 
-const renderDialog = (questions: AskUserQuestionRequest['questions']) => {
+const renderDialog = (questions: AskUserQuestionRequest['questions'], requestId = 'other-input-1') => {
   const onSubmit = vi.fn();
   const onCancel = vi.fn();
   render(
     <AskUserQuestionDialog
       isOpen
-      request={{ requestId: 'other-input-1', toolName: 'AskUserQuestion', questions }}
+      request={{ requestId, toolName: 'AskUserQuestion', questions }}
       onSubmit={onSubmit}
       onCancel={onCancel}
       timeoutSeconds={300}
@@ -171,5 +171,30 @@ describe('AskUserQuestionDialog answer encoding', () => {
 
     const [, answers] = onSubmit.mock.calls[0];
     expect(JSON.stringify(answers)).not.toContain(OTHER_OPTION_MARKER);
+  });
+});
+
+describe('AskUserQuestionDialog prefilled answer', () => {
+  it('opens with the prefilled text and submits it when it is left as it is', () => {
+    const { onSubmit } = renderDialog(
+      [{ question: 'Q', header: 'H', multiSelect: false, options: [], defaultText: '30' }],
+      'prefilled-kept',
+    );
+
+    expect(customBox().value).toBe('30');
+    submit();
+    expect(onSubmit).toHaveBeenCalledWith('prefilled-kept', { Q: '30' });
+  });
+
+  it('keeps a prefilled text longer than the typing limit whole while it is edited', () => {
+    const draft = 'x'.repeat(2500);
+    const { onSubmit } = renderDialog(
+      [{ question: 'Q', header: 'H', multiSelect: false, options: [], defaultText: draft }],
+      'prefilled-long',
+    );
+
+    fireEvent.change(customBox(), { target: { value: `y${draft.slice(1)}` } });
+    submit();
+    expect(onSubmit).toHaveBeenCalledWith('prefilled-long', { Q: `y${draft.slice(1)}` });
   });
 });

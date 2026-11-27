@@ -6,14 +6,15 @@ Drive the OMP CLI (`omp`, Oh My Pi) through its RPC mode instead of print mode, 
 
 ## Investigation findings
 
-Verified against `omp 18.18.6` and `18.20.0`. Where `18.12` differs it is noted; that version was not run here.
+Verified against `omp 18.18.6` and `18.20.0`. Where `18.12` differs it is noted; that version was not run here. The `form` request of the `ask` tool was verified against `omp 19.2.1`.
 
 - `omp --print --mode json` (the previous transport) has no back-channel. A tool that needs approval is refused, the `ask` tool is not registered, and images can only be passed as file paths the model is told to read.
 - `omp --mode rpc-ui` is a newline-delimited JSON protocol over stdio (not JSON-RPC). Commands go to stdin; stdout carries a `ready` frame, one `response` per command id, session events, `extension_ui_request` frames and `prompt_result`.
 - Approvals arrive as `extension_ui_request` with `method: "select"`, `title: "Allow tool: <name>\n<details>"` and the options `Approve` / `Approve <tool> for this session` / `Deny` (`Approve Once` plus grant choices in `always-ask-cached` mode).
 - An approval prompt carries no call id. Its details are whatever the tool's own formatter prints (`Command:` for `bash`, `Path:` and `Content:` for `write`, `File:` for `edit`, `Arguments:` for MCP tools); a tool without a formatter (`read`, `github`, ...) prints nothing. The prompt is written directly and the call's `tool_execution_start` goes through the event stream, so the prompt can arrive first.
-- The `ask` tool walks its form field by field: `select` for choices (with an `Other (type your own)` row followed by an `input`), `input` / `editor` for text.
-- A checkbox group has no request of its own. OMP sends its options as a `select`, toggles the option that comes back and sends the select again, until the answer is its `✔ Done selecting` row. The closing rows follow the options: "Other" then "Done" in 18.18 and later, "Done" then "Other" in 18.12. The title gains `(N selected) ` once something is selected; which options are checked is not in the frame. There is no "Done" row while nothing is selected in 18.12, and in later versions for a group marked `required`.
+- Up to omp 18 the `ask` tool walks its form field by field: `select` for choices (with an `Other (type your own)` row followed by an `input`), `input` / `editor` for text.
+- In that walk a checkbox group has no request of its own. OMP sends its options as a `select`, toggles the option that comes back and sends the select again, until the answer is its `✔ Done selecting` row. The closing rows follow the options: "Other" then "Done" in 18.18 and later, "Done" then "Other" in 18.12. The title gains `(N selected) ` once something is selected; which options are checked is not in the frame. There is no "Done" row while nothing is selected in 18.12, and in later versions for a group marked `required`.
+- From omp 19 on the `ask` tool sends its whole HTML form in one `extension_ui_request` with `method: "form"` and the form as `html`, and takes the submitted values back as `data`, by control name. OMP checks the reply against its own reading of the form and fails the tool call when it does not fit; there is no round for correcting a value. Extension prompts still use `select` / `confirm` / `input` / `editor`.
 - `--thinking <level>` accepts a level the model does not list and runs with the next lower one it has, or its lowest (`xhigh` on `[low, high, max]` runs as `high`).
 - `prompt` accepts `images: [{ type: "image", mimeType, data }]`. Inbound frames larger than the advertised 1 MiB frame size are accepted (tested with 3 MiB).
 - `get_session_stats` returns `sessionId` and `contextUsage.contextWindow` without a model call.
@@ -84,6 +85,7 @@ In a session file a call id can occur more than once (providers that number call
 - `select` / `confirm` / `input` / `editor` → question dialog with `provider: "omp"`. Text typed into a choice question is returned through OMP's "Other" row and its follow-up `input`. A `confirm`, and a `select` or checkbox group without the "Other" row, cannot take typed text: they are sent with `choiceOnly: true`, and the dialog shows no free-text box for them.
 - A checkbox group → one multi-select question. Before the dialog opens the bridge finds the preselected options (toggle one, read the count, toggle it back) and marks them `selected`, so the dialog opens with the form's own selection. After the dialog it replays the user's choice as toggles, sends typed text through "Other", and ends with "Done". Rounds that do not count toggles this way are shown one by one, as before.
 - An optional group can be submitted empty. The webview names the blank optional question in its answers (`withBlankOptionalAnswers`), because an empty answer map over the file IPC means "dismissed".
+- `form` (the `ask` tool from omp 19 on) → one question dialog with a question per named field. `html-form.js` reads the form with OMP's own HTML parsing and field rules, so both sides find the same fields, option values and value shapes. A radio group or a `<select>` is a single choice, a checkbox group a multi-select, an input or a textarea a typed answer that opens with the field's value (`defaultText`); preselected options open selected. The form text around a field (paragraphs, lists, `<pre>`, tables) is the question's `detail`, as Markdown. The reply carries option values for the chosen labels, typed text as a group's "Other" answer, and a number for a `number` / `range` input; a hidden input is left to OMP. An answer that breaks its field (`required`, `min` / `max`, `minlength` / `maxlength`, `email`, `url`, `pattern`) is asked again with the reason. Dismissing the dialog cancels the request.
 - A request OMP withdraws (`cancel`) gets no answer. A dialog still open when the turn ends does not keep the bridge process alive.
 
 ## Approval mode
@@ -115,8 +117,11 @@ The indicator asks for the selected model (`get_omp_plan_usage:<model>`). A mode
 ## Known limitations
 
 - Sessions started by the plugin have no OMP title; the history list falls back to the first prompt. Sessions titled in the OMP terminal UI show that title.
-- A checkbox group marked `required` with nothing preselected looks like a single choice until one option is picked. It is asked as a single choice first and then as a multi-select with that pick checked.
-- A radio group's preselected option is not in OMP's frame, so single-choice questions open with nothing selected.
+- With omp 18, a checkbox group marked `required` with nothing preselected looks like a single choice until one option is picked. It is asked as a single choice first and then as a multi-select with that pick checked.
+- With omp 18, a radio group's preselected option is not in OMP's frame, so single-choice questions open with nothing selected.
+- An `ask` form (omp 19) is asked one field per question, not shown as a whole form. Bold and italic are dropped, a picture is shown only from an `https:` URL (any other is named by its alt text), and option notes are not collected.
+- A form dialog that is dismissed or times out cancels the `ask` call; OMP's "submit the form's defaults on timeout" reply is not used.
+- `html-form.js` mirrors OMP's HTML parser and field rules and has to follow them when they change.
 - `always-ask-cached` is not in the picker. When OMP is configured for it, the plugin answers for the current call only.
 - `Edit` cards are built from OMP's display diff, one card per changed region.
 - Results of background subagents arrive through OMP's `wait` tool, not inside the `Task` card.
@@ -132,6 +137,7 @@ The indicator asks for the selected model (`get_omp_plan_usage:<model>`). A mode
 - `./gradlew test` and `./gradlew checkstyleMain`
 - Live turns through `OMP_USE_STDIN=true node channel-manager.js omp send` against `omp 18.18.6`, with a script answering the permission files the way the plugin does: resume, streaming usage, `todo` / `edit` / `write` / `task` mapping, approval allowed and denied, `ask`, image input, `/session`, stop during a running command.
 - The same way against `omp 18.20.0`: a checkbox question; under `always-ask`, `bash`, `write` and `edit` approvals, two parallel `bash` calls with one allowed and one denied (only the allowed one ran), and a parallel local and `ssh://` `read` (the dialog listed the `ssh://` call). The 18.12 row order, `confirm` and option-only `select` are covered by the bridge tests only.
+- A live turn through `runOmpTurn` against `omp 19.2.1` with scripted dialog answers: an `ask` form with a radio group, a checkbox group with typed text, a select, a lone checkbox, a number input and a hidden input, including a rejected number that was asked again. OMP returned the submitted `data`. The form reader was also compared with OMP's own parser source on 9 forms: the same fields, and 3600 random submissions accepted by OMP's reply check.
 - `node channel-manager.js omp listCommands <cwd>` and `omp getPlanUsage <model>` against the same installation.
 - The webview in a browser with a mocked bridge: Approvals row, effort levels per model, `ompApprovalMode` in the send payload, `/` list, plan-usage indicator.
 
