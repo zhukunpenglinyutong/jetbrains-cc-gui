@@ -1,5 +1,6 @@
 package com.github.claudecodegui.provider.minimax;
 
+import com.github.claudecodegui.provider.common.SessionHistoryNotFoundException;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import org.junit.Assume;
@@ -9,10 +10,13 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Base64;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class MiniMaxHistoryReaderTest {
@@ -321,5 +325,130 @@ public class MiniMaxHistoryReaderTest {
     public void resolveMinimaxHomeFallsBackToDefaultDotMinimax() {
         assertEquals(Path.of("C:\\Users\\tester", ".minimax"),
                 MiniMaxHistoryReader.resolveMinimaxHome(null, null, null, "C:\\Users\\tester"));
+    }
+
+    // ------------------------------------------------------------------
+    // mcode 0.7.x "v2-final-dated-session" layout (manifest.json + messages.jsonl)
+    // ------------------------------------------------------------------
+
+    private static String base64SessionId(String sessionId) {
+        return Base64.getEncoder().encodeToString(sessionId.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static Path writeNewLayoutSession(Path home, String dayDirName, String sessionId,
+                                              String manifestJson, String messagesJsonl) throws Exception {
+        Path sessionDir = home.resolve("v2").resolve("sessions")
+                .resolve("2026").resolve("11").resolve("25")
+                .resolve(dayDirName + "-session_" + base64SessionId(sessionId));
+        Files.createDirectories(sessionDir);
+        Files.writeString(sessionDir.resolve("manifest.json"), manifestJson, StandardCharsets.UTF_8);
+        Files.writeString(sessionDir.resolve("messages.jsonl"), messagesJsonl, StandardCharsets.UTF_8);
+        return sessionDir;
+    }
+
+    @Test
+    public void listsAndLoadsNewLayoutSession() throws Exception {
+        Path home = Files.createTempDirectory("minimax-history-test");
+        String messages = ""
+                + "{\"message_id\":\"m1\",\"message\":{\"role\":\"user\",\"content\":["
+                + "{\"type\":\"text\",\"text\":\"<system-reminder>injected</system-reminder>"
+                + "<plugin-hook-context>context</plugin-hook-context>\\n\\n定制客运梳理\"}]}}\n"
+                + "{\"message_id\":\"m2\",\"message\":{\"role\":\"assistant\",\"content\":["
+                + "{\"type\":\"thinking\",\"thinking\":\"思考中\"},"
+                + "{\"type\":\"text\",\"text\":\"先看结构\"},"
+                + "{\"type\":\"toolCall\",\"id\":\"call-1\",\"name\":\"bash\","
+                + "\"arguments\":{\"command\":\"ls\"}}]}}\n"
+                + "{\"message_id\":\"m3\",\"message\":{\"role\":\"toolResult\",\"toolCallId\":\"call-1\","
+                + "\"content\":[{\"type\":\"text\",\"text\":\"file1.txt\"}]}}\n"
+                + "{\"message_id\":\"m4\",\"message\":{\"role\":\"custom\",\"content\":[\"<\",\"s\"]}}\n"
+                + "{\"message_id\":\"m5\",\"message\":{\"role\":\"user\",\"content\":["
+                + "{\"type\":\"text\",\"text\":\"<system-reminder>only reminder</system-reminder>\"}]}}\n"
+                + "{\"message_id\":\"m6\",\"message\":{\"role\":\"user\",\"content\":["
+                + "{\"type\":\"text\",\"text\":\"第二个问题\"}]}}\n";
+        Path sessionDir = writeNewLayoutSession(home, "01-22-29-003", "mvs_new123",
+                """
+                        {"schemaVersion":1,"sessionId":"mvs_new123","createdAtMs":1000,"updatedAtMs":2000,
+                         "source":"local-runtime","layout":"v2-final-dated-session"}""",
+                messages);
+
+        MiniMaxHistoryReader reader = new MiniMaxHistoryReader(home, new Gson());
+
+        // Listing: no workspace persisted, yet the session must surface in a
+        // project-filtered list, with the stripped first prompt as its title.
+        List<MiniMaxHistoryReader.SessionInfo> listed =
+                reader.listSessionsForProject("E:\\some\\other\\project");
+        assertEquals(1, listed.size());
+        assertEquals("mvs_new123", listed.get(0).sessionId);
+        assertEquals("定制客运梳理", listed.get(0).title);
+        assertNull(listed.get(0).cwd);
+        assertEquals(6, listed.get(0).messageCount);
+        assertEquals(2000L, listed.get(0).lastTimestamp);
+
+        // Loading: restored transcript, cleaned and in order.
+        List<JsonObject> messages_loaded = reader.getSessionMessages("mvs_new123", "E:\\some\\other\\project");
+        assertEquals(6, messages_loaded.size());
+        assertEquals("user", messages_loaded.get(0).get("type").getAsString());
+        assertEquals("定制客运梳理", messages_loaded.get(0).getAsJsonObject("message")
+                .getAsJsonArray("content").get(0).getAsJsonObject().get("text").getAsString());
+        assertEquals("thinking", messages_loaded.get(1).getAsJsonObject("message")
+                .getAsJsonArray("content").get(0).getAsJsonObject().get("type").getAsString());
+        assertEquals("思考中", messages_loaded.get(1).getAsJsonObject("message")
+                .getAsJsonArray("content").get(0).getAsJsonObject().get("thinking").getAsString());
+        assertEquals("text", messages_loaded.get(2).getAsJsonObject("message")
+                .getAsJsonArray("content").get(0).getAsJsonObject().get("type").getAsString());
+        assertEquals("先看结构", messages_loaded.get(2).getAsJsonObject("message")
+                .getAsJsonArray("content").get(0).getAsJsonObject().get("text").getAsString());
+        JsonObject toolUse = messages_loaded.get(3).getAsJsonObject("message")
+                .getAsJsonArray("content").get(0).getAsJsonObject();
+        assertEquals("tool_use", toolUse.get("type").getAsString());
+        assertEquals("bash", toolUse.get("name").getAsString());
+        assertEquals("ls", toolUse.getAsJsonObject("input").get("command").getAsString());
+        JsonObject toolResult = messages_loaded.get(4).getAsJsonObject("message")
+                .getAsJsonArray("content").get(0).getAsJsonObject();
+        assertEquals("tool_result", toolResult.get("type").getAsString());
+        assertEquals("call-1", toolResult.get("tool_use_id").getAsString());
+        assertEquals("file1.txt", toolResult.get("content").getAsString());
+        assertEquals("user", messages_loaded.get(5).get("type").getAsString());
+        assertEquals("第二个问题", messages_loaded.get(5).getAsJsonObject("message")
+                .getAsJsonArray("content").get(0).getAsJsonObject().get("text").getAsString());
+
+        // The dir-name fast path must find the session for deletion too.
+        assertTrue(reader.deleteSession("mvs_new123", "E:\\some\\other\\project"));
+        assertFalse(Files.exists(sessionDir));
+    }
+
+    @Test
+    public void newLayoutMissingSessionBehavesLikeMissingHistory() throws Exception {
+        Path home = Files.createTempDirectory("minimax-history-test");
+        MiniMaxHistoryReader reader = new MiniMaxHistoryReader(home, new Gson());
+
+        // Ordinary loads and listings report nothing; strict loads raise NotFound
+        // so the orchestrator retires the stale session id.
+        assertTrue(reader.listSessionsForProject("/repo").isEmpty());
+        assertTrue(reader.getSessionMessages("mvs_missing", "/repo").isEmpty());
+        assertThrows(SessionHistoryNotFoundException.class,
+                () -> reader.getSessionMessages("mvs_missing", "/repo", () -> false));
+    }
+
+    @Test
+    public void newLayoutUnreadableManifestIsRetryableNotMissing() throws Exception {
+        Path home = Files.createTempDirectory("minimax-history-test");
+        String sessionId = "mvs_partial";
+        Path sessionDir = home.resolve("v2").resolve("sessions")
+                .resolve("2026").resolve("11").resolve("25")
+                .resolve("01-22-29-003-session_" + base64SessionId(sessionId));
+        Files.createDirectories(sessionDir);
+        Files.writeString(sessionDir.resolve("manifest.json"),
+                "{\"sessionId\":\"mvs_partial\", \"created", StandardCharsets.UTF_8);
+        Files.writeString(sessionDir.resolve("messages.jsonl"),
+                "{\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"saved\"}]}}\n",
+                StandardCharsets.UTF_8);
+
+        MiniMaxHistoryReader reader = new MiniMaxHistoryReader(home, new Gson());
+        // The dir name still identifies the session; the readable transcript wins.
+        List<JsonObject> messages = reader.getSessionMessages(sessionId, "/repo", () -> false);
+        assertEquals(1, messages.size());
+        assertEquals("saved", messages.get(0).getAsJsonObject("message")
+                .getAsJsonArray("content").get(0).getAsJsonObject().get("text").getAsString());
     }
 }
