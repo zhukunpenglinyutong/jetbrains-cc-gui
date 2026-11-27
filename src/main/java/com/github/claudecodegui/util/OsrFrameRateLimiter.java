@@ -10,6 +10,7 @@ import org.cef.handler.CefLifeSpanHandlerAdapter;
 
 import java.awt.Component;
 import java.awt.event.HierarchyEvent;
+import java.lang.reflect.Method;
 import java.util.function.BooleanSupplier;
 import java.util.function.IntConsumer;
 
@@ -55,6 +56,10 @@ final class OsrFrameRateLimiter {
             if (!browser.isOffScreenRendering()) {
                 return;
             }
+            Method setter = findFrameRateSetter();
+            if (setter == null) {
+                return;
+            }
             CefBrowser cefBrowser = browser.getCefBrowser();
             if (JBCefBrowserFactory.isRemoteDevelopmentBrowser(cefBrowser)) {
                 return;
@@ -62,7 +67,7 @@ final class OsrFrameRateLimiter {
             Component component = browser.getComponent();
             OsrFrameRateLimiter limiter = new OsrFrameRateLimiter(
                     component::isShowing,
-                    rate -> setFrameRate(cefBrowser, rate),
+                    rate -> setFrameRate(cefBrowser, setter, rate),
                     Registry.intValue(FRAME_RATE_REGISTRY_KEY, 0));
             component.addHierarchyListener(event -> limiter.onHierarchyChanged(event.getChangeFlags()));
             // Before its native peer exists the in-process browser drops the call and logs a CEF error.
@@ -104,13 +109,25 @@ final class OsrFrameRateLimiter {
         return registryFrameRate > 0 ? registryFrameRate : DEFAULT_FRAME_RATE;
     }
 
-    private static void setFrameRate(CefBrowser cefBrowser, int rate) {
+    /**
+     * Looked up reflectively: 2023.3 (233) JCEF has no setWindowlessFrameRate, and a direct call
+     * makes the Marketplace plugin verifier report the plugin as binary incompatible with 233.
+     */
+    static Method findFrameRateSetter() {
+        try {
+            return CefBrowser.class.getMethod("setWindowlessFrameRate", int.class);
+        } catch (NoSuchMethodException e) {
+            return null;
+        }
+    }
+
+    private static void setFrameRate(CefBrowser cefBrowser, Method setter, int rate) {
         if (JBCefBrowserFactory.isBrowserClosed(cefBrowser)) {
             return;
         }
         try {
-            cefBrowser.setWindowlessFrameRate(rate);
-        } catch (RuntimeException | LinkageError e) {
+            setter.invoke(cefBrowser, rate);
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
             LOG.debug("Failed to set the OSR frame rate to " + rate, e);
         }
     }
