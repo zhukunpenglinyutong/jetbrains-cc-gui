@@ -2190,6 +2190,11 @@
     "nativeStatus": "Native Codex MCP status"
   },
   "tools": {
+    "browserAccessHint": {
+      "title": "This browser error happened outside CC GUI",
+      "description": "An external browser tool could not access the page. This is not a CC GUI error.",
+      "report": "Please report it to the provider of that tool."
+    },
     "toolCall": "Tool Call",
     "runCommand": "Run Command",
     "commandRead": "Read {{path}}",

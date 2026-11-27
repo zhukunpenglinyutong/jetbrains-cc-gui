@@ -1808,6 +1808,11 @@
     "nativeStatus": "Native Codex MCP status"
   },
   "tools": {
+    "browserAccessHint": {
+      "title": "이 브라우저 오류는 CC GUI 외부에서 발생했습니다",
+      "description": "외부 브라우저 도구가 페이지에 접근하지 못했습니다. CC GUI의 오류가 아닙니다.",
+      "report": "해당 도구의 제공자에게 신고하세요."
+    },
     "toolCall": "도구 호출",
     "runCommand": "명령 실행",
     "commandRead": "{{path}} 읽기",

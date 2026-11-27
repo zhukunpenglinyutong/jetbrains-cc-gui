@@ -1864,6 +1864,11 @@
     "nativeStatus": "Native Codex MCP status"
   },
   "tools": {
+    "browserAccessHint": {
+      "title": "Este erro de navegador ocorreu fora do CC GUI",
+      "description": "Uma ferramenta de navegador externa não conseguiu acessar a página. Este não é um erro do CC GUI.",
+      "report": "Relate o problema ao fornecedor dessa ferramenta."
+    },
     "toolCall": "Chamada de Ferramenta",
     "runCommand": "Executar Comando",
     "commandRead": "Ler {{path}}",

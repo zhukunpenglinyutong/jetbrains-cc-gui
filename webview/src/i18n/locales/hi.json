@@ -1725,6 +1725,11 @@
     "nativeStatus": "Native Codex MCP status"
   },
   "tools": {
+    "browserAccessHint": {
+      "title": "यह ब्राउज़र त्रुटि CC GUI के बाहर हुई",
+      "description": "एक बाहरी ब्राउज़र टूल पेज तक नहीं पहुँच सका। यह CC GUI की त्रुटि नहीं है।",
+      "report": "कृपया इसकी रिपोर्ट उस टूल के प्रदाता को करें।"
+    },
     "toolCall": "उपकरण कॉल",
     "runCommand": "कमांड चलाएं",
     "commandRead": "{{path}} पढ़ें",

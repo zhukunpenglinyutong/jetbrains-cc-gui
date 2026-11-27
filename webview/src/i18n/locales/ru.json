@@ -1741,6 +1741,11 @@
     "nativeStatus": "Native Codex MCP status"
   },
   "tools": {
+    "browserAccessHint": {
+      "title": "Эта ошибка браузера возникла вне CC GUI",
+      "description": "Внешний браузерный инструмент не смог получить доступ к странице. Это не ошибка CC GUI.",
+      "report": "Сообщите о ней поставщику этого инструмента."
+    },
     "toolCall": "Вызываю инструмент",
     "runCommand": "Выполняю команду",
     "commandRead": "Прочитать {{path}}",

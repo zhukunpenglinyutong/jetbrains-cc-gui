@@ -1745,6 +1745,11 @@
     "nativeStatus": "原生 Codex MCP 狀態"
   },
   "tools": {
+    "browserAccessHint": {
+      "title": "此瀏覽器錯誤發生在 CC GUI 之外",
+      "description": "外部瀏覽器工具無法存取該頁面。這不是 CC GUI 的錯誤。",
+      "report": "請回報給該工具的提供者。"
+    },
     "toolCall": "工具調用",
     "runCommand": "運行命令",
     "commandRead": "讀取 {{path}}",

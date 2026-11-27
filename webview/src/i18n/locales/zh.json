@@ -2183,6 +2183,11 @@
     "nativeStatus": "原生 Codex MCP 状态"
   },
   "tools": {
+    "browserAccessHint": {
+      "title": "此浏览器错误发生在 CC GUI 之外",
+      "description": "外部浏览器工具无法访问该页面。这不是 CC GUI 的错误。",
+      "report": "请反馈给该工具的提供方。"
+    },
     "toolCall": "工具调用",
     "runCommand": "运行命令",
     "commandRead": "读取 {{path}}",

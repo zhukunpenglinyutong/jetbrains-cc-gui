@@ -1718,6 +1718,11 @@
     "nativeStatus": "Native Codex MCP status"
   },
   "tools": {
+    "browserAccessHint": {
+      "title": "このブラウザエラーは CC GUI の外部で発生しました",
+      "description": "外部のブラウザツールがページにアクセスできませんでした。これは CC GUI のエラーではありません。",
+      "report": "そのツールの提供元に報告してください。"
+    },
     "toolCall": "ツール呼び出し",
     "runCommand": "コマンドを実行",
     "commandRead": "{{path}} を読む",
