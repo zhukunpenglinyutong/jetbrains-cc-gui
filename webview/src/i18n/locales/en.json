@@ -2190,6 +2190,14 @@
     "nativeStatus": "Native Codex MCP status"
   },
   "tools": {
+    "browserAccessHint": {
+      "title": "Codex couldn't control your browser",
+      "description": "Codex's browser tool (cua_repl) tried to access Chrome/Edge, but couldn't connect to the browser access host or verify the page address.",
+      "optionsTitle": "What you can do:",
+      "desktopOption": "Use the official Codex desktop app for this browser task.",
+      "manualOption": "Or continue here without browser control, for example by pasting the page content or attaching a file.",
+      "note": "Reopening the browser or changing CC GUI permissions is unlikely to help."
+    },
     "toolCall": "Tool Call",
     "runCommand": "Run Command",
     "commandRead": "Read {{path}}",

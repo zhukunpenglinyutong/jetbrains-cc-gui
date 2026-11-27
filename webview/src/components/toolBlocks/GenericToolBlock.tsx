@@ -6,6 +6,8 @@ import ToolDetailsAccordion from './ToolDetailsAccordion';
 import ToolSummarySection from './ToolSummarySection';
 import { useGenericToolState } from './useGenericToolState';
 import { isNonRenderedToolUse } from '../../utils/toolConstants';
+import { isBrowserAccessError } from '../../utils/browserAccessError';
+import BrowserAccessHint from './BrowserAccessHint';
 
 interface GenericToolBlockProps {
   name?: string;
@@ -86,6 +88,7 @@ const GenericToolBlock = memo(function GenericToolBlock({ name, input, result, t
 
         <div className={`tool-status-indicator ${isError ? 'error' : isCompleted ? 'completed' : 'pending'}`} />
       </div>
+      {isBrowserAccessError(name, input, result) && <BrowserAccessHint />}
       {hasExpandableContent && (
         <ToolDetailsAccordion
           expanded={expanded}

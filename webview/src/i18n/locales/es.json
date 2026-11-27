@@ -1725,6 +1725,14 @@
     "nativeStatus": "Native Codex MCP status"
   },
   "tools": {
+    "browserAccessHint": {
+      "title": "Codex no pudo controlar tu navegador",
+      "description": "La herramienta de navegador de Codex (cua_repl) intentó acceder a Chrome/Edge, pero no pudo conectarse al host de acceso al navegador ni verificar la dirección de la página.",
+      "optionsTitle": "Qué puedes hacer:",
+      "desktopOption": "Usa la aplicación de escritorio oficial de Codex para esta tarea en el navegador.",
+      "manualOption": "O continúa aquí sin control del navegador, por ejemplo pegando el contenido de la página o adjuntando un archivo.",
+      "note": "Es poco probable que reabrir el navegador o cambiar los permisos de CC GUI sirva de algo."
+    },
     "toolCall": "Llamada de herramienta",
     "runCommand": "Ejecutar comando",
     "commandRead": "Leer {{path}}",

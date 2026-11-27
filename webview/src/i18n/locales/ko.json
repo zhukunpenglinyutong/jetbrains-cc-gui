@@ -1808,6 +1808,14 @@
     "nativeStatus": "Native Codex MCP status"
   },
   "tools": {
+    "browserAccessHint": {
+      "title": "Codex가 브라우저를 제어하지 못했습니다",
+      "description": "Codex의 브라우저 도구(cua_repl)가 Chrome/Edge에 접근하려 했지만, 브라우저 액세스 호스트에 연결하지 못했거나 페이지 주소를 확인하지 못했습니다.",
+      "optionsTitle": "할 수 있는 방법:",
+      "desktopOption": "이 브라우저 작업에는 공식 Codex 데스크톱 앱을 사용하세요.",
+      "manualOption": "또는 페이지 내용을 붙여넣거나 파일을 첨부하는 등 브라우저 제어 없이 여기에서 계속하세요.",
+      "note": "브라우저를 다시 열거나 CC GUI 권한을 변경해도 해결되지 않을 가능성이 높습니다."
+    },
     "toolCall": "도구 호출",
     "runCommand": "명령 실행",
     "commandRead": "{{path}} 읽기",

@@ -1718,6 +1718,14 @@
     "nativeStatus": "Native Codex MCP status"
   },
   "tools": {
+    "browserAccessHint": {
+      "title": "Codex はブラウザを操作できませんでした",
+      "description": "Codex のブラウザツール（cua_repl）が Chrome/Edge にアクセスしようとしましたが、ブラウザアクセスホストに接続できないか、ページのアドレスを確認できませんでした。",
+      "optionsTitle": "対処方法：",
+      "desktopOption": "このブラウザ作業には公式の Codex デスクトップアプリを使用してください。",
+      "manualOption": "または、ページの内容を貼り付けるかファイルを添付するなどして、ブラウザ操作なしでここで続行してください。",
+      "note": "ブラウザを開き直したり CC GUI の権限を変更したりしても、解決する可能性は低いです。"
+    },
     "toolCall": "ツール呼び出し",
     "runCommand": "コマンドを実行",
     "commandRead": "{{path}} を読む",
