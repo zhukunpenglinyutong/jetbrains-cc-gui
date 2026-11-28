@@ -163,7 +163,11 @@ public final class HookMutationService {
                 try {
                     Files.writeString(temporary, content, StandardCharsets.UTF_8);
                     HookLocalStorage.restrictFile(temporary);
-                    Files.createLink(target, temporary);
+                    try {
+                        HookLocalStorage.createHardLink(target, temporary);
+                    } catch (UnsupportedOperationException | kotlin.NotImplementedError unsupported) {
+                        createExclusively(target, content);
+                    }
                     JsonObject result = success();
                     result.addProperty("location", target.toString());
                     result.addProperty("revision", revision(target));
@@ -178,6 +182,21 @@ public final class HookMutationService {
         } catch (IOException | UnsupportedOperationException error) {
             LOG.debug("[HookMutation] Could not create native hook state", error);
             return failure("WRITE_FAILED");
+        }
+    }
+
+    /** For providers without hard links (IJent on WSL paths). Never replaces an existing file. */
+    private static void createExclusively(Path target, String content) throws IOException {
+        Files.createFile(target);
+        boolean written = false;
+        try {
+            HookLocalStorage.restrictFile(target);
+            Files.writeString(target, content, StandardCharsets.UTF_8);
+            written = true;
+        } finally {
+            if (!written) {
+                Files.deleteIfExists(target);
+            }
         }
     }
 
@@ -304,7 +323,8 @@ public final class HookMutationService {
             targetView.setPermissions(copiedPermissions);
             targetView.setOwner(attributes.owner());
             targetView.setGroup(attributes.group());
-        } catch (UnsupportedOperationException | IOException | IllegalArgumentException ignored) {
+        } catch (UnsupportedOperationException | IOException | IllegalArgumentException
+                | kotlin.NotImplementedError ignored) {
             // Attribute views differ by filesystem; unsupported views are best effort.
         }
     }

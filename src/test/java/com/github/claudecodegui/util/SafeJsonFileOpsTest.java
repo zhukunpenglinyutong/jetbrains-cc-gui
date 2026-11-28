@@ -484,54 +484,88 @@ public class SafeJsonFileOpsTest {
     }
 
     @Test
-    public void unimplementedIjentLockFailsWithoutWriting() throws Exception {
-        assertUnsupportedLockFailsWithoutWriting(new kotlin.NotImplementedError("Not yet implemented"));
+    public void unimplementedIjentLockFallsBackToAMarkerFile() throws Exception {
+        assertUnsupportedLockFallsBack(new kotlin.NotImplementedError("Not yet implemented"));
     }
 
     @Test
-    public void unsupportedProviderLockFailsWithoutWriting() throws Exception {
-        assertUnsupportedLockFailsWithoutWriting(new UnsupportedOperationException("Locking unsupported"));
+    public void unsupportedProviderLockFallsBackToAMarkerFile() throws Exception {
+        assertUnsupportedLockFallsBack(new UnsupportedOperationException("Locking unsupported"));
     }
 
-    private void assertUnsupportedLockFailsWithoutWriting(Throwable failure) throws Exception {
+    private void assertUnsupportedLockFallsBack(Throwable failure) throws Exception {
         Path target = tempDir.resolve("config.json");
         Path lock = tempDir.resolve("config.json.lock");
+        Path marker = tempDir.resolve("config.json.lock.held");
         Files.writeString(target, "{\"keep\":true}");
+        AtomicBoolean heldDuringAction = new AtomicBoolean();
+
+        SafeJsonFileOps.withLock(lock, 1_000, () -> {
+            heldDuringAction.set(Files.exists(marker));
+            Files.writeString(target, "{}");
+        }, unsupportedLock(failure));
+
+        assertTrue(heldDuringAction.get());
+        assertEquals("{}", Files.readString(target));
+        assertFalse(Files.exists(marker));
+    }
+
+    @Test
+    public void fallbackLockHeldByAnotherProcessBlocksTheAction() throws Exception {
+        Path lock = tempDir.resolve("config.json.lock");
+        Path marker = Files.writeString(tempDir.resolve("config.json.lock.held"), "other-process");
         AtomicBoolean ran = new AtomicBoolean();
-        AtomicReference<java.nio.channels.FileChannel> opened = new AtomicReference<>();
         try {
-            SafeJsonFileOps.withLock(lock, 1_000, () -> {
-                ran.set(true);
-                Files.writeString(target, "{}");
-            }, channel -> {
-                opened.set(channel);
-                if (failure instanceof Error error) {
-                    throw error;
-                }
-                throw (RuntimeException) failure;
-            });
-            fail("An unsupported lock must be reported as an IOException");
+            SafeJsonFileOps.withLock(lock, 200, () -> ran.set(true),
+                    unsupportedLock(new kotlin.NotImplementedError("Not yet implemented")));
+            fail("A held fallback lock must time out");
         } catch (IOException expected) {
-            assertTrue(expected.getCause() == failure);
-            assertTrue(expected.getMessage().contains(lock.toString()));
-            assertTrue(expected.getMessage().contains("no changes were written"));
+            assertTrue(expected.getMessage().contains("Timed out"));
+            assertTrue(expected.getMessage().contains(marker.toString()));
         }
         assertFalse(ran.get());
-        assertEquals("{\"keep\":true}", Files.readString(target));
-        assertFalse("The failed channel must be closed", opened.get().isOpen());
-        // A retry must acquire a real OS lock, not reuse a stale thread-local entry.
-        SafeJsonFileOps.withLock(lock, 1_000, () -> {
-            ran.set(true);
-            try (java.nio.channels.FileChannel competing = java.nio.channels.FileChannel.open(
-                    lock, java.nio.file.StandardOpenOption.WRITE)) {
-                try (java.nio.channels.FileLock unexpected = competing.tryLock()) {
-                    fail("The retry must hold the OS lock");
-                } catch (java.nio.channels.OverlappingFileLockException expected) {
-                    // The original cross-process locking protocol is preserved.
-                }
-            }
-        });
+        assertEquals("other-process", Files.readString(marker));
+    }
+
+    @Test
+    public void abandonedFallbackLockIsRecovered() throws Exception {
+        Path lock = tempDir.resolve("config.json.lock");
+        Path marker = Files.writeString(tempDir.resolve("config.json.lock.held"), "crashed-process");
+        Files.setLastModifiedTime(marker,
+                java.nio.file.attribute.FileTime.from(java.time.Instant.now().minusSeconds(3600)));
+        AtomicBoolean ran = new AtomicBoolean();
+
+        SafeJsonFileOps.withLock(lock, 1_000, () -> ran.set(true),
+                unsupportedLock(new kotlin.NotImplementedError("Not yet implemented")));
+
         assertTrue(ran.get());
+        try (java.util.stream.Stream<Path> files = Files.list(tempDir)) {
+            assertEquals(java.util.List.of(lock), files.collect(java.util.stream.Collectors.toList()));
+        }
+    }
+
+    @Test
+    public void failedActionReleasesTheFallbackLock() throws Exception {
+        Path lock = tempDir.resolve("config.json.lock");
+        IOException failure = new IOException("action failed");
+        try {
+            SafeJsonFileOps.withLock(lock, 1_000, () -> {
+                throw failure;
+            }, unsupportedLock(new kotlin.NotImplementedError("Not yet implemented")));
+            fail("The action failure must propagate");
+        } catch (IOException expected) {
+            assertTrue(expected == failure);
+        }
+        assertFalse(Files.exists(tempDir.resolve("config.json.lock.held")));
+    }
+
+    private static SafeJsonFileOps.FileLockAttempt unsupportedLock(Throwable failure) {
+        return channel -> {
+            if (failure instanceof Error error) {
+                throw error;
+            }
+            throw (RuntimeException) failure;
+        };
     }
 
     @Test

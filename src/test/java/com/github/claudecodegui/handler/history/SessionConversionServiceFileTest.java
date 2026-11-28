@@ -1,5 +1,6 @@
 package com.github.claudecodegui.handler.history;
 
+import com.github.claudecodegui.util.MarkerFileLock;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -14,6 +15,7 @@ import java.util.stream.Stream;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -73,6 +75,57 @@ public class SessionConversionServiceFileTest {
             assertTrue(loggedError.getMessage(), loggedError.getMessage().contains("Failed to convert session"));
         }
         assertArrayEquals(original, Files.readAllBytes(file));
+        assertEquals(List.of(SESSION_ID + ".jsonl"), this.directoryEntries());
+    }
+
+    @Test
+    public void convertsWhenIjentImplementsNeitherLockingNorFlush() throws Exception {
+        this.assertConvertsWithoutProviderSupport(channel -> {
+            throw new kotlin.NotImplementedError("Not yet implemented");
+        }, channel -> {
+            throw new kotlin.NotImplementedError("Not yet implemented");
+        });
+    }
+
+    @Test
+    public void convertsWhenTheProviderDoesNotSupportLockingOrFlush() throws Exception {
+        this.assertConvertsWithoutProviderSupport(channel -> {
+            throw new UnsupportedOperationException("Locking unsupported");
+        }, channel -> {
+            throw new UnsupportedOperationException("Flush unsupported");
+        });
+    }
+
+    @Test
+    public void keepsTheSessionWhileAnotherProcessHoldsTheFallbackLock() throws Exception {
+        Path file = this.writeSession("{\"entrypoint\":\"sdk-cli\",\"type\":\"user\"}");
+        byte[] before = Files.readAllBytes(file);
+        SessionConversionService unsupported = new SessionConversionService(null, channel -> {
+            throw new kotlin.NotImplementedError("Not yet implemented");
+        });
+
+        try (MarkerFileLock other = MarkerFileLock.acquire(file, 0)) {
+            assertNotNull(other);
+            SessionConversionService.FileConversionResult result = unsupported.convertSessionFile(file, SESSION_ID);
+
+            assertFalse(result.success());
+            assertEquals(ConversionResultCode.FILE_LOCKED, result.code());
+            assertArrayEquals(before, Files.readAllBytes(file));
+        }
+
+        assertEquals(List.of(SESSION_ID + ".jsonl"), this.directoryEntries());
+    }
+
+    private void assertConvertsWithoutProviderSupport(SessionConversionService.FileLockAttempt lock,
+                                                      SessionConversionService.FileFlush flush) throws Exception {
+        Path file = this.writeSession("{\"entrypoint\":\"sdk-cli\",\"type\":\"user\"}");
+
+        SessionConversionService.FileConversionResult result =
+                new SessionConversionService(null, lock, flush).convertSessionFile(file, SESSION_ID);
+
+        assertTrue(result.success());
+        assertNull(result.code());
+        assertTrue(Files.readString(file).contains("\"entrypoint\":\"cli\""));
         assertEquals(List.of(SESSION_ID + ".jsonl"), this.directoryEntries());
     }
 
