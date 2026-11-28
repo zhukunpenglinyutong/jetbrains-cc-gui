@@ -142,7 +142,10 @@ export interface HistorySessionSummary {
   running?: boolean;
   /** Another chat window holds this thread's native writer; it outlives local turns. */
   ownedElsewhere?: boolean;
-  /** Native thread metadata does not contain a count until history has been read. */
+  /**
+   * Absent when unknown: native thread metadata has no count until history has been read,
+   * and a DSH count is left out when its history could not be read in time.
+   */
   messageCount?: number;
   /** Scopes asynchronous counts to the metadata revision displayed by this list. */
   nativeRevision?: string;

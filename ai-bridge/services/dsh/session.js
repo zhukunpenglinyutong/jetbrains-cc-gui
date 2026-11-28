@@ -158,6 +158,12 @@ export async function listSessions(client) {
   return Array.isArray(value && value.items) ? value.items : [];
 }
 
+/** Base64 bytes of one stored image; the host verifies the reference. */
+export async function readImageAttachment(client, sessionId, attachment, timeoutMs) {
+  const value = await client.call('session.attachment', { sessionId, attachment }, timeoutMs);
+  return typeof value?.data === 'string' ? value.data : '';
+}
+
 /**
  * One backwards page of session history.
  *
@@ -191,7 +197,7 @@ const FOLLOW_SNAPSHOT_TIMEOUT_MS = 15_000;
  * cursor, so the snapshot is both the first window and the source of the
  * `cursor` that `session/page` needs afterwards.
  */
-function openFollowSnapshot(client, sessionId, maxMessages) {
+function openFollowSnapshot(client, sessionId, maxMessages, timeoutMs = FOLLOW_SNAPSHOT_TIMEOUT_MS) {
   return new Promise((resolve, reject) => {
     const mux = new DshRemoteMux(client.muxUrl(), { headers: client.muxHeaders() });
     let settled = false;
@@ -206,7 +212,7 @@ function openFollowSnapshot(client, sessionId, maxMessages) {
     };
     const timer = setTimeout(() => {
       finish(() => reject(new Error('dsh session/follow snapshot timed out')));
-    }, FOLLOW_SNAPSHOT_TIMEOUT_MS);
+    }, Math.min(timeoutMs, FOLLOW_SNAPSHOT_TIMEOUT_MS));
 
     mux.open('session/follow', {
       request: {
@@ -232,11 +238,11 @@ function openFollowSnapshot(client, sessionId, maxMessages) {
   });
 }
 
-async function modernHistoryPage(client, sessionId, maxMessages, beforeSeq) {
+async function modernHistoryPage(client, sessionId, maxMessages, beforeSeq, timeoutMs) {
   const key = historyCursorKey(client, sessionId);
   const cachedCursor = historyCursors.get(key);
   if (beforeSeq === null || beforeSeq === undefined || cachedCursor === undefined) {
-    const snapshot = await openFollowSnapshot(client, sessionId, maxMessages);
+    const snapshot = await openFollowSnapshot(client, sessionId, maxMessages, timeoutMs);
     rememberHistoryCursor(key, snapshot.cursor);
     return {
       events: snapshot.records,
@@ -250,7 +256,7 @@ async function modernHistoryPage(client, sessionId, maxMessages, beforeSeq) {
       throughSeq: cachedCursor,
       ...(Number.isInteger(beforeSeq) ? { beforeSeq } : {}),
       ...(Number.isInteger(maxMessages) && maxMessages > 0 ? { maxMessages } : {}),
-    });
+    }, timeoutMs);
   } catch (error) {
     // A stale cursor (host restarted, session compacted) would fail every
     // later page the same way; drop it so the next read re-snapshots.
@@ -272,9 +278,9 @@ function unwrapHistoryRecord(record) {
   return record;
 }
 
-export async function history(client, sessionId, maxMessages, beforeSeq) {
+export async function history(client, sessionId, maxMessages, beforeSeq, timeoutMs) {
   if (isModern(client)) {
-    return modernHistoryPage(client, sessionId, maxMessages, beforeSeq);
+    return modernHistoryPage(client, sessionId, maxMessages, beforeSeq, timeoutMs);
   }
   const payload = { sessionId };
   if (Number.isInteger(maxMessages) && maxMessages > 0) {
@@ -283,7 +289,7 @@ export async function history(client, sessionId, maxMessages, beforeSeq) {
   if (Number.isInteger(beforeSeq)) {
     payload.beforeSeq = beforeSeq;
   }
-  return client.call('session.history', payload);
+  return client.call('session.history', payload, timeoutMs);
 }
 
 export async function archiveSession(client, sessionId) {

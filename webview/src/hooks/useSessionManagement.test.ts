@@ -299,6 +299,24 @@ describe('useSessionManagement', () => {
     expect(historyData.sessions?.map(session => session.sessionId)).toEqual(['known']);
   });
 
+  it('keeps an unknown total unknown when deleting from a list without message counts', () => {
+    let historyData: HistoryData = { success: true, sessions: [
+      { sessionId: 'first', title: 'First' },
+      { sessionId: 'second', title: 'Second' },
+      { sessionId: 'third', title: 'Third' },
+    ] };
+    const mocks = { ...createMocks(), setHistoryData: vi.fn((update: HistoryData | null | ((current: HistoryData | null) => HistoryData | null)) => {
+      historyData = (typeof update === 'function' ? update(historyData) : update) as HistoryData;
+    }) };
+    const { result } = renderHook(() => useSessionManagement({ messages: [], loading: false,
+      historyData, currentSessionId: null, ...mocks, t }));
+    act(() => { result.current.deleteHistorySession('first'); });
+    expect(historyData.total).toBeUndefined();
+    act(() => { result.current.deleteHistorySessions(['second']); });
+    expect(historyData.total).toBeUndefined();
+    expect(historyData.sessions?.map(session => session.sessionId)).toEqual(['third']);
+  });
+
   it('preserves freshly counted messages when editing through callbacks from the preceding render', () => {
     let historyData: HistoryData = { success: true, source: 'native', sessions: [{ sessionId: 'saved', title: 'Original' }] };
     const mocks = { ...createMocks(), setHistoryData: vi.fn((update: HistoryData | null | ((current: HistoryData | null) => HistoryData | null)) => {
