@@ -5,6 +5,7 @@ import EnvVarsSection from './CodexProviderDialog/EnvVarsSection';
 import JsonField from './CodexProviderDialog/JsonField';
 import PresetSections from './CodexProviderDialog/PresetSections';
 import { useCodexProviderForm } from './CodexProviderDialog/useCodexProviderForm';
+import { useRepaintOnOverlayClose } from '../hooks/useRepaintOnOverlayClose';
 
 const FOOTER_ACTIONS_STYLE: React.CSSProperties = { marginLeft: 'auto' };
 
@@ -57,6 +58,8 @@ export default function CodexProviderDialog({
       return () => window.removeEventListener('keydown', handleEscapeKey);
     }
   }, [isOpen]);
+
+  useRepaintOnOverlayClose(isOpen);
 
   if (!isOpen) {
     return null;

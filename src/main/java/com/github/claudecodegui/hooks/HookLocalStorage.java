@@ -1,5 +1,7 @@
 package com.github.claudecodegui.hooks;
 
+import com.github.claudecodegui.util.MarkerFileLock;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -17,7 +19,69 @@ final class HookLocalStorage {
 
     private static final java.util.Map<Path, java.util.concurrent.Semaphore> LOCAL_LOCKS = new java.util.concurrent.ConcurrentHashMap<>();
 
+    private static final ChannelOpener DEFAULT_OPENER = file -> java.nio.channels.FileChannel.open(file,
+            java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS);
+    private static volatile ChannelOpener channelOpener = DEFAULT_OPENER;
+    private static volatile FileLockAttempt lockAttempt = java.nio.channels.FileChannel::tryLock;
+    private static volatile HardLink hardLink = Files::createLink;
+    private static final AclViewLookup DEFAULT_ACL_LOOKUP =
+            path -> Files.getFileAttributeView(path, java.nio.file.attribute.AclFileAttributeView.class);
+    private static volatile AclViewLookup aclViewLookup = DEFAULT_ACL_LOOKUP;
+
+    @FunctionalInterface
+    interface AclViewLookup {
+        java.nio.file.attribute.AclFileAttributeView find(Path path);
+    }
+
+    @FunctionalInterface
+    interface ChannelOpener {
+        java.nio.channels.FileChannel open(Path file) throws IOException;
+    }
+
+    @FunctionalInterface
+    interface FileLockAttempt {
+        java.nio.channels.FileLock tryLock(java.nio.channels.FileChannel channel) throws IOException;
+    }
+
+    @FunctionalInterface
+    interface HardLink {
+        void create(Path link, Path existing) throws IOException;
+    }
+
     private HookLocalStorage() {
+    }
+
+    @org.jetbrains.annotations.TestOnly
+    static void setChannelOpener(ChannelOpener opener) {
+        channelOpener = opener != null ? opener : DEFAULT_OPENER;
+    }
+
+    @org.jetbrains.annotations.TestOnly
+    static void setLockAttempt(FileLockAttempt attempt) {
+        lockAttempt = attempt != null ? attempt : java.nio.channels.FileChannel::tryLock;
+    }
+
+    @org.jetbrains.annotations.TestOnly
+    static void setHardLink(HardLink link) {
+        hardLink = link != null ? link : Files::createLink;
+    }
+
+    @org.jetbrains.annotations.TestOnly
+    static void setAclViewLookup(AclViewLookup lookup) {
+        aclViewLookup = lookup != null ? lookup : DEFAULT_ACL_LOOKUP;
+    }
+
+    static java.nio.file.attribute.AclFileAttributeView aclView(Path path) {
+        try {
+            return aclViewLookup.find(path);
+        } catch (NullPointerException unsupported) {
+            // IJent on WSL paths (IDE 263) throws here instead of returning null for "no ACL view".
+            return null;
+        }
+    }
+
+    static void createHardLink(Path link, Path existing) throws IOException {
+        hardLink.create(link, existing);
     }
 
     static Path directory(Path userHome, String kind, Path source) {
@@ -82,19 +146,42 @@ final class HookLocalStorage {
         java.nio.channels.FileLock lock = null;
         boolean retained = false;
         try {
-            channel = java.nio.channels.FileChannel.open(file, java.nio.file.StandardOpenOption.CREATE,
-                    java.nio.file.StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS);
             try {
-                lock = channel.tryLock();
+                channel = channelOpener.open(file);
+                lock = lockAttempt.tryLock(channel);
             } catch (java.nio.channels.OverlappingFileLockException error) {
                 return null;
+            } catch (UnsupportedOperationException | kotlin.NotImplementedError unsupported) {
+                // JetBrains' IJent filesystem for WSL paths implements neither this open
+                // (WRITE + NOFOLLOW_LINKS) nor tryLock, so a marker file takes their place.
+                MarkerFileLock marker = MarkerFileLock.acquire(file, 0);
+                if (marker == null) {
+                    return null;
+                }
+                retained = true;
+                java.nio.channels.FileChannel unlocked = channel;
+                return new SourceLock(() -> {
+                    try (marker) {
+                        if (unlocked != null) {
+                            unlocked.close();
+                        }
+                    }
+                }, local);
             }
             if (lock == null) {
                 return null;
             }
             restrictFile(file);
             retained = true;
-            return new SourceLock(channel, lock, local);
+            java.nio.channels.FileChannel lockedChannel = channel;
+            java.nio.channels.FileLock heldLock = lock;
+            return new SourceLock(() -> {
+                try {
+                    heldLock.release();
+                } finally {
+                    lockedChannel.close();
+                }
+            }, local);
         } finally {
             if (!retained) {
                 try {
@@ -114,15 +201,18 @@ final class HookLocalStorage {
         }
     }
 
+    @FunctionalInterface
+    private interface Release {
+        void run() throws IOException;
+    }
+
     static final class SourceLock implements AutoCloseable {
-        private final java.nio.channels.FileChannel channel;
-        private final java.nio.channels.FileLock lock;
+        private final Release release;
         private final java.util.concurrent.Semaphore local;
         private final java.util.concurrent.atomic.AtomicBoolean closed = new java.util.concurrent.atomic.AtomicBoolean();
 
-        private SourceLock(java.nio.channels.FileChannel channel, java.nio.channels.FileLock lock, java.util.concurrent.Semaphore local) {
-            this.channel = channel;
-            this.lock = lock;
+        private SourceLock(Release release, java.util.concurrent.Semaphore local) {
+            this.release = release;
             this.local = local;
         }
 
@@ -130,13 +220,9 @@ final class HookLocalStorage {
         public void close() throws IOException {
             if (closed.compareAndSet(false, true)) {
                 try {
-                    lock.release();
+                    release.run();
                 } finally {
-                    try {
-                        channel.close();
-                    } finally {
-                        local.release();
-                    }
+                    local.release();
                 }
             }
         }

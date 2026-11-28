@@ -3,6 +3,7 @@ package com.github.claudecodegui.handler.history;
 import com.github.claudecodegui.util.ClaudeConfigDir;
 import com.github.claudecodegui.bridge.NodeDetector;
 import com.github.claudecodegui.handler.core.HandlerContext;
+import com.github.claudecodegui.util.MarkerFileLock;
 import com.github.claudecodegui.util.PathUtils;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
@@ -10,6 +11,7 @@ import com.google.gson.JsonSyntaxException;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
+import kotlin.NotImplementedError;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -24,6 +26,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.PosixFileAttributeView;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
@@ -43,8 +46,32 @@ class SessionConversionService {
 
     private static final String ENTRYPOINT_CLI = SessionEntrypoint.CLI.getValue();
 
+    private final FileLockAttempt lockAttempt;
+
+    @FunctionalInterface
+    interface FileLockAttempt {
+        FileLock tryLock(FileChannel channel) throws IOException;
+    }
+
+    private final FileFlush fileFlush;
+
+    @FunctionalInterface
+    interface FileFlush {
+        void force(FileChannel channel) throws IOException;
+    }
+
     SessionConversionService(HandlerContext context) {
+        this(context, FileChannel::tryLock);
+    }
+
+    SessionConversionService(HandlerContext context, FileLockAttempt lockAttempt) {
+        this(context, lockAttempt, channel -> channel.force(true));
+    }
+
+    SessionConversionService(HandlerContext context, FileLockAttempt lockAttempt, FileFlush fileFlush) {
         this.context = context;
+        this.lockAttempt = lockAttempt;
+        this.fileFlush = fileFlush;
     }
 
     /**
@@ -141,6 +168,7 @@ class SessionConversionService {
         boolean backupComplete = false;
         FileLock fileLock = null;
         FileChannel fileChannel = null;
+        MarkerFileLock markerLock = null;
 
         try {
             // Acquire file lock to prevent concurrent modification. The channel is also opened
@@ -149,7 +177,7 @@ class SessionConversionService {
             // this channel instead of opening the file again.
             try {
                 fileChannel = FileChannel.open(sessionFile, StandardOpenOption.READ, StandardOpenOption.WRITE);
-                fileLock = fileChannel.tryLock();
+                fileLock = this.lockAttempt.tryLock(fileChannel);
                 if (fileLock == null) {
                     LOG.warn("[SessionConversionService] Session file is locked by another process: " + sessionId);
                     return new FileConversionResult(false, ConversionResultCode.FILE_LOCKED);
@@ -157,16 +185,26 @@ class SessionConversionService {
             } catch (OverlappingFileLockException e) {
                 LOG.warn("[SessionConversionService] Session file is already locked: " + sessionId);
                 return new FileConversionResult(false, ConversionResultCode.FILE_LOCKED);
+            } catch (UnsupportedOperationException | NotImplementedError unsupported) {
+                // JetBrains' IJent filesystem for WSL paths does not implement tryLock, so a
+                // marker file takes its place. It is held until the converted file is in place.
+                markerLock = MarkerFileLock.acquire(sessionFile, 0);
+                if (markerLock == null) {
+                    LOG.warn("[SessionConversionService] Session file is locked by another process: " + sessionId);
+                    return new FileConversionResult(false, ConversionResultCode.FILE_LOCKED);
+                }
             }
 
             // Create unique files in the same directory so the final move can stay atomic.
             Path sessionDir = sessionFile.getParent();
             backupFile = Files.createTempFile(sessionDir, sessionId + ".jsonl.backup.", ".tmp");
-            copyThroughChannel(fileChannel, backupFile);
+            copyPosixPermissions(sessionFile, backupFile);
+            this.copyThroughChannel(fileChannel, backupFile);
             backupComplete = true;
             LOG.debug("[SessionConversionService] Created backup: " + backupFile);
 
             tempFile = Files.createTempFile(sessionDir, sessionId + ".jsonl.convert.", ".tmp");
+            copyPosixPermissions(sessionFile, tempFile);
 
             // Stream processing to handle large files efficiently
             AtomicInteger modifiedCount = new AtomicInteger(0);
@@ -249,6 +287,9 @@ class SessionConversionService {
         } finally {
             // Idempotent: no-op if the success/failure paths already released it.
             releaseFileLock(fileLock, fileChannel);
+            if (markerLock != null) {
+                markerLock.close();
+            }
 
             // Clean up temporary and backup files
             try {
@@ -334,7 +375,7 @@ class SessionConversionService {
      * @param target file to create or overwrite.
      * @throws IOException if the copy stops before the whole file has been written.
      */
-    private static void copyThroughChannel(FileChannel source, Path target) throws IOException {
+    private void copyThroughChannel(FileChannel source, Path target) throws IOException {
         try (FileChannel out = FileChannel.open(target, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
             long size = source.size();
             long position = 0;
@@ -345,7 +386,30 @@ class SessionConversionService {
                 }
                 position += moved;
             }
-            out.force(true);
+            try {
+                this.fileFlush.force(out);
+            } catch (UnsupportedOperationException | NotImplementedError unsupported) {
+                // IJent does not implement force either. The backup is complete; it is only
+                // not guaranteed to survive a power failure.
+                LOG.debug("[SessionConversionService] Cannot flush the backup to disk: " + target);
+            }
+        }
+    }
+
+    /**
+     * Give a file that will hold session content, or replace the session, the session's own
+     * permissions. A temporary file's default is not the same everywhere: IJent on WSL paths
+     * creates it readable by other users. Does nothing where there are no POSIX permissions.
+     *
+     * @param source the session file.
+     * @param target the temporary file, still empty.
+     * @throws IOException if the permissions cannot be read or applied.
+     */
+    private static void copyPosixPermissions(Path source, Path target) throws IOException {
+        PosixFileAttributeView sourceView = Files.getFileAttributeView(source, PosixFileAttributeView.class);
+        PosixFileAttributeView targetView = Files.getFileAttributeView(target, PosixFileAttributeView.class);
+        if (sourceView != null && targetView != null) {
+            targetView.setPermissions(sourceView.readAttributes().permissions());
         }
     }
 

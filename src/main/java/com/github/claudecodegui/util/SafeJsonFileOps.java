@@ -62,9 +62,10 @@ import java.util.concurrent.locks.ReentrantLock;
  *       caller's intent on the fresh content when another process won the race.</li>
  *   <li><b>Advisory locking</b>: {@link #withLock} serialises read-modify-write
  *       cycles across plugin windows (in-JVM via a reentrant lock, cross-process
- *       via an OS file lock on a dedicated {@code .lock} sidecar file). Failing
- *       to obtain the lock is reported to the caller instead of silently
- *       running the critical section unlocked.</li>
+ *       via an OS file lock on a dedicated {@code .lock} sidecar file, or via a
+ *       create-new marker file where the filesystem provider has no file
+ *       locks). Failing to obtain the lock is reported to the caller instead of
+ *       silently running the critical section unlocked.</li>
  * </ul>
  *
  * <p>Remaining limitation: a process that does not honour the advisory lock
@@ -414,6 +415,12 @@ public final class SafeJsonFileOps {
      * on the same thread re-enter the outer lock instead of re-locking the OS
      * file.
      *
+     * <p>Where the filesystem provider does not implement file locks (IJent on
+     * WSL paths), a {@code <lockFile>.held} file created with
+     * create-new semantics replaces the OS lock. It only excludes processes
+     * that take the same fallback, not ones holding an OS lock on
+     * {@code lockFile}.
+     *
      * @param lockFile  the sidecar lock file (created if missing, never deleted)
      * @param timeoutMs how long to wait for each lock
      * @param action    the critical section
@@ -455,7 +462,7 @@ public final class SafeJsonFileOps {
 
         try {
             try (FileChannel channel = FileChannel.open(lockFile, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-                 FileLock fileLock = acquireLock(channel, lockFile, timeoutMs, lockAttempt)) {
+                 HeldLock crossProcessLock = acquireLock(channel, lockFile, timeoutMs, lockAttempt)) {
                 Set<String> held = HELD_LOCKS.get();
                 held.add(lockKey);
                 try {
@@ -740,6 +747,13 @@ public final class SafeJsonFileOps {
                 + (lastError != null ? ": " + lastError.getMessage() : ""), lastError);
     }
 
+    /** The cross-process lock held around a critical section. */
+    @FunctionalInterface
+    private interface HeldLock extends AutoCloseable {
+        @Override
+        void close() throws IOException;
+    }
+
     /**
      * Try to acquire the OS-level exclusive lock, polling until the deadline.
      *
@@ -747,10 +761,10 @@ public final class SafeJsonFileOps {
      * @param lockFile  the lock file (for the error message)
      * @param timeoutMs how long to wait
      * @param lockAttempt the channel operation used to acquire the lock
-     * @return the acquired lock
+     * @return the acquired lock, or the marker-file lock when the provider has no file locks
      * @throws IOException when the timeout elapses, the wait is interrupted, or the channel fails
      */
-    private static FileLock acquireLock(FileChannel channel, Path lockFile, long timeoutMs, FileLockAttempt lockAttempt) throws IOException {
+    private static HeldLock acquireLock(FileChannel channel, Path lockFile, long timeoutMs, FileLockAttempt lockAttempt) throws IOException {
         long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs);
         for (;;) {
             FileLock lock;
@@ -758,24 +772,33 @@ public final class SafeJsonFileOps {
                 lock = lockAttempt.tryLock(channel);
             } catch (UnsupportedOperationException | NotImplementedError unsupported) {
                 // IJent in some supported IDE versions exposes FileChannel but does not
-                // implement tryLock. Report a normal IO failure so startup can continue;
-                // the protected action must never run without its cross-process lock.
-                throw new IOException("The filesystem provider does not support file locking for " + lockFile
-                        + "; no changes were written. This operation requires a filesystem with file-lock support.", unsupported);
+                // implement tryLock.
+                LOG.debug("[SafeJsonFileOps] No file locks for " + lockFile + " — using a marker file: "
+                        + unsupported.getMessage());
+                MarkerFileLock marker = MarkerFileLock.acquire(lockFile, timeoutMs);
+                if (marker == null) {
+                    throw new IOException("Timed out after " + timeoutMs + " ms waiting for the cross-process lock "
+                            + MarkerFileLock.markerOf(lockFile) + "; no changes were written — retry the operation");
+                }
+                return marker::close;
             }
             if (lock != null) {
-                return lock;
+                return lock::release;
             }
             if (System.nanoTime() >= deadline) {
                 throw new IOException("Timed out after " + timeoutMs + " ms waiting for the cross-process lock "
                         + lockFile + "; no changes were written — retry the operation");
             }
-            try {
-                Thread.sleep(LOCK_RETRY_DELAY_MS);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new IOException("Interrupted while waiting for the cross-process lock " + lockFile, e);
-            }
+            waitForLockRetry(lockFile);
+        }
+    }
+
+    private static void waitForLockRetry(Path lockFile) throws IOException {
+        try {
+            Thread.sleep(LOCK_RETRY_DELAY_MS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Interrupted while waiting for the cross-process lock " + lockFile, e);
         }
     }
 

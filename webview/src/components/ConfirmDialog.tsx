@@ -1,4 +1,5 @@
 import { useEffect, useId, type ReactNode } from 'react';
+import { useRepaintOnOverlayClose } from '../hooks/useRepaintOnOverlayClose';
 
 interface ConfirmDialogProps {
   isOpen: boolean;
@@ -40,6 +41,8 @@ const ConfirmDialog = ({
       return () => window.removeEventListener('keydown', handleEscape);
     }
   }, [isOpen, onCancel]);
+
+  useRepaintOnOverlayClose(isOpen);
 
   if (!isOpen) {
     return null;

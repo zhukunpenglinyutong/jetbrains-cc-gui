@@ -163,7 +163,16 @@ public final class HookMutationService {
                 try {
                     Files.writeString(temporary, content, StandardCharsets.UTF_8);
                     HookLocalStorage.restrictFile(temporary);
-                    Files.createLink(target, temporary);
+                    try {
+                        HookLocalStorage.createHardLink(target, temporary);
+                    } catch (java.nio.file.FileAlreadyExistsException error) {
+                        throw error;
+                    } catch (IOException | UnsupportedOperationException | kotlin.NotImplementedError unsupported) {
+                        // IJent on WSL paths has no hard links: depending on the IDE build the call is
+                        // unimplemented, refused, or handed to the Windows view, which fails with an IO error.
+                        LOG.debug("[HookMutation] No hard link, creating the file directly", unsupported);
+                        createExclusively(target, content);
+                    }
                     JsonObject result = success();
                     result.addProperty("location", target.toString());
                     result.addProperty("revision", revision(target));
@@ -176,8 +185,23 @@ public final class HookMutationService {
         } catch (java.nio.file.FileAlreadyExistsException error) {
             return failure("HOOK_REVISION_CONFLICT");
         } catch (IOException | UnsupportedOperationException error) {
-            LOG.debug("[HookMutation] Could not create native hook state", error);
+            LOG.warn("[HookMutation] Could not create native hook state: " + target, error);
             return failure("WRITE_FAILED");
+        }
+    }
+
+    /** For filesystems without hard links. Never replaces an existing file. */
+    private static void createExclusively(Path target, String content) throws IOException {
+        Files.createFile(target);
+        boolean written = false;
+        try {
+            HookLocalStorage.restrictFile(target);
+            Files.writeString(target, content, StandardCharsets.UTF_8);
+            written = true;
+        } finally {
+            if (!written) {
+                Files.deleteIfExists(target);
+            }
         }
     }
 
@@ -304,15 +328,16 @@ public final class HookMutationService {
             targetView.setPermissions(copiedPermissions);
             targetView.setOwner(attributes.owner());
             targetView.setGroup(attributes.group());
-        } catch (UnsupportedOperationException | IOException | IllegalArgumentException ignored) {
+        } catch (UnsupportedOperationException | IOException | IllegalArgumentException
+                | kotlin.NotImplementedError ignored) {
             // Attribute views differ by filesystem; unsupported views are best effort.
         }
     }
 
     private static void copyAclAttributes(Path source, Path target) {
         try {
-            AclFileAttributeView sourceView = Files.getFileAttributeView(source, AclFileAttributeView.class);
-            AclFileAttributeView targetView = Files.getFileAttributeView(target, AclFileAttributeView.class);
+            AclFileAttributeView sourceView = HookLocalStorage.aclView(source);
+            AclFileAttributeView targetView = HookLocalStorage.aclView(target);
             if (sourceView == null || targetView == null) {
                 return;
             }

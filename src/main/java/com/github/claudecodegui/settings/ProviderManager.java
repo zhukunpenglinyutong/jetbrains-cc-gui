@@ -190,6 +190,9 @@ public class ProviderManager {
         }
 
         JsonObject claude = config.getAsJsonObject("claude");
+        if (!claude.has("providers") || claude.get("providers").isJsonNull()) {
+            claude.add("providers", new JsonObject());
+        }
         JsonObject providers = claude.getAsJsonObject("providers");
 
         String id = provider.get("id").getAsString();
@@ -236,6 +239,9 @@ public class ProviderManager {
         }
 
         JsonObject claude = config.getAsJsonObject("claude");
+        if (!claude.has("providers") || claude.get("providers").isJsonNull()) {
+            claude.add("providers", new JsonObject());
+        }
         JsonObject providers = claude.getAsJsonObject("providers");
 
         String id = provider.get("id").getAsString();
