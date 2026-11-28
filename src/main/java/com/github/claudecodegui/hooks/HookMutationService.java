@@ -165,7 +165,12 @@ public final class HookMutationService {
                     HookLocalStorage.restrictFile(temporary);
                     try {
                         HookLocalStorage.createHardLink(target, temporary);
-                    } catch (UnsupportedOperationException | kotlin.NotImplementedError unsupported) {
+                    } catch (java.nio.file.FileAlreadyExistsException error) {
+                        throw error;
+                    } catch (IOException | UnsupportedOperationException | kotlin.NotImplementedError unsupported) {
+                        // IJent on WSL paths has no hard links: depending on the IDE build the call is
+                        // unimplemented, refused, or handed to the Windows view, which fails with an IO error.
+                        LOG.debug("[HookMutation] No hard link, creating the file directly", unsupported);
                         createExclusively(target, content);
                     }
                     JsonObject result = success();
@@ -180,12 +185,12 @@ public final class HookMutationService {
         } catch (java.nio.file.FileAlreadyExistsException error) {
             return failure("HOOK_REVISION_CONFLICT");
         } catch (IOException | UnsupportedOperationException error) {
-            LOG.debug("[HookMutation] Could not create native hook state", error);
+            LOG.warn("[HookMutation] Could not create native hook state: " + target, error);
             return failure("WRITE_FAILED");
         }
     }
 
-    /** For providers without hard links (IJent on WSL paths). Never replaces an existing file. */
+    /** For filesystems without hard links. Never replaces an existing file. */
     private static void createExclusively(Path target, String content) throws IOException {
         Files.createFile(target);
         boolean written = false;

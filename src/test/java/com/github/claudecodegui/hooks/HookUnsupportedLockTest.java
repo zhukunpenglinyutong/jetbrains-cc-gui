@@ -128,6 +128,23 @@ public class HookUnsupportedLockTest {
     }
 
     @Test
+    public void firstCodexToggleSucceedsWhenTheFilesystemRejectsTheHardLink() throws Exception {
+        Path home = this.temporaryFolder.getRoot().toPath();
+        Path config = home.resolve(".codex").resolve("config.toml");
+        HookLocalStorage.setHardLink((link, existing) -> {
+            throw new java.nio.file.FileSystemException(link.toString(), existing.toString(), "Incorrect function");
+        });
+
+        JsonObject result = new HookMutationService(home).writeNativeState(null, config, "missing", "[features]\nhooks = true\n");
+
+        assertTrue(result.toString(), result.get("success").getAsBoolean());
+        assertEquals("[features]\nhooks = true\n", Files.readString(config));
+        try (Stream<Path> files = Files.list(config.getParent())) {
+            assertEquals(List.of(config), files.toList());
+        }
+    }
+
+    @Test
     public void creatingCodexStateNeverReplacesAFileThatAppearedMeanwhile() throws Exception {
         Path home = this.temporaryFolder.getRoot().toPath();
         Path config = home.resolve(".codex").resolve("config.toml");
