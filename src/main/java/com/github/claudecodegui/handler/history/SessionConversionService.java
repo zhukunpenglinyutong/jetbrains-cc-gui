@@ -26,6 +26,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.PosixFileAttributeView;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
@@ -197,11 +198,13 @@ class SessionConversionService {
             // Create unique files in the same directory so the final move can stay atomic.
             Path sessionDir = sessionFile.getParent();
             backupFile = Files.createTempFile(sessionDir, sessionId + ".jsonl.backup.", ".tmp");
+            copyPosixPermissions(sessionFile, backupFile);
             this.copyThroughChannel(fileChannel, backupFile);
             backupComplete = true;
             LOG.debug("[SessionConversionService] Created backup: " + backupFile);
 
             tempFile = Files.createTempFile(sessionDir, sessionId + ".jsonl.convert.", ".tmp");
+            copyPosixPermissions(sessionFile, tempFile);
 
             // Stream processing to handle large files efficiently
             AtomicInteger modifiedCount = new AtomicInteger(0);
@@ -390,6 +393,23 @@ class SessionConversionService {
                 // not guaranteed to survive a power failure.
                 LOG.debug("[SessionConversionService] Cannot flush the backup to disk: " + target);
             }
+        }
+    }
+
+    /**
+     * Give a file that will hold session content, or replace the session, the session's own
+     * permissions. A temporary file's default is not the same everywhere: IJent on WSL paths
+     * creates it readable by other users. Does nothing where there are no POSIX permissions.
+     *
+     * @param source the session file.
+     * @param target the temporary file, still empty.
+     * @throws IOException if the permissions cannot be read or applied.
+     */
+    private static void copyPosixPermissions(Path source, Path target) throws IOException {
+        PosixFileAttributeView sourceView = Files.getFileAttributeView(source, PosixFileAttributeView.class);
+        PosixFileAttributeView targetView = Files.getFileAttributeView(target, PosixFileAttributeView.class);
+        if (sourceView != null && targetView != null) {
+            targetView.setPermissions(sourceView.readAttributes().permissions());
         }
     }
 
