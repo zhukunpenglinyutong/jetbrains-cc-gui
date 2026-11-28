@@ -13,6 +13,7 @@ import {
   scopeLabel,
   targetLocation,
 } from './utils';
+import { useRepaintOnOverlayClose } from '../../../hooks/useRepaintOnOverlayClose';
 
 type ActiveEditor = NonNullable<UseHookManagementReturn['editor']>;
 
@@ -68,6 +69,8 @@ export default function HookEditorDialog({
   const providerExtensions = isHookItem(selected) && Object.keys(selected.extensions).length > 0
     ? JSON.stringify(selected.extensions, null, 2) : null;
   const validationSummary = selected.validationIssues.map((issue) => issueLabel(issue, t));
+
+  useRepaintOnOverlayClose(true);
 
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {

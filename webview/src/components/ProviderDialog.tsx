@@ -6,6 +6,7 @@ import ModelMappingSection from './ProviderDialog/ModelMappingSection';
 import JsonConfigSection from './ProviderDialog/JsonConfigSection';
 import ProviderDialogFooter from './ProviderDialog/ProviderDialogFooter';
 import { useProviderForm } from './ProviderDialog/useProviderForm';
+import { useRepaintOnOverlayClose } from '../hooks/useRepaintOnOverlayClose';
 
 export {
   normalizeProviderEnvForSave,
@@ -69,6 +70,8 @@ export default function ProviderDialog({
     handleJsonChange,
     handleSave,
   } = useProviderForm({ isOpen, provider, onClose, onSave });
+
+  useRepaintOnOverlayClose(isOpen);
 
   if (!isOpen) {
     return null;
