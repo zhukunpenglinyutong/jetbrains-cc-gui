@@ -22,7 +22,7 @@ const popups = {
     <ConfirmDialog isOpen={isOpen} title="t" message="m" onConfirm={noop} onCancel={noop} />
   ),
   'provider editor': (isOpen: boolean) => (
-    <ProviderDialog isOpen={isOpen} provider={null} onClose={noop} onSave={noop} onDelete={noop} />
+    <ProviderDialog isOpen={isOpen} provider={null} onClose={noop} onSave={noop} onDelete={noop} addToast={noop} />
   ),
   'Codex provider editor': (isOpen: boolean) => (
     <CodexProviderDialog isOpen={isOpen} provider={null} onClose={noop} onSave={noop} addToast={noop} />
