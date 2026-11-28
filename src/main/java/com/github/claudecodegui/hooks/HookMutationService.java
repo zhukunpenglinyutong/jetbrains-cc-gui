@@ -331,8 +331,8 @@ public final class HookMutationService {
 
     private static void copyAclAttributes(Path source, Path target) {
         try {
-            AclFileAttributeView sourceView = Files.getFileAttributeView(source, AclFileAttributeView.class);
-            AclFileAttributeView targetView = Files.getFileAttributeView(target, AclFileAttributeView.class);
+            AclFileAttributeView sourceView = HookLocalStorage.aclView(source);
+            AclFileAttributeView targetView = HookLocalStorage.aclView(target);
             if (sourceView == null || targetView == null) {
                 return;
             }

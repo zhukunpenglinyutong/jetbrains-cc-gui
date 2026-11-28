@@ -24,6 +24,14 @@ final class HookLocalStorage {
     private static volatile ChannelOpener channelOpener = DEFAULT_OPENER;
     private static volatile FileLockAttempt lockAttempt = java.nio.channels.FileChannel::tryLock;
     private static volatile HardLink hardLink = Files::createLink;
+    private static final AclViewLookup DEFAULT_ACL_LOOKUP =
+            path -> Files.getFileAttributeView(path, java.nio.file.attribute.AclFileAttributeView.class);
+    private static volatile AclViewLookup aclViewLookup = DEFAULT_ACL_LOOKUP;
+
+    @FunctionalInterface
+    interface AclViewLookup {
+        java.nio.file.attribute.AclFileAttributeView find(Path path);
+    }
 
     @FunctionalInterface
     interface ChannelOpener {
@@ -56,6 +64,20 @@ final class HookLocalStorage {
     @org.jetbrains.annotations.TestOnly
     static void setHardLink(HardLink link) {
         hardLink = link != null ? link : Files::createLink;
+    }
+
+    @org.jetbrains.annotations.TestOnly
+    static void setAclViewLookup(AclViewLookup lookup) {
+        aclViewLookup = lookup != null ? lookup : DEFAULT_ACL_LOOKUP;
+    }
+
+    static java.nio.file.attribute.AclFileAttributeView aclView(Path path) {
+        try {
+            return aclViewLookup.find(path);
+        } catch (NullPointerException unsupported) {
+            // IJent on WSL paths (IDE 263) throws here instead of returning null for "no ACL view".
+            return null;
+        }
     }
 
     static void createHardLink(Path link, Path existing) throws IOException {

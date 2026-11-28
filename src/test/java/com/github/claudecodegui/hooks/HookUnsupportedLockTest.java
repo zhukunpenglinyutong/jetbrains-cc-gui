@@ -30,6 +30,28 @@ public class HookUnsupportedLockTest {
         HookLocalStorage.setChannelOpener(null);
         HookLocalStorage.setLockAttempt(null);
         HookLocalStorage.setHardLink(null);
+        HookLocalStorage.setAclViewLookup(null);
+    }
+
+    @Test
+    public void saveSucceedsWhenIjentThrowsForTheAclView() throws Exception {
+        this.useIjentLockFileOpen();
+        this.useIjentAclLookup();
+        this.assertSaveSucceeds();
+    }
+
+    @Test
+    public void toggleSucceedsWhenIjentThrowsForTheAclView() throws Exception {
+        Path home = this.temporaryFolder.getRoot().toPath();
+        Path settings = this.writeClaudeSettings(home, CLAUDE_HOOK);
+        JsonObject item = firstHook(home);
+        this.useIjentLockFileOpen();
+        this.useIjentAclLookup();
+
+        JsonObject result = new HookToggleService(home).toggle(null, toggleOff(item));
+
+        assertTrue(result.toString(), result.get("success").getAsBoolean());
+        assertFalse(Files.readString(settings).contains("echo ready"));
     }
 
     @Test
@@ -149,6 +171,12 @@ public class HookUnsupportedLockTest {
     private void useIjentLockFileOpen() {
         HookLocalStorage.setChannelOpener(file -> {
             throw new kotlin.NotImplementedError("An operation is not implemented: WRITE + NOFOLLOW_LINKS");
+        });
+    }
+
+    private void useIjentAclLookup() {
+        HookLocalStorage.setAclViewLookup(path -> {
+            throw new NullPointerException("cast(...) must not be null");
         });
     }
 
