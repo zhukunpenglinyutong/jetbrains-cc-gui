@@ -365,3 +365,21 @@ test('mapQuestionAnswers falls back to the dialog keys when no question matches'
   assert.deepEqual(mapQuestionAnswers({ 'Pick one': ['A', 'B'] }), [{ id: 'Pick one', selected: ['A', 'B'] }]);
   assert.deepEqual(mapQuestionAnswers({ 'Pick one': { answers: ['A'] } }), [{ id: 'Pick one', selected: ['A'] }]);
 });
+
+test('projectMuxFrame marks a failure that DSH records only on the tool message', () => {
+  const event = {
+    type: 'tool/result',
+    data: {
+      message: {
+        role: 'tool',
+        source: { kind: 'tool', callId: 'c1' },
+        toolCallId: 'c1',
+        isError: true,
+        content: [{ type: 'text', text: 'Error: unknown skill' }],
+      },
+    },
+  };
+  assert.deepEqual(projectMuxFrame('session/event', { event }), [
+    { kind: 'tool-result', toolId: 'c1', toolName: null, output: 'Error: unknown skill', isError: true },
+  ]);
+});

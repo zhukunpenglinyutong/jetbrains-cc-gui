@@ -506,7 +506,8 @@ export function useSessionManagement({
           ...prevHistoryData,
           sessions,
           total: prevHistoryData.source === 'native' ? sumKnownHistoryMessages(sessions)
-            : Math.max(0, (prevHistoryData.total || 0) - (deletedSession?.messageCount || 0))
+            : prevHistoryData.total === undefined ? undefined
+            : Math.max(0, prevHistoryData.total - (deletedSession?.messageCount || 0))
         };
       });
 
@@ -553,7 +554,8 @@ export function useSessionManagement({
           ...prevHistoryData,
           sessions,
           total: prevHistoryData.source === 'native' ? sumKnownHistoryMessages(sessions)
-            : Math.max(0, (prevHistoryData.total || 0) - deletedMessageCount)
+            : prevHistoryData.total === undefined ? undefined
+            : Math.max(0, prevHistoryData.total - deletedMessageCount)
         };
       });
 

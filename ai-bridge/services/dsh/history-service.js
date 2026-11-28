@@ -13,11 +13,17 @@ import {
   archiveSession,
   history,
   listSessions as rpcListSessions,
+  readImageAttachment,
   sessionIdFromThread,
 } from './session.js';
 
 const HISTORY_PAGE_SIZE = 200;
 const HISTORY_MAX_PAGES = 40;
+const COUNT_CONCURRENCY = 4;
+// The Java reader gives the whole list command 45s; counting must leave room.
+const COUNT_BUDGET_MS = 10_000;
+// Reading images shares the Java reader's 45s with the history itself.
+const IMAGE_BUDGET_MS = 15_000;
 
 // ---------------------------------------------------------------------------
 // Injected-context filtering (AGENTS.md / skills / runtime snapshot / goal XML)
@@ -177,22 +183,37 @@ function flushAssistant(messages, bufs) {
   }
 }
 
+// DSH nests the message under `data.message` or uses `data` itself as the message.
+function dshMessageOf(data) {
+  return data.message && typeof data.message === 'object' ? data.message : data;
+}
+
+function joinBlockText(content, type) {
+  if (!Array.isArray(content)) {
+    return '';
+  }
+  return content
+    .filter((block) => block && (block.type ?? 'text') === type)
+    .map((block) => asString(block.text))
+    .join('');
+}
+
 function foldUserMessage(messages, bufs, data) {
   flushAssistant(messages, bufs);
-  let text = asString(data.text);
-  if (!text && Array.isArray(data.content)) {
-    text = data.content
-      .map((block) => (block && asString(block.text)) || '')
-      .join('');
-  }
-  if (text && !isDshInjectedUserMessage(data, text)) {
+  const message = dshMessageOf(data);
+  const text = asString(data.text) || joinBlockText(message.content, 'text');
+  const attachments = Array.isArray(message.content)
+    ? message.content.filter((block) => (block?.type === 'image' || block?.type === 'file') && block.attachment)
+    : [];
+  if ((text || attachments.length > 0) && !isDshInjectedUserMessage(message, text)) {
     bufs.index += 1;
     messages.push({
       id: `dsh-user-${bufs.index}`,
       role: 'user',
       text,
       kind: 'message',
-      sourceKind: dshSourceKind(data),
+      sourceKind: dshSourceKind(message),
+      ...(attachments.length > 0 ? { attachments } : {}),
     });
   }
 }
@@ -208,9 +229,10 @@ function foldAssistantChunk(bufs, data) {
 }
 
 function foldAssistantMessage(messages, bufs, data) {
-  if (!bufs.assistant && asString(data.text)) {
-    bufs.assistant = asString(data.text);
-  }
+  const { content } = dshMessageOf(data);
+  // Streamed chunks, when present, already hold the same text.
+  bufs.reasoning ||= joinBlockText(content, 'reasoning');
+  bufs.assistant ||= asString(data.text) || joinBlockText(content, 'text');
   flushAssistant(messages, bufs);
 }
 
@@ -255,6 +277,7 @@ function foldToolResult(messages, data) {
       : null;
   const isError =
     Boolean(data.error) ||
+    data.message?.isError === true ||
     (firstBlock && typeof firstBlock === 'object' && firstBlock.isError === true);
   let finalOutput = output;
   if (data.error && finalOutput == null) {
@@ -342,13 +365,55 @@ function toOutputText(value) {
   }
 }
 
+// An image without bytes, and any other file, shows as a named attachment.
+function toAttachmentBlock({ type, attachment, data }) {
+  if (type === 'image' && data) {
+    return { type: 'image', source: { type: 'base64', media_type: attachment.mediaType, data } };
+  }
+  return {
+    type: 'attachment',
+    fileName: attachment.name || type,
+    ...(attachment.mediaType ? { mediaType: attachment.mediaType } : {}),
+  };
+}
+
+/** Add the stored bytes to image blocks; an image stays without them if unreadable. */
+export async function attachImageData(folded, readImage, budgetMs = IMAGE_BUDGET_MS) {
+  const deadline = Date.now() + budgetMs;
+  const rows = [];
+  for (const row of folded) {
+    if (!row.attachments) {
+      rows.push(row);
+      continue;
+    }
+    const attachments = [];
+    for (const block of row.attachments) {
+      const remaining = deadline - Date.now();
+      let data = '';
+      if (block.type === 'image' && remaining > 0) {
+        try {
+          data = await readImage(block.attachment, remaining);
+        } catch {
+          // Shown as a named attachment instead.
+        }
+      }
+      attachments.push(data ? { ...block, data } : block);
+    }
+    rows.push({ ...row, attachments });
+  }
+  return rows;
+}
+
 export function toClaudeMessages(folded) {
   const out = [];
   for (const row of Array.isArray(folded) ? folded : []) {
     switch (row.kind) {
       case 'message':
         if (row.role === 'user') {
-          out.push(claudeMessage(row.id, 'user', [{ type: 'text', text: row.text }]));
+          out.push(claudeMessage(row.id, 'user', [
+            ...(row.attachments ?? []).map(toAttachmentBlock),
+            ...(row.text ? [{ type: 'text', text: row.text }] : []),
+          ]));
         } else {
           out.push(claudeMessage(row.id, 'assistant', [{ type: 'text', text: row.text }]));
         }
@@ -427,32 +492,110 @@ export function pathsEqualForWorkspace(a, b) {
   return false;
 }
 
-async function loadHistoryPages(client, sessionId) {
+/** All history events of one session; `complete` is false when some could not be read. */
+export async function loadHistoryPages(client, sessionId, timeoutMs) {
+  const deadline = timeoutMs === undefined ? undefined : Date.now() + timeoutMs;
   const collected = [];
   let lastPage = null;
   let beforeSeq = null;
+  let complete = false;
   for (let pageIndex = 0; pageIndex < HISTORY_MAX_PAGES; pageIndex++) {
-    const page = await history(client, sessionId, HISTORY_PAGE_SIZE, beforeSeq);
+    const remaining = deadline === undefined ? undefined : deadline - Date.now();
+    if (remaining <= 0) {
+      break;
+    }
+    const page = await history(client, sessionId, HISTORY_PAGE_SIZE, beforeSeq, remaining);
     if (pageIndex === 0) {
       lastPage = page;
     }
     const events = Array.isArray(page && page.events) ? page.events : [];
-    if (events.length === 0) {
+    collected.unshift(...events);
+    if (!page?.hasMore) {
+      complete = true;
       break;
     }
-    collected.unshift(...events);
     const first = events[0];
     const nextBefore = Number.isInteger(first && first.seq)
       ? first.seq
       : Number.isInteger(first && first.event && first.event.seq)
         ? first.event.seq
         : null;
-    if (!page.hasMore || nextBefore == null || nextBefore === beforeSeq) {
+    if (nextBefore == null || nextBefore === beforeSeq) {
       break;
     }
     beforeSeq = nextBefore;
   }
-  return { events: collected, lastPage };
+  return { events: collected, lastPage, complete };
+}
+
+function listSummary(sessions) {
+  const allCounted = sessions.every((session) => session.messageCount !== undefined);
+  return {
+    sessions,
+    sessionCount: sessions.length,
+    ...(allCounted ? { total: sessions.reduce((sum, session) => sum + session.messageCount, 0) } : {}),
+  };
+}
+
+/** Session-list rows for one project path, from the host's `session.list` items. */
+export function summarizeSessions(items, cwd) {
+  const sessions = [];
+  for (const item of items) {
+    const sessionId = asString(item && item.sessionId);
+    if (!sessionId) {
+      continue;
+    }
+    const itemCwd = asString(item.cwd);
+    if (!itemCwd || !pathsEqualForWorkspace(itemCwd, cwd)) {
+      continue;
+    }
+    if (item.blank === true) {
+      continue;
+    }
+    const title = sanitizeDshSidebarTitle(
+      item.projections && item.projections.values && asString(item.projections.values.title)
+    );
+    sessions.push({
+      sessionId,
+      title: title || `DSH session ${sessionId.slice(0, 8)}`,
+      lastTimestamp: Number.isFinite(item.updatedAt) ? item.updatedAt : 0,
+      firstTimestamp: Number.isFinite(item.updatedAt) ? item.updatedAt : 0,
+      cwd: asString(item.cwd),
+      provider: 'dsh',
+    });
+  }
+  sessions.sort((a, b) => b.lastTimestamp - a.lastTimestamp);
+  return listSummary(sessions);
+}
+
+// The messages a restored session shows as text: prompts and replies.
+function countMessages(events) {
+  return foldHistoryEvents(events).filter((row) => row.kind === 'message').length;
+}
+
+/**
+ * Count the rows' messages from their histories, newest first. A row stays
+ * unknown unless its whole history was read within the time budget.
+ */
+export async function fillMessageCounts(summary, readHistory, budgetMs = COUNT_BUDGET_MS) {
+  const sessions = summary.sessions.map((session) => ({ ...session }));
+  const pending = [...sessions];
+  const deadline = Date.now() + budgetMs;
+  const worker = async () => {
+    while (pending.length > 0 && Date.now() < deadline) {
+      const session = pending.shift();
+      try {
+        const { events, complete } = await readHistory(session.sessionId, Math.max(1, deadline - Date.now()));
+        if (complete) {
+          session.messageCount = countMessages(events);
+        }
+      } catch {
+        // A failed or timed-out read leaves the count unknown.
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: COUNT_CONCURRENCY }, worker));
+  return listSummary(sessions);
 }
 
 /** channel command: list sessions for one project path. */
@@ -466,40 +609,14 @@ export async function listSessionsCommand({ cwd }) {
     // must stay visible here.
     const { client } = await connectExisting(settings);
     const items = await rpcListSessions(client);
-    const sessions = [];
-    for (const item of items) {
-      const sessionId = asString(item && item.sessionId);
-      if (!sessionId) {
-        continue;
-      }
-      const itemCwd = asString(item.cwd);
-      if (!itemCwd || !pathsEqualForWorkspace(itemCwd, cwd)) {
-        continue;
-      }
-      if (item.blank === true) {
-        continue;
-      }
-      const title = sanitizeDshSidebarTitle(
-        item.projections && item.projections.values && asString(item.projections.values.title)
-      );
-      const stats = item.projections && item.projections.values && item.projections.values.sessionStats;
-      sessions.push({
-        sessionId,
-        title: title || `DSH session ${sessionId.slice(0, 8)}`,
-        messageCount: stats && Number.isInteger(stats.turns) ? stats.turns : 0,
-        lastTimestamp: Number.isFinite(item.updatedAt) ? item.updatedAt : 0,
-        firstTimestamp: Number.isFinite(item.updatedAt) ? item.updatedAt : 0,
-        cwd: asString(item.cwd),
-        provider: 'dsh',
-      });
-    }
-    sessions.sort((a, b) => b.lastTimestamp - a.lastTimestamp);
+    const summary = await fillMessageCounts(
+      summarizeSessions(items, cwd),
+      (sessionId, timeoutMs) => loadHistoryPages(client, sessionId, timeoutMs)
+    );
     console.log(JSON.stringify({
       success: true,
-      sessions,
-      sessionCount: sessions.length,
       provider: 'dsh',
-      total: sessions.reduce((sum, session) => sum + session.messageCount, 0),
+      ...summary,
     }));
   } catch (error) {
     console.log(JSON.stringify({
@@ -518,7 +635,10 @@ export async function loadSessionCommand({ sessionId }) {
   try {
     const { client } = await connectExisting(settings);
     const { events, lastPage } = await loadHistoryPages(client, id);
-    const folded = foldHistoryEvents(events);
+    const folded = await attachImageData(
+      foldHistoryEvents(events),
+      (attachment, timeoutMs) => readImageAttachment(client, id, attachment, timeoutMs)
+    );
     const messages = toClaudeMessages(folded);
     const tokenUsage = lastPage && lastPage.projections && lastPage.projections.values
       ? lastPage.projections.values.tokenUsage

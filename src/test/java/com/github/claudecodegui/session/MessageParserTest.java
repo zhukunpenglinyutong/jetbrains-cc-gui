@@ -38,6 +38,32 @@ public class MessageParserTest {
     }
 
     @Test
+    public void parseServerMessageKeepsUserMessageWithOnlyAttachmentBlocks() {
+        MessageParser parser = new MessageParser();
+
+        JsonObject attachment = new JsonObject();
+        attachment.addProperty("type", "attachment");
+        attachment.addProperty("fileName", "notes.txt");
+
+        JsonArray content = new JsonArray();
+        content.add(attachment);
+
+        JsonObject message = new JsonObject();
+        message.add("content", content);
+
+        JsonObject raw = new JsonObject();
+        raw.addProperty("type", "user");
+        raw.add("message", message);
+
+        ClaudeSession.Message parsed = parser.parseServerMessage(raw);
+
+        assertNotNull(parsed);
+        assertEquals(ClaudeSession.Message.Type.USER, parsed.type);
+        assertEquals("", parsed.content);
+        assertEquals(raw, parsed.raw);
+    }
+
+    @Test
     public void parseServerMessageUnwrapsNormalizedToolUseRawPayload() {
         MessageParser parser = new MessageParser();
 

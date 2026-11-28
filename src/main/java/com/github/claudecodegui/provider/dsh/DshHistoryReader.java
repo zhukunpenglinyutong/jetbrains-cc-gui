@@ -50,6 +50,8 @@ public class DshHistoryReader {
     /**
      * Sessions for one project, shaped like the other CLI readers
      * ({@code {success, sessions[], sessionCount, provider, total}}).
+     * A row's {@code messageCount} is omitted when its history could not be read
+     * in time, and {@code total} is omitted unless every row has a count.
      */
     public String getSessionsForProjectAsJson(String projectPath) {
         JsonObject stdin = new JsonObject();

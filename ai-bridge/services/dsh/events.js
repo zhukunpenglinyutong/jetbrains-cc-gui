@@ -227,7 +227,7 @@ function projectSessionEvent(event) {
         (firstBlock ? asString(firstBlock.toolCallId) : '') ||
         'tool';
       let output = data.result ?? data.output ?? extractToolResultOutput(data);
-      let isError = false;
+      let isError = message?.isError === true;
       if (data.error) {
         isError = true;
         if (typeof data.error === 'string') {

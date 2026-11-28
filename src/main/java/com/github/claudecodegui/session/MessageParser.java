@@ -63,7 +63,7 @@ public class MessageParser {
                 if (hasToolResult(sanitizedRaw)) {
                     return new ClaudeSession.Message(ClaudeSession.Message.Type.USER, "[tool_result]", sanitizedRaw);
                 }
-                if (hasImageContent(sanitizedRaw)) {
+                if (hasImageContent(sanitizedRaw) || hasContentBlockType(sanitizedRaw, "attachment")) {
                     return new ClaudeSession.Message(ClaudeSession.Message.Type.USER, "", sanitizedRaw);
                 }
                 return null;
