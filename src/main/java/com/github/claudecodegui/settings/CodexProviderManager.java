@@ -195,6 +195,9 @@ public class CodexProviderManager {
         }
 
         JsonObject codex = config.getAsJsonObject("codex");
+        if (!codex.has("providers") || codex.get("providers").isJsonNull()) {
+            codex.add("providers", new JsonObject());
+        }
         JsonObject providers = codex.getAsJsonObject("providers");
 
         String id = providerToPersist.get("id").getAsString();
@@ -241,6 +244,9 @@ public class CodexProviderManager {
         }
 
         JsonObject codex = config.getAsJsonObject("codex");
+        if (!codex.has("providers") || codex.get("providers").isJsonNull()) {
+            codex.add("providers", new JsonObject());
+        }
         JsonObject providers = codex.getAsJsonObject("providers");
 
         String id = savedProvider.get("id").getAsString();
